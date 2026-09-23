@@ -75,54 +75,168 @@ PROJECT_NAMESPACE_ID::config::ExcelLevel make_level(int32_t level_id, int32_t le
   return result;
 }
 
-void seed_matching_tables(atframework::testing::mock_resource& resource) {
+void seed_matching_tables(atframework::testing::mock_resource& resource, bool relaxed_balanced_windows = false) {
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool pool;
   pool.set_id(1);
-  pool.set_user_upper(4);
+  pool.set_max_user_cout_limit(4);
+  pool.set_max_faction_cout_limit(2);
   pool.set_unit_max_size(2);
+  pool.set_faction_user_max_size(2);
+  pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
   pool.add_rule_group_ids(10);
   pool.set_search_timeout_seconds(120);
   pool.set_confirm_timeout_seconds(15);
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool convergence_pool;
   convergence_pool.set_id(2);
-  convergence_pool.set_user_upper(3);
+  convergence_pool.set_max_user_cout_limit(3);
+  convergence_pool.set_max_faction_cout_limit(3);
   convergence_pool.set_unit_max_size(1);
+  convergence_pool.set_faction_user_max_size(1);
+  convergence_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
   convergence_pool.add_rule_group_ids(20);
   convergence_pool.set_search_timeout_seconds(120);
   convergence_pool.set_confirm_timeout_seconds(15);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool faction_pool;
   faction_pool.set_id(3);
-  faction_pool.set_user_upper(6);
+  faction_pool.set_max_user_cout_limit(6);
+  faction_pool.set_max_faction_cout_limit(3);
   faction_pool.set_unit_max_size(3);
+  faction_pool.set_faction_user_max_size(3);
+  faction_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
   faction_pool.add_rule_group_ids(30);
   faction_pool.set_search_timeout_seconds(120);
   faction_pool.set_confirm_timeout_seconds(15);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool incompatible_unit_pool;
   incompatible_unit_pool.set_id(4);
-  incompatible_unit_pool.set_user_upper(4);
+  incompatible_unit_pool.set_max_user_cout_limit(4);
+  incompatible_unit_pool.set_max_faction_cout_limit(2);
   incompatible_unit_pool.set_unit_max_size(3);
+  incompatible_unit_pool.set_faction_user_max_size(3);
+  incompatible_unit_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
   incompatible_unit_pool.add_rule_group_ids(40);
   incompatible_unit_pool.set_search_timeout_seconds(120);
   incompatible_unit_pool.set_confirm_timeout_seconds(15);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool dynamic_ready_pool;
   dynamic_ready_pool.set_id(5);
-  dynamic_ready_pool.set_user_upper(3);
+  dynamic_ready_pool.set_max_user_cout_limit(3);
+  dynamic_ready_pool.set_max_faction_cout_limit(3);
   dynamic_ready_pool.set_unit_max_size(1);
+  dynamic_ready_pool.set_faction_user_max_size(1);
+  dynamic_ready_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
   dynamic_ready_pool.add_rule_group_ids(50);
   dynamic_ready_pool.set_search_timeout_seconds(120);
   dynamic_ready_pool.set_confirm_timeout_seconds(15);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool partial_template_pool;
   partial_template_pool.set_id(6);
-  partial_template_pool.set_user_lower(2);
-  partial_template_pool.set_user_upper(3);
+  partial_template_pool.set_max_user_cout_limit(3);
+  partial_template_pool.set_max_faction_cout_limit(3);
   partial_template_pool.set_unit_max_size(1);
+  partial_template_pool.set_faction_user_max_size(1);
+  partial_template_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
   partial_template_pool.add_rule_group_ids(60);
   partial_template_pool.set_search_timeout_seconds(120);
   partial_template_pool.set_confirm_timeout_seconds(15);
-  resource.set_file("matching_pool.bytes",
-                    make_table_bytes({pool, convergence_pool, faction_pool, incompatible_unit_pool, dynamic_ready_pool,
-                                      partial_template_pool}));
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingPool balanced_pool;
+  balanced_pool.set_id(7);
+  balanced_pool.set_max_user_cout_limit(9);
+  balanced_pool.set_max_faction_cout_limit(3);
+  balanced_pool.set_unit_max_size(3);
+  balanced_pool.set_faction_user_max_size(3);
+  balanced_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED);
+  balanced_pool.add_rule_group_ids(70);
+  balanced_pool.set_search_timeout_seconds(120);
+  balanced_pool.set_confirm_timeout_seconds(15);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingPool two_faction_pool;
+  two_faction_pool.set_id(8);
+  two_faction_pool.set_max_user_cout_limit(6);
+  two_faction_pool.set_max_faction_cout_limit(2);
+  two_faction_pool.set_unit_max_size(3);
+  two_faction_pool.set_faction_user_max_size(3);
+  two_faction_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
+  two_faction_pool.add_rule_group_ids(30);
+  two_faction_pool.set_search_timeout_seconds(120);
+  two_faction_pool.set_confirm_timeout_seconds(15);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingPool minimum_faction_pool;
+  minimum_faction_pool.set_id(9);
+  minimum_faction_pool.set_max_user_cout_limit(4);
+  minimum_faction_pool.set_max_faction_cout_limit(2);
+  minimum_faction_pool.set_unit_max_size(2);
+  minimum_faction_pool.set_faction_user_max_size(2);
+  minimum_faction_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
+  minimum_faction_pool.add_rule_group_ids(90);
+  minimum_faction_pool.set_search_timeout_seconds(120);
+  minimum_faction_pool.set_confirm_timeout_seconds(15);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingPool mixed_template_pool;
+  mixed_template_pool.set_id(10);
+  mixed_template_pool.set_max_user_cout_limit(5);
+  mixed_template_pool.set_max_faction_cout_limit(2);
+  mixed_template_pool.set_unit_max_size(3);
+  mixed_template_pool.set_faction_user_max_size(3);
+  mixed_template_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
+  mixed_template_pool.add_rule_group_ids(100);
+  mixed_template_pool.set_search_timeout_seconds(120);
+  mixed_template_pool.set_confirm_timeout_seconds(15);
+  auto small_balanced_pool = incompatible_unit_pool;
+  small_balanced_pool.set_id(11);
+  small_balanced_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED);
+  auto invalid_balanced_pool = balanced_pool;
+  invalid_balanced_pool.set_id(12);
+  invalid_balanced_pool.clear_rule_group_ids();
+  invalid_balanced_pool.add_rule_group_ids(30);
+  auto small_unit_priority_pool = two_faction_pool;
+  small_unit_priority_pool.set_id(13);
+  small_unit_priority_pool.set_unit_max_size(2);
+  auto small_unit_balanced_pool = balanced_pool;
+  small_unit_balanced_pool.set_id(14);
+  small_unit_balanced_pool.set_unit_max_size(2);
+  small_unit_balanced_pool.set_max_faction_cout_limit(2);
+  small_unit_balanced_pool.set_max_user_cout_limit(6);
+  auto small_faction_pool = incompatible_unit_pool;
+  small_faction_pool.set_id(15);
+  small_faction_pool.set_faction_user_max_size(2);
+  small_faction_pool.set_max_user_cout_limit(6);
+  auto undersized_faction_pool = small_faction_pool;
+  undersized_faction_pool.set_id(16);
+  undersized_faction_pool.set_faction_user_max_size(1);
+  auto missing_faction_capacity_pool = small_faction_pool;
+  missing_faction_capacity_pool.set_id(17);
+  missing_faction_capacity_pool.clear_faction_user_max_size();
+  auto unreachable_exclusive_pool = mixed_template_pool;
+  unreachable_exclusive_pool.set_id(18);
+  unreachable_exclusive_pool.set_unit_max_size(1);
+  auto undersized_balanced_pool = small_balanced_pool;
+  undersized_balanced_pool.set_id(19);
+  undersized_balanced_pool.set_faction_user_max_size(1);
+  auto downgrade_pool = small_unit_balanced_pool;
+  downgrade_pool.set_id(20);
+  downgrade_pool.set_unit_max_size(3);
+  downgrade_pool.clear_rule_group_ids();
+  downgrade_pool.add_rule_group_ids(200);
+  auto priority_downgrade_pool = downgrade_pool;
+  priority_downgrade_pool.set_id(21);
+  priority_downgrade_pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
+  resource.set_file("matching_pool.bytes", make_table_bytes({pool,
+                                                             convergence_pool,
+                                                             faction_pool,
+                                                             incompatible_unit_pool,
+                                                             dynamic_ready_pool,
+                                                             partial_template_pool,
+                                                             balanced_pool,
+                                                             two_faction_pool,
+                                                             minimum_faction_pool,
+                                                             mixed_template_pool,
+                                                             small_balanced_pool,
+                                                             invalid_balanced_pool,
+                                                             small_unit_priority_pool,
+                                                             small_unit_balanced_pool,
+                                                             small_faction_pool,
+                                                             undersized_faction_pool,
+                                                             missing_faction_capacity_pool,
+                                                             unreachable_exclusive_pool,
+                                                             undersized_balanced_pool,
+                                                             downgrade_pool,
+                                                             priority_downgrade_pool}));
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRuleGroup group;
   group.set_group_id(10);
@@ -158,17 +272,38 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   partial_template_group.set_global_user_lower(0);
   partial_template_group.set_global_user_upper(100);
   partial_template_group.add_pool_rules(600);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRuleGroup minimum_faction_group;
+  minimum_faction_group.set_group_id(90);
+  minimum_faction_group.set_global_user_lower(0);
+  minimum_faction_group.set_global_user_upper(100);
+  minimum_faction_group.add_pool_rules(900);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRuleGroup mixed_template_group;
+  mixed_template_group.set_group_id(100);
+  mixed_template_group.set_global_user_lower(0);
+  mixed_template_group.set_global_user_upper(100);
+  mixed_template_group.add_pool_rules(1000);
+  auto balanced_group = faction_group;
+  balanced_group.set_group_id(70);
+  balanced_group.clear_pool_rules();
+  balanced_group.add_pool_rules(700);
+  balanced_group.add_pool_rules(701);
+  auto downgrade_group = balanced_group;
+  downgrade_group.set_group_id(200);
+  downgrade_group.clear_pool_rules();
+  downgrade_group.add_pool_rules(2000);
+  downgrade_group.add_pool_rules(2001);
+  downgrade_group.add_pool_rules(2002);
   resource.set_file("matching_rule_group.bytes",
                     make_table_bytes({group, convergence_group, faction_group, incompatible_unit_group,
-                                      dynamic_ready_group, partial_template_group}));
+                                      dynamic_ready_group, partial_template_group, minimum_faction_group,
+                                      mixed_template_group, balanced_group, downgrade_group}));
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule rule;
   rule.set_id(100);
   rule.mutable_time_limit()->set_min(0);
   rule.mutable_time_limit()->set_max(60);
-  rule.add_result_template_ids(1000);
-  rule.add_result_template_ids(1001);
-  rule.set_start_battle_min_user(2);
+  rule.set_min_user_cout_limit(2);
+  rule.set_min_faction_count_limit(1);
   auto* rank_rule = rule.add_rules();
   rank_rule->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
   rank_rule->add_values(5);
@@ -181,8 +316,8 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   strict_rule.set_id(200);
   strict_rule.mutable_time_limit()->set_min(0);
   strict_rule.mutable_time_limit()->set_max(60);
-  strict_rule.add_result_template_ids(2000);
-  strict_rule.set_start_battle_min_user(3);
+  strict_rule.set_min_user_cout_limit(3);
+  strict_rule.set_min_faction_count_limit(3);
   auto* strict_rank_rule = strict_rule.add_rules();
   strict_rank_rule->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
   strict_rank_rule->add_values(5);
@@ -190,120 +325,89 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule relaxed_rule;
   relaxed_rule.set_id(201);
   relaxed_rule.mutable_time_limit()->set_min(61);
-  relaxed_rule.add_result_template_ids(2000);
-  relaxed_rule.set_start_battle_min_user(3);
+  relaxed_rule.set_min_user_cout_limit(3);
+  relaxed_rule.set_min_faction_count_limit(3);
   relaxed_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule faction_strict_rule;
   faction_strict_rule.set_id(300);
   faction_strict_rule.mutable_time_limit()->set_min(0);
   faction_strict_rule.mutable_time_limit()->set_max(60);
-  faction_strict_rule.add_result_template_ids(3000);
-  faction_strict_rule.add_result_template_ids(3001);
-  faction_strict_rule.add_result_template_ids(3002);
-  faction_strict_rule.set_start_battle_min_user(6);
+  faction_strict_rule.set_min_user_cout_limit(6);
+  faction_strict_rule.set_min_faction_count_limit(2);
   auto* faction_rank_rule = faction_strict_rule.add_rules();
   faction_rank_rule->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
   faction_rank_rule->add_values(5);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule faction_relaxed_rule;
   faction_relaxed_rule.set_id(301);
   faction_relaxed_rule.mutable_time_limit()->set_min(61);
-  faction_relaxed_rule.add_result_template_ids(3000);
-  faction_relaxed_rule.add_result_template_ids(3001);
-  faction_relaxed_rule.add_result_template_ids(3002);
-  faction_relaxed_rule.set_start_battle_min_user(6);
+  faction_relaxed_rule.set_min_user_cout_limit(6);
+  faction_relaxed_rule.set_min_faction_count_limit(2);
   faction_relaxed_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule incompatible_unit_rule;
   incompatible_unit_rule.set_id(400);
   incompatible_unit_rule.mutable_time_limit()->set_min(0);
-  incompatible_unit_rule.add_result_template_ids(4000);
-  incompatible_unit_rule.set_start_battle_min_user(4);
+  incompatible_unit_rule.set_min_user_cout_limit(4);
+  incompatible_unit_rule.set_min_faction_count_limit(2);
   incompatible_unit_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule dynamic_ready_strict_rule;
   dynamic_ready_strict_rule.set_id(500);
   dynamic_ready_strict_rule.mutable_time_limit()->set_min(0);
   dynamic_ready_strict_rule.mutable_time_limit()->set_max(60);
-  dynamic_ready_strict_rule.add_result_template_ids(5001);
-  dynamic_ready_strict_rule.set_start_battle_min_user(3);
+  dynamic_ready_strict_rule.set_min_user_cout_limit(3);
+  dynamic_ready_strict_rule.set_min_faction_count_limit(2);
   auto* dynamic_ready_rank_rule = dynamic_ready_strict_rule.add_rules();
   dynamic_ready_rank_rule->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
   dynamic_ready_rank_rule->add_values(5);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule dynamic_ready_relaxed_rule;
   dynamic_ready_relaxed_rule.set_id(501);
   dynamic_ready_relaxed_rule.mutable_time_limit()->set_min(61);
-  dynamic_ready_relaxed_rule.add_result_template_ids(5001);
-  dynamic_ready_relaxed_rule.add_result_template_ids(5000);
-  dynamic_ready_relaxed_rule.set_start_battle_min_user(2);
+  dynamic_ready_relaxed_rule.set_min_user_cout_limit(2);
+  dynamic_ready_relaxed_rule.set_min_faction_count_limit(2);
   dynamic_ready_relaxed_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule partial_template_rule;
   partial_template_rule.set_id(600);
   partial_template_rule.mutable_time_limit()->set_min(0);
-  partial_template_rule.add_result_template_ids(6000);
+  partial_template_rule.set_min_user_cout_limit(3);
+  partial_template_rule.set_min_faction_count_limit(3);
   partial_template_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
-  resource.set_file("matching_rule.bytes",
-                    make_table_bytes({rule, strict_rule, relaxed_rule, faction_strict_rule, faction_relaxed_rule,
-                                      incompatible_unit_rule, dynamic_ready_strict_rule, dynamic_ready_relaxed_rule,
-                                      partial_template_rule}));
-
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate result_template;
-  result_template.set_id(1000);
-  auto* faction = result_template.add_faction_template();
-  faction->set_user_number(1);
-  faction->set_count(2);
-
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate alternate_result_template;
-  alternate_result_template.set_id(1001);
-  auto* alternate_faction = alternate_result_template.add_faction_template();
-  alternate_faction->set_user_number(1);
-  alternate_faction->set_count(2);
-
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate convergence_template;
-  convergence_template.set_id(2000);
-  auto* convergence_faction = convergence_template.add_faction_template();
-  convergence_faction->set_user_number(1);
-  convergence_faction->set_count(3);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate faction_template;
-  faction_template.set_id(3000);
-  auto* three_user_faction = faction_template.add_faction_template();
-  three_user_faction->set_user_number(3);
-  three_user_faction->set_count(2);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate mixed_faction_template;
-  mixed_faction_template.set_id(3001);
-  auto* two_user_mixed_faction = mixed_faction_template.add_faction_template();
-  two_user_mixed_faction->set_user_number(2);
-  two_user_mixed_faction->set_count(1);
-  auto* three_user_mixed_faction = mixed_faction_template.add_faction_template();
-  three_user_mixed_faction->set_user_number(3);
-  three_user_mixed_faction->set_count(2);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate two_user_template;
-  two_user_template.set_id(3002);
-  auto* two_user_template_faction = two_user_template.add_faction_template();
-  two_user_template_faction->set_user_number(2);
-  two_user_template_faction->set_count(3);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate incompatible_unit_template;
-  incompatible_unit_template.set_id(4000);
-  auto* two_user_faction = incompatible_unit_template.add_faction_template();
-  two_user_faction->set_user_number(2);
-  two_user_faction->set_count(2);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate dynamic_ready_three_factions;
-  dynamic_ready_three_factions.set_id(5000);
-  auto* dynamic_ready_three_faction = dynamic_ready_three_factions.add_faction_template();
-  dynamic_ready_three_faction->set_user_number(1);
-  dynamic_ready_three_faction->set_count(3);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate dynamic_ready_two_factions;
-  dynamic_ready_two_factions.set_id(5001);
-  auto* dynamic_ready_two_faction = dynamic_ready_two_factions.add_faction_template();
-  dynamic_ready_two_faction->set_user_number(1);
-  dynamic_ready_two_faction->set_count(2);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate partial_result_template;
-  partial_result_template.set_id(6000);
-  auto* partial_result_faction = partial_result_template.add_faction_template();
-  partial_result_faction->set_user_number(1);
-  partial_result_faction->set_count(3);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRule minimum_faction_rule;
+  minimum_faction_rule.set_id(900);
+  minimum_faction_rule.mutable_time_limit()->set_min(0);
+  minimum_faction_rule.set_min_user_cout_limit(2);
+  minimum_faction_rule.set_min_faction_count_limit(2);
+  minimum_faction_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRule mixed_template_rule;
+  mixed_template_rule.set_id(1000);
+  mixed_template_rule.mutable_time_limit()->set_min(0);
+  mixed_template_rule.set_min_user_cout_limit(5);
+  mixed_template_rule.set_min_faction_count_limit(2);
+  mixed_template_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
+  auto balanced_strict_rule = faction_strict_rule;
+  balanced_strict_rule.set_id(700);
+  auto balanced_relaxed_rule = faction_relaxed_rule;
+  balanced_relaxed_rule.set_id(701);
+  if (relaxed_balanced_windows) {
+    balanced_relaxed_rule.set_min_user_cout_limit(4);
+  }
+  auto downgrade_strict_rule = balanced_strict_rule;
+  downgrade_strict_rule.set_id(2000);
+  downgrade_strict_rule.mutable_time_limit()->set_max(19);
+  auto downgrade_middle_rule = balanced_relaxed_rule;
+  downgrade_middle_rule.set_id(2001);
+  downgrade_middle_rule.mutable_time_limit()->set_min(20);
+  downgrade_middle_rule.mutable_time_limit()->set_max(59);
+  downgrade_middle_rule.set_min_user_cout_limit(4);
+  auto downgrade_last_rule = downgrade_middle_rule;
+  downgrade_last_rule.set_id(2002);
+  downgrade_last_rule.mutable_time_limit()->set_min(60);
+  downgrade_last_rule.mutable_time_limit()->set_max(0);
+  downgrade_last_rule.set_min_user_cout_limit(2);
   resource.set_file(
-      "matching_result_template.bytes",
-      make_table_bytes({result_template, alternate_result_template, convergence_template, faction_template,
-                        mixed_faction_template, two_user_template, incompatible_unit_template,
-                        dynamic_ready_three_factions, dynamic_ready_two_factions, partial_result_template}));
+      "matching_rule.bytes",
+      make_table_bytes({rule, strict_rule, relaxed_rule, faction_strict_rule, faction_relaxed_rule,
+                        incompatible_unit_rule, dynamic_ready_strict_rule, dynamic_ready_relaxed_rule,
+                        partial_template_rule, minimum_faction_rule, mixed_template_rule, balanced_strict_rule,
+                        balanced_relaxed_rule, downgrade_strict_rule, downgrade_middle_rule, downgrade_last_rule}));
 
   resource.set_file("const.bytes", make_empty_table_bytes());
   resource.set_file("dtmq_channel_type.bytes", make_empty_table_bytes());
@@ -312,7 +416,8 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
       "level.bytes",
       make_table_bytes({make_level(101, 1, 1), make_level(201, 1, 2), make_level(202, 1, 2), make_level(203, 1, 2),
                         make_level(207, 1, 2), make_level(208, 2, 2), make_level(301, 1, 3), make_level(401, 1, 4),
-                        make_level(501, 1, 5), make_level(601, 1, 6)}));
+                        make_level(501, 1, 5), make_level(601, 1, 6), make_level(701, 1, 7), make_level(1001, 1, 10),
+                        make_level(2001, 1, 20)}));
   resource.set_file("rank_define.bytes", make_empty_table_bytes());
   resource.set_file("rank_period_reward_pool.bytes", make_empty_table_bytes());
   resource.set_file("rank_rule.bytes", make_empty_table_bytes());
@@ -592,6 +697,205 @@ CASE_TEST(matchsvr_matching_wal, routes_unit_members_to_their_own_lobbysvr) {
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
+CASE_TEST(matchsvr_matching_logic, same_capacity_rule_supports_exclusive_one_vs_one_and_three_vs_three) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto rule = *excel::get_ExcelMatchingRule_by_id(300);
+  rule.set_faction_add_rule(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM);
+  rule.set_min_user_cout_limit(2);
+  runtime.resource().set_file("matching_rule.bytes", make_table_bytes(rule));
+  runtime.resource().set_version("same-capacity-exclusive");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(8);
+  for (int32_t size : {1, 3}) {
+    matching_room room{"same-capacity", scope, 301, 100, 300};
+    auto first = make_party_unit(1, 10001, size, 10, false);
+    auto created = matching_logic::check_unit_can_create_room(scope, first, 100, size);
+    CASE_EXPECT_TRUE(created.evaluation.can_join());
+    if (!created.evaluation.can_join()) {
+      continue;
+    }
+    CASE_EXPECT_TRUE(add_unit(room, first));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+    CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 100, size).ready());
+    auto different = make_party_unit(2, 10011, size == 1 ? 3 : 1, 10, false);
+    auto rejected = matching_logic::check_unit_can_join(room, different, 100, 4);
+    CASE_EXPECT_FALSE(rejected.evaluation.can_join());
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, rejected.evaluation.result());
+    auto second = make_party_unit(3, 10021, size, 10, false);
+    auto joined = matching_logic::check_unit_can_join(room, second, 100, size * 2);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (joined.evaluation.can_join()) {
+      CASE_EXPECT_TRUE(add_unit(room, second));
+      CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+      CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
+      CASE_EXPECT_TRUE(matching_logic::check_room_ready(room, 100, size * 2).ready());
+      room.begin_confirmation(115);
+      CASE_EXPECT_TRUE(room.finalize_faction_ids());
+      CASE_EXPECT_NE(0, room.get_unit_faction_id(1));
+      CASE_EXPECT_NE(room.get_unit_faction_id(1), room.get_unit_faction_id(3));
+    }
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, same_capacity_compares_fill_target_not_incoming_unit_size) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto rule = *excel::get_ExcelMatchingRule_by_id(300);
+  rule.set_faction_add_rule(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM);
+  rule.set_min_user_cout_limit(2);
+  runtime.resource().set_file("matching_rule.bytes", make_table_bytes(rule));
+  runtime.resource().set_version("same-fill-target");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  for (int32_t pool_id : {8, 14}) {
+    // 两种池策略都必须补满，不能因为已满足最小总人数就提前开局。
+    auto scope = make_room().get_scope();
+    scope.set_matching_pool_id(pool_id);
+    if (pool_id == 14) {
+      auto balanced_rule = rule;
+      balanced_rule.set_id(700);
+      runtime.resource().set_file("matching_rule.bytes", make_table_bytes({rule, balanced_rule}));
+      runtime.resource().set_version("same-fill-balanced");
+      CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+    }
+    matching_room room{"fill-target", scope, 301, 100, 300};
+    for (uint64_t unit_id = 1; unit_id <= 6; ++unit_id) {
+      auto unit = make_party_unit(unit_id, 10100 + unit_id, 1, 10, true);
+      auto joined = unit_id == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 6)
+                                 : matching_logic::check_unit_can_join(room, unit, 100, 6);
+      CASE_EXPECT_TRUE(joined.evaluation.can_join());
+      if (!joined.evaluation.can_join()) {
+        break;
+      }
+      CASE_EXPECT_TRUE(add_unit(room, unit));
+      CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+      CASE_EXPECT_EQ(unit_id == 6, matching_logic::check_room_ready(room, 100, 6).ready());
+      if (unit_id == 1) {
+        const auto exclusive = make_party_unit(9, 10109, 1, 10, false);
+        CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, exclusive, 100, 6).evaluation.can_join());
+      }
+      for (const auto& assignment : room.get_faction_assignments()) {
+        CASE_EXPECT_EQ(3, assignment.user_capacity());
+      }
+    }
+    CASE_EXPECT_EQ(6, room.get_user_count());
+    CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, none_rule_allows_three_unequal_full_factions) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(7);
+  matching_room room{"unequal-factions", scope, 301, 100, 300};
+  for (int32_t size : {1, 2, 3}) {
+    auto unit = make_party_unit(static_cast<uint64_t>(size), 10200 + size * 10, size, 10, false);
+    auto joined = size == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 6)
+                            : matching_logic::check_unit_can_join(room, unit, 100, 6);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (!joined.evaluation.can_join()) {
+      break;
+    }
+    CASE_EXPECT_TRUE(add_unit(room, unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+    CASE_EXPECT_EQ(size == 3, matching_logic::check_room_ready(room, 100, 6).ready());
+  }
+  CASE_EXPECT_EQ(6, room.get_user_count());
+  CASE_EXPECT_EQ(3, room.get_faction_assignments().size());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, faction_capacity_and_numeric_limits_must_match_the_same_rule) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto same_rule = *excel::get_ExcelMatchingRule_by_id(100);
+  same_rule.set_faction_add_rule(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM);
+  auto unrestricted_rule = same_rule;
+  unrestricted_rule.set_id(101);
+  unrestricted_rule.set_faction_add_rule(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_NONE);
+  unrestricted_rule.mutable_rules(0)->set_values(0, 2);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRuleGroup group;
+  group.set_group_id(10);
+  group.set_global_user_upper(100);
+  group.add_pool_rules(100);
+  group.add_pool_rules(101);
+  runtime.resource().set_file("matching_rule_group.bytes", make_table_bytes(group));
+  runtime.resource().set_file("matching_rule.bytes", make_table_bytes({same_rule, unrestricted_rule}));
+  runtime.resource().set_version("capacity-and-numeric");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  auto room = make_room();
+  auto stored = make_party_unit(1, 10301, 1, 10, false);
+  auto created = matching_logic::check_unit_can_create_room(room.get_scope(), stored, 100, 1);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  CASE_EXPECT_TRUE(add_unit(room, stored));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+  // SAME 接受段位差 4 但拒绝容量 2；NONE 接受容量 2 但拒绝段位差 4，不能拼接两条规则。
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(2, 10302, 14), 100, 2).evaluation.can_join());
+  auto incoming = make_unit(2, 10302, 11);
+  CASE_EXPECT_TRUE(matching_logic::check_unit_can_join(room, incoming, 100, 2).evaluation.can_join());
+  protobuf_copy_message(*incoming.add_ban_users(), stored.users(0).user_key());
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, incoming, 100, 2).evaluation.can_join());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, complete_faction_migration_obeys_same_capacity_rule) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto rule = *excel::get_ExcelMatchingRule_by_id(300);
+  rule.set_faction_add_rule(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM);
+  runtime.resource().set_file("matching_rule.bytes", make_table_bytes(rule));
+  runtime.resource().set_version("same-capacity-migration");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(3);
+  matching_room room{"same-capacity-target", scope, 301, 100, 300};
+  auto first = make_party_unit(1, 10401, 2, 10, false);
+  auto created = matching_logic::check_unit_can_create_room(scope, first, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  CASE_EXPECT_TRUE(add_unit(room, first));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+  auto different = make_party_unit(2, 10411, 3, 10, false);
+  CASE_EXPECT_FALSE(matching_logic::check_faction_can_join(room, {&different}, 3, 100, 5).evaluation.can_join());
+  auto same = make_party_unit(3, 10421, 2, 10, false);
+  auto accepted = matching_logic::check_faction_can_join(room, {&same}, 2, 100, 4);
+  CASE_EXPECT_TRUE(accepted.evaluation.can_join());
+  CASE_EXPECT_EQ(2, accepted.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(2, room.get_user_count());
+  CASE_EXPECT_EQ(1, room.get_faction_assignments().size());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, rejects_unknown_faction_add_rule_after_reload) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  auto unit = make_unit(1, 10501, 10);
+  CASE_EXPECT_TRUE(matching_logic::check_unit_can_create_room(scope, unit, 100, 1).evaluation.can_join());
+  auto rule = *excel::get_ExcelMatchingRule_by_id(100);
+  rule.set_faction_add_rule(static_cast<PROJECT_NAMESPACE_ID::config::EnMatchingFactionAddRule>(99));
+  runtime.resource().set_file("matching_rule.bytes", make_table_bytes(rule));
+  runtime.resource().set_version("unknown-add-rule");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_create_room(scope, unit, 100, 1).evaluation.can_join());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
 CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_contract) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
@@ -648,7 +952,7 @@ CASE_TEST(matchsvr_matching_manager, validates_create_operator_as_unit_member) {
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_template_and_force_limits) {
+CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_limits_without_force_count_filter) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -664,8 +968,8 @@ CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_template_and_force_limi
 
   auto rank_rejected = matching_logic::check_unit_can_join(room, make_unit(3, 10003, 16, 2), 110, 2);
   CASE_EXPECT_FALSE(rank_rejected.evaluation.can_join());
-  auto force_rejected = matching_logic::check_unit_can_join(room, make_unit(4, 10004, 12, 1), 110, 2);
-  CASE_EXPECT_FALSE(force_rejected.evaluation.can_join());
+  auto same_force = matching_logic::check_unit_can_join(room, make_unit(4, 10004, 12, 1), 110, 2);
+  CASE_EXPECT_TRUE(same_force.evaluation.can_join());
 
   auto oversized = make_unit(5, 10005, 12, 2);
   for (uint64_t user_id = 10006; user_id <= 10008; ++user_id) {
@@ -673,18 +977,29 @@ CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_template_and_force_limi
   }
   auto room_full = matching_logic::check_unit_can_join(room, oversized, 110, 2);
   CASE_EXPECT_FALSE(room_full.evaluation.can_join());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, room_full.evaluation.result());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, room_full.evaluation.result());
 
   CASE_EXPECT_TRUE(add_unit(room, make_unit(2, 10002, 14, 2)));
   CASE_EXPECT_TRUE(room.set_faction_assignments(accepted.evaluation.faction_assignments()));
   auto ready = matching_logic::check_room_ready(room, 110, 2);
+  // 新建的可补位 faction 容量为 2，只有 1 人时尚未补满。
+  CASE_EXPECT_FALSE(ready.ready());
+  auto filler = make_unit(6, 10009, 12, 2);
+  auto filled = matching_logic::check_unit_can_join(room, filler, 110, 3);
+  CASE_EXPECT_TRUE(filled.evaluation.can_join());
+  if (!filled.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  CASE_EXPECT_TRUE(add_unit(room, filler));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(filled.evaluation.faction_assignments()));
+  ready = matching_logic::check_room_ready(room, 110, 3);
   CASE_EXPECT_TRUE(ready.ready());
-  CASE_EXPECT_EQ(1000, ready.result_template_id());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, selects_initial_faction_from_template_capacity_index) {
+CASE_TEST(matchsvr_matching_logic, uses_pool_capacity_without_template_reachability) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -709,15 +1024,67 @@ CASE_TEST(matchsvr_matching_logic, selects_initial_faction_from_template_capacit
   CASE_EXPECT_EQ(2, exclusive.evaluation.faction_assignments(0).assigned_user_count());
 
   scope.set_matching_pool_id(4);
-  auto missing_slot =
+  auto full_faction =
       matching_logic::check_unit_can_create_room(scope, make_party_unit(23, 26005, 3, 10, true), 100, 3);
-  CASE_EXPECT_FALSE(missing_slot.evaluation.can_join());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, missing_slot.evaluation.result());
+  CASE_EXPECT_TRUE(full_faction.evaluation.can_join());
+  CASE_EXPECT_EQ(3, full_faction.evaluation.faction_assignments(0).user_capacity());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, keeps_template_eligible_until_room_start_threshold_is_reached) {
+CASE_TEST(matchsvr_matching_logic, priority_factions_require_full_capacity) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(4);
+  auto party = make_party_unit(24, 26010, 2, 10, true);
+  auto created = matching_logic::check_unit_can_create_room(scope, party, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  CASE_EXPECT_EQ(0, created.evaluation.result());
+  if (created.evaluation.can_join()) {
+    matching_room room{"priority-incomplete", scope, 401, 100, 300};
+    CASE_EXPECT_EQ(3, created.evaluation.faction_assignments(0).user_capacity());
+    CASE_EXPECT_TRUE(add_unit(room, party));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+    auto second = make_party_unit(25, 26020, 2, 10, true);
+    auto joined = matching_logic::check_unit_can_join(room, second, 100, 4);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (joined.evaluation.can_join()) {
+      CASE_EXPECT_TRUE(add_unit(room, second));
+      CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+      CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
+      CASE_EXPECT_EQ(4, room.get_user_count());
+      // 当前人数满足两项最小门槛，但两个容量 3 的 faction 都没有补满。
+      const auto ready = matching_logic::check_room_ready(room, 100, 4);
+      CASE_EXPECT_EQ(0, ready.result());
+      CASE_EXPECT_FALSE(ready.ready());
+    }
+  }
+
+  // 两个独占队伍的固定容量均为 2，同样四人时已满员，可以成局。
+  party.set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
+  created = matching_logic::check_unit_can_create_room(scope, party, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (created.evaluation.can_join()) {
+    CASE_EXPECT_EQ(2, created.evaluation.faction_assignments(0).user_capacity());
+    matching_room room{"priority-exclusive", scope, 401, 100, 300};
+    CASE_EXPECT_TRUE(add_unit(room, party));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+    auto second = make_party_unit(25, 26020, 2, 10, false);
+    auto joined = matching_logic::check_unit_can_join(room, second, 100, 4);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (joined.evaluation.can_join()) {
+      CASE_EXPECT_TRUE(add_unit(room, second));
+      CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+      CASE_EXPECT_TRUE(matching_logic::check_room_ready(room, 100, 4).ready());
+    }
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, keeps_room_searching_until_user_threshold_is_reached) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -754,12 +1121,11 @@ CASE_TEST(matchsvr_matching_logic, keeps_template_eligible_until_room_start_thre
   ready = matching_logic::check_room_ready(room, 162, 2);
   CASE_EXPECT_EQ(0, ready.result());
   CASE_EXPECT_TRUE(ready.ready());
-  CASE_EXPECT_EQ(5001, ready.result_template_id());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, accepts_result_template_subset_after_pool_lower_bound) {
+CASE_TEST(matchsvr_matching_logic, accepts_full_factions_after_readiness_limits) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -795,52 +1161,17 @@ CASE_TEST(matchsvr_matching_logic, accepts_result_template_subset_after_pool_low
 
   ready = matching_logic::check_room_ready(room, 100, 2);
   CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_FALSE(ready.ready());
+
+  auto third_unit = make_unit(28, 28003, 10);
+  joined = matching_logic::check_unit_can_join(room, third_unit, 100, 3);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_TRUE(add_unit(room, third_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+
+  ready = matching_logic::check_room_ready(room, 100, 3);
+  CASE_EXPECT_EQ(0, ready.result());
   CASE_EXPECT_TRUE(ready.ready());
-  CASE_EXPECT_EQ(6000, ready.result_template_id());
-
-  CASE_EXPECT_EQ(0, runtime.stop());
-}
-
-CASE_TEST(matchsvr_matching_logic, keeps_template_dynamic_until_all_fixed_factions_are_full) {
-  atframework::testing::runtime runtime;
-  if (!start_runtime(runtime)) {
-    return;
-  }
-
-  auto room = make_room();
-  CASE_EXPECT_TRUE(add_unit(room, make_unit(1, 10001, 10, 1)));
-  room.set_result_template_id(1001);
-  set_single_faction(room, 1, 1);
-
-  const auto result = matching_logic::check_room_ready(room, 110, 1);
-  CASE_EXPECT_EQ(0, result.result());
-  CASE_EXPECT_FALSE(result.ready());
-  CASE_EXPECT_EQ(0, result.result_template_id());
-
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate result_template;
-  result_template.set_id(1000);
-  auto* faction = result_template.add_faction_template();
-  faction->set_user_number(1);
-  faction->set_count(2);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate changed_alternate_template;
-  changed_alternate_template.set_id(1001);
-  auto* changed_alternate_faction = changed_alternate_template.add_faction_template();
-  changed_alternate_faction->set_user_number(2);
-  changed_alternate_faction->set_count(1);
-  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate convergence_template;
-  convergence_template.set_id(2000);
-  auto* convergence_faction = convergence_template.add_faction_template();
-  convergence_faction->set_user_number(1);
-  convergence_faction->set_count(3);
-  runtime.resource().set_file("matching_result_template.bytes",
-                              make_table_bytes({result_template, changed_alternate_template, convergence_template}));
-  runtime.resource().set_version("matchsvr-unit-test-v2");
-  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
-
-  const auto reloaded_result = matching_logic::check_room_ready(room, 110, 1);
-  CASE_EXPECT_EQ(0, reloaded_result.result());
-  CASE_EXPECT_FALSE(reloaded_result.ready());
-  CASE_EXPECT_EQ(0, reloaded_result.result_template_id());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -905,7 +1236,7 @@ CASE_TEST(matchsvr_matching_logic, rejects_bidirectional_unit_and_user_history_b
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, selects_exact_template_for_preserved_factions) {
+CASE_TEST(matchsvr_matching_logic, accepts_preserved_full_factions_without_reassignment) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -932,7 +1263,6 @@ CASE_TEST(matchsvr_matching_logic, selects_exact_template_for_preserved_factions
   CASE_EXPECT_TRUE(room.set_faction_assignments(assignments));
   auto result = matching_logic::check_room_ready(room, 110, 6);
   CASE_EXPECT_TRUE(result.ready());
-  CASE_EXPECT_EQ(3000, result.result_template_id());
 
   matching_room solo_room{"preserved-solo-factions", scope, 301, 100, 300};
   assignments.Clear();
@@ -946,7 +1276,6 @@ CASE_TEST(matchsvr_matching_logic, selects_exact_template_for_preserved_factions
   CASE_EXPECT_TRUE(solo_room.set_faction_assignments(assignments));
   result = matching_logic::check_room_ready(solo_room, 110, 6);
   CASE_EXPECT_TRUE(result.ready());
-  CASE_EXPECT_EQ(3000, result.result_template_id());
   for (const auto& faction : solo_room.get_faction_assignments()) {
     CASE_EXPECT_EQ(3, faction.unit_ids_size());
   }
@@ -1024,7 +1353,6 @@ CASE_TEST(matchsvr_matching_logic, creates_a_second_incomplete_faction_when_exis
 
   matching_room room{"single-pending-faction", scope, 301, 100, 300};
   CASE_EXPECT_TRUE(add_unit(room, make_party_unit(1, 23001, 2, 10, true)));
-  room.set_result_template_id(3001);
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> initial_assignments;
   auto* faction = initial_assignments.Add();
   faction->set_user_capacity(3);
@@ -1106,7 +1434,6 @@ CASE_TEST(matchsvr_matching_logic, fills_the_pending_faction_before_opening_anot
   matching_room room{"incremental-faction", scope, 301, 100, 300};
   CASE_EXPECT_TRUE(add_unit(room, make_party_unit(1, 30001, 1, 10, true)));
   CASE_EXPECT_TRUE(add_unit(room, make_party_unit(2, 30002, 1, 10, true)));
-  room.set_result_template_id(3000);
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> initial_assignments;
   auto* faction_zero = initial_assignments.Add();
   faction_zero->set_user_capacity(3);
@@ -1126,7 +1453,6 @@ CASE_TEST(matchsvr_matching_logic, fills_the_pending_faction_before_opening_anot
   matching_room create_faction_room{"create-faction", scope, 301, 100, 300};
   CASE_EXPECT_TRUE(add_unit(create_faction_room, make_party_unit(11, 31001, 2, 10, true)));
   CASE_EXPECT_TRUE(add_unit(create_faction_room, make_party_unit(13, 31005, 1, 10, true)));
-  create_faction_room.set_result_template_id(3000);
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> create_faction_assignments;
   auto* existing_faction = create_faction_assignments.Add();
   existing_faction->set_user_capacity(3);
@@ -1143,7 +1469,136 @@ CASE_TEST(matchsvr_matching_logic, fills_the_pending_faction_before_opening_anot
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, does_not_rebuild_factions_after_incremental_assignment_fails) {
+CASE_TEST(matchsvr_matching_logic, fills_factions_larger_than_the_unit_limit) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  for (int32_t pool_id : {13, 14}) {
+    PROJECT_NAMESPACE_ID::DMatchingScope scope;
+    scope.set_level_type(1);
+    scope.set_region("cn");
+    scope.set_battle_version("1.0");
+    scope.set_matching_pool_id(pool_id);
+    CASE_EXPECT_EQ(3, excel::get_matching_pool_faction_capacity(pool_id));
+    const auto oversized_unit = make_party_unit(99, 39099, 3, 10, true);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
+                   matching_logic::validate_unit(scope.matching_pool_id(), oversized_unit));
+    CASE_EXPECT_FALSE(matching_logic::check_unit_can_create_room(scope, oversized_unit, 100, 3).evaluation.can_join());
+
+    matching_room room{"separate-unit-and-faction-limits", scope, 301, 100, 300};
+    // 两个 2 人 Unit 分别占位，两个单人补满两个容量为 3 的 faction。
+    for (uint64_t unit_id = 1; unit_id <= 4; ++unit_id) {
+      auto unit = make_party_unit(unit_id, 39000 + unit_id * 10, unit_id <= 2 ? 2 : 1, 10, true);
+      CASE_EXPECT_EQ(0, matching_logic::validate_unit(scope.matching_pool_id(), unit));
+      auto joined = unit_id == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 6)
+                                 : matching_logic::check_unit_can_join(room, unit, 100, 6);
+      CASE_EXPECT_TRUE(joined.evaluation.can_join());
+      if (!joined.evaluation.can_join()) {
+        CASE_EXPECT_EQ(0, runtime.stop());
+        return;
+      }
+      CASE_EXPECT_TRUE(add_unit(room, unit));
+      CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+      if (unit_id < 4) {
+        CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 100, 6).ready());
+      }
+    }
+    CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, oversized_unit, 100, 9).evaluation.can_join());
+    CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
+    for (const auto& assignment : room.get_faction_assignments()) {
+      CASE_EXPECT_EQ(3, assignment.user_capacity());
+      CASE_EXPECT_EQ(3, assignment.assigned_user_count());
+    }
+    const auto ready = matching_logic::check_room_ready(room, 100, 6);
+    CASE_EXPECT_TRUE(ready.ready());
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, migrates_complete_faction_larger_than_the_unit_limit) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(13);
+  matching_room target{"separate-faction-migration-limit", scope, 301, 100, 300};
+  CASE_EXPECT_TRUE(add_unit(target, make_party_unit(10, 39101, 2, 10, true)));
+  set_single_faction(target, 10, 3);
+  std::vector<PROJECT_NAMESPACE_ID::DMatchingUnit> source_units;
+  source_units.emplace_back(make_party_unit(11, 39201, 2, 10, true));
+  source_units.emplace_back(make_party_unit(12, 39203, 1, 10, true));
+  const auto joined = matching_logic::check_faction_can_join(target, make_unit_view(source_units), 3, 110, 5);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (joined.evaluation.can_join()) {
+    CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments_size());
+    const auto& migrated = joined.evaluation.faction_assignments(1);
+    CASE_EXPECT_EQ(3, migrated.user_capacity());
+    CASE_EXPECT_EQ(3, migrated.assigned_user_count());
+    CASE_EXPECT_EQ(2, migrated.unit_ids_size());
+    CASE_EXPECT_EQ(11, migrated.unit_ids(0));
+    CASE_EXPECT_EQ(12, migrated.unit_ids(1));
+    for (const auto& unit : source_units) {
+      CASE_EXPECT_TRUE(add_unit(target, unit));
+    }
+    CASE_EXPECT_TRUE(target.set_faction_assignments(joined.evaluation.faction_assignments()));
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, enforces_faction_limit_independently_of_unit_limit) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(15);
+  const auto valid_unit = make_party_unit(1, 39301, 2, 10, true);
+  const auto created = matching_logic::check_unit_can_create_room(scope, valid_unit, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (created.evaluation.can_join()) {
+    CASE_EXPECT_EQ(2, created.evaluation.faction_assignments(0).user_capacity());
+  }
+  for (bool allow_fill : {false, true}) {
+    const auto oversized_unit = make_party_unit(2, 39311, 3, 10, allow_fill);
+    CASE_EXPECT_EQ(0, matching_logic::validate_unit(scope.matching_pool_id(), oversized_unit));
+    CASE_EXPECT_FALSE(matching_logic::check_unit_can_create_room(scope, oversized_unit, 100, 3).evaluation.can_join());
+  }
+  matching_room target{"reject-oversized-faction", scope, 401, 100, 300};
+  CASE_EXPECT_TRUE(add_unit(target, valid_unit));
+  set_single_faction(target, 1, 2);
+  std::vector<PROJECT_NAMESPACE_ID::DMatchingUnit> source_units;
+  source_units.emplace_back(make_party_unit(2, 39311, 3, 10, false));
+  const auto rejected = matching_logic::check_faction_can_join(target, make_unit_view(source_units), 3, 100, 5);
+  CASE_EXPECT_FALSE(rejected.evaluation.can_join());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, rejected.evaluation.result());
+  CASE_EXPECT_EQ(2, target.get_user_count());
+  CASE_EXPECT_EQ(1, target.get_faction_assignments().size());
+
+  // 不再通过模板校验池容量；正容量直接生效，漏配仍须拒绝。
+  for (int32_t pool_id : {16, 19}) {
+    scope.set_matching_pool_id(pool_id);
+    const auto solo = make_party_unit(3, 39321, 1, 10, true);
+    auto single = matching_logic::check_unit_can_create_room(scope, solo, 100, 1);
+    CASE_EXPECT_TRUE(single.evaluation.can_join());
+    CASE_EXPECT_EQ(1, excel::get_matching_pool_faction_capacity(pool_id));
+  }
+  scope.set_matching_pool_id(17);
+  CASE_EXPECT_EQ(0, excel::get_matching_pool_faction_capacity(17));
+  CASE_EXPECT_FALSE(
+      matching_logic::check_unit_can_create_room(scope, make_unit(3, 39321, 10), 100, 1).evaluation.can_join());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, balances_factions_after_opening_the_pool_maximum) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -1153,13 +1608,379 @@ CASE_TEST(matchsvr_matching_logic, does_not_rebuild_factions_after_incremental_a
   scope.set_level_type(1);
   scope.set_region("cn");
   scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(7);
+
+  auto first_unit = make_party_unit(1, 31501, 1, 10, true);
+  auto created = matching_logic::check_unit_can_create_room(scope, first_unit, 100, 1);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  matching_room room{"balanced-factions", scope, 301, 100, 300};
+  CASE_EXPECT_TRUE(add_unit(room, first_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+
+  for (uint64_t unit_id = 2; unit_id <= 5; ++unit_id) {
+    auto unit = make_party_unit(unit_id, 31500 + unit_id, 1, 10, true);
+    auto joined = matching_logic::check_unit_can_join(room, unit, 100, static_cast<int32_t>(unit_id));
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (!joined.evaluation.can_join()) {
+      CASE_EXPECT_EQ(0, runtime.stop());
+      return;
+    }
+    CASE_EXPECT_TRUE(add_unit(room, unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+
+    const int expected_faction_count = unit_id < 3 ? static_cast<int>(unit_id) : 3;
+    CASE_EXPECT_EQ(expected_faction_count, room.get_faction_assignments().size());
+  }
+
+  CASE_EXPECT_EQ(2, room.get_faction_assignments().Get(0).assigned_user_count());
+  CASE_EXPECT_EQ(2, room.get_faction_assignments().Get(1).assigned_user_count());
+  CASE_EXPECT_EQ(1, room.get_faction_assignments().Get(2).assigned_user_count());
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, balanced_factions_cannot_start_before_full_capacity) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(11);
+
+  matching_room room{"balanced-full-capacity", scope, 401, 100, 300};
+  auto first_unit = make_party_unit(1, 31511, 2, 10, true);
+  auto created = matching_logic::check_unit_can_create_room(scope, first_unit, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (!created.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(3, created.evaluation.faction_assignments(0).user_capacity());
+  CASE_EXPECT_TRUE(add_unit(room, first_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+  auto second_unit = make_party_unit(2, 31513, 1, 10, true);
+  auto second_joined = matching_logic::check_unit_can_join(room, second_unit, 100, 3);
+  CASE_EXPECT_TRUE(second_joined.evaluation.can_join());
+  if (!second_joined.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(3, second_joined.evaluation.faction_assignments(1).user_capacity());
+  CASE_EXPECT_TRUE(add_unit(room, second_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(second_joined.evaluation.faction_assignments()));
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 100, 3).ready());
+
+  auto incoming_unit = make_party_unit(3, 31514, 1, 10, true);
+  auto joined = matching_logic::check_unit_can_join(room, incoming_unit, 100, 4);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (joined.evaluation.can_join()) {
+    CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments_size());
+    CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(0).assigned_user_count());
+    CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(1).assigned_user_count());
+    CASE_EXPECT_TRUE(add_unit(room, incoming_unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+    const auto ready = matching_logic::check_room_ready(room, 100, 4);
+    CASE_EXPECT_FALSE(ready.ready());
+  }
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, lower_user_threshold_does_not_bypass_full_factions) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(20);
+  matching_room room{"balanced-downgrade-fill", scope, 301, 100, 300};
+  for (uint64_t unit_id = 1; unit_id <= 2; ++unit_id) {
+    auto unit = make_party_unit(unit_id, 39500 + unit_id * 10, unit_id == 1 ? 2 : 1, 10, true);
+    auto joined = unit_id == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 3)
+                               : matching_logic::check_unit_can_join(room, unit, 100, 3);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (!joined.evaluation.can_join()) {
+      CASE_EXPECT_EQ(0, runtime.stop());
+      return;
+    }
+    CASE_EXPECT_TRUE(add_unit(room, unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+  }
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 119, 3).ready());
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 120, 3).ready());
+  const auto incoming = make_party_unit(3, 39530, 1, 10, true);
+  const auto joined = matching_logic::check_unit_can_join(room, incoming, 120, 4);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (joined.evaluation.can_join()) {
+    CASE_EXPECT_TRUE(add_unit(room, incoming));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+    CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
+    for (const auto& assignment : room.get_faction_assignments()) {
+      CASE_EXPECT_EQ(3, assignment.user_capacity());
+      CASE_EXPECT_EQ(2, assignment.assigned_user_count());
+    }
+    CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 119, 4).ready());
+    const auto ready = matching_logic::check_room_ready(room, 120, 4);
+    CASE_EXPECT_FALSE(ready.ready());
+    // 仅修改开局人数条件，不拆分最初的双人 Unit，也不改变其阵营归属。
+    CASE_EXPECT_EQ(1, room.get_faction_assignments().Get(0).unit_ids_size());
+    CASE_EXPECT_EQ(1, room.get_faction_assignments().Get(0).unit_ids(0));
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, balanced_downgrade_does_not_shrink_an_oversized_faction) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(20);
+  matching_room room{"balanced-downgrade-preserve-members", scope, 301, 100, 300};
+  for (uint64_t unit_id = 1; unit_id <= 2; ++unit_id) {
+    auto unit = make_party_unit(unit_id, 39600 + unit_id * 10, unit_id == 1 ? 3 : 1, 10, true);
+    auto joined = unit_id == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 4)
+                               : matching_logic::check_unit_can_join(room, unit, 100, 4);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (!joined.evaluation.can_join()) {
+      CASE_EXPECT_EQ(0, runtime.stop());
+      return;
+    }
+    CASE_EXPECT_TRUE(add_unit(room, unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+  }
+  // [3,1] 既不是 2v2，也不是 1v1；不能把 3 人 Unit 拆出一个玩家。
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 120, 4).ready());
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 160, 4).ready());
+  const auto first_before = room.get_faction_assignments().Get(0).SerializeAsString();
+  const auto second_before = room.get_faction_assignments().Get(1).SerializeAsString();
+  CASE_EXPECT_FALSE(
+      matching_logic::check_unit_can_join(room, make_party_unit(9, 39690, 3, 10, true), 160, 7).evaluation.can_join());
+  CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
+  CASE_EXPECT_EQ(first_before, room.get_faction_assignments().Get(0).SerializeAsString());
+  CASE_EXPECT_EQ(second_before, room.get_faction_assignments().Get(1).SerializeAsString());
+  // 降低开局人数门槛不会改变已有容量，原房间仍须继续补满。
+  const auto incoming = make_party_unit(3, 39630, 2, 10, true);
+  const auto joined = matching_logic::check_unit_can_join(room, incoming, 160, 6);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (joined.evaluation.can_join()) {
+    CASE_EXPECT_TRUE(add_unit(room, incoming));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+    const auto ready = matching_logic::check_room_ready(room, 160, 6);
+    CASE_EXPECT_TRUE(ready.ready());
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, exclusive_solos_start_after_user_threshold_downgrade) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(20);
+  matching_room room{"balanced-downgrade-one-vs-one", scope, 301, 100, 300};
+  for (uint64_t unit_id = 1; unit_id <= 2; ++unit_id) {
+    auto unit = make_party_unit(unit_id, 39700 + unit_id, 1, 10, false);
+    auto joined = unit_id == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 2)
+                               : matching_logic::check_unit_can_join(room, unit, 100, 2);
+    CASE_EXPECT_TRUE(joined.evaluation.can_join());
+    if (!joined.evaluation.can_join()) {
+      CASE_EXPECT_EQ(0, runtime.stop());
+      return;
+    }
+    CASE_EXPECT_TRUE(add_unit(room, unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+  }
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 119, 2).ready());
+  CASE_EXPECT_FALSE(matching_logic::check_room_ready(room, 159, 2).ready());
+  const auto ready = matching_logic::check_room_ready(room, 160, 2);
+  CASE_EXPECT_TRUE(ready.ready());
+  room.begin_confirmation(200);
+  CASE_EXPECT_TRUE(room.finalize_faction_ids());
+  CASE_EXPECT_NE(0, room.get_unit_faction_id(1));
+  CASE_EXPECT_NE(room.get_unit_faction_id(1), room.get_unit_faction_id(2));
+  for (const auto& assignment : room.get_faction_assignments()) {
+    CASE_EXPECT_EQ(1, assignment.user_capacity());
+    CASE_EXPECT_EQ(1, assignment.assigned_user_count());
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, validates_balanced_capacity_across_windows_and_reload) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
+  scope.set_matching_pool_id(7);
+  auto unit = make_party_unit(1, 31530, 1, 10, true);
+  CASE_EXPECT_TRUE(matching_logic::check_unit_can_create_room(scope, unit, 100, 1).evaluation.can_join());
+
+  // 仅放宽后续窗口的最小人数，不改变补位容量。
+  seed_matching_tables(runtime.resource(), true);
+  runtime.resource().set_version("balanced-relaxed-windows");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  auto relaxed = matching_logic::check_unit_can_create_room(scope, unit, 100, 1);
+  CASE_EXPECT_TRUE(relaxed.evaluation.can_join());
+  if (relaxed.evaluation.can_join()) {
+    CASE_EXPECT_EQ(3, relaxed.evaluation.faction_assignments(0).user_capacity());
+  }
+
+  seed_matching_tables(runtime.resource());
+  runtime.resource().set_version("balanced-consistent-windows");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+  auto restored = matching_logic::check_unit_can_create_room(scope, unit, 100, 1);
+  CASE_EXPECT_TRUE(restored.evaluation.can_join());
+  if (restored.evaluation.can_join()) {
+    CASE_EXPECT_EQ(3, restored.evaluation.faction_assignments(0).user_capacity());
+  }
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, admits_none_rule_without_predicting_future_composition) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto scope = make_room().get_scope();
   scope.set_matching_pool_id(3);
+  auto first = make_party_unit(1, 31540, 3, 10, true);
+  auto created = matching_logic::check_unit_can_create_room(scope, first, 100, 3);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (!created.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  matching_room room{"completion-user-limit", scope, 301, 100, 300};
+  CASE_EXPECT_TRUE(add_unit(room, first));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+  const auto before = room.get_faction_assignments().Get(0).SerializeAsString();
+
+  // NONE 接受容量不同的独占阵营，只检查当前加入是否超过硬上限。
+  const auto exclusive = matching_logic::check_unit_can_join(room, make_party_unit(2, 31543, 1, 10, false), 100, 4);
+  CASE_EXPECT_TRUE(exclusive.evaluation.can_join());
+  CASE_EXPECT_EQ(0, exclusive.evaluation.result());
+  CASE_EXPECT_EQ(2, exclusive.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(1, exclusive.evaluation.faction_assignments(1).user_capacity());
+  CASE_EXPECT_EQ(3, room.get_user_count());
+  CASE_EXPECT_EQ(1, room.get_faction_assignments().size());
+  CASE_EXPECT_EQ(before, room.get_faction_assignments().Get(0).SerializeAsString());
+
+  // 不独占的单人 Unit 建立容量 3 的 faction，只需补两人，恰好达到上限。
+  const auto accepted = matching_logic::check_unit_can_join(room, make_party_unit(2, 31543, 1, 10, true), 100, 4);
+  CASE_EXPECT_TRUE(accepted.evaluation.can_join());
+  CASE_EXPECT_EQ(2, accepted.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, matches_fixed_capacities_for_mixed_faction_sizes) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(10);
+
+  auto fillable_unit = make_party_unit(1, 31521, 2, 10, true);
+  auto created = matching_logic::check_unit_can_create_room(scope, fillable_unit, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (!created.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+
+  matching_room room{"mixed-template", scope, 1001, 100, 300};
+  CASE_EXPECT_TRUE(add_unit(room, fillable_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+
+  auto exclusive_unit = make_party_unit(2, 31523, 2, 10, false);
+  auto joined = matching_logic::check_unit_can_join(room, exclusive_unit, 100, 4);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (!joined.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(0).user_capacity());
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(1).user_capacity());
+  CASE_EXPECT_TRUE(add_unit(room, exclusive_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+
+  auto final_unit = make_party_unit(3, 31525, 1, 10, true);
+  joined = matching_logic::check_unit_can_join(room, final_unit, 100, 5);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (joined.evaluation.can_join()) {
+    CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(0).assigned_user_count());
+    CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(1).assigned_user_count());
+    CASE_EXPECT_TRUE(add_unit(room, final_unit));
+    CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+    const auto ready = matching_logic::check_room_ready(room, 100, 5);
+    CASE_EXPECT_TRUE(ready.ready());
+  }
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, requires_rule_minimum_faction_count_before_ready) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(9);
+
+  auto first_unit = make_party_unit(1, 31601, 2, 10, true);
+  auto created = matching_logic::check_unit_can_create_room(scope, first_unit, 100, 2);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  matching_room room{"minimum-factions", scope, 301, 100, 300};
+  CASE_EXPECT_TRUE(add_unit(room, first_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+
+  auto ready = matching_logic::check_room_ready(room, 100, 2);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_FALSE(ready.ready());
+
+  auto second_unit = make_party_unit(2, 31603, 2, 10, true);
+  auto joined = matching_logic::check_unit_can_join(room, second_unit, 100, 4);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_TRUE(add_unit(room, second_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+
+  ready = matching_logic::check_room_ready(room, 100, 4);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_TRUE(ready.ready());
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, rejects_new_faction_after_pool_faction_limit_is_reached) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(8);
 
   matching_room room{"fallback-faction", scope, 301, 100, 300};
   CASE_EXPECT_TRUE(add_unit(room, make_party_unit(1, 32001, 2, 10, true)));
   CASE_EXPECT_TRUE(add_unit(room, make_party_unit(2, 32003, 1, 10, true)));
   CASE_EXPECT_TRUE(add_unit(room, make_party_unit(3, 32004, 1, 10, true)));
-  room.set_result_template_id(3000);
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> initial_assignments;
   auto* faction_zero = initial_assignments.Add();
   faction_zero->set_user_capacity(3);
@@ -1176,7 +1997,7 @@ CASE_TEST(matchsvr_matching_logic, does_not_rebuild_factions_after_incremental_a
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, keeps_created_faction_capacity_when_larger_templates_exist) {
+CASE_TEST(matchsvr_matching_logic, uses_pool_capacity_for_new_faction) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -1186,23 +2007,25 @@ CASE_TEST(matchsvr_matching_logic, keeps_created_faction_capacity_when_larger_te
   scope.set_level_type(1);
   scope.set_region("cn");
   scope.set_battle_version("1.0");
-  scope.set_matching_pool_id(3);
+  scope.set_matching_pool_id(10);
 
   matching_room room{"fixed-capacity", scope, 301, 100, 300};
-  CASE_EXPECT_TRUE(add_unit(room, make_party_unit(1, 33001, 1, 10, true)));
-  CASE_EXPECT_TRUE(add_unit(room, make_party_unit(2, 33002, 1, 10, true)));
+  CASE_EXPECT_TRUE(add_unit(room, make_party_unit(1, 33001, 2, 10, false)));
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> initial_assignments;
   auto* faction = initial_assignments.Add();
   faction->set_user_capacity(2);
   faction->add_unit_ids(1);
-  faction->add_unit_ids(2);
   CASE_EXPECT_TRUE(room.set_faction_assignments(initial_assignments));
 
   const auto joined = matching_logic::check_unit_can_join(room, make_party_unit(3, 33003, 1, 10, true), 110, 3);
   CASE_EXPECT_TRUE(joined.evaluation.can_join());
   CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments_size());
+  if (!joined.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
   CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(0).user_capacity());
-  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(1).user_capacity());
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(1).user_capacity());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -1441,7 +2264,7 @@ CASE_TEST(matchsvr_matching_manager, rejects_conflicts_and_unauthorized_operatio
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_manager, rejects_first_unit_that_cannot_fit_any_faction_template) {
+CASE_TEST(matchsvr_matching_manager, creates_first_unit_without_predicting_future_composition) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -1455,10 +2278,188 @@ CASE_TEST(matchsvr_matching_manager, rejects_first_unit_that_cannot_fit_any_fact
   set_request_levels(request, {401});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
 
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND,
-                 manager->create_matching(ctx, request, response));
-  CASE_EXPECT_EQ(0, manager->get_room_count());
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, request, response));
+  CASE_EXPECT_EQ(1, manager->get_room_count());
+  CASE_EXPECT_EQ(3, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, response.snapshot().status());
+
+  manager->clear();
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, tracks_searching_users_after_join_rejection_cancel_and_clear) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  manager->clear();
+  rpc::context ctx{rpc::context::create_without_task()};
+  const auto first = make_create_request(921, 39981, 10, 0, 20);
+  const auto second = make_create_request(922, 39982, 10, 0, 20);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, first, response));
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
+  const auto matching_id = response.matching_id();
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, second, response));
+  CASE_EXPECT_EQ(matching_id, response.matching_id());
+  CASE_EXPECT_EQ(2, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING,
+                 manager->create_matching(ctx, second, response));
+  CASE_EXPECT_EQ(2, manager->get_total_matching_user_count());
+  PROJECT_NAMESPACE_ID::SSMatchingCancelReq cancel;
+  cancel.set_unit_id(first.unit().unit_id());
+  protobuf_copy_message(*cancel.mutable_operator_user(), first.operator_user());
+  CASE_EXPECT_EQ(0, manager->cancel_matching(ctx, cancel, response));
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
+  cancel.set_unit_id(second.unit().unit_id());
+  protobuf_copy_message(*cancel.mutable_operator_user(), second.operator_user());
+  CASE_EXPECT_EQ(0, manager->cancel_matching(ctx, cancel, response));
   CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND,
+                 manager->cancel_matching(ctx, cancel, response));
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, first, response));
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
+  manager->clear();
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, tick_confirms_full_exclusive_factions_after_threshold_downgrade) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  manager->clear();
+  atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto first_request = make_create_request(901, 39901, 10, 0, 20);
+  auto second_request = make_create_request(902, 39902, 10, 0, 20);
+  first_request.mutable_unit()->set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
+  second_request.mutable_unit()->set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot first_response;
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot second_response;
+  const int32_t first_result = manager->create_matching(ctx, first_request, first_response);
+  const int32_t second_result = manager->create_matching(ctx, second_request, second_response);
+  CASE_EXPECT_EQ(0, first_result);
+  CASE_EXPECT_EQ(0, second_result);
+  if (first_result != 0 || second_result != 0) {
+    manager->clear();
+    atfw::util::time::time_utility::reset_global_now_offset();
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(first_response.matching_id(), second_response.matching_id());
+  const auto first_heartbeat = make_heartbeat_request(901, first_request.operator_user());
+  const auto second_heartbeat = make_heartbeat_request(902, second_request.operator_user());
+  for (int elapsed : {19, 20, 59, 60}) {
+    atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{elapsed - 1});
+    // 心跳本身也会评估开局，因此在边界前刷新，再跨过边界让 tick 单独触发状态变化。
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, first_heartbeat, first_response));
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, second_heartbeat, second_response));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING,
+                   first_response.snapshot().status());
+    CASE_EXPECT_EQ(2, manager->get_total_matching_user_count());
+    atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{elapsed});
+    CASE_EXPECT_EQ(0, manager->tick());
+    CASE_EXPECT_EQ(elapsed < 60 ? 2 : 0, manager->get_total_matching_user_count());
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, first_heartbeat, first_response));
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, second_heartbeat, second_response));
+    const auto expected_status = elapsed < 60 ? PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING
+                                              : PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING;
+    CASE_EXPECT_EQ(expected_status, first_response.snapshot().status());
+    CASE_EXPECT_EQ(expected_status, second_response.snapshot().status());
+    CASE_EXPECT_EQ(1, manager->get_room_count());
+    CASE_EXPECT_EQ(2, manager->get_room_unit_count(first_response.matching_id()));
+    CASE_EXPECT_EQ(2, manager->get_room_faction_count(first_response.matching_id()));
+  }
+  manager->clear();
+  atfw::util::time::time_utility::reset_global_now_offset();
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, tick_confirms_full_unequal_factions_after_threshold_downgrade) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  manager->clear();
+  atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto party = make_party_create_request(911, 39911, 3, 10);
+  party.mutable_scope()->set_matching_pool_id(20);
+  set_request_levels(party, {2001});
+  auto solo = make_create_request(912, 39914, 10, 0, 20);
+  solo.mutable_unit()->set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot party_response;
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot solo_response;
+  const int32_t party_result = manager->create_matching(ctx, party, party_response);
+  const int32_t solo_result = manager->create_matching(ctx, solo, solo_response);
+  CASE_EXPECT_EQ(0, party_result);
+  CASE_EXPECT_EQ(0, solo_result);
+  if (party_result == 0 && solo_result == 0) {
+    CASE_EXPECT_EQ(party_response.matching_id(), solo_response.matching_id());
+    atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{19});
+    // 刷新每个成员的心跳，避免把时钟推进误当作 Unit 离线。
+    for (const auto& user : party.unit().users()) {
+      const auto heartbeat = make_heartbeat_request(911, user.user_key());
+      CASE_EXPECT_EQ(0, manager->check_matching(ctx, heartbeat, party_response));
+    }
+    const auto solo_heartbeat = make_heartbeat_request(912, solo.operator_user());
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, solo_heartbeat, solo_response));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING,
+                   solo_response.snapshot().status());
+    CASE_EXPECT_EQ(4, manager->get_total_matching_user_count());
+    atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{20});
+    CASE_EXPECT_EQ(0, manager->tick());
+    CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
+    const auto party_heartbeat = make_heartbeat_request(911, party.operator_user());
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, party_heartbeat, party_response));
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, solo_heartbeat, solo_response));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                   party_response.snapshot().status());
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                   solo_response.snapshot().status());
+    CASE_EXPECT_EQ(1, manager->get_room_count());
+    CASE_EXPECT_EQ(2, manager->get_room_unit_count(party_response.matching_id()));
+    CASE_EXPECT_EQ(2, manager->get_room_faction_count(party_response.matching_id()));
+  }
+  manager->clear();
+  atfw::util::time::time_utility::reset_global_now_offset();
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, applies_balanced_policy_through_create_matching) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  auto manager = matching_manager::me();
+  manager->clear();
+  rpc::context ctx{rpc::context::create_without_task()};
+
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+  std::string matching_id;
+  for (uint64_t unit_id = 1; unit_id <= 4; ++unit_id) {
+    auto request = make_create_request(unit_id, 29000 + unit_id, 10, 0, 7);
+    CASE_EXPECT_EQ(0, manager->create_matching(ctx, request, response));
+    if (unit_id == 1) {
+      matching_id = response.matching_id();
+    } else {
+      CASE_EXPECT_EQ(matching_id, response.matching_id());
+    }
+    const size_t expected_faction_count = unit_id < 3 ? static_cast<size_t>(unit_id) : size_t{3};
+    CASE_EXPECT_EQ(expected_faction_count, manager->get_room_faction_count(matching_id));
+  }
+
+  CASE_EXPECT_EQ(1, manager->get_room_count());
+  CASE_EXPECT_EQ(4, manager->get_total_matching_user_count());
 
   manager->clear();
   CASE_EXPECT_EQ(0, runtime.stop());
@@ -1805,6 +2806,7 @@ CASE_TEST(matchsvr_matching_manager, rebalances_a_complete_faction_atomically) {
   const std::string source_matching_id = source_response.matching_id();
   CASE_EXPECT_TRUE(target_matching_id != source_matching_id);
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(source_matching_id));
+  CASE_EXPECT_EQ(6, manager->get_total_matching_user_count());
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{62});
   auto check_moved = make_heartbeat_request(target_duo.unit().unit_id(), target_duo.operator_user());
@@ -1815,6 +2817,7 @@ CASE_TEST(matchsvr_matching_manager, rebalances_a_complete_faction_atomically) {
                  moved_response.snapshot().status());
   CASE_EXPECT_EQ(4, manager->get_room_unit_count(target_matching_id));
   CASE_EXPECT_EQ(2, manager->get_room_faction_count(target_matching_id));
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
 
   auto check_faction_member = make_heartbeat_request(source_solo_one.unit().unit_id(), source_solo_one.operator_user());
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot faction_member_response;
@@ -1822,6 +2825,7 @@ CASE_TEST(matchsvr_matching_manager, rebalances_a_complete_faction_atomically) {
   CASE_EXPECT_EQ(target_matching_id, faction_member_response.matching_id());
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
                  faction_member_response.snapshot().status());
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
 
   atfw::util::time::time_utility::reset_global_now_offset();
   manager->clear();
@@ -1944,6 +2948,48 @@ CASE_TEST(matchsvr_matching_manager, expires_whole_searching_unit_when_one_membe
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
+CASE_TEST(matchsvr_matching_manager, refreshes_searching_users_after_heartbeat_removes_part_of_room) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  manager->clear();
+  atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
+  rpc::context ctx{rpc::context::create_without_task()};
+  const auto expiring = make_party_create_request(501, 59101, 2, 10);
+  const auto surviving = make_party_create_request(502, 59103, 1, 10);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, expiring, response));
+  const std::string matching_id = response.matching_id();
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, surviving, response));
+  CASE_EXPECT_EQ(matching_id, response.matching_id());
+  CASE_EXPECT_EQ(3, manager->get_total_matching_user_count());
+
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{6});
+  auto heartbeat = make_heartbeat_request(surviving.unit().unit_id(), surviving.operator_user());
+  CASE_EXPECT_EQ(0, manager->check_matching(ctx, heartbeat, response));
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{11});
+  CASE_EXPECT_EQ(0, manager->tick());
+  CASE_EXPECT_EQ(1, manager->get_room_unit_count(matching_id));
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(0, manager->check_matching(ctx, heartbeat, response));
+  CASE_EXPECT_EQ(matching_id, response.matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, response.snapshot().status());
+
+  // 剩余房间仍在搜索桶中；补入新 Unit 后再次刷新人数，不能漏计或重复累计。
+  const auto replacement = make_party_create_request(503, 59104, 2, 10);
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, replacement, response));
+  CASE_EXPECT_EQ(matching_id, response.matching_id());
+  CASE_EXPECT_EQ(2, manager->get_room_unit_count(matching_id));
+  CASE_EXPECT_EQ(3, manager->get_total_matching_user_count());
+  manager->clear();
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
+  atfw::util::time::time_utility::reset_global_now_offset();
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
 CASE_TEST(matchsvr_matching_manager, does_not_evict_units_after_matching_state) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
@@ -2051,7 +3097,13 @@ CASE_TEST(matchsvr_matching_manager, removes_unconfirmed_unit_and_resumes_after_
   CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
 
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot retry_response;
-  CASE_EXPECT_EQ(0, manager->create_matching(ctx, timeout_request, retry_response));
+  // 同一玩家重新发起匹配时，Lobby 会分配新的 Unit ID。
+  auto retry_request = make_create_request(63, 70002, 14, 2);
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, retry_request, retry_response));
+  CASE_EXPECT_EQ(response.matching_id(), retry_response.matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 retry_response.snapshot().status());
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
 
   atfw::util::time::time_utility::reset_global_now_offset();
   manager->clear();
@@ -2114,7 +3166,7 @@ CASE_TEST(matchsvr_matching_manager, validates_and_idempotently_handles_orbit_st
   check.set_unit_id(second_request.unit().unit_id());
   protobuf_copy_message(*check.mutable_heartbeat_data()->mutable_user_key(), second_request.operator_user());
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, snapshot));
-  CASE_EXPECT_EQ(1002, snapshot.snapshot().faction_id());
+  CASE_EXPECT_EQ(1001, snapshot.snapshot().faction_id());
   check.set_unit_id(first_request.unit().unit_id());
   protobuf_copy_message(*check.mutable_heartbeat_data()->mutable_user_key(), first_request.operator_user());
 

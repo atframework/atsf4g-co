@@ -144,8 +144,6 @@ message DMatchingUnitJoinEvaluation {
 message DMatchingRoomReadyEvaluation {
   // true 表示房间已经满编，可以停止搜索并进入玩家确认阶段。
   bool ready = 1;
-  // 成局使用的结果模板 ID。
-  int32 result_template_id = 2;
   // 业务错误码。0 表示检查成功；ready=false 不一定是错误，也可能只是人数不足。
   int32 result = 3;
 }
@@ -155,7 +153,6 @@ message DMatchingRoomSnapshot {
   DMatchingScope scope = 2;
   EnMatchingRoomStatus status = 3;
   repeated DMatchingUnit units = 4;
-  int32 result_template_id = 5;
   int64 created_time = 6;
   int64 expire_time = 7;
   int32 result = 9;
@@ -235,7 +232,6 @@ message DMatchingEventLog {
   }
 }
 
-
 message DMatchedUserData {
   DOrbitRoomKey room_key = 1;
   int64 start_timepoint = 2;
@@ -250,7 +246,7 @@ message DUserMatchingData {
   // 创建该 Unit 的 Matchsvr。Unit 生命周期内的查询、心跳、取消和确认必须固定路由到该实例。
   uint64 matchsvr_server_id = 3;
   repeated DMatchedUserData matched_users = 4;
-  int64 is_start_matching = 5; //玩家离线前是否处于匹配检查状态
+  int64 is_start_matching = 5;  // 玩家离线前是否处于匹配检查状态
 
   DMatchingStartData level_data = 10;
 }
@@ -269,8 +265,8 @@ message DLevelSelect {
 
 // orbit 房间初始化时需要的数据
 message DMatchingOrbitInitData {
- DOrbitUserInitDataDetail orbit_init_data = 1;  // 保底的战斗房间初始化数据，确保玩家会进入到局内
- string user_open_id = 2;  // 用户的 openid_id
+  DOrbitUserInitDataDetail orbit_init_data = 1;  // 保底的战斗房间初始化数据，确保玩家会进入到局内
+  string user_open_id = 2;                       // 用户的 openid_id
 }
 
 message DMatchingStartData {

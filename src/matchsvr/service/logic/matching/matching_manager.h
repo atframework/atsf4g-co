@@ -139,7 +139,8 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
                                           const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now) const;
   // 固定目标房间，按稳定顺序从同一粗桶内更新的 donor 连续拉取迁移原子，返回实际迁移数。
   size_t rebalance_room(rpc::context& ctx, const matching_room::ptr_t& target_room, int64_t now,
-                        size_t max_migration_count);
+                        size_t max_migration_count,
+                        const PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation* known_target_ready = nullptr);
   // 原子迁移一个或多个 Unit；多个 Unit 只用于保持满员 faction 的成员关系。
   bool move_units(rpc::context& ctx, const matching_room::ptr_t& source_room, const matching_room::ptr_t& target_room,
                   const std::vector<uint64_t>& unit_ids, int64_t now);
@@ -147,16 +148,19 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   void index_unit(const std::string& matching_id, const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
   // 删除 unit 和玩家的全局活动索引。
   void unindex_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
-  // 把仍可加入的房间插入粗桶。
+  // 房间进入搜索阶段时加入粗桶并计入搜索人数；重复调用不改变索引和人数。
   void index_room(const matching_room::ptr_t& room);
-  // 从粗桶移除房间。
+  // 只刷新已索引房间计入的搜索人数，不插入房间索引。
+  void refresh_searching_room_user_count(const matching_room& room);
+  // 房间退出搜索阶段时移除粗桶索引，并扣除此前计入的搜索人数。
   void unindex_room(const matching_room& room);
   // 释放房间中所有 unit 的活动索引。
   void unindex_all_units(const matching_room& room);
   // 若规则已满足，向 orbitsvr 发起创建房间请求。
   void start_battle(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
-  // 保留固定容量 faction 并动态选择最终模板，用于创建、迁房、查询和定时推进。
-  void evaluate_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
+  // 保留固定容量 faction 并按当前规则判断成局，用于创建、迁房、查询和定时推进。
+  PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation evaluate_room(rpc::context& ctx, const matching_room::ptr_t& room,
+                                                                   int64_t now);
   // 淘汰确认超时的 Unit，并让仍有效的 Unit 回到撮合。
   void handle_confirm_timeout(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
   // 搜索阶段任一成员心跳租约过期时摘除整个 Unit；确认及之后的状态不受心跳摘除影响。
@@ -181,6 +185,9 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   std::unordered_map<user_key, uint64_t, user_key_hash> user_to_unit_;
   // 四维粗桶以及桶内的老房间优先队列。
   std::map<bucket_key, std::set<queue_entry>> searching_rooms_by_bucket_;
+  // 按房间保存已计入的人数，移除时不依赖可能已改变的房间人数；重复索引/移除均幂等。
+  std::unordered_map<std::string, int32_t> searching_room_user_counts_;
+  int32_t total_matching_user_count_ = 0;
   // Matchsvr tick 频率可能远高于秒级租约精度，心跳失联扫描每秒最多执行一次。
   int64_t last_heartbeat_check_time_ = 0;
 };

@@ -109,7 +109,6 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
       terminal_time_(0),
       confirm_expire_time_(0),
       last_event_id_(0),
-      result_template_id_(0),
       result_(0),
       orbit_ready_processing_(false),
       orbit_server_id_(0) {
@@ -201,7 +200,6 @@ bool matching_room::add_unit(const unit_ptr_t& unit) {
     unit_size_counts_.resize(unit_size + 1, 0);
   }
   ++unit_size_counts_[unit_size];
-  result_template_id_ = 0;
   finalized_unit_faction_ids_.clear();
   faction_ids_finalized_ = false;
   return true;
@@ -245,7 +243,6 @@ bool matching_room::remove_unit(uint64_t unit_id) {
   if (statistics.has_value()) {
     commit_faction_assignments(std::move(remaining_assignments), std::move(*statistics));
   }
-  result_template_id_ = 0;
   finalized_unit_faction_ids_.clear();
   faction_ids_finalized_ = false;
   std::vector<const PROJECT_NAMESPACE_ID::DMatchingUnit*> remaining_units;
@@ -314,7 +311,6 @@ bool matching_room::are_all_users_confirmed() const noexcept {
 
 void matching_room::resume_matching(int64_t expire_time) noexcept {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING;
-  result_template_id_ = 0;
   confirm_expire_time_ = 0;
   expire_time_ = expire_time;
   finalized_unit_faction_ids_.clear();
@@ -329,8 +325,6 @@ void matching_room::resume_matching(int64_t expire_time) noexcept {
     }
   }
 }
-
-void matching_room::set_result_template_id(int32_t value) noexcept { result_template_id_ = value; }
 
 bool matching_room::set_faction_assignments(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& value) {
@@ -478,7 +472,6 @@ void matching_room::dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) co
   protobuf_copy_message(*output.mutable_scope(), scope_);
   output.set_selected_level_id(selected_level_id_);
   output.set_status(status_);
-  output.set_result_template_id(result_template_id_);
   output.set_created_time(created_time_);
   output.set_expire_time(expire_time_);
   output.set_result(result_);

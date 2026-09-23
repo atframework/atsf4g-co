@@ -66,8 +66,6 @@ class matching_room {
   int64_t get_battle_create_expire_time() const noexcept { return battle_create_expire_time_; }
   // 返回 matchsvr 内部房间事件序号；不用于 lobbysvr 订阅。
   int64_t get_last_event_id() const noexcept { return last_event_id_; }
-  // 返回成局时动态选中的最终结果模板 ID；搜索期间为 0。
-  int32_t get_result_template_id() const noexcept { return result_template_id_; }
   // 返回房间当前业务结果。
   int32_t get_result() const noexcept { return result_; }
   // 返回当前所有 unit，key 为 unit_id。
@@ -97,7 +95,7 @@ class matching_room {
 
   // 统计房间内的真实玩家数量。
   size_t get_user_count() const noexcept { return user_count_; }
-  // 返回按 Unit 人数索引的 Unit 数量，用于匹配模板快速判定。
+  // 返回按 Unit 人数索引的 Unit 数量。
   const std::vector<size_t>& get_unit_size_counts() const noexcept { return unit_size_counts_; }
   // 判断 unit 是否仍在本房间。
   bool has_unit(uint64_t unit_id) const noexcept;
@@ -118,8 +116,6 @@ class matching_room {
   bool are_all_users_confirmed() const noexcept;
   // 确认失败移除 Unit 后，让剩余 Unit 回到正常撮合。
   void resume_matching(int64_t expire_time) noexcept;
-  // 保存成局时动态选中的最终结果模板；继续搜索时清零。
-  void set_result_template_id(int32_t value) noexcept;
   // 原子校验并保存搜索阶段的临时 faction 分配；结构不合法时返回 false 且保持原值。
   bool set_faction_assignments(
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& value);
@@ -200,8 +196,6 @@ class matching_room {
   int64_t battle_create_expire_time_ = 0;
   // 单房间单调递增 WAL 事件 ID。
   int64_t last_event_id_;
-  // 成局时动态选中的最终结果模板 ID，搜索期间不锁定模板。
-  int32_t result_template_id_;
   // 房间最终业务结果。
   int32_t result_;
   // 是否已经开始处理 orbitsvr ready 回调。

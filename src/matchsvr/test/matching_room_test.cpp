@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <memory>
 
 #include "frame/test_macros.h"
 
@@ -204,11 +205,9 @@ CASE_TEST(matchsvr_matching_room, extends_expiry_monotonically_and_resets_confir
   room.extend_expire_time(250);
   CASE_EXPECT_EQ(250, room.get_expire_time());
 
-  room.set_result_template_id(88);
   room.begin_confirmation(300);
   room.resume_matching(400);
   CASE_EXPECT_EQ(0, room.get_confirm_expire_time());
-  CASE_EXPECT_EQ(0, room.get_result_template_id());
   CASE_EXPECT_EQ(400, room.get_expire_time());
 }
 
@@ -216,7 +215,6 @@ CASE_TEST(matchsvr_matching_room, maintains_internal_factions_until_confirmation
   auto room = make_room();
   CASE_EXPECT_TRUE(add_unit(room, make_unit(1, 10001, 1)));
   CASE_EXPECT_TRUE(add_unit(room, make_unit(2, 10002, 1)));
-  room.set_result_template_id(88);
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> assignments;
   auto* faction = assignments.Add();
   faction->set_user_capacity(2);
@@ -270,7 +268,6 @@ CASE_TEST(matchsvr_matching_room, maintains_internal_factions_until_confirmation
   CASE_EXPECT_EQ(1, room.get_pending_faction_user_count());
 
   room.resume_matching(400);
-  CASE_EXPECT_EQ(0, room.get_result_template_id());
   CASE_EXPECT_EQ(1, room.get_faction_assignments().size());
   room.dump(snapshot);
   CASE_EXPECT_EQ(0, snapshot.faction_assignments_size());

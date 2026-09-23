@@ -16,9 +16,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iterator>
+#include <limits>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -39,12 +39,19 @@ constexpr const size_t matching_logic::kMaxRebalanceMigrationsPerTick;
 
 bool matching_logic::placement_candidate::is_valid() const noexcept { return position >= 0; }
 
-bool matching_logic::placement_candidate::is_better_than(const placement_candidate& other) const noexcept {
+bool matching_logic::placement_candidate::is_better_for_priority_than(const placement_candidate& other) const noexcept {
   if (completes_faction != other.completes_faction) {
     return completes_faction;
   }
   if (remaining_after_join != other.remaining_after_join) {
     return remaining_after_join < other.remaining_after_join;
+  }
+  return position < other.position;
+}
+
+bool matching_logic::placement_candidate::is_better_for_balance_than(const placement_candidate& other) const noexcept {
+  if (user_count_spread_after_join != other.user_count_spread_after_join) {
+    return user_count_spread_after_join < other.user_count_spread_after_join;
   }
   return position < other.position;
 }
@@ -234,17 +241,38 @@ matching_logic::matching_rule_list matching_logic::select_rules(const PROJECT_NA
   return result;
 }
 
-bool matching_logic::check_incoming_units_matching_rule_limit(const unit_view& existing_units,
-                                                              const unit_view& incoming_units,
-                                                              const matching_rule_ptr& rule) {
+bool matching_logic::check_incoming_units_compatibility(const unit_view& existing_units,
+                                                        const unit_view& incoming_units) {
+  for (const auto* existing : existing_units) {
+    if (existing == nullptr) {
+      return false;
+    }
+  }
   for (const auto* incoming : incoming_units) {
     if (incoming == nullptr) {
       return false;
     }
     for (const auto* existing : existing_units) {
-      if (existing == nullptr || units_are_banned(*existing, *incoming)) {
+      if (units_are_banned(*existing, *incoming)) {
         return false;
       }
+    }
+  }
+  return true;
+}
+
+bool matching_logic::check_rule_compatibility(const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
+                                              const unit_view& existing_units, const unit_view& incoming_units,
+                                              const matching_rule_ptr& rule) {
+  if (rule->region_limits_size() > 0 && std::find(rule->region_limits().begin(), rule->region_limits().end(),
+                                                  scope.region()) == rule->region_limits().end()) {
+    return false;
+  }
+  if (rule->rules().empty()) {
+    return true;
+  }
+  for (const auto* incoming : incoming_units) {
+    for (const auto* existing : existing_units) {
       for (const auto& item : rule->rules()) {
         if (!matches_rule_item(item, existing->parameter(), incoming->parameter())) {
           return false;
@@ -255,38 +283,6 @@ bool matching_logic::check_incoming_units_matching_rule_limit(const unit_view& e
   return true;
 }
 
-bool matching_logic::check_rule_limits(const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
-                                       const unit_view& existing_units, const unit_view& incoming_units,
-                                       const matching_rule_ptr& rule) {
-  std::unordered_map<int32_t, int32_t> force_counts;
-  for (const auto* unit : existing_units) {
-    if (unit == nullptr) {
-      return false;
-    }
-    ++force_counts[unit->parameter().force_type()];
-  }
-  for (const auto* unit : incoming_units) {
-    if (unit == nullptr) {
-      return false;
-    }
-    ++force_counts[unit->parameter().force_type()];
-  }
-  for (const auto& limit : rule->force_type_limits()) {
-    if (limit.count() > 0 && force_counts[limit.force_type()] > limit.count()) {
-      return false;
-    }
-  }
-  return rule->region_limits_size() == 0 || std::find(rule->region_limits().begin(), rule->region_limits().end(),
-                                                      scope.region()) != rule->region_limits().end();
-}
-
-bool matching_logic::check_rule_compatibility(const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
-                                              const unit_view& existing_units, const unit_view& incoming_units,
-                                              const matching_rule_ptr& rule) {
-  return check_rule_limits(scope, existing_units, incoming_units, rule) &&
-         check_incoming_units_matching_rule_limit(existing_units, incoming_units, rule);
-}
-
 matching_logic::faction_assignment_list matching_logic::copy_assignments(const faction_assignment_list& source) {
   faction_assignment_list output;
   for (const auto& assignment : source) {
@@ -295,29 +291,54 @@ matching_logic::faction_assignment_list matching_logic::copy_assignments(const f
   return output;
 }
 
-matching_logic::faction_layout matching_logic::get_faction_layout(const matching_room& room) {
-  matching_logic::faction_layout result;
-  result.pending_user_count = room.get_pending_faction_user_count();
-  result.faction_count_by_capacity = room.get_faction_count_by_capacity();
-  result.fill_enabled_faction_capacities = room.get_fill_enabled_faction_capacities();
-  return result;
-}
-
-bool matching_logic::template_contains_layout(const faction_layout& layout,
-                                              const excel::matching_result_template_index_t& result_template) {
-  if (!excel::matching_result_template_contains_faction_counts(result_template, layout.faction_count_by_capacity)) {
-    return false;
+size_t matching_logic::get_faction_user_count_spread(const faction_assignment_list& assignments) {
+  if (assignments.size() <= 1) {
+    return 0;
   }
-  return std::all_of(
-      layout.fill_enabled_faction_capacities.begin(), layout.fill_enabled_faction_capacities.end(),
-      [&](size_t capacity) { return capacity == static_cast<size_t>(result_template.max_faction_capacity); });
+  size_t minimum_user_count = static_cast<size_t>(assignments.Get(0).assigned_user_count());
+  size_t maximum_user_count = minimum_user_count;
+  for (int position = 1; position < assignments.size(); ++position) {
+    const size_t assigned_user_count = static_cast<size_t>(assignments.Get(position).assigned_user_count());
+    minimum_user_count = std::min(minimum_user_count, assigned_user_count);
+    maximum_user_count = std::max(maximum_user_count, assigned_user_count);
+  }
+  return maximum_user_count - minimum_user_count;
 }
 
-bool matching_logic::template_can_contain_layout(const faction_layout& layout, size_t total_users,
-                                                 const excel::matching_result_template_index_t& result_template) {
-  return result_template.total_user_count >= 0 &&
-         total_users <= static_cast<size_t>(result_template.total_user_count) &&
-         template_contains_layout(layout, result_template);
+matching_logic::placement_candidate matching_logic::find_best_existing_faction(
+    const faction_assignment_list& assignments, size_t unit_size, size_t fill_capacity, bool balanced) {
+  placement_candidate best_placement;
+  size_t minimum = std::numeric_limits<size_t>::max();
+  size_t second_minimum = minimum;
+  size_t maximum = 0;
+  for (const auto& assignment : assignments) {
+    const size_t count = assignment.assigned_user_count();
+    if (count < minimum) {
+      second_minimum = minimum;
+      minimum = count;
+    } else if (count < second_minimum) {
+      second_minimum = count;
+    }
+    maximum = std::max(maximum, count);
+  }
+  for (int position = 0; position < assignments.size(); ++position) {
+    const auto& assignment = assignments.Get(position);
+    const size_t joined_count = static_cast<size_t>(assignment.assigned_user_count()) + unit_size;
+    if (assignment.user_capacity() != fill_capacity || joined_count > fill_capacity) {
+      continue;
+    }
+    placement_candidate candidate;
+    candidate.position = position;
+    candidate.remaining_after_join = fill_capacity - joined_count;
+    candidate.completes_faction = candidate.remaining_after_join == 0;
+    const size_t other_minimum = assignment.assigned_user_count() == minimum ? second_minimum : minimum;
+    candidate.user_count_spread_after_join = std::max(maximum, joined_count) - std::min(other_minimum, joined_count);
+    if (!best_placement.is_valid() || (balanced ? candidate.is_better_for_balance_than(best_placement)
+                                                : candidate.is_better_for_priority_than(best_placement))) {
+      best_placement = candidate;
+    }
+  }
+  return best_placement;
 }
 
 bool matching_logic::incoming_levels_are_compatible(const std::vector<int32_t>& existing_level_ids,
@@ -342,72 +363,38 @@ bool matching_logic::incoming_levels_are_compatible(const std::vector<int32_t>& 
   }
   return !compatible_level_ids.empty();
 }
-bool matching_logic::has_compatible_rule_without_factions(const matching_rule_list& rules,
-                                                          const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
-                                                          const unit_view& existing_units,
-                                                          const unit_view& incoming_units,
-                                                          const faction_layout& current_layout) {
-  if (current_layout.pending_user_count != 0 || !current_layout.faction_count_by_capacity.empty() ||
-      !current_layout.fill_enabled_faction_capacities.empty()) {
-    return false;
+size_t matching_logic::get_max_faction_capacity(const faction_assignment_list& assignments) {
+  size_t result = 0;
+  for (const auto& assignment : assignments) {
+    result = std::max(result, static_cast<size_t>(assignment.user_capacity()));
   }
-  return std::any_of(rules.begin(), rules.end(), [&](const matching_rule_ptr& rule) {
-    return rule->result_template_ids_size() == 0 &&
-           check_rule_compatibility(scope, existing_units, incoming_units, rule);
-  });
+  return result;
 }
 
-bool matching_logic::has_compatible_faction_layout(const matching_rule_list& rules,
-                                                   const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
-                                                   const unit_view& existing_units, const unit_view& incoming_units,
-                                                   size_t total_users, const faction_layout& current_layout) {
+bool matching_logic::has_compatible_rule(const matching_rule_list& rules,
+                                         const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
+                                         const unit_view& existing_units, const unit_view& incoming_units,
+                                         size_t incoming_capacity, size_t maximum_existing_capacity) {
+  if (rules.empty() || !check_incoming_units_compatibility(existing_units, incoming_units)) {
+    return false;
+  }
   for (const auto& rule : rules) {
-    const bool has_compatible_template =
-        std::any_of(rule->result_template_ids().begin(), rule->result_template_ids().end(), [&](int32_t template_id) {
-          auto result_template = excel::get_matching_result_template_index(template_id);
-          return result_template && template_can_contain_layout(current_layout, total_users, *result_template);
-        });
-    if (has_compatible_template && check_rule_compatibility(scope, existing_units, incoming_units, rule)) {
+    switch (rule->faction_add_rule()) {
+      case PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_NONE:
+        break;
+      case PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM:
+        if (maximum_existing_capacity > 0 && incoming_capacity != maximum_existing_capacity) {
+          continue;
+        }
+        break;
+      default:
+        continue;
+    }
+    if (check_rule_compatibility(scope, existing_units, incoming_units, rule)) {
       return true;
     }
   }
   return false;
-}
-
-size_t matching_logic::get_max_new_faction_capacity(const matching_rule_list& rules,
-                                                    const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
-                                                    const unit_view& existing_units, size_t total_users,
-                                                    const faction_layout& current_layout,
-                                                    const PROJECT_NAMESPACE_ID::DMatchingUnit& new_faction_unit) {
-  const size_t new_faction_unit_size = static_cast<size_t>(new_faction_unit.users_size());
-  if (new_faction_unit_size == 0) {
-    return 0;
-  }
-  const unit_view incoming_units{&new_faction_unit};
-  const bool fill_enabled =
-      new_faction_unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
-  size_t result = 0;
-  for (const auto& rule : rules) {
-    size_t rule_max_capacity = 0;
-    for (int32_t template_id : rule->result_template_ids()) {
-      auto result_template = excel::get_matching_result_template_index(template_id);
-      if (!result_template || !template_can_contain_layout(current_layout, total_users, *result_template)) {
-        continue;
-      }
-      const size_t faction_capacity =
-          fill_enabled ? static_cast<size_t>(result_template->max_faction_capacity) : new_faction_unit_size;
-      if (faction_capacity < new_faction_unit_size ||
-          !excel::matching_result_template_can_add_faction(*result_template, current_layout.faction_count_by_capacity,
-                                                           faction_capacity)) {
-        continue;
-      }
-      rule_max_capacity = std::max(rule_max_capacity, faction_capacity);
-    }
-    if (rule_max_capacity > 0 && check_rule_compatibility(scope, existing_units, incoming_units, rule)) {
-      result = std::max(result, rule_max_capacity);
-    }
-  }
-  return result;
 }
 
 matching_logic::join_check_result matching_logic::make_join_evaluation(faction_assignment_list assignments,
@@ -425,13 +412,14 @@ matching_logic::join_check_result matching_logic::make_rejected_join(int32_t res
   result.evaluation.set_result(result_code);
   return result;
 }
+
 int32_t matching_logic::validate_unit(int32_t matching_pool_id, const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
   auto pool = excel::get_ExcelMatchingPool_by_id(matching_pool_id);
   if (!pool) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND;
   }
-  if (unit.unit_id() == 0 || unit.users_size() == 0 ||
-      (pool->unit_max_size() > 0 && unit.users_size() > pool->unit_max_size()) ||
+  if (unit.unit_id() == 0 || unit.users_size() == 0 || pool->unit_max_size() <= 0 ||
+      unit.users_size() > pool->unit_max_size() ||
       (unit.faction_fill_policy() != PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE &&
        unit.faction_fill_policy() != PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE)) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
@@ -457,25 +445,26 @@ matching_logic::join_check_result matching_logic::check_unit_can_create_room(
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
   }
   const size_t unit_size = static_cast<size_t>(unit.users_size());
-  if (unit_size == 0 || unit.acceptable_level_ids().empty()) {
+  if (unit_size == 0 || unit.acceptable_level_ids().empty() || pool->unit_max_size() <= 0 ||
+      unit_size > static_cast<size_t>(pool->unit_max_size())) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
   }
-  if (pool->user_upper() > 0 && unit_size > static_cast<size_t>(pool->user_upper())) {
+  if (pool->max_user_cout_limit() > 0 && unit_size > static_cast<size_t>(pool->max_user_cout_limit())) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
   }
 
   unit_view existing_units;
   unit_view incoming_units{&unit};
-  const faction_layout empty_layout;
   const auto rules = select_rules(scope, now, now, global_matching_users_count);
   faction_assignment_list assignments;
-  if (has_compatible_rule_without_factions(rules, scope, existing_units, incoming_units, empty_layout)) {
-    return make_join_evaluation(std::move(assignments), {});
+  if (pool->max_faction_cout_limit() <= 0) {
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
   }
-
-  const size_t faction_capacity =
-      get_max_new_faction_capacity(rules, scope, existing_units, unit_size, empty_layout, unit);
-  if (faction_capacity == 0) {
+  const bool fill_enabled = unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
+  const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
+  const size_t faction_capacity = fill_enabled ? fill_capacity : unit_size;
+  if (fill_capacity == 0 || unit_size > fill_capacity ||
+      !has_compatible_rule(rules, scope, existing_units, incoming_units, faction_capacity, 0)) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
   }
   auto* assignment = assignments.Add();
@@ -486,6 +475,8 @@ matching_logic::join_check_result matching_logic::check_unit_can_create_room(
   progress.has_faction = true;
   progress.completes_faction = unit_size == faction_capacity;
   progress.remaining_user_count = faction_capacity - unit_size;
+  progress.faction_count_after_join = 1;
+  progress.faction_user_count_spread_after_join = 0;
   return make_join_evaluation(std::move(assignments), progress);
 }
 
@@ -513,8 +504,11 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
   const size_t unit_size = static_cast<size_t>(unit.users_size());
 
   // 人数上限检查
-  if (pool->user_upper() > 0 &&
-      room.get_user_count() + static_cast<size_t>(unit_size) > static_cast<size_t>(pool->user_upper())) {
+  if (unit_size == 0 || pool->unit_max_size() <= 0 || unit_size > static_cast<size_t>(pool->unit_max_size())) {
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+  }
+  if (pool->max_user_cout_limit() > 0 &&
+      room.get_user_count() + unit_size > static_cast<size_t>(pool->max_user_cout_limit())) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
   }
 
@@ -534,74 +528,65 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
   }
 
   const auto& assignments = room.get_faction_assignments();
-  const auto current_layout = get_faction_layout(room);
-  const size_t total_users = room.get_user_count() + static_cast<size_t>(unit_size);
-  placement_candidate best_placement;
-
-  if (unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE) {
-    // 可以补位 faction assignment 里找最优的
-    for (int position = 0; position < assignments.size(); ++position) {
-      const auto& assignment = assignments.Get(position);
-      const size_t assigned_users = static_cast<size_t>(assignment.assigned_user_count());
-      if (assigned_users >= assignment.user_capacity() ||
-          unit_size > static_cast<size_t>(assignment.user_capacity()) - assigned_users) {
-        continue;
-      }
-      const size_t remaining_after = static_cast<size_t>(assignment.user_capacity()) - assigned_users - unit_size;
-      placement_candidate candidate{position, remaining_after == 0, remaining_after};
-      if (!best_placement.is_valid() || candidate.is_better_than(best_placement)) {
-        best_placement = candidate;
-      }
-    }
+  if (!assignments.empty() &&
+      (pool->max_faction_cout_limit() <= 0 || assignments.size() > pool->max_faction_cout_limit())) {
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
   }
-
-  if (!allow_new_faction && !assignments.empty() && !best_placement.is_valid()) {
+  const bool unit_can_fill_faction =
+      unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
+  const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
+  if (fill_capacity == 0 || unit_size > fill_capacity || pool->max_faction_cout_limit() <= 0) {
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+  }
+  const size_t incoming_capacity = unit_can_fill_faction ? fill_capacity : unit_size;
+  const auto rules = select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count);
+  if (!has_compatible_rule(rules, room.get_scope(), existing_units, incoming_units, incoming_capacity,
+                           get_max_faction_capacity(assignments))) {
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+  }
+  const bool can_create_faction = allow_new_faction && assignments.size() < pool->max_faction_cout_limit();
+  const bool balanced = pool->faction_fill_policy() == PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED;
+  placement_candidate best_placement;
+  bool create_new_faction = false;
+  if (!unit_can_fill_faction) {
+    // 禁止补位的 Unit 只能独占一个新 faction。
+    create_new_faction = true;
+  } else if (balanced && can_create_faction) {
+    // 平均策略优先增加 faction 数，此时不搜索已有 faction。
+    create_new_faction = true;
+  } else {
+    // 集中策略优先补位；平均策略不能新建时，也从已有 faction 中选择。
+    best_placement = find_best_existing_faction(assignments, unit_size, fill_capacity, balanced);
+    create_new_faction = !best_placement.is_valid();
+  }
+  if (create_new_faction && !can_create_faction) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
   }
 
-  const auto rules = select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count);
-  if (assignments.empty()) {
-    if (has_compatible_rule_without_factions(rules, room.get_scope(), existing_units, incoming_units, current_layout)) {
-      return make_join_evaluation({}, {});
-    }
-    if (!allow_new_faction) {
-      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
-    }
-  }
-
-  if (best_placement.is_valid()) {
-    if (!has_compatible_faction_layout(rules, room.get_scope(), existing_units, incoming_units, total_users,
-                                       current_layout)) {
-      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
-    }
-    const auto& candidate = best_placement;
-    auto joined_assignments = copy_assignments(assignments);
-    auto* joined_assignment = joined_assignments.Mutable(candidate.position);
+  auto joined_assignments = copy_assignments(assignments);
+  faction_join_progress progress;
+  if (create_new_faction) {
+    auto* new_assignment = joined_assignments.Add();
+    new_assignment->set_user_capacity(static_cast<uint32_t>(unit_can_fill_faction ? fill_capacity : unit_size));
+    new_assignment->add_unit_ids(unit.unit_id());
+    new_assignment->set_assigned_user_count(static_cast<uint32_t>(unit_size));
+    progress.remaining_user_count = static_cast<size_t>(new_assignment->user_capacity()) - unit_size;
+  } else {
+    auto* joined_assignment = joined_assignments.Mutable(best_placement.position);
     joined_assignment->add_unit_ids(unit.unit_id());
     joined_assignment->set_assigned_user_count(joined_assignment->assigned_user_count() +
                                                static_cast<uint32_t>(unit_size));
-    faction_join_progress progress;
-    progress.has_faction = true;
     progress.joins_existing = true;
-    progress.completes_faction = candidate.completes_faction;
-    progress.remaining_user_count = candidate.remaining_after_join;
-    return make_join_evaluation(std::move(joined_assignments), progress);
+    progress.remaining_user_count = best_placement.remaining_after_join;
+    progress.faction_user_count_spread_after_join = best_placement.user_count_spread_after_join;
   }
 
-  const size_t faction_capacity =
-      get_max_new_faction_capacity(rules, room.get_scope(), existing_units, total_users, current_layout, unit);
-  if (faction_capacity == 0) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
-  }
-  auto joined_assignments = copy_assignments(assignments);
-  auto* assignment = joined_assignments.Add();
-  assignment->set_user_capacity(static_cast<uint32_t>(faction_capacity));
-  assignment->add_unit_ids(unit.unit_id());
-  assignment->set_assigned_user_count(static_cast<uint32_t>(unit_size));
-  faction_join_progress progress;
   progress.has_faction = true;
-  progress.completes_faction = unit_size == static_cast<size_t>(assignment->user_capacity());
-  progress.remaining_user_count = static_cast<size_t>(assignment->user_capacity()) - unit_size;
+  progress.completes_faction = progress.remaining_user_count == 0;
+  progress.faction_count_after_join = static_cast<size_t>(joined_assignments.size());
+  if (create_new_faction) {
+    progress.faction_user_count_spread_after_join = get_faction_user_count_spread(joined_assignments);
+  }
   return make_join_evaluation(std::move(joined_assignments), progress);
 }
 
@@ -624,7 +609,12 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
   }
 
-  if (pool->user_upper() > 0 && room.get_user_count() + faction_users > static_cast<size_t>(pool->user_upper())) {
+  if (pool->faction_user_max_size() <= 0 || faction_capacity > static_cast<uint32_t>(pool->faction_user_max_size()) ||
+      pool->max_faction_cout_limit() <= 0 || room.get_faction_assignments().size() >= pool->max_faction_cout_limit()) {
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+  }
+  if (pool->max_user_cout_limit() > 0 &&
+      room.get_user_count() + faction_users > static_cast<size_t>(pool->max_user_cout_limit())) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
   }
 
@@ -640,21 +630,11 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
   }
 
-  auto prospective_layout = get_faction_layout(room);
-  ++prospective_layout.faction_count_by_capacity[faction_capacity];
-
-  if (std::any_of(faction_units.begin(), faction_units.end(), [](const auto* unit) {
-        return unit->faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
-      })) {
-    prospective_layout.fill_enabled_faction_capacities.emplace(faction_capacity);
-  }
-
   const auto rules = select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count);
-  if (!has_compatible_faction_layout(rules, room.get_scope(), existing_units, faction_units,
-                                     room.get_user_count() + faction_users, prospective_layout)) {
+  if (!has_compatible_rule(rules, room.get_scope(), existing_units, faction_units, faction_capacity,
+                           get_max_faction_capacity(room.get_faction_assignments()))) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
   }
-
   auto assignments = copy_assignments(room.get_faction_assignments());
   auto* assignment = assignments.Add();
   assignment->set_user_capacity(faction_capacity);
@@ -665,6 +645,8 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
   faction_join_progress progress;
   progress.has_faction = true;
   progress.completes_faction = true;
+  progress.faction_count_after_join = static_cast<size_t>(assignments.size());
+  progress.faction_user_count_spread_after_join = get_faction_user_count_spread(assignments);
   return make_join_evaluation(std::move(assignments), progress);
 }
 
@@ -678,44 +660,45 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
                            : PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
     return result;
   }
-  const auto layout = get_faction_layout(room);
+  const auto& assignments = room.get_faction_assignments();
   const size_t total_users = room.get_user_count();
-  for (const auto& rule : select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count)) {
-    if (rule->result_template_ids_size() == 0) {
-      if (!room.get_faction_assignments().empty()) {
-        continue;
-      }
-      const int32_t ready_users =
-          rule->start_battle_min_user() > 0 ? rule->start_battle_min_user() : pool->user_upper();
-      result.set_result(0);
-      result.set_ready(ready_users > 0 && total_users >= static_cast<size_t>(ready_users));
+  const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
+  if (fill_capacity == 0 || pool->max_faction_cout_limit() <= 0 || assignments.empty()) {
+    return result;
+  }
+  if ((pool->max_user_cout_limit() > 0 && total_users > static_cast<size_t>(pool->max_user_cout_limit())) ||
+      assignments.size() > pool->max_faction_cout_limit()) {
+    result.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    return result;
+  }
+  bool all_factions_full = true;
+  size_t assigned_users = 0;
+  for (const auto& assignment : assignments) {
+    if (assignment.assigned_user_count() == 0 || assignment.user_capacity() > fill_capacity ||
+        assignment.assigned_user_count() > assignment.user_capacity()) {
       return result;
     }
-
-    const int32_t configured_required_user_count =
-        rule->start_battle_min_user() > 0 ? rule->start_battle_min_user() : pool->user_lower();
-    const size_t required_user_count = static_cast<size_t>(std::max(0, configured_required_user_count));
-    bool rule_contains_layout = false;
-    int32_t selected_template_id = 0;
-    for (int32_t template_id : rule->result_template_ids()) {
-      auto result_template = excel::get_matching_result_template_index(template_id);
-      if (!result_template || total_users > static_cast<size_t>(result_template->total_user_count) ||
-          !template_contains_layout(layout, *result_template)) {
-        continue;
-      }
-      rule_contains_layout = true;
-      if (required_user_count > 0 && total_users >= required_user_count && layout.pending_user_count == 0) {
-        selected_template_id = template_id;
-        break;
-      }
-    }
-    if (!rule_contains_layout) {
+    assigned_users += assignment.assigned_user_count();
+    all_factions_full = all_factions_full && assignment.assigned_user_count() == assignment.user_capacity();
+  }
+  if (assigned_users != total_users) {
+    return result;
+  }
+  for (const auto& rule : select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count)) {
+    if ((rule->faction_add_rule() != PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_NONE &&
+         rule->faction_add_rule() != PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM) ||
+        (rule->region_limits_size() > 0 && std::find(rule->region_limits().begin(), rule->region_limits().end(),
+                                                     room.get_scope().region()) == rule->region_limits().end())) {
       continue;
     }
+    // 规则有效但尚未满员时仍返回成功，允许 rebalance 继续补人。
     result.set_result(0);
-    if (selected_template_id != 0) {
+    const bool enough_users =
+        rule->min_user_cout_limit() <= 0 || total_users >= static_cast<size_t>(rule->min_user_cout_limit());
+    const bool enough_factions =
+        rule->min_faction_count_limit() <= 0 || assignments.size() >= rule->min_faction_count_limit();
+    if (all_factions_full && enough_users && enough_factions) {
       result.set_ready(true);
-      result.set_result_template_id(selected_template_id);
       return result;
     }
   }

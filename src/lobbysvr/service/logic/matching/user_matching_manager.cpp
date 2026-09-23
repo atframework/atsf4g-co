@@ -469,7 +469,9 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
   }
   if (snapshot.result() != 0) {
     if (snapshot.result() == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND) {
-      clear_matching_state(ctx);
+      if (unit_id != get_current_unit_id()) {
+        clear_matching_state(ctx);
+      }
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
     FWLOGERROR("{} check matching rejected by matchsvr, unit_id={}, result={}({})", *owner_, unit_id, snapshot.result(),

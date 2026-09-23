@@ -17,6 +17,7 @@ func init() {
 	robot_case.RegisterCase("matching_level_select", MatchingLevelSelectCase, time.Second*30)
 	robot_case.RegisterCase("matching_start", MatchingStartCase, time.Second*30)
 	robot_case.RegisterCase("matching_wait", MatchingWaitCase, time.Minute*5)
+	robot_case.RegisterCase("matching_wait_success", MatchingWaitSuccessCase, time.Minute*5)
 	robot_case.RegisterCase("matching_confirm", MatchingConfirmCase, time.Second*30)
 	robot_case.RegisterCase("matching_assert_faction", MatchingAssertFactionCase, time.Second*30)
 }
@@ -74,6 +75,28 @@ func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.User
 }
 
 func MatchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
+	return matchingWaitCase(action, holder, args, false)
+}
+
+// MatchingWaitSuccessCase only accepts FINISHED; entering confirmation is not battle creation success.
+func MatchingWaitSuccessCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
+	return matchingWaitCase(action, holder, args, true)
+}
+
+func matchingWaitSuccessStatus(status public_protocol_pbdesc.EnMatchingUnitLifecycleStatus) (bool, error) {
+	switch status {
+	case public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED:
+		return true, nil
+	case public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED,
+		public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT,
+		public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED:
+		return false, fmt.Errorf("matching did not succeed, status: %s", status.String())
+	default:
+		return false, nil
+	}
+}
+
+func matchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string, requireSuccess bool) error {
 	if len(args) < 1 {
 		return fmt.Errorf("need timeout seconds")
 	}
@@ -98,11 +121,54 @@ func MatchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserH
 	}
 	deadline := time.Now().Add(time.Duration(timeoutSeconds) * time.Second)
 	for time.Now().Before(deadline) {
-		err := action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingCheckForWaitTask, "Matching Check Task"))
-		if err != nil {
-			return err
+		status := public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_INVALID
+		var checkErr error
+		if requireSuccess {
+			// A NOT_FOUND response must not reuse a previous attempt's cached FINISHED state.
+			checkErr = action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
+				errCode, response, rpcErr := protocol.MatchingCheckRpc(taskAction, taskAction.User)
+				if rpcErr != nil {
+					return rpcErr
+				}
+				if errCode == int32(public_protocol_pbdesc.EnErrorCode_EN_MATCHING_RESULT_NOT_FOUND) {
+					return nil
+				}
+				if errCode < 0 {
+					return fmt.Errorf("matching check failed, errCode: %d", errCode)
+				}
+				if response == nil {
+					return fmt.Errorf("matching check response missing")
+				}
+				message, responseErr := response.GetMessage()
+				if responseErr != nil {
+					return responseErr
+				}
+				if message.GetView() == nil || message.GetView().GetUnitId() == 0 {
+					return fmt.Errorf("matching check view missing active unit")
+				}
+				status = message.GetView().GetStatus()
+				protocol.SaveMatchingView(taskAction.User, message.GetView())
+				return nil
+			}, "Matching Success Check Task"))
+		} else {
+			checkErr = action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingCheckForWaitTask, "Matching Check Task"))
+			status = protocol.MatchingStatusFromUser(user)
 		}
-		status := protocol.MatchingStatusFromUser(user)
+		if checkErr != nil {
+			return checkErr
+		}
+		if requireSuccess {
+			finished, statusErr := matchingWaitSuccessStatus(status)
+			if statusErr != nil {
+				return statusErr
+			}
+			if finished {
+				action.Log("matching succeeded, status: %s", status.String())
+				return nil
+			}
+			time.Sleep(time.Duration(intervalSeconds) * time.Second)
+			continue
+		}
 		switch status {
 		case public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
 			public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE,

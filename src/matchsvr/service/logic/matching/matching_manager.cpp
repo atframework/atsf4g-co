@@ -188,6 +188,8 @@ int32_t matching_manager::tick() {
 }
 
 void matching_manager::clear() {
+  searching_room_user_counts_.clear();
+  total_matching_user_count_ = 0;
   searching_rooms_by_bucket_.clear();
   user_to_unit_.clear();
   unit_to_room_.clear();
@@ -286,7 +288,7 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
                               ? initial_evaluation.evaluation.result()
                               : PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
       FCTXLOGERROR(ctx,
-                   "create matching rejected because unit cannot fit any result template, unit_id={}, user_count={}, "
+                   "create matching rejected by pool or faction admission rules, unit_id={}, user_count={}, "
                    "matching_pool_id={}, result={}",
                    unit.unit_id(), unit.users_size(), scope.matching_pool_id(), response.result());
       return response.result();
@@ -325,6 +327,8 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
   if (created_room) {
     rooms_.emplace(selected_room->get_matching_id(), selected_room);
     index_room(selected_room);
+  } else {
+    refresh_searching_room_user_count(*selected_room);
   }
   runtime_unit->bind_room(selected_room);
   runtime_unit->refresh_view_from_room(*selected_room);
@@ -333,6 +337,8 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
     if (created_room) {
       unindex_room(*selected_room);
       rooms_.erase(selected_room->get_matching_id());
+    } else {
+      refresh_searching_room_user_count(*selected_room);
     }
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
     FCTXLOGERROR(ctx, "create matching failed to initialize Unit subscribers, matching_id={}, unit_id={}, result={}",
@@ -409,6 +415,7 @@ int32_t matching_manager::cancel_matching(rpc::context& ctx, const PROJECT_NAMES
     event_log.set_cancel(atfw::util::time::time_utility::get_now());
     publish_room_event(ctx, room, std::move(event_log));
   } else {
+    refresh_searching_room_user_count(*room);
     publish_room_event(ctx, room, std::move(remove_event));
     evaluate_room(ctx, room, atfw::util::time::time_utility::get_now());
   }
@@ -471,10 +478,10 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
 
   if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
     const int64_t now = atfw::util::time::time_utility::get_now();
-    // 规则时间窗可能让当前房间直接满足动态模板；先成局，避免 ready 房间被 rebalance 拆走。
-    evaluate_room(ctx, room, now);
+    // 规则时间窗可能降低成局人数门槛；先成局，避免 ready 房间被 rebalance 拆走。
+    const auto ready = evaluate_room(ctx, room, now);
     if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING &&
-        rebalance_room(ctx, room, now, matching_logic::get_max_rebalance_migrations_per_target()) > 0) {
+        rebalance_room(ctx, room, now, matching_logic::get_max_rebalance_migrations_per_target(), &ready) > 0) {
       room = runtime_unit->get_room();
       if (!room) {
         response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND);
@@ -482,9 +489,6 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
                      response.result());
         return response.result();
       }
-    }
-    if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
-      evaluate_room(ctx, room, now);
     }
   }
   response.set_result(0);
@@ -735,19 +739,7 @@ rpc::result_code_type matching_manager::orbit_room_ready(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int32_t matching_manager::get_total_matching_user_count() const noexcept {
-  int32_t result = 0;
-  for (const auto& bucket : searching_rooms_by_bucket_) {
-    for (const auto& entry : bucket.second) {
-      auto room_iter = rooms_.find(entry.matching_id);
-      if (room_iter != rooms_.end() && room_iter->second &&
-          room_iter->second->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
-        result += static_cast<int32_t>(room_iter->second->get_user_count());
-      }
-    }
-  }
-  return result;
-}
+int32_t matching_manager::get_total_matching_user_count() const noexcept { return total_matching_user_count_; }
 
 size_t matching_manager::get_room_unit_count(const std::string& matching_id) const noexcept {
   auto room_iter = rooms_.find(matching_id);
@@ -891,7 +883,10 @@ matching_manager::joinable_room_result matching_manager::find_joinable_room(
 
   // 规则组选择要把本次待加入 Unit 也计入全服匹配人数，确保加入已有房间和新建房间使用同一规则边界。
   const int32_t global_matching_users = get_total_matching_user_count() + unit.users_size();
-  std::tuple<int32_t, int64_t> selected_score{-1, 0};
+  auto pool = excel::get_ExcelMatchingPool_by_id(scope.matching_pool_id());
+  const bool balanced =
+      pool && pool->faction_fill_policy() == PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED;
+  std::tuple<int64_t, int64_t, int64_t> selected_score{-1, 0, 0};
   size_t evaluated_room_count = 0;
   size_t joinable_room_count = 0;
   for (const auto& entry : bucket_iter->second) {
@@ -906,11 +901,18 @@ matching_manager::joinable_room_result matching_manager::find_joinable_room(
       continue;
     }
     ++joinable_room_count;
-    const int32_t placement_priority = evaluation.progress.joins_existing && evaluation.progress.completes_faction
+    const int64_t placement_priority = evaluation.progress.joins_existing && evaluation.progress.completes_faction
                                            ? 2
                                            : (evaluation.progress.joins_existing ? 1 : 0);
-    const auto score =
-        std::make_tuple(placement_priority, -static_cast<int64_t>(evaluation.progress.remaining_user_count));
+    std::tuple<int64_t, int64_t, int64_t> score;
+    if (balanced) {
+      score = std::make_tuple(static_cast<int64_t>(evaluation.progress.faction_count_after_join),
+                              -static_cast<int64_t>(evaluation.progress.faction_user_count_spread_after_join),
+                              -static_cast<int64_t>(evaluation.progress.remaining_user_count));
+    } else {
+      score = std::make_tuple(placement_priority, -static_cast<int64_t>(evaluation.progress.remaining_user_count),
+                              int64_t{0});
+    }
     if (!result.room || score > selected_score) {
       result.room = room_iter->second;
       selected_score = score;
@@ -919,15 +921,16 @@ matching_manager::joinable_room_result matching_manager::find_joinable_room(
   }
   FCTXLOGDEBUG(ctx,
                "find joinable matching room finished, unit_id={}, bucket_rooms={}, evaluated_rooms={}, "
-               "joinable_rooms={}, selected_matching_id={}, placement_priority={}, remaining_faction_users={}",
+               "joinable_rooms={}, selected_matching_id={}, primary_score={}, secondary_score={}",
                unit.unit_id(), bucket_iter->second.size(), evaluated_room_count, joinable_room_count,
                result.room ? result.room->get_matching_id() : std::string{}, std::get<0>(selected_score),
-               -std::get<1>(selected_score));
+               std::get<1>(selected_score));
   return result;
 }
 
 size_t matching_manager::rebalance_room(rpc::context& ctx, const matching_room::ptr_t& target_room, int64_t now,
-                                        size_t max_migration_count) {
+                                        size_t max_migration_count,
+                                        const PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation* known_target_ready) {
   if (!target_room || target_room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING ||
       target_room->get_units().empty() || max_migration_count == 0) {
     return 0;
@@ -939,9 +942,9 @@ size_t matching_manager::rebalance_room(rpc::context& ctx, const matching_room::
   }
 
   int32_t global_matching_users = get_total_matching_user_count();
-  const auto target_ready = matching_logic::check_room_ready(*target_room, now, global_matching_users);
+  int32_t target_checked_global_users = global_matching_users;
+  const auto target_ready = known_target_ready ? *known_target_ready : evaluate_room(ctx, target_room, now);
   if (target_ready.ready()) {
-    evaluate_room(ctx, target_room, now);
     return 0;
   }
   if (target_ready.result() != 0) {
@@ -975,9 +978,8 @@ size_t matching_manager::rebalance_room(rpc::context& ctx, const matching_room::
     }
     auto source_room = source_iter->second;
     ++source_room_count;
-    const auto source_ready = matching_logic::check_room_ready(*source_room, now, global_matching_users);
+    const auto source_ready = evaluate_room(ctx, source_room, now);
     if (source_ready.ready()) {
-      evaluate_room(ctx, source_room, now);
       global_matching_users = get_total_matching_user_count();
       continue;
     }
@@ -1027,7 +1029,13 @@ size_t matching_manager::rebalance_room(rpc::context& ctx, const matching_room::
       }
       evaluate_room(ctx, target_room, now);
       global_matching_users = get_total_matching_user_count();
+      target_checked_global_users = global_matching_users;
     }
+  }
+  // donor 自行开局也会改变全局人数规则组；无迁移且人数未变时不重复检查 target。
+  if (target_room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING &&
+      target_checked_global_users != get_total_matching_user_count()) {
+    evaluate_room(ctx, target_room, now);
   }
   if (migration_count > 0) {
     FCTXLOGDEBUG(ctx,
@@ -1083,7 +1091,6 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
     moved_units.emplace_back(source_unit_iter->second);
   }
 
-  const int32_t old_target_template_id = target_room->get_result_template_id();
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> old_target_assignments;
   for (const auto& assignment : target_room->get_faction_assignments()) {
     protobuf_copy_message(*old_target_assignments.Add(), assignment);
@@ -1101,7 +1108,6 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
         FCTXLOGERROR(ctx, "move matching units failed to restore target assignments, target_matching_id={}",
                      target_room->get_matching_id());
       }
-      target_room->set_result_template_id(old_target_template_id);
       FCTXLOGERROR(ctx,
                    "move matching units failed to add target unit, source_matching_id={}, target_matching_id={}, "
                    "unit_id={}, restored_units={}",
@@ -1116,7 +1122,6 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
   for (const auto& assignment : source_room->get_faction_assignments()) {
     protobuf_copy_message(*old_source_assignments.Add(), assignment);
   }
-  const int32_t old_source_template_id = source_room->get_result_template_id();
   std::unordered_set<uint64_t> removed_unit_ids;
   for (const auto& unit : moved_units) {
     if (source_room->remove_unit(unit->get_unit_id())) {
@@ -1133,7 +1138,6 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
       FCTXLOGERROR(ctx, "move matching units failed to restore source assignments, source_matching_id={}",
                    source_room->get_matching_id());
     }
-    source_room->set_result_template_id(old_source_template_id);
     target_room->clear_faction_assignments();
     for (auto added_iter = added_unit_ids.rbegin(); added_iter != added_unit_ids.rend(); ++added_iter) {
       target_room->remove_unit(*added_iter);
@@ -1143,7 +1147,6 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
       FCTXLOGERROR(ctx, "move matching units failed to restore target assignments, target_matching_id={}",
                    target_room->get_matching_id());
     }
-    target_room->set_result_template_id(old_target_template_id);
     FCTXLOGERROR(ctx, "move matching units lost source precondition, source_matching_id={}, unit_count={}",
                  source_room->get_matching_id(), unit_ids.size());
     return false;
@@ -1151,6 +1154,8 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
 
   target_room->extend_expire_time(
       now + matching_logic::get_search_timeout_seconds(target_room->get_scope().matching_pool_id()));
+  refresh_searching_room_user_count(*source_room);
+  refresh_searching_room_user_count(*target_room);
   for (const auto& moved_unit : moved_units) {
     index_unit(target_room->get_matching_id(), moved_unit->get_data());
     moved_unit->bind_room(target_room);
@@ -1188,11 +1193,31 @@ void matching_manager::unindex_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& u
 }
 
 void matching_manager::index_room(const matching_room::ptr_t& room) {
+  const int32_t current_users = static_cast<int32_t>(room->get_user_count());
+  if (!searching_room_user_counts_.emplace(room->get_matching_id(), current_users).second) {
+    return;
+  }
+  total_matching_user_count_ += current_users;
   searching_rooms_by_bucket_[make_bucket_key(room->get_scope())].insert(
       queue_entry{room->get_created_time(), room->get_matching_id()});
 }
 
+void matching_manager::refresh_searching_room_user_count(const matching_room& room) {
+  auto count_iter = searching_room_user_counts_.find(room.get_matching_id());
+  if (count_iter == searching_room_user_counts_.end()) {
+    return;
+  }
+  const int32_t current_users = static_cast<int32_t>(room.get_user_count());
+  total_matching_user_count_ += current_users - count_iter->second;
+  count_iter->second = current_users;
+}
+
 void matching_manager::unindex_room(const matching_room& room) {
+  auto count_iter = searching_room_user_counts_.find(room.get_matching_id());
+  if (count_iter != searching_room_user_counts_.end()) {
+    total_matching_user_count_ -= count_iter->second;
+    searching_room_user_counts_.erase(count_iter);
+  }
   auto bucket_iter = searching_rooms_by_bucket_.find(make_bucket_key(room.get_scope()));
   if (bucket_iter == searching_rooms_by_bucket_.end()) {
     return;
@@ -1241,9 +1266,9 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
                              now + matching_logic::get_search_timeout_seconds(room->get_scope().matching_pool_id()));
   FCTXLOGDEBUG(ctx,
                "start battle for matching, matching_id={}, orbitsvr_id={:#x}, level_id={}, user_count={}, "
-               "result_template_id={}, battle_create_expire_time={}",
+               "battle_create_expire_time={}",
                room->get_matching_id(), orbit_server_id, room->get_selected_level_id(), room->get_user_count(),
-               room->get_result_template_id(), room->get_battle_create_expire_time());
+               room->get_battle_create_expire_time());
 
   auto invoke_result = rpc::async_invoke(
       ctx, "matching_manager.create_orbit_room",
@@ -1304,14 +1329,15 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
   }
 }
 
-void matching_manager::evaluate_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now) {
+PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_manager::evaluate_room(rpc::context& ctx,
+                                                                                   const matching_room::ptr_t& room,
+                                                                                   int64_t now) {
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
-    return;
+    PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation result;
+    result.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND);
+    return result;
   }
   auto result = matching_logic::check_room_ready(*room, now, get_total_matching_user_count());
-  if (result.result() == 0) {
-    room->set_result_template_id(result.result_template_id());
-  }
   if (result.ready()) {
     unindex_room(*room);
     room->begin_confirmation(now + matching_logic::get_confirm_timeout_seconds(room->get_scope().matching_pool_id()));
@@ -1319,11 +1345,11 @@ void matching_manager::evaluate_room(rpc::context& ctx, const matching_room::ptr
     event_log.set_notify_confirm(room->get_confirm_expire_time());
     publish_room_event(ctx, room, std::move(event_log));
     FCTXLOGDEBUG(ctx,
-                 "matching room ready for confirmation, matching_id={}, user_count={}, result_template_id={}, "
+                 "matching room ready for confirmation, matching_id={}, user_count={}, "
                  "confirm_expire_time={}",
-                 room->get_matching_id(), room->get_user_count(), room->get_result_template_id(),
-                 room->get_confirm_expire_time());
+                 room->get_matching_id(), room->get_user_count(), room->get_confirm_expire_time());
   }
+  return result;
 }
 
 void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now) {
@@ -1398,6 +1424,8 @@ void matching_manager::handle_unit_heartbeat_timeout(rpc::context& ctx, const ma
   if (room_empty) {
     unindex_room(*room);
     room->mark_timeout(now);
+  } else {
+    refresh_searching_room_user_count(*room);
   }
   publish_room_event(ctx, room, std::move(remove_event),
                      PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
@@ -1451,14 +1479,6 @@ std::vector<matching_manager::migration_candidate> matching_manager::collect_mig
       migration_candidate candidate;
       candidate.faction_capacity = assignment.user_capacity();
       candidate.unit_ids.emplace_back(unit_id);
-      result.emplace_back(std::move(candidate));
-    }
-  }
-  // 不使用 faction 模板的规则只按总人数成局，因此房间没有 faction membership。
-  if (source_room.get_faction_assignments().empty()) {
-    for (const auto& unit : source_room.get_units()) {
-      migration_candidate candidate;
-      candidate.unit_ids.emplace_back(unit.first);
       result.emplace_back(std::move(candidate));
     }
   }
@@ -1520,12 +1540,11 @@ matching_manager::candidate_evaluation matching_manager::evaluate_candidate(
 
 // 用例边界自动清理：匹配管理器是进程级单例，房间/单元/用户索引跨用例存活，由清理流程统一清空。
 static const bool matching_manager_case_cleanup_registered = []() {
-  server_frame_unit_test_register_case_cleanup("matchsvr.matching_manager", kUnitTestCaseCleanupLevelBusiness,
-                                               []() {
-                                                 if (!matching_manager::is_instance_destroyed()) {
-                                                   matching_manager::me()->clear();
-                                                 }
-                                               });
+  server_frame_unit_test_register_case_cleanup("matchsvr.matching_manager", kUnitTestCaseCleanupLevelBusiness, []() {
+    if (!matching_manager::is_instance_destroyed()) {
+      matching_manager::me()->clear();
+    }
+  });
   return true;
 }();
 #endif
