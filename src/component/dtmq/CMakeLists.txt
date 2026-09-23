@@ -29,7 +29,9 @@ generate_for_pb_add_ss_service(
   EXTERNAL_COMPONENT_PROTOCOLS
   "dtmq-protocol-proxy-pbdesc"
   INCLUDE_HEADERS
-  "protocol/pbdesc/dtmq_proxy.pb.h")
+  "protocol/pbdesc/dtmq_proxy.pb.h"
+  GENERATED_FLOW_NAME
+  "atframework.dtmq.DtmqProxysvrService")
 
 generate_for_pb_add_ss_service(
   "atframework.dtmq.DtmqProxysvrNotifyService"
@@ -47,7 +49,9 @@ generate_for_pb_add_ss_service(
   EXTERNAL_COMPONENT_PROTOCOLS
   "dtmq-protocol-proxy-pbdesc"
   INCLUDE_HEADERS
-  "protocol/pbdesc/dtmq_proxy.pb.h")
+  "protocol/pbdesc/dtmq_proxy.pb.h"
+  GENERATED_FLOW_NAME
+  "atframework.dtmq.DtmqProxysvrNotifyService.dtmq-proxysvr")
 
 add_subdirectory(sdk)
 

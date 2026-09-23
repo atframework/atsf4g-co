@@ -6,8 +6,6 @@
 
 #include <memory/object_allocator.h>
 
-#include <rpc/rpc_context.h>
-
 #include <config/excel_config_const_index.h>
 #include <config/logic_config.h>
 
@@ -15,9 +13,14 @@
 
 #include <router/router_friend_manager.h>
 
+#include <rpc/friend_api/friendmanagementnotifyservice.atfw.gen.h>
+#include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_context.h>
+
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -250,18 +253,43 @@ void friend_object::on_saved(rpc::context& ctx, uint64_t svr_id) {
   }
 
   refresh_feature_limit(ctx);
+  if (!pending_notification_event_log_.empty() || !pending_notification_snapshot_.empty()) {
+    auto self = shared_from_this();
+    auto invoke_result =
+        rpc::async_invoke(ctx, "friend_object.on_saved", [self](rpc::context& child_ctx) -> rpc::result_code_type {
+          if (!self) {
+            RPC_RETURN_CODE(0);
+          }
+
+          RPC_AWAIT_IGNORE_RESULT(self->send_notification(child_ctx));
+          RPC_RETURN_CODE(0);
+        });
+
+    if (invoke_result.is_error()) {
+      FCTXLOGERROR(ctx, "{} async_invoke failed, error: {}({})", *this, *invoke_result.get_error(),
+                   protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    }
+  }
 }
 
 int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& db_data) {
+  refresh_feature_limit(ctx);
+
   int ret = base_type::dump(ctx, db_data);
   if (ret < 0) {
     return ret;
   }
   already_setup_quick_save_ = false;
 
+  table_friend_blob_data& blob_data = *db_data.mutable_blob_data();
+  dump(ctx, blob_data);
+
+  return ret;
+}
+
+void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data) {
   auto now = ctx.logical_now();
 
-  table_friend_blob_data& blob_data = *db_data.mutable_blob_data();
   blob_data.clear_friend_list();
   blob_data.clear_inviter_list();
   blob_data.clear_invitee_list();
@@ -306,8 +334,6 @@ int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& d
   for (const auto& kv : gifts_) {
     protobuf_copy_message(*blob_data.add_gift_list(), kv.second);
   }
-
-  return ret;
 }
 
 bool friend_object::add_friend(rpc::context& ctx, int64_t event_id, DFriendInfo& friend_data) {
@@ -681,8 +707,109 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
   }
 }
 
-rpc::result_code_type friend_object::send_notification(rpc::context& /*ctx*/) {
-  // TODO(owent): 打包和下发数据
+rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
+  std::unordered_map<uint64_t, SSFriendManagementEventSync*> merged_notification_by_target_server;
+
+  // 打包快照
+  do {
+    if (pending_notification_snapshot_.empty()) {
+      break;
+    }
+
+    std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t>
+        pending_notification_snapshot;
+    pending_notification_snapshot.swap(pending_notification_snapshot_);
+    std::unordered_map<uint64_t,
+                       std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t>>
+        pending_notification_map_by_target_server;
+
+    for (const auto& user_id_key : pending_notification_snapshot) {
+      auto subscriber = wal_publisher_->get_subscribe_manager().find(user_id_key);
+      if (subscriber && subscriber->get_private_data().subscriber_server_node_id != 0) {
+        pending_notification_map_by_target_server[subscriber->get_private_data().subscriber_server_node_id].insert(
+            user_id_key);
+      }
+    }
+
+    if (pending_notification_map_by_target_server.empty()) {
+      break;
+    }
+
+    for (const auto& target_server_pair : pending_notification_map_by_target_server) {
+      SSFriendManagementEventSync* sync_body = nullptr;
+      auto it = merged_notification_by_target_server.find(target_server_pair.first);
+      if (it != merged_notification_by_target_server.end()) {
+        sync_body = it->second;
+      } else {
+        sync_body = ctx.create<SSFriendManagementEventSync>();
+        merged_notification_by_target_server.emplace(target_server_pair.first, sync_body);
+      }
+      if (sync_body == nullptr) {
+        continue;
+      }
+
+      auto* event_target = sync_body->add_event_target();
+      for (const auto& user_id_key : target_server_pair.second) {
+        protobuf_copy_message(*event_target->add_subscriber_key(), user_id_key);
+      }
+
+      dump(ctx, *event_target->mutable_snapshot());
+    }
+  } while (false);
+
+  // 打包增量数据
+  do {
+    if (pending_notification_event_log_.empty()) {
+      break;
+    }
+
+    std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey,
+                       atfw::util::memory::strong_rc_ptr<DFriendManagementNotificationEvent>, user_key_hash_t,
+                       user_key_equal_t>
+        pending_notification_event_log;
+    pending_notification_event_log.swap(pending_notification_event_log_);
+
+    for (const auto& user_pair : pending_notification_event_log) {
+      auto subscriber = wal_publisher_->get_subscribe_manager().find(user_pair.first);
+      if (!subscriber) {
+        continue;
+      }
+      if (subscriber->get_private_data().subscriber_server_node_id == 0) {
+        continue;
+      }
+
+      uint64_t target_server_node_id = subscriber->get_private_data().subscriber_server_node_id;
+
+      SSFriendManagementEventSync* sync_body = nullptr;
+      auto it = merged_notification_by_target_server.find(target_server_node_id);
+      if (it != merged_notification_by_target_server.end()) {
+        sync_body = it->second;
+      } else {
+        sync_body = ctx.create<SSFriendManagementEventSync>();
+        merged_notification_by_target_server.emplace(target_server_node_id, sync_body);
+      }
+      if (sync_body == nullptr) {
+        continue;
+      }
+
+      auto* event_target = sync_body->add_event_target();
+      protobuf_copy_message(*event_target->add_subscriber_key(), user_pair.first);
+      protobuf_move_message(*event_target->mutable_increase()->mutable_event_log(),
+                            std::move(*user_pair.second->mutable_increase()->mutable_event_log()));
+    }
+  } while (false);
+
+  // 发送数据
+  for (auto& send_messages : merged_notification_by_target_server) {
+    auto target_server_node_id = send_messages.first;
+    auto* sync_body = send_messages.second;
+    if (sync_body == nullptr) {
+      continue;
+    }
+
+    RPC_AWAIT_IGNORE_RESULT(rpc::friend_api::management_event_sync(ctx, target_server_node_id, *sync_body));
+  }
+
   RPC_RETURN_CODE(0);
 }
 
@@ -1108,6 +1235,41 @@ void friend_object::cleanup_invalid_gifts(rpc::context& ctx, std::chrono::system
 size_t friend_object::get_current_friend_count() const noexcept { return friends_.size(); }
 
 size_t friend_object::get_current_inviter_count() const noexcept { return inviters_.size(); }
+
+bool friend_object::append_notification_snapshot(rpc::context& /*ctx*/,
+                                                 const PROJECT_NAMESPACE_ID::DUserIDKey& subscriber_key) {
+  auto iter = pending_notification_snapshot_.find(subscriber_key);
+  if (iter != pending_notification_snapshot_.end()) {
+    return true;
+  }
+
+  pending_notification_snapshot_.insert(subscriber_key);
+  pending_notification_event_log_.erase(subscriber_key);
+  return true;
+}
+
+bool friend_object::append_notification_event(rpc::context& /*ctx*/,
+                                              const PROJECT_NAMESPACE_ID::DUserIDKey& subscriber_key,
+                                              const DFriendEvent& event_data) {
+  {
+    auto iter = pending_notification_snapshot_.find(subscriber_key);
+    if (iter != pending_notification_snapshot_.end()) {
+      return false;
+    }
+  }
+
+  atfw::util::memory::strong_rc_ptr<DFriendManagementNotificationEvent> event_set;
+  auto iter = pending_notification_event_log_.find(subscriber_key);
+  if (iter == pending_notification_event_log_.end()) {
+    event_set = atfw::memory::stl::make_strong_rc<DFriendManagementNotificationEvent>();
+    pending_notification_event_log_.emplace(subscriber_key, event_set);
+  } else {
+    event_set = iter->second;
+  }
+
+  protobuf_copy_message(*event_set->mutable_increase()->add_event_log(), event_data);
+  return true;
+}
 
 void friend_object::check_inviter_count_exceed(rpc::context& ctx, int64_t event_id) {
   size_t friend_total_inviter_limit = get_configure_friend_total_inviter_limit();

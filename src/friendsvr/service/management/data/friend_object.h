@@ -36,11 +36,15 @@ PROJECT_NAMESPACE_END
 namespace atframework {
 namespace friend_api {
 
+class table_friend_blob_data;
 class DFriendInfo;
+class DFriendEvent;
 class DFriendInvitationInfo;
 class DFriendSubscribeKey;
+class DFriendManagementNotificationEvent;
 
-class friend_object : public friend_cache {
+// NOLINTNEXTLINE(misc-multiple-inheritance)
+class friend_object : public friend_cache, public std::enable_shared_from_this<friend_object> {
  public:
   using base_type = friend_cache;
   using ptr_t = std::shared_ptr<friend_object>;
@@ -65,6 +69,8 @@ class friend_object : public friend_cache {
   void on_saved(rpc::context& ctx, uint64_t svr_id) override;
 
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& db_data) override;
+
+  void dump(rpc::context& ctx, table_friend_blob_data& blob_data);
 
   bool add_friend(rpc::context& ctx, int64_t event_id, DFriendInfo& friend_data);
 
@@ -127,6 +133,11 @@ class friend_object : public friend_cache {
     return inviters_;
   }
 
+  bool append_notification_snapshot(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& subscriber_key);
+
+  bool append_notification_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& subscriber_key,
+                                 const DFriendEvent& event_data);
+
  private:
   void check_inviter_count_exceed(rpc::context& ctx, int64_t event_id);
   void set_quick_save() const;
@@ -156,6 +167,13 @@ class friend_object : public friend_cache {
                               std::equal_to<>,
                               atfw::util::memory::lru_map_option<atfw::util::memory::compat_strong_ptr_mode::kStrongRc>>
       transaction_participator_data_cache_;
+
+  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey,
+                     atfw::util::memory::strong_rc_ptr<DFriendManagementNotificationEvent>, user_key_hash_t,
+                     user_key_equal_t>
+      pending_notification_event_log_;
+  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t>
+      pending_notification_snapshot_;
 };
 
 }  // namespace friend_api

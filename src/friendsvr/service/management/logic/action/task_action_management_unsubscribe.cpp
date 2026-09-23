@@ -51,7 +51,7 @@ task_action_management_unsubscribe::operator()() {
   uint32_t zone_id = req_msg.head().router().object_zone_id();
 
   if (0 == user_id || 0 == zone_id) {
-    FWLOGERROR("try to find router cache id from request {} for {} and player {}:{} failed.", "SSFriendGMResetLimitReq",
+    FWLOGERROR("try to find router cache id from request {} for {} and player {}:{} failed.", "SSFriendUnsubscribeReq",
                name(), zone_id, user_id);
     set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);

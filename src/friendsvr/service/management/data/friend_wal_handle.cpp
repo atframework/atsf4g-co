@@ -8,6 +8,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_context.h>
+
 #include "data/friend_object.h"
 
 namespace atframework {
@@ -265,14 +267,31 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
   friend_wal_delegate_helper::setup_delegate_actions(ret->log_action_delegate);
 
   // ============ callbacks for wal_publisher ============
-  ret->send_snapshot = [](wal_publisher_type&, wal_publisher_type::subscriber_iterator,
-                          wal_publisher_type::subscriber_iterator,
-                          wal_publisher_type::callback_param_type) -> wal_result_code {
+  // NOLINTBEGIN(performance-unnecessary-value-param)
+  ret->send_snapshot = [](wal_publisher_type& wal_publisher, wal_publisher_type::subscriber_iterator begin_iter,
+                          wal_publisher_type::subscriber_iterator end_iter,
+                          wal_publisher_type::callback_param_type param) -> wal_result_code {
     // 好友模块不使用订阅机制，发送快照留空即可
+    auto* friend_obj = wal_publisher.get_private_data();
+    if (friend_obj == nullptr) {
+      size_t subscriber_count = 0;
+      while (begin_iter != end_iter) {
+        ++subscriber_count;
+        ++begin_iter;
+      }
+      FCTXLOGERROR(param.context.get(), "Friend object is null in send_snapshot callback, subscriber count: {}",
+                   subscriber_count);
+      return wal_result_code::kOk;
+    }
+
+    while (begin_iter != end_iter) {
+      friend_obj->append_notification_snapshot(param.context, begin_iter->first);
+      ++begin_iter;
+    }
+
     return wal_result_code::kOk;
   };
 
-  // NOLINTBEGIN(performance-unnecessary-value-param)
   ret->send_logs = [](wal_publisher_type&, wal_publisher_type::log_const_iterator,
                       wal_publisher_type::log_const_iterator, wal_publisher_type::subscriber_iterator,
                       wal_publisher_type::subscriber_iterator,

@@ -23,4 +23,4 @@ project_component_declare_sdk(
   ${DTMQ_PROXY_SERVICE_SOURCES}
   GENERATED_FLOW_NAMES
   "atframework.dtmq.DtmqProxysvrService"
-  "atframework.dtmq.DtmqProxysvrNotifyService")
+  "atframework.dtmq.DtmqProxysvrNotifyService.dtmq-proxysvr")

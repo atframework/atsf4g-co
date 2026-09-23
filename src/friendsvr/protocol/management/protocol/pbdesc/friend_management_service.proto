@@ -7,9 +7,12 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
+import "google/protobuf/empty.proto";
+
 import "protocol/extension/atframework.proto";
 
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.friend_api.proto";
 import "protocol/pbdesc/svr.struct.friend_api.proto";
 
 import "protocol/pbdesc/distributed_transaction.proto";
@@ -161,6 +164,38 @@ service FriendManagementService {
       api_name: "移除全部邀请"
       router_rpc: true
       user_rpc: true
+    };
+  };
+}
+
+message DFriendManagementNotificationEvent {
+  repeated atframework.shared.DUserIDKey subscriber_key = 1;
+
+  message Increase {
+    repeated DFriendEvent event_log = 1;
+  }
+
+  oneof event_type {
+    // 快照下发，不包含 transaction_storage ，这是好友管理服务内部的私有数据
+    table_friend_blob_data snapshot = 6;
+    Increase increase = 7;
+  }
+}
+
+message SSFriendManagementEventSync {
+  repeated DFriendManagementNotificationEvent event_target = 1;
+}
+
+service FriendManagementNotifyService {
+  option (atframework.service_options) = {
+    module_name: "friend_api"
+  };
+
+  rpc management_event_sync(stream SSFriendManagementEventSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "好友管理的事件通知"
+      descriptions: "Notify another server instance to sync friend management events"
     };
   };
 }

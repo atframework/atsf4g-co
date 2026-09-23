@@ -32,6 +32,25 @@ generate_for_pb_add_ss_service(
   GENERATED_FLOW_NAME
   "atframework.friend_api.FriendManagementService")
 
+generate_for_pb_add_ss_service(
+  "atframework.friend_api.FriendManagementNotifyService"
+  "${CMAKE_CURRENT_LIST_DIR}/service/management"
+  NO_SERVICE_TASK
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE_ID}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk/management"
+  RPC_DLLEXPORT_DECL
+  FRIEND_SDK_MANAGEMENT_API
+  EXTERNAL_COMPONENT_PROTOCOLS
+  "distributed-transaction-protocol"
+  EXTERNAL_SERVICE_PROTOCOLS
+  "friend-protocol-management-pbdesc"
+  INCLUDE_HEADERS
+  "protocol/pbdesc/friend_management_service.pb.h"
+  GENERATED_FLOW_NAME
+  "atframework.friend_api.FriendManagementNotifyService.friendsvr-management")
+
 project_service_declare_protocol(
   "friend-protocol-recommend-pbdesc" "${CMAKE_CURRENT_LIST_DIR}/protocol/recommend" PROTOCOLS
   "${CMAKE_CURRENT_LIST_DIR}/protocol/recommend/protocol/pbdesc/friend_recommend_service.proto")

@@ -114,16 +114,11 @@ FRIEND_SDK_MANAGEMENT_API bool router_friend_manager::has_custom_create_object_f
 
 FRIEND_SDK_MANAGEMENT_API router_friend_cache::object_ptr_t router_friend_manager::create_friend_object(
     rpc::context &ctx, uint32_t zone_id, uint64_t user_id) {
-  router_friend_cache::object_ptr_t ret;
   if (create_fn_) {
-    ret = create_fn_(ctx, zone_id, user_id);
+    return create_fn_(ctx, zone_id, user_id);
   }
 
-  if (!ret) {
-    ret = friend_cache::create(ctx, zone_id, user_id);
-  }
-
-  return ret;
+  return friend_cache::create(ctx, zone_id, user_id);
 }
 
 FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_manager::pull_online_server(rpc::context &ctx,

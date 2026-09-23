@@ -1,10 +1,13 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-set(CURRENT_SERVICE_SOURCES rpc/friend_api/friendmanagementservice.atfw.gen.cpp rpc/friend_api/friend_algorithm.cpp
-                            data/friend_cache.cpp router/router_friend_cache.cpp router/router_friend_manager.cpp)
-set(CURRENT_SERVICE_HEADERS rpc/friend_api/friendmanagementservice.atfw.gen.h rpc/friend_api/friend_algorithm.h
-                            data/friend_cache.h router/router_friend_cache.h router/router_friend_manager.h)
+set(CURRENT_SERVICE_SOURCES
+    rpc/friend_api/friendmanagementservice.atfw.gen.cpp rpc/friend_api/friendmanagementnotifyservice.atfw.gen.cpp
+    rpc/friend_api/friend_algorithm.cpp data/friend_cache.cpp router/router_friend_cache.cpp
+    router/router_friend_manager.cpp)
+set(CURRENT_SERVICE_HEADERS
+    rpc/friend_api/friendmanagementservice.atfw.gen.h rpc/friend_api/friendmanagementnotifyservice.atfw.gen.h
+    rpc/friend_api/friend_algorithm.h data/friend_cache.h router/router_friend_cache.h router/router_friend_manager.h)
 
 project_service_declare_sdk(
   "friend-sdk-management"
@@ -26,4 +29,5 @@ project_service_declare_sdk(
   SOURCES
   ${CURRENT_SERVICE_SOURCES}
   GENERATED_FLOW_NAMES
-  "atframework.friend_api.FriendManagementService")
+  "atframework.friend_api.FriendManagementService"
+  "atframework.friend_api.FriendManagementNotifyService.friendsvr-management")
