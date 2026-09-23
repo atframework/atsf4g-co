@@ -192,6 +192,10 @@ file(
 )
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
      "& ${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+     "if ($LASTEXITCODE -ne 0) { throw \"generate-excel-bytes failed with exit code $LASTEXITCODE\" }${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+
 file(
   APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
   "& \"${CMAKE_COMMAND}\" -E copy_directory \"${PROJECT_SOURCE_DIR}/resource/UeSourceBytes\" \"${PROJECT_INSTALL_RES_DIR}/excel\"${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
