@@ -56,10 +56,10 @@ FRIEND_SDK_MANAGEMENT_API std::pair<uint32_t, uint64_t> transaction_participator
   uint32_t zone_id = 0;
   uint64_t user_id = 0;
   const char* const separator = atfw::util::string::str2int(zone_id, zone_begin, static_cast<size_t>(end - zone_begin));
-  if (separator == nullptr || separator >= end || *separator != ':' || static_cast<size_t>(separator + 1 >= end)) {
+  if (separator == nullptr || separator >= end || *separator != ':' || separator + 1 >= end) {
     return {0, 0};
   }
-  atfw::util::string::str2int(user_id, separator + 1, end - separator - 1);
+  atfw::util::string::str2int(user_id, separator + 1, static_cast<size_t>(end - separator - 1));
   return {zone_id, user_id};
 }
 
