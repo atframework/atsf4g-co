@@ -195,6 +195,8 @@ rpc::result_void_type user_item_container_manager::create_init(rpc::context& ctx
       RPC_RETURN_VOID;
     }
 
+    int32_t item_size = static_cast<int32_t>(item_instances.size());
+
     auto checked_request = owner_->get_user_item_manager().check_add(ctx, std::move(item_instances));
     auto add_result = checked_request.do_operation(ctx);
     if (add_result.error_code != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
@@ -205,7 +207,7 @@ rpc::result_void_type user_item_container_manager::create_init(rpc::context& ctx
     }
 
     FWLOGDEBUG("{} user_item_container_manager::create_init add_item finish, request_count={}, instance_count={}",
-               *owner_, item_instances.size(), instance_count);
+               *owner_, item_size, instance_count);
   }
   RPC_RETURN_VOID;
 }

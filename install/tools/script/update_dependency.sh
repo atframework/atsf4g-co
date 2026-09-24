@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -e
+
 cd "$(dirname $0)"
 
 # helm is installed by the CMake build into <build>/tools/helm, next to the deploy tree (<build>/publish).
