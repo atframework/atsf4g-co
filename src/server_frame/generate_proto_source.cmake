@@ -148,7 +148,7 @@ add_custom_command(
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
   COMMENT "Generate xresconv.xml,xresconv.data.xml,validator.yaml into ${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
 
-set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "\"${Python3_EXECUTABLE}\" \"${PROJECT_THIRD_PARTY_XRESLOADER_CLI}\"")
+set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "\"${PROJECT_THIRD_PARTY_XRESLOADER_CLI}\"")
 if(Java_JAVA_EXECUTABLE)
   set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS
       "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} --java-path \"${Java_JAVA_EXECUTABLE}\"")
@@ -193,8 +193,10 @@ file(
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
      "& ${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS}${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
 
-file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
-     "if ($LASTEXITCODE -ne 0) { throw \"generate-excel-bytes failed with exit code $LASTEXITCODE\" }${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}")
+file(
+  APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
+  "if ($LASTEXITCODE -ne 0) { throw \"generate-excel-bytes failed with exit code $LASTEXITCODE\" }${PROJECT_THIRD_PARTY_BUILDTOOLS_BASH_EOL}"
+)
 
 file(
   APPEND "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
@@ -291,8 +293,7 @@ project_server_frame_create_protocol_target(
   PUBLIC_LINK_LIBRARIES
   ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_NET})
 
-# 定义 SERVER_FRAME_BASE_PROTOCOLS Target
-# 这里在 configure 阶段就生成一次 serverframe_all.pb。protoc 失败时必须立刻中断 configure：否则会沿用上一次的
+# 定义 SERVER_FRAME_BASE_PROTOCOLS Target 这里在 configure 阶段就生成一次 serverframe_all.pb。protoc 失败时必须立刻中断 configure：否则会沿用上一次的
 # 描述文件继续配置，把 proto 的错误推迟到后面才暴露，甚至被构建期的其他产物掩盖。
 execute_process(
   COMMAND
