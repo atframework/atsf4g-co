@@ -81,13 +81,6 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
     }
   }
 
-  if (obj->get_data_version() != 0) {
-    // 数据版本不为0，说明已经有缓存数据
-    FWLOGERROR("pull_cache for {}:{}:{} failed, data version is not 0", get_key().type_id, get_key().zone_id,
-               get_key().object_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
-  }
-
   // 设置路由ID
   if (login_lock_table_ptr->login_zone_id() == get_key().zone_id) {
     // Zone 匹配
@@ -172,13 +165,6 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_EAGAIN);
       }
     }
-  }
-
-  if (obj->get_data_version() != 0) {
-    // 数据版本不为0，说明已经有缓存数据
-    FWLOGERROR("pull_object for {}:{}:{} failed, data version is not 0", get_key().type_id, get_key().zone_id,
-               get_key().object_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
 
   // 拉取用户数据
