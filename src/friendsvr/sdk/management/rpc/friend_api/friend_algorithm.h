@@ -23,8 +23,8 @@ FRIEND_SDK_MANAGEMENT_API std::pair<uint32_t, uint64_t> transaction_participator
     gsl::string_view key);
 
 FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::vtable_type& get_default_transaction_delegator();
-FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options get_normal_transaction_options();
-FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options get_force_commit_transaction_options();
+FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options& get_normal_transaction_options();
+FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options& get_force_commit_transaction_options();
 
 }  // namespace friend_api
 }  // namespace rpc

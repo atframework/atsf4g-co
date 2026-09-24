@@ -72,7 +72,8 @@ task_action_management_transaction_prepare::operator()() {
   auto friend_cache_obj = router_cache->get_object();
   if (!friend_cache_obj || !friend_cache_obj->is_writable()) {
     FWLOGERROR("try to get friend_object for {} and friend {}:{} failed.", name(), zone_id, user_id);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
+    set_response_code(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
+    TASK_ACTION_RETURN_CODE(get_response_code());
   }
 
   atfw::friend_api::friend_object::ptr_t friend_obj =
@@ -88,6 +89,13 @@ task_action_management_transaction_prepare::operator()() {
 
   if (0 != client_res) {
     rsp_body.set_client_result(client_res);
+  } else {
+    // Persist the prepared participant before the initiator can decide to commit.
+    router_object_base::io_task_guard save_guard;
+    set_response_code(RPC_AWAIT_CODE_RESULT(router_cache->save(get_shared_context(), nullptr, save_guard)));
+    if (get_response_code() < 0) {
+      TASK_ACTION_RETURN_CODE(get_response_code());
+    }
   }
 
   friend_obj->refresh_feature_limit(get_shared_context());

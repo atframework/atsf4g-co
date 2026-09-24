@@ -63,14 +63,18 @@ create_friend_transaction_vtable() {
     int32_t result = 0;
     friend_wal_publisher_context param{ctx, result};
 
-    for (const auto& event_log : event_data->event_data()) {
+    for (auto& event_log : *event_data->mutable_event_data()) {
       auto wal_log = friend_obj->get_wal_publisher().allocate_log(ctx.logical_now(), DFriendEvent::EVENT_NOT_SET, param,
                                                                   event_log);
       if (!wal_log) {
         FWLOGERROR("malloc DFriendEvent failed");
-        continue;
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
       }
-      friend_obj->get_wal_publisher().emplace_back_log(std::move(wal_log), param);
+      event_log.set_event_id(wal_log->event_id());
+      auto applied = friend_obj->get_wal_publisher().emplace_back_log(std::move(wal_log), param);
+      if (applied < atfw::util::distributed_system::wal_result_code::kOk) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
+      }
     }
 
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -86,16 +90,29 @@ create_friend_transaction_vtable() {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
     }
 
+    const auto& transaction_uuid = storage.metadata().transaction_uuid();
+    // The transaction SDK owns repeat-prepare handling. A force commit must not run beside an existing transaction.
+    if (handle.get_running_transactions().count(transaction_uuid) != 0 ||
+        handle.get_finished_transactions().count(transaction_uuid) != 0) {
+      RPC_RETURN_CODE(storage.configure().force_commit() ? PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN : 0);
+    }
+
     friend_key_type key = static_cast<friend_key_type>(
         rpc::friend_api::transaction_participator_key_to_friend_key(handle.get_participator_key()));
-    auto event_data = friend_obj->mutable_transaction_participator_data(ctx, storage.metadata().transaction_uuid(), key,
-                                                                        storage.participator_data());
+    // Validate the request before inserting it into the UUID cache; an existing prepare may still own that entry.
+    auto event_data = friend_obj->unpack_transaction_participator_data(storage.participator_data());
     if (!event_data) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
     }
 
-    RPC_RETURN_CODE(
-        friend_obj->check_prepare_transcation(ctx, storage.metadata().transaction_uuid(), event_data->event_data()));
+    auto result = friend_obj->check_prepare_transcation(ctx, transaction_uuid, event_data->event_data());
+    if (result < 0) {
+      RPC_RETURN_CODE(result);
+    }
+    if (!friend_obj->cache_transaction_participator_data(ctx, transaction_uuid, key, std::move(event_data))) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    }
+    RPC_RETURN_CODE(0);
   };
 
   ret->check_writable = [](rpc::context&, atframework::distributed_system::transaction_participator_handle& handle,
@@ -143,6 +160,19 @@ create_friend_transaction_vtable() {
   ret->on_resolve_task_finished =
       [](rpc::context& ctx,
          atframework::distributed_system::transaction_participator_handle& handle) -> rpc::result_code_type {
+    friend_object* friend_obj = reinterpret_cast<friend_object*>(handle.get_private_data());
+    if (nullptr == friend_obj) {
+      FWLOGERROR("transaction_participator_handle {} should not has no private data", handle.get_participator_key());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
+    }
+
+    friend_obj->refresh_feature_limit(ctx);
+    RPC_AWAIT_IGNORE_RESULT(friend_obj->send_notification(ctx));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  };
+
+  ret->on_finished = [](rpc::context& ctx, friend_transaction_participator_handle& handle,
+                        const friend_transaction_participator_handle::storage_type&) -> rpc::result_code_type {
     friend_object* friend_obj = reinterpret_cast<friend_object*>(handle.get_private_data());
     if (nullptr == friend_obj) {
       FWLOGERROR("transaction_participator_handle {} should not has no private data", handle.get_participator_key());

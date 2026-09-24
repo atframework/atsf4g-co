@@ -2,10 +2,8 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 
 # ============ friendsvr-management service unit tests (rpc-unit-test based) ============
-# Case sources link service::friendsvr-management::private; the service include directory, SDK/protocol dependencies and
-# the generated-flow build order propagate from it. The skeleton drives the management_subscribe SS action directly via
-# atfw::testing::invoke_ss_action<task_action_management_subscribe>, so it does not call
-# register_handles_for_friendmanagementservice() and compiles no registration TU here.
+# Exercise the generated clients and real service actions with offline SS/DB boundaries.
+project_service_get_target_root_dir(service::friendsvr-management::private FRIEND_MANAGEMENT_ROOT_DIR)
 project_add_rpc_unit_test(
   TARGET
   ${PROJECT_NAME}-friendsvr-management-unit-test
@@ -15,10 +13,13 @@ project_add_rpc_unit_test(
   service
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/friendsvr_management_test.cpp"
+  "${FRIEND_MANAGEMENT_ROOT_DIR}/app/handle_ss_rpc_friendmanagementservice.atfw.gen.cpp"
   LINK_LIBRARIES
   service::friendsvr-management::private
   FEATURES
   SS
+  DB
+  ROUTER
   LABELS
   fast
   TIMEOUT

@@ -22,7 +22,8 @@
 
 namespace atframework {
 namespace friend_api {
-FRIEND_SDK_MANAGEMENT_API router_friend_private_type::router_friend_private_type() : friend_tb(NULL), friend_ver(0) {}
+FRIEND_SDK_MANAGEMENT_API router_friend_private_type::router_friend_private_type()
+    : friend_tb(nullptr), friend_ver(nullptr) {}
 
 FRIEND_SDK_MANAGEMENT_API router_friend_private_type::router_friend_private_type(
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_friend> *tb, uint64_t *ver)
@@ -40,7 +41,7 @@ FRIEND_SDK_MANAGEMENT_API router_friend_cache::router_friend_cache(rpc::context 
 FRIEND_SDK_MANAGEMENT_API const char *router_friend_cache::name() const { return "[friend router cache]"; }
 
 FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_cache(rpc::context &ctx, void *priv_data) {
-  if (NULL == priv_data) {
+  if (nullptr == priv_data) {
     router_friend_private_type local_priv_data;
     return pull_cache(ctx, local_priv_data);
   }
@@ -81,14 +82,14 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_cache(
       if (res < 0) {
         if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
           FWLOGERROR("load friend data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id, res);
-          left_retry_times = 0;
           break;
         }
 
         // try to create and retry
         friend_tb_ptr->set_user_id(get_key().object_id);
         friend_tb_ptr->set_zone_id(get_key().zone_id);
-        *friend_tb_ptr->mutable_router_save_timepoint() = protobuf_from_system_clock(ctx.logical_now());
+        *friend_tb_ptr->mutable_router_lock()->mutable_router_save_timepoint() =
+            protobuf_from_system_clock(ctx.logical_now());
         *friend_tb_ver_ptr = 0;
 
         auto clone_friebd_tb = rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_friend>(ctx, friend_tb_ptr);
@@ -108,8 +109,8 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_cache(
   }
 
   fix_router_timeout(ctx, *friend_tb_ptr);
-  uint64_t router_server_id = friend_tb_ptr->router_server_id();
-  uint64_t router_version = friend_tb_ptr->router_version();
+  uint64_t router_server_id = friend_tb_ptr->router_lock().router_server_id();
+  uint64_t router_version = friend_tb_ptr->router_lock().router_version();
 
   // 设置路由ID
   set_router_server_id(router_server_id, router_version);
@@ -123,7 +124,7 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_cache(
 }
 
 FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_object(rpc::context &ctx, void *priv_data) {
-  if (NULL == priv_data) {
+  if (nullptr == priv_data) {
     router_friend_private_type local_priv_data;
     return pull_object(ctx, local_priv_data);
   }
@@ -160,7 +161,6 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_object
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
         FWLOGERROR("load friend data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id, res);
-        left_retry_times = 0;
         break;
       }
 
@@ -172,7 +172,8 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_object
       // try to create and retry
       friend_tb_ptr->set_user_id(get_key().object_id);
       friend_tb_ptr->set_zone_id(get_key().zone_id);
-      *friend_tb_ptr->mutable_router_save_timepoint() = protobuf_from_system_clock(ctx.logical_now());
+      *friend_tb_ptr->mutable_router_lock()->mutable_router_save_timepoint() =
+          protobuf_from_system_clock(ctx.logical_now());
       *friend_tb_ver_ptr = 0;
       auto clone_friebd_tb = rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_friend>(ctx, friend_tb_ptr);
       res = RPC_AWAIT_CODE_RESULT(rpc::db::user_friend::insert(ctx, clone_friebd_tb, friend_tb_ver_ptr));
@@ -196,7 +197,7 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_object
   uint64_t self_node_id = logic_config::me()->get_local_server_id();
   fix_router_timeout(ctx, *friend_tb_ptr);
   // 刷新路由ID
-  set_router_server_id(friend_tb_ptr->router_server_id(), friend_tb_ptr->router_version());
+  set_router_server_id(friend_tb_ptr->router_lock().router_server_id(), friend_tb_ptr->router_lock().router_version());
 
   obj->load_and_move_db(ctx, std::move(*friend_tb_ptr), *friend_tb_ver_ptr);
 
@@ -250,12 +251,13 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
 
   // 尝试保存用户数据
   uint64_t db_version = obj->get_db_version();
-  uint64_t old_router_server_id = get_router_server_id();
-  uint64_t old_router_version = get_router_version();
+  uint64_t old_router_server_id = obj->get_router_server_id();
+  uint64_t old_router_version = obj->get_router_server_version();
   auto old_router_save_timepoint = obj->get_router_server_save_timepoint();
 
   uint64_t self_node_id = logic_config::me()->get_local_server_id();
-  obj->set_router_server(self_node_id, old_router_version + 1, ctx.logical_now());
+  // remove_object may already have selected an offline or transfer destination.
+  obj->set_router_server(get_router_server_id(), get_router_version() + 1, ctx.logical_now());
 
   {
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_friend> db_data{ctx};
@@ -290,7 +292,8 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
     if (res >= 0) {
       rpc::shared_message<PROJECT_NAMESPACE_ID::table_friend> db_data{ctx};
       obj->dump(ctx, *db_data);
-      if (self_node_id == fake_db_data->router_server_id() || 0 == fake_db_data->router_server_id()) {
+      if (self_node_id == fake_db_data->router_lock().router_server_id() ||
+          0 == fake_db_data->router_lock().router_server_id()) {
         // 数据发生了严重的不一致问题，发生了覆盖
         FWLOGERROR("friend router object {}:{} data old data will be overwrite.\nold data: {}\nnew data: {}",
                    get_key().zone_id, get_key().object_id, fake_db_data->DebugString(), db_data->DebugString());
@@ -317,6 +320,7 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
                get_key().object_id, res, obj->get_db_version());
   } else {
     obj->set_db_version(db_version);
+    set_router_server_id(obj->get_router_server_id(), obj->get_router_server_version());
     obj->on_saved(ctx, get_router_server_id());
   }
 
@@ -325,13 +329,15 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
 
 void router_friend_cache::fix_router_timeout(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_friend &table) {
   // 路由信息的自动修复流程
-  if (0 != table.router_server_id() && logic_config::me()->get_local_server_id() != table.router_server_id() &&
-      protobuf_to_system_clock(table.router_save_timepoint()) +
+  const auto &router_lock = table.router_lock();
+  if (0 != router_lock.router_server_id() &&
+      logic_config::me()->get_local_server_id() != router_lock.router_server_id() &&
+      protobuf_to_system_clock(router_lock.router_save_timepoint()) +
               protobuf_to_system_clock(logic_config::me()->get_cfg_router().object_free_timeout()) <
           ctx.logical_now()) {
     FWLOGERROR("friend router object for {}:{} has expired router server id {:#x}", get_key().zone_id,
-               get_key().object_id, table.router_server_id());
-    table.set_router_server_id(0);
+               get_key().object_id, router_lock.router_server_id());
+    table.mutable_router_lock()->set_router_server_id(0);
   }
 }
 

@@ -70,7 +70,8 @@ task_action_management_transaction_reject::operator()() {
   auto friend_cache_obj = router_cache->get_object();
   if (!friend_cache_obj || !friend_cache_obj->is_writable()) {
     FWLOGERROR("try to get friend_object for {} and friend {}:{} failed.", name(), zone_id, user_id);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
+    set_response_code(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
+    TASK_ACTION_RETURN_CODE(get_response_code());
   }
 
   atfw::friend_api::friend_object::ptr_t friend_obj =

@@ -61,9 +61,9 @@ FRIEND_SDK_MANAGEMENT_API friend_cache::ptr_t friend_cache::create(rpc::context&
 FRIEND_SDK_MANAGEMENT_API void friend_cache::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_friend& db_data,
                                                   uint64_t db_version) {
   protobuf_copy_message(data_->db_blob_data, db_data.blob_data());
-  data_->router_server_id = db_data.router_server_id();
-  data_->router_version = db_data.router_version();
-  data_->router_save_timepoint = protobuf_to_system_clock(db_data.router_save_timepoint());
+  data_->router_server_id = db_data.router_lock().router_server_id();
+  data_->router_version = db_data.router_lock().router_version();
+  data_->router_save_timepoint = protobuf_to_system_clock(db_data.router_lock().router_save_timepoint());
 
   data_->db_version = db_version;
 
@@ -81,9 +81,10 @@ FRIEND_SDK_MANAGEMENT_API int friend_cache::dump(rpc::context& /*ctx*/, PROJECT_
 
   db_data.set_user_id(get_user_id());
   db_data.set_zone_id(get_zone_id());
-  db_data.set_router_server_id(data_->router_server_id);
-  db_data.set_router_version(data_->router_version);
-  *db_data.mutable_router_save_timepoint() = protobuf_from_system_clock(data_->router_save_timepoint);
+  auto* router_lock = db_data.mutable_router_lock();
+  router_lock->set_router_server_id(data_->router_server_id);
+  router_lock->set_router_version(data_->router_version);
+  *router_lock->mutable_router_save_timepoint() = protobuf_from_system_clock(data_->router_save_timepoint);
   return 0;
 }
 
@@ -103,9 +104,9 @@ FRIEND_SDK_MANAGEMENT_API void friend_cache::load_and_move_db(rpc::context& ctx,
                                                               PROJECT_NAMESPACE_ID::table_friend&& move_db_data,
                                                               uint64_t db_version) {
   protobuf_move_message(data_->db_blob_data, std::move(*move_db_data.mutable_blob_data()));
-  data_->router_server_id = move_db_data.router_server_id();
-  data_->router_version = move_db_data.router_version();
-  data_->router_save_timepoint = protobuf_to_system_clock(move_db_data.router_save_timepoint());
+  data_->router_server_id = move_db_data.router_lock().router_server_id();
+  data_->router_version = move_db_data.router_lock().router_version();
+  data_->router_save_timepoint = protobuf_to_system_clock(move_db_data.router_lock().router_save_timepoint());
   data_->db_version = db_version;
 
   on_loaded(ctx);

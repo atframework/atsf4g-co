@@ -35,28 +35,32 @@
 namespace rpc {
 namespace friend_api {
 
+namespace {
+constexpr const char* kFriendParticipatorKeyPrefix = "friend:";
+}  // namespace
+
 using atfw::distributed_system::transaction_client_handle;
 
 FRIEND_SDK_MANAGEMENT_API std::string friend_key_to_transaction_participator_key(uint32_t zone_id, uint64_t user_id) {
-  return atfw::util::string::format("friend:{}:{}", zone_id, user_id);
+  return atfw::util::string::format("{}{}:{}", kFriendParticipatorKeyPrefix, zone_id, user_id);
 }
 
 FRIEND_SDK_MANAGEMENT_API std::pair<uint32_t, uint64_t> transaction_participator_key_to_friend_key(
     gsl::string_view key) {
-  if (key.size() <= 7) {
+  if (key.size() <= strlen(kFriendParticipatorKeyPrefix) ||
+      key.substr(0, strlen(kFriendParticipatorKeyPrefix)) != kFriendParticipatorKeyPrefix) {
     return std::pair<uint32_t, uint64_t>{0, 0};
   }
-  const char* start = key.data();
-  const char* next = start + 7;
+  const char* const end = key.data() + key.size();
+  const char* const zone_begin = key.data() + strlen(kFriendParticipatorKeyPrefix);
   uint32_t zone_id = 0;
   uint64_t user_id = 0;
-  next = atfw::util::string::str2int(zone_id, next, key.size() - static_cast<size_t>(next - start));
-  if (next != nullptr && next + 1 < start + key.size()) {
-    atfw::util::string::str2int(user_id, next + 1, key.size() - static_cast<size_t>(next - start) - 1);
-    return std::pair<uint32_t, uint64_t>{zone_id, user_id};
+  const char* const separator = atfw::util::string::str2int(zone_id, zone_begin, end - zone_begin);
+  if (separator == nullptr || separator >= end || *separator != ':' || separator + 1 >= end) {
+    return {0, 0};
   }
-
-  return std::pair<uint32_t, uint64_t>{0, 0};
+  atfw::util::string::str2int(user_id, separator + 1, end - separator - 1);
+  return {zone_id, user_id};
 }
 
 FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::vtable_type& get_default_transaction_delegator() {
@@ -117,10 +121,10 @@ FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::vtable_type& get_defa
 
     auto router_key = rpc::friend_api::transaction_participator_key_to_friend_key(participator.participator_key());
 
-    // Just notify, there is no need to wait for the result
+    // Return the participant result so the transaction client can retry failed persistence.
     auto result = RPC_AWAIT_CODE_RESULT(rpc::friend_api::management_transaction_commit(
         ctx, atfw::friend_api::router_friend_manager::me()->get_type_id(), router_key.first, router_key.second,
-        *req_body, *rsp_body, true));
+        *req_body, *rsp_body));
 
     if (result < 0) {
       FCTXLOGERROR(ctx, "rpc::friend_api::transaction_commit {}, participator={} failed, result : {}({})",
@@ -146,10 +150,10 @@ FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::vtable_type& get_defa
 
     auto router_key = rpc::friend_api::transaction_participator_key_to_friend_key(participator.participator_key());
 
-    // Just notify, there is no need to wait for the result
+    // Return the participant result so the transaction client can retry failed persistence.
     auto result = RPC_AWAIT_CODE_RESULT(rpc::friend_api::management_transaction_reject(
         ctx, atfw::friend_api::router_friend_manager::me()->get_type_id(), router_key.first, router_key.second,
-        *req_body, *rsp_body, true));
+        *req_body, *rsp_body));
 
     if (result < 0) {
       FCTXLOGERROR(ctx, "rpc::friend_api::transaction_reject {}, participator={} failed, result : {}({})",
@@ -163,32 +167,26 @@ FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::vtable_type& get_defa
   return *ret;
 }
 
-FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options get_normal_transaction_options() {
-  static std::unique_ptr<transaction_client_handle::transaction_options> options;
-  if (options) {
-    return *options;
-  }
-
-  options = gsl::make_unique<transaction_client_handle::transaction_options>();
-
-  // 采用数据库CAS一致性算法
-  options->replication_read_count = 0;
-  options->replication_total_count = 0;
-  options->memory_only = false;
-  options->timeout = protobuf_to_system_clock(logic_config::me()->get_logic_cfg().transaction().timeout());
-
-  return *options;
+FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options& get_normal_transaction_options() {
+  static const auto options = [] {
+    transaction_client_handle::transaction_options result;
+    // 采用数据库CAS一致性算法
+    result.replication_read_count = 0;
+    result.replication_total_count = 0;
+    result.memory_only = false;
+    result.timeout = protobuf_to_system_clock(logic_config::me()->get_logic_cfg().transaction().timeout());
+    return result;
+  }();
+  return options;
 }
 
-FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options get_force_commit_transaction_options() {
-  static std::unique_ptr<transaction_client_handle::transaction_options> options;
-  if (options) {
-    return *options;
-  }
-
-  options = gsl::make_unique<transaction_client_handle::transaction_options>(get_normal_transaction_options());
-  options->force_commit = true;
-  return *options;
+FRIEND_SDK_MANAGEMENT_API const transaction_client_handle::transaction_options& get_force_commit_transaction_options() {
+  static const auto options = [] {
+    auto result = get_normal_transaction_options();
+    result.force_commit = true;
+    return result;
+  }();
+  return options;
 }
 
 }  // namespace friend_api

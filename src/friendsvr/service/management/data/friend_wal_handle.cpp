@@ -211,6 +211,10 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
     if (blob_data->global_finished_event_id() > 0) {
       wal.set_global_ingore_key(blob_data->global_finished_event_id());
     }
+
+    if (blob_data->wal_removed_event_id() > 0) {
+      wal.set_last_removed_key(blob_data->wal_removed_event_id());
+    }
     return wal_result_code::kOk;
   };
 
@@ -227,8 +231,12 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
 
     // 好友系统的WAL log为纯内存数据，不需要保存到数据库
     // Dump global ignore
-    if (wal.get_global_ingore_key()) {
+    if (wal.get_global_ingore_key() != nullptr) {
       blob_data->set_global_finished_event_id(*wal.get_global_ingore_key());
+    }
+
+    if (wal.get_last_removed_key() != nullptr) {
+      blob_data->set_wal_removed_event_id(*wal.get_last_removed_key());
     }
     return wal_result_code::kOk;
   };
@@ -247,7 +255,7 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
 
   ret->merge_log = [](const wal_object_type&, wal_object_type::callback_param_type, wal_object_type::log_type& to,
                       const wal_object_type::log_type& from) {
-    FWLOGERROR("Merge friend WAL failed(should not happen) from\n{}to\n{}", from.DebugString(), to.DebugString());
+    FWLOGDEBUG("Ignore repeated friend WAL event {}, existing event {}", from.event_id(), to.event_id());
   };
 
   ret->get_log_key = [](const wal_object_type&, const wal_object_type::log_type& log) -> wal_object_type::log_key_type {
@@ -273,7 +281,6 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
   ret->send_snapshot = [](wal_publisher_type& wal_publisher, wal_publisher_type::subscriber_iterator begin_iter,
                           wal_publisher_type::subscriber_iterator end_iter,
                           wal_publisher_type::callback_param_type param) -> wal_result_code {
-    // 好友模块不使用订阅机制，发送快照留空即可
     auto* friend_obj = wal_publisher.get_private_data();
     if (friend_obj == nullptr) {
       size_t subscriber_count = 0;
@@ -294,11 +301,20 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
     return wal_result_code::kOk;
   };
 
-  ret->send_logs = [](wal_publisher_type&, wal_publisher_type::log_const_iterator,
-                      wal_publisher_type::log_const_iterator, wal_publisher_type::subscriber_iterator,
-                      wal_publisher_type::subscriber_iterator,
-                      wal_publisher_type::callback_param_type) -> wal_result_code {
-    // 好友模块不使用订阅机制，发送Log留空即可
+  ret->send_logs = [](wal_publisher_type& publisher, wal_publisher_type::log_const_iterator begin_log,
+                      wal_publisher_type::log_const_iterator end_log,
+                      wal_publisher_type::subscriber_iterator begin_subscriber,
+                      wal_publisher_type::subscriber_iterator end_subscriber,
+                      wal_publisher_type::callback_param_type parameter) -> wal_result_code {
+    auto* object = publisher.get_private_data();
+    if (object == nullptr) {
+      return wal_result_code::kInitlization;
+    }
+    for (; begin_subscriber != end_subscriber; ++begin_subscriber) {
+      for (auto log = begin_log; log != end_log; ++log) {
+        object->append_notification_event(parameter.context, begin_subscriber->first, **log);
+      }
+    }
     return wal_result_code::kOk;
   };
   // NOLINTEND(performance-unnecessary-value-param)
@@ -321,6 +337,8 @@ static friend_wal_publisher_type::configure_pointer create_friend_publisher_cong
     return ret;
   }
   // ret->enable_last_broadcast_for_removed_subscriber = true;
+  // Independent prepared transactions may commit in a different order from their assigned event IDs.
+  ret->enable_hole_log = true;
   const auto& cfg = logic_config::me()->get_logic_cfg().friend_api();
   ret->gc_expire_duration = protobuf_to_system_clock(cfg.wal_gc_expire_duration());
   ret->gc_log_size = cfg.wal_gc_log_size() > 0 ? cfg.wal_gc_log_size() : 8;

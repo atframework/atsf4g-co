@@ -21,6 +21,7 @@ message table_friend_blob_data {
   atframework.friend_api.DFriendStatistics statistics = 1;  // 统计数据，限频数据
   int64 event_id_allocator = 2;                          // 事件ID分配器
   int64 global_finished_event_id = 3;                    // 全局已完成事务ID
+  int64 wal_removed_event_id = 4;                        // wal模块以及移除的事件ID起点
 
   repeated atframework.friend_api.DFriendInfo friend_list = 11;
   repeated atframework.friend_api.DFriendInvitationInfo inviter_list = 12;

@@ -121,6 +121,11 @@ class friend_object : public friend_cache, public std::enable_shared_from_this<f
   atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data>
   mutable_transaction_participator_data(rpc::context& ctx, const std::string& transaction_uuid, friend_key_type key,
                                         const google::protobuf::Any& data);
+  atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data> unpack_transaction_participator_data(
+      const google::protobuf::Any& data);
+  bool cache_transaction_participator_data(
+      rpc::context& ctx, const std::string& transaction_uuid, friend_key_type key,
+      atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data> data);
   void remove_transaction_data(rpc::context& ctx, const std::string& transaction_uuid);
 
   void cleanup_invalid_friends(rpc::context& ctx, std::chrono::system_clock::time_point now);
@@ -141,6 +146,7 @@ class friend_object : public friend_cache, public std::enable_shared_from_this<f
                                  const DFriendEvent& event_data);
 
  private:
+  int32_t check_prepare_event(const DFriendEvent& event) const;
   void check_inviter_count_exceed(rpc::context& ctx, int64_t event_id);
   void set_quick_save() const;
 

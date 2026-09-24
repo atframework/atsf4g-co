@@ -138,8 +138,8 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_manager::pull_onli
     RPC_RETURN_CODE(ret);
   }
 
-  router_svr_id = local_db_tb_ptr->router_server_id();
-  router_svr_ver = local_db_tb_ptr->router_version();
+  router_svr_id = local_db_tb_ptr->router_lock().router_server_id();
+  router_svr_ver = local_db_tb_ptr->router_lock().router_version();
 
   ptr_t cache = get_cache(key);
   if (cache && !cache->is_writable()) {

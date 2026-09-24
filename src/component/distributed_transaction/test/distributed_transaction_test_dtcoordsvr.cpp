@@ -2463,8 +2463,9 @@ CASE_TEST(component_dtcoordsvr, participant_ack_drains_inflight_io_before_delete
 
   // Task B acks both participants; the record is only deleted after the in-flight fetch finished.
   bool ack_started = false;
-  auto ack_task =
-      test.run_task("drain_ack", std::chrono::seconds{10}, [&ack_started](rpc::context& ctx) -> rpc::result_code_type {
+  bool release_ack = false;
+  auto ack_task = test.run_task(
+      "drain_ack", std::chrono::seconds{10}, [&ack_started, &release_ack](rpc::context& ctx) -> rpc::result_code_type {
         ack_started = true;
         transaction_metadata metadata;
         metadata.set_transaction_uuid("mgr-drain-1");
@@ -2472,16 +2473,26 @@ CASE_TEST(component_dtcoordsvr, participant_ack_drains_inflight_io_before_delete
         int32_t res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_TRUE(!!trans);
+        // Let the first reader observe the fetched record before ACK can remove it. Otherwise that reader
+        // may correctly return EN_SYS_NOTFOUND when resumed after the last ACK deletes the cache entry.
+        for (int i = 0; i < 5000 && !release_ack; ++i) {
+          RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
+        }
+        if (!release_ack) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+        }
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
         res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pb"));
         CASE_EXPECT_EQ(0, res);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&ack_started]() { return ack_started; }));
+  CASE_EXPECT_EQ(0u, test.db().calls("distribute_transaction", atfw::testing::mock_db::op_type::remove_all));
   release_slow_get = true;
   auto fetch_result = test.wait(fetch_task, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(fetch_result.task_exited);
   CASE_EXPECT_EQ(0, fetch_result.result_code);
+  release_ack = true;
   auto ack_result = test.wait(ack_task, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(ack_result.task_exited);
   CASE_EXPECT_EQ(0, ack_result.result_code);

@@ -4,6 +4,16 @@
 
 #include "data/friend_object.h"
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/com.const.config.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <memory/object_allocator.h>
 
 #include <config/excel_config_const_index.h>
@@ -104,7 +114,10 @@ friend_object::friend_object(
   wal_publisher_->get_private_data() = this;
 }
 
-friend_object::~friend_object() {}
+friend_object::~friend_object() {
+  transaction_handle_->set_private_data(nullptr);
+  wal_publisher_->get_private_data() = nullptr;
+}
 
 void friend_object::init(rpc::context& ctx) { friend_cache::init(ctx); }
 
@@ -142,6 +155,10 @@ void friend_object::on_loaded(rpc::context& ctx) {
   inviters_.clear();
   invitees_.clear();
   friends_.clear();
+  transaction_participator_data_cache_.clear();
+  pending_notification_event_log_.clear();
+  pending_notification_snapshot_.clear();
+  already_setup_quick_save_ = false;
 
   auto now = ctx.logical_now();
 
@@ -149,7 +166,14 @@ void friend_object::on_loaded(rpc::context& ctx) {
   // db_version) 都会触发这个事件 这时候数据已经被存入 db_data_ , 可通过 get_db_blob() 提取和转移数据
   table_friend_blob_data& blob_data = mutable_db_data();
   friend_key_type key;
-  event_id_allocator_ = blob_data.event_id_allocator();
+  if (blob_data.wal_removed_event_id() <= 0) {
+    blob_data.set_wal_removed_event_id(1);
+  }
+  event_id_allocator_ = (std::max)(blob_data.event_id_allocator(), blob_data.global_finished_event_id());
+  event_id_allocator_ = (std::max)(blob_data.wal_removed_event_id(), event_id_allocator_);
+
+  wal_publisher_->assign_logs(friend_wal_publisher_type::log_container_type{});
+  wal_publisher_->set_broadcast_key_bound(0);
 
   // WAL Load
   {
@@ -159,11 +183,9 @@ void friend_object::on_loaded(rpc::context& ctx) {
   }
 
   // 事务 Load
+  friend_transaction_participator_handle::snapshot_type storage;
   if (blob_data.has_transaction_storage()) {
-    friend_transaction_participator_handle::snapshot_type storage;
-    if (blob_data.transaction_storage().UnpackTo(&storage)) {
-      transaction_handle_->load(storage);
-    } else {
+    if (!blob_data.transaction_storage().UnpackTo(&storage)) {
       std::string error_msg = storage.InitializationErrorString();
       const std::string type_url = protobuf_get_any_type_url<friend_transaction_participator_handle::snapshot_type>();
       if (error_msg.empty() && type_url != blob_data.transaction_storage().type_url()) {
@@ -172,8 +194,10 @@ void friend_object::on_loaded(rpc::context& ctx) {
       }
 
       FCTXLOGDEBUG(ctx, "{} unpack transaction storage failed, msg: {}", *this, error_msg);
+      storage.Clear();
     }
   }
+  transaction_handle_->load(storage);
 
   for (int i = 0; i < blob_data.friend_list_size(); ++i) {
     const auto& friend_data = blob_data.friend_list(i);
@@ -241,6 +265,11 @@ void friend_object::on_loaded(rpc::context& ctx) {
   }
   blob_data.clear_gift_list();
 
+  auto subscribers = wal_publisher_->get_subscribe_manager().all_range();
+  for (auto subscriber = subscribers.first; subscriber != subscribers.second; ++subscriber) {
+    append_notification_snapshot(ctx, subscriber->first);
+  }
+
   refresh_feature_limit(ctx);
 }
 
@@ -292,12 +321,19 @@ int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& d
 void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data, bool with_transaction_data) {
   auto now = ctx.logical_now();
 
+  cleanup_invalid_friends(ctx, now);
+  cleanup_invalid_inviters(ctx, now);
+  cleanup_invalid_invitees(ctx, now);
+  cleanup_invalid_gifts(ctx, now);
+
   blob_data.clear_friend_list();
   blob_data.clear_inviter_list();
   blob_data.clear_invitee_list();
   blob_data.clear_gift_list();
 
   blob_data.set_event_id_allocator(event_id_allocator_);
+  protobuf_copy_message(*blob_data.mutable_statistics(), get_statistics());
+  blob_data.clear_transaction_storage();
 
   // WAL Dump
   {
@@ -309,6 +345,24 @@ void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data, b
 
   // 事务 Dump
   if (with_transaction_data) {
+    const friend_key_type self_key{get_zone_id(), get_user_id()};
+    for (const auto& running : transaction_handle_->get_running_transactions()) {
+      if (!running.second.storage) {
+        continue;
+      }
+      auto cache_iter = transaction_participator_data_cache_.find(running.first);
+      if (cache_iter == transaction_participator_data_cache_.end() || !cache_iter->second) {
+        continue;
+      }
+      auto data_iter = cache_iter->second->participator_data.find(self_key);
+      if (data_iter == cache_iter->second->participator_data.end() || !data_iter->second) {
+        continue;
+      }
+      // The SDK snapshot copies this storage; persist IDs assigned during execution before that copy.
+      if (!running.second.storage->mutable_participator_data()->PackFrom(*data_iter->second)) {
+        FCTXLOGERROR(ctx, "{} pack transaction {} participator data failed", *this, running.first);
+      }
+    }
     friend_transaction_participator_handle::snapshot_type storage;
     transaction_handle_->dump(storage);
     if (!blob_data.mutable_transaction_storage()->PackFrom(storage)) {
@@ -317,22 +371,18 @@ void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data, b
     }
   }
 
-  cleanup_invalid_friends(ctx, now);
   for (auto& kv : friends_) {
     protobuf_copy_message(*blob_data.add_friend_list(), kv.second);
   }
 
-  cleanup_invalid_inviters(ctx, now);
   for (auto& kv : inviters_) {
     protobuf_copy_message(*blob_data.add_inviter_list(), kv.second);
   }
 
-  cleanup_invalid_invitees(ctx, now);
   for (auto& kv : invitees_) {
     protobuf_copy_message(*blob_data.add_invitee_list(), kv.second);
   }
 
-  cleanup_invalid_gifts(ctx, now);
   for (const auto& kv : gifts_) {
     protobuf_copy_message(*blob_data.add_gift_list(), kv.second);
   }
@@ -400,7 +450,7 @@ bool friend_object::remove_friend(rpc::context& ctx, int64_t event_id, DFriendIn
   protobuf_copy_message(friend_data, iter->second);
   friends_.erase(iter);
 
-  FCTXLOGDEBUG(ctx, "event {} remove friend {}:{}, current count:{}", *this, event_id, key.zone_id, key.user_id,
+  FCTXLOGDEBUG(ctx, "{} event {} remove friend {}:{}, current count:{}", *this, event_id, key.zone_id, key.user_id,
                get_current_friend_count());
 
   // TODO(any): OSS
@@ -490,16 +540,11 @@ bool friend_object::remove_all_inviters(rpc::context& ctx, int64_t event_id) {
     remove_keys.insert(kv.first);
   }
 
-  int64_t remove_event_id = 0;
-  if (!remove_keys.empty()) {
-    remove_event_id = allocate_event_id();
-  }
-
   for (const auto& k : remove_keys) {
     rpc::context::message_holder<DFriendInvitationInfo> to_remove_inviter{ctx};
     to_remove_inviter->mutable_from_user()->set_zone_id(k.zone_id);
     to_remove_inviter->mutable_from_user()->set_user_id(k.user_id);
-    remove_inviter(ctx, remove_event_id, *to_remove_inviter);
+    remove_inviter(ctx, event_id, *to_remove_inviter);
   }
 
   // TODO(any): OSS
@@ -537,6 +582,7 @@ bool friend_object::add_invitee(rpc::context& ctx, int64_t event_id, DFriendInvi
   stats_data.set_weekly_invitee(stats_data.weekly_invitee() + 1);
   stats_data.set_sum_invitee(stats_data.sum_invitee() + 1);
 
+  set_quick_save();
   return true;
 }
 
@@ -563,6 +609,7 @@ bool friend_object::remove_invitee(rpc::context& ctx, int64_t event_id, DFriendI
 
   FCTXLOGDEBUG(ctx, "{} event {} removed invitee {}:{}", *this, event_id, key.zone_id, key.user_id);
 
+  set_quick_save();
   return true;
 }
 
@@ -710,6 +757,14 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
 }
 
 rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
+  // Repair before packing snapshots so all subscribers see the same state and event sequence.
+  cleanup_invalid_friends(ctx, ctx.logical_now());
+  cleanup_invalid_inviters(ctx, ctx.logical_now());
+  cleanup_invalid_invitees(ctx, ctx.logical_now());
+  int32_t result = 0;
+  friend_wal_publisher_context parameter{ctx, result};
+  wal_publisher_->broadcast(parameter);
+
   std::unordered_map<uint64_t, SSFriendManagementEventSync*> merged_notification_by_target_server;
 
   // 打包快照
@@ -816,9 +871,11 @@ rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
 }
 
 namespace {
-static void friend_object_merge_transcation_events(size_t& add_invitee_count, size_t& add_inviter_count,
-                                                   size_t& add_friend_count,
-                                                   const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events) {
+static void friend_object_merge_transcation_events(
+    size_t& add_invitee_count, size_t& add_inviter_count,
+    std::unordered_set<friend_key_type, friend_key_hash_type>& added_friends,
+    const std::unordered_map<friend_key_type, DFriendInfo, friend_key_hash_type>& existing_friends,
+    const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events) {
   for (int i = 0; i < events.size(); ++i) {
     switch (events.Get(i).event_case()) {
       case DFriendEvent::kAddInvitee:
@@ -827,9 +884,14 @@ static void friend_object_merge_transcation_events(size_t& add_invitee_count, si
       case DFriendEvent::kAddInviter:
         ++add_inviter_count;
         break;
-      case DFriendEvent::kAddFriendData:
-        ++add_friend_count;
+      case DFriendEvent::kAddFriendData: {
+        const auto& user = events.Get(i).add_friend_data().user_key();
+        friend_key_type key{user.zone_id(), user.user_id()};
+        if (existing_friends.find(key) == existing_friends.end()) {
+          added_friends.insert(key);
+        }
         break;
+      }
       default:
         break;
     }
@@ -837,13 +899,66 @@ static void friend_object_merge_transcation_events(size_t& add_invitee_count, si
 }
 }  // namespace
 
+int32_t friend_object::check_prepare_event(const DFriendEvent& event) const {
+  const PROJECT_NAMESPACE_ID::DUserIDKey* peer = nullptr;
+  if (event.event_id() != 0) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  switch (event.event_case()) {
+    case DFriendEvent::kAddFriendData:
+      peer = &event.add_friend_data().user_key();
+      break;
+    case DFriendEvent::kRemoveFriendData:
+      peer = &event.remove_friend_data().user_key();
+      break;
+    case DFriendEvent::kAddInviter:
+      if (event.add_inviter().to_user().zone_id() != get_zone_id() ||
+          event.add_inviter().to_user().user_id() != get_user_id()) {
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      }
+      peer = &event.add_inviter().from_user();
+      break;
+    case DFriendEvent::kRemoveInviter:
+      peer = &event.remove_inviter().from_user();
+      break;
+    case DFriendEvent::kAddInvitee:
+      if (event.add_invitee().from_user().zone_id() != get_zone_id() ||
+          event.add_invitee().from_user().user_id() != get_user_id()) {
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      }
+      peer = &event.add_invitee().to_user();
+      break;
+    case DFriendEvent::kRemoveInvitee:
+      peer = &event.remove_invitee().to_user();
+      break;
+    case DFriendEvent::kRemoveAllInviter:
+    case DFriendEvent::kClearAllData:
+      break;
+    default:
+      // Gift fields are reserved storage; management exposes no gift operations.
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  if (peer != nullptr && (peer->zone_id() == 0 || peer->user_id() == 0 ||
+                          (peer->zone_id() == get_zone_id() && peer->user_id() == get_user_id()))) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  return 0;
+}
+
 int32_t friend_object::check_prepare_transcation(rpc::context& ctx, const std::string& transaction_uuid,
                                                  const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events) {
+  for (const auto& event : events) {
+    int32_t result = check_prepare_event(event);
+    if (result != 0) {
+      return result;
+    }
+  }
   size_t add_invitee_count = 0;
   size_t add_inviter_count = 0;
-  size_t add_friend_count = 0;
+  std::unordered_set<friend_key_type, friend_key_hash_type> added_friends;
 
-  friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, add_friend_count, events);
+  cleanup_invalid_friends(ctx, ctx.logical_now());
+  friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, added_friends, friends_, events);
   // 也要附加正在运行的事务事件
   {
     for (const auto& running_transaction : transaction_handle_->get_running_transactions()) {
@@ -862,17 +977,17 @@ int32_t friend_object::check_prepare_transcation(rpc::context& ctx, const std::s
       if (!trans_data) {
         continue;
       }
-      friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, add_friend_count,
+      friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, added_friends, friends_,
                                              trans_data->event_data());
     }
   }
 
-  if (add_invitee_count <= 0 && add_friend_count <= 0 && add_inviter_count <= 0) {
+  if (add_invitee_count == 0 && added_friends.empty() && add_inviter_count == 0) {
     return 0;
   }
 
   // 检查好友数量上限
-  if (friends_.size() + add_friend_count > get_configure_friend_max_number()) {
+  if (friends_.size() + added_friends.size() > get_configure_friend_max_number()) {
     return PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_MAX_NUMBER_LIMIT;
   }
 
@@ -909,7 +1024,14 @@ int32_t friend_object::check_prepare_transcation(rpc::context& ctx, const std::s
   return 0;
 }
 
-int64_t friend_object::allocate_event_id() { return ++event_id_allocator_; }
+int64_t friend_object::allocate_event_id() {
+  // wal_removed_event_id 至少初始化为1 ，event_id_allocator_ 初始化会不低于这个值
+  if (event_id_allocator_ <= 1) {
+    event_id_allocator_ = atfw::util::time::time_utility::get_sys_now() * 1000000;
+    event_id_allocator_ += atfw::util::time::time_utility::get_now_nanos() / 1000;
+  }
+  return ++event_id_allocator_;
+}
 
 void friend_object::gm_reset_limit() {
   DFriendStatistics& stats_data = mutable_statistics();
@@ -925,6 +1047,7 @@ void friend_object::gm_reset_limit() {
   stats_data.set_sum_receive_gift_times(0);
   stats_data.set_sum_invitee(0);
   stats_data.set_sum_inviter(0);
+  set_quick_save();
 }
 
 void friend_object::subscribe(rpc::context& ctx, const DFriendSubscribeKey& subscribe_key,
@@ -969,9 +1092,14 @@ void friend_object::unsubscribe(rpc::context& ctx, const DFriendSubscribeKey& su
 }
 
 bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
-  wal_publisher_->set_global_log_ingore_key(event_id);
-
   bool has_event = false;
+
+  if (nullptr == wal_publisher_->get_global_log_ingore_key() ||
+      *wal_publisher_->get_global_log_ingore_key() < event_id) {
+    wal_publisher_->set_global_log_ingore_key(event_id);
+    has_event = true;
+  }
+
   // 仅仅移除event_id更小的记录
   {
     std::vector<int64_t> pending_to_erase;
@@ -1077,16 +1205,22 @@ atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data>
 friend_object::mutable_transaction_participator_data(rpc::context& ctx, const std::string& transaction_uuid,
                                                      friend_key_type key, const google::protobuf::Any& raw_data) {
   auto iter_trans = transaction_participator_data_cache_.find(transaction_uuid);
-
-  atfw::util::memory::strong_rc_ptr<transaction_participator_data_cache_t> cache_ptr;
   if (iter_trans != transaction_participator_data_cache_.end()) {
-    cache_ptr = iter_trans->second;
     auto iter_data = iter_trans->second->participator_data.find(key);
     if (iter_data != iter_trans->second->participator_data.end()) {
       return iter_data->second;
     }
   }
 
+  auto ret = unpack_transaction_participator_data(raw_data);
+  if (!ret || !cache_transaction_participator_data(ctx, transaction_uuid, key, ret)) {
+    return nullptr;
+  }
+  return ret;
+}
+
+atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data>
+friend_object::unpack_transaction_participator_data(const google::protobuf::Any& raw_data) {
   atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data> ret =
       atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::friend_transaction_data>();
   if (!ret) {
@@ -1104,21 +1238,36 @@ friend_object::mutable_transaction_participator_data(rpc::context& ctx, const st
     return nullptr;
   }
 
+  return ret;
+}
+
+bool friend_object::cache_transaction_participator_data(
+    rpc::context& ctx, const std::string& transaction_uuid, friend_key_type key,
+    atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data> data) {
+  auto iter_trans = transaction_participator_data_cache_.find(transaction_uuid);
+  atfw::util::memory::strong_rc_ptr<transaction_participator_data_cache_t> cache_ptr;
+  if (iter_trans != transaction_participator_data_cache_.end()) {
+    cache_ptr = iter_trans->second;
+  }
+
   if (!cache_ptr) {
     cache_ptr = atfw::memory::stl::make_strong_rc<transaction_participator_data_cache_t>();
+    if (!cache_ptr) {
+      return false;
+    }
     cache_ptr->timeout = ctx.logical_now() + get_configure_transaction_timeout();
     cache_ptr->timeout += std::chrono::seconds{2};
 
-    cache_ptr->participator_data[key] = ret;
+    cache_ptr->participator_data[key] = std::move(data);
 
     transaction_participator_data_cache_.insert_key_value(transaction_uuid, std::move(cache_ptr));
   } else {
-    cache_ptr->participator_data[key] = ret;
+    cache_ptr->participator_data[key] = std::move(data);
   }
 
   set_quick_save();
 
-  return ret;
+  return true;
 }
 
 void friend_object::remove_transaction_data(rpc::context& /*ctx*/, const std::string& transaction_uuid) {
@@ -1140,22 +1289,23 @@ void friend_object::cleanup_invalid_friends(rpc::context& ctx, std::chrono::syst
 
   for (auto& kv : friends_) {
     if ((kv.second.removed_time().seconds() > 0 && now >= protobuf_to_system_clock(kv.second.removed_time())) ||
-        (now >= protobuf_to_system_clock(kv.second.expired_time()) + tolerate_time)) {
+        (kv.second.expired_time().seconds() > 0 &&
+         now >= protobuf_to_system_clock(kv.second.expired_time()) + tolerate_time)) {
       expired_keys.insert(kv.first);
       continue;
     }
   }
 
-  int64_t new_event_id = 0;
-  if (!expired_keys.empty()) {
-    new_event_id = allocate_event_id();
-  }
-
+  int32_t result = 0;
+  friend_wal_publisher_context parameter{ctx, result};
   for (const auto& k : expired_keys) {
-    rpc::context::message_holder<DFriendInfo> to_remove_friend{ctx};
-    to_remove_friend->mutable_user_key()->set_user_id(k.user_id);
-    to_remove_friend->mutable_user_key()->set_zone_id(k.zone_id);
-    remove_friend(ctx, new_event_id, *to_remove_friend);
+    DFriendEvent event;
+    event.mutable_remove_friend_data()->mutable_user_key()->set_user_id(k.user_id);
+    event.mutable_remove_friend_data()->mutable_user_key()->set_zone_id(k.zone_id);
+    auto log = wal_publisher_->allocate_log(ctx.logical_now(), event.event_case(), parameter, event);
+    if (log) {
+      wal_publisher_->emplace_back_log(std::move(log), parameter);
+    }
   }
 }
 
@@ -1177,16 +1327,16 @@ void friend_object::cleanup_invalid_inviters(rpc::context& ctx, std::chrono::sys
     }
   }
 
-  int64_t new_event_id = 0;
-  if (!expired_keys.empty()) {
-    new_event_id = allocate_event_id();
-  }
-
+  int32_t result = 0;
+  friend_wal_publisher_context parameter{ctx, result};
   for (const auto& k : expired_keys) {
-    rpc::context::message_holder<DFriendInvitationInfo> to_remove_inviter{ctx};
-    to_remove_inviter->mutable_from_user()->set_zone_id(k.zone_id);
-    to_remove_inviter->mutable_from_user()->set_user_id(k.user_id);
-    remove_inviter(ctx, new_event_id, *to_remove_inviter);
+    DFriendEvent event;
+    event.mutable_remove_inviter()->mutable_from_user()->set_zone_id(k.zone_id);
+    event.mutable_remove_inviter()->mutable_from_user()->set_user_id(k.user_id);
+    auto log = wal_publisher_->allocate_log(ctx.logical_now(), event.event_case(), parameter, event);
+    if (log) {
+      wal_publisher_->emplace_back_log(std::move(log), parameter);
+    }
   }
 }
 
@@ -1208,16 +1358,16 @@ void friend_object::cleanup_invalid_invitees(rpc::context& ctx, std::chrono::sys
     }
   }
 
-  int64_t new_event_id = 0;
-  if (!expired_keys.empty()) {
-    new_event_id = allocate_event_id();
-  }
-
+  int32_t result = 0;
+  friend_wal_publisher_context parameter{ctx, result};
   for (const auto& k : expired_keys) {
-    rpc::context::message_holder<DFriendInvitationInfo> to_remove_invitee{ctx};
-    to_remove_invitee->mutable_to_user()->set_zone_id(k.zone_id);
-    to_remove_invitee->mutable_to_user()->set_user_id(k.user_id);
-    remove_invitee(ctx, new_event_id, *to_remove_invitee);
+    DFriendEvent event;
+    event.mutable_remove_invitee()->mutable_to_user()->set_zone_id(k.zone_id);
+    event.mutable_remove_invitee()->mutable_to_user()->set_user_id(k.user_id);
+    auto log = wal_publisher_->allocate_log(ctx.logical_now(), event.event_case(), parameter, event);
+    if (log) {
+      wal_publisher_->emplace_back_log(std::move(log), parameter);
+    }
   }
 }
 

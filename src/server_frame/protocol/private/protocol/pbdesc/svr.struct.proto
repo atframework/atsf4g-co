@@ -9,6 +9,8 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
 
+import "google/protobuf/timestamp.proto";
+
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
@@ -17,6 +19,15 @@ import "protocol/pbdesc/com.struct.cache.proto";
 import "protocol/pbdesc/com.struct.friend_api.proto";
 
 package atframework.shared;
+
+message router_system_lock_holder {
+  // 路由系统 - 登入(持有锁)进程id，0表示可写对象不在任何节点上
+  uint64 router_server_id = 1;
+  // 路由系统 - 登入进程变更版本号
+  uint64 router_version = 2;
+  // 路由系统 - 数据保存时间点
+  google.protobuf.Timestamp router_save_timepoint = 3;
+}
 
 message client_session_index {
   uint64 node_id = 1;
