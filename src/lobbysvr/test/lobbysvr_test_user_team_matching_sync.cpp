@@ -658,8 +658,21 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
   CASE_EXPECT_TRUE(member_team->is_member());
   CASE_EXPECT_FALSE(non_member_team->is_member());
 
-  // 两个玩家都处于真实的本地匹配状态, 排除"订阅门槛被心跳守卫掩盖"的可能
-  CASE_EXPECT_TRUE(seed_in_matching_state(test, member_inst, kMemberUnitId, kMatchsvrId));
+  // 普通队员不会调用 start_matching；上一轮终态和 ACK 必须在队伍通知订阅新 Unit 时重置。
+  CASE_EXPECT_TRUE(team_test::run_sync_task(
+      test, "team.mts06_previous_terminal", [member_inst](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(9);
+        data->mutable_view()->mutable_unit()->set_unit_id(90081);
+        data->mutable_view()->set_last_event_id(9);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+        data->mutable_level_data()->set_battle_version("member-next-round");
+        data->mutable_level_data()->mutable_level_select()->add_level_ids(1102);
+        member_inst->get_user_matching_manager().init_from_table_data(ctx, table);
+        RPC_RETURN_CODE(0);
+      }));
   CASE_EXPECT_TRUE(seed_in_matching_state(test, non_member_inst, kNonMemberUnitId, kMatchsvrId));
 
   // 成员: 注入 team_view -> 缓存按键合并 + 向 matchsvr 发起一次心跳查询
@@ -676,6 +689,20 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
   CASE_EXPECT_EQ(1, static_cast<int>(captured_heartbeats->size()));
   if (1 == captured_heartbeats->size()) {
     CASE_EXPECT_EQ(kMemberUnitId, captured_heartbeats->front().unit_id());
+    CASE_EXPECT_EQ(0, captured_heartbeats->front().heartbeat_data().acknowledge_event_id());
+  }
+  CASE_EXPECT_EQ(kMemberUnitId, member_inst->get_user_matching_manager().get_view().unit().unit_id());
+  CASE_EXPECT_EQ(kMatchsvrId, member_inst->get_user_matching_manager().get_current_matchsvr_server_id());
+  CASE_EXPECT_TRUE(member_inst->get_user_matching_manager().is_in_matching());
+  {
+    rpc::context ctx{rpc::context::create_without_task()};
+    PROJECT_NAMESPACE_ID::DMatchingStartData selection;
+    member_inst->get_user_matching_manager().fetch_level_select_data(ctx, selection);
+    CASE_EXPECT_EQ("member-next-round", selection.battle_version());
+    CASE_EXPECT_EQ(1, selection.level_select().level_ids_size());
+    if (selection.level_select().level_ids_size() == 1) {
+      CASE_EXPECT_EQ(1102, selection.level_select().level_ids(0));
+    }
   }
   CASE_EXPECT_EQ(kMemberUnitId, user_team_battle_library_function::get_matching_team_sync_view(*member_team).unit_id());
 

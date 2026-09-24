@@ -152,9 +152,13 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
   }
   set_matching_state(ctx, true);
 
+  const uint64_t unit_id = get_current_unit_id();
   auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
-  int32_t result = RPC_AWAIT_CODE_RESULT(
-      query_matchsvr_snapshot(ctx, get_current_unit_id(), get_current_matchsvr_server_id(), *response));
+  int32_t result =
+      RPC_AWAIT_CODE_RESULT(query_matchsvr_snapshot(ctx, unit_id, get_current_matchsvr_server_id(), *response));
+  if (unit_id != get_current_unit_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
   if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
     if (is_matching_not_found(result)) {
       // 玩家离线期间 Unit 可能已经完成并被 Matchsvr 回收。本地 CREATING_BATTLE 视图中的
@@ -283,7 +287,7 @@ bool user_matching_manager::is_in_orbit_or_matching() const {
 }
 
 rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
-  if (is_in_matching()) {
+  if (is_in_matching() || has_pending_matching_event()) {
     FWLOGERROR("{} start matching rejected by active matching, unit_id={}, status={}", *owner_, get_current_unit_id(),
                static_cast<int>(data_.view().status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING);
@@ -294,6 +298,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
                static_cast<int>(data_.view().status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_USER_IN_BATTLE);
   }
+  reset_matching_unit();
   data_.set_is_start_matching(atfw::util::time::time_utility::get_now());
   FWLOGDEBUG("{} start matching, level_select={}, level_count={}, data={}", *owner_,
              data_.level_data().level_select().DebugString(), data_.level_data().battle_version(),
@@ -308,7 +313,9 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
                                                             data_.level_data().battle_version(),
                                                             data_.level_data().faction_fill_policy()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-    set_matching_state(ctx, false);
+    if (ret != PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING) {
+      set_matching_state(ctx, false);
+    }
     RPC_RETURN_CODE(ret);
   }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -331,7 +338,8 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
         int32_t result = RPC_AWAIT_CODE_RESULT(manager.start_matching_inner_(
             child_ctx, manager.data_.level_data().level_select(), manager.data_.level_data().battle_version(),
             manager.data_.level_data().faction_fill_policy()));
-        if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+        if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS &&
+            result != PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING) {
           manager.set_matching_state(child_ctx, false);
         }
         RPC_RETURN_CODE(result);
@@ -346,7 +354,11 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
 rpc::result_code_type user_matching_manager::start_matching_inner_(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select, const std::string& battle_version,
     PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy) {
-  // Function implementation goes here
+  // 队伍回调可能重入。已经登记 Unit 的创建流程不能重复创建或清空。
+  if (get_current_unit_id() != 0 && (!is_matching_finish(data_.view().status()) || has_pending_matching_event())) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
+  reset_matching_unit();
   // TODO(jijunliang): 通知battle锁背包
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCreateReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
@@ -398,7 +410,14 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
 
+  const uint64_t unit_id = rpc_request->unit().unit_id();
+  if (!prepare_matching_unit(ctx, unit_id, matchsvr_id)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::create_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
+  if (unit_id != get_current_unit_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
   if (result < 0) {
     clear_matching_state(ctx);
     FWLOGERROR("{} start matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
@@ -448,6 +467,12 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
     FWLOGERROR("{} check matching failed to find current Unit", *owner_);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
+  if (unit_id != get_current_unit_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
+  if (get_current_matchsvr_server_id() != 0 && matchsvr_id != get_current_matchsvr_server_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
+  }
 
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>(ctx);
   rpc_request->set_unit_id(unit_id);
@@ -462,17 +487,21 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::matching_heart_bear(ctx, matchsvr_id, *rpc_request, snapshot));
+  if (unit_id != get_current_unit_id()) {
+    snapshot.Clear();
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
   if (result < 0) {
     FWLOGERROR("{} check matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
                unit_id, result, protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (snapshot.result() != 0) {
-    if (snapshot.result() == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND) {
-      if (unit_id != get_current_unit_id()) {
-        clear_matching_state(ctx);
-      }
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    if (is_matching_not_found(snapshot.result()) && is_matching_finish(data_.view().status()) &&
+        !has_pending_matching_event()) {
+      // Unit 已回收，无需再补 ACK。终态结果保留到下一轮开始；非终态仍交给登录恢复处理。
+      last_reported_acknowledge_event_id_ = get_acknowledge_event_id();
+      RPC_RETURN_CODE(snapshot.result());
     }
     FWLOGERROR("{} check matching rejected by matchsvr, unit_id={}, result={}({})", *owner_, unit_id, snapshot.result(),
                protobuf_mini_dumper_get_error_msg(snapshot.result()));
@@ -513,6 +542,9 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::cancel_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
+  if (unit_id != get_current_unit_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
   if (result < 0) {
     FWLOGERROR("{} cancel matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
                unit_id, result, protobuf_mini_dumper_get_error_msg(result));
@@ -565,6 +597,9 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   }
   int32_t result =
       RPC_AWAIT_CODE_RESULT(rpc::matching::confirm_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
+  if (unit_id != get_current_unit_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+  }
   if (result < 0) {
     FWLOGERROR("{} confirm matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
                unit_id, result, protobuf_mini_dumper_get_error_msg(result));
@@ -591,11 +626,10 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
                sync.has_unit_view());
     return result;
   }
-  if (local_unit_id != 0 && local_unit_id != sync.unit_id() && is_in_matching()) {
-    FWLOGERROR("{} ignore matching sync from unexpected Unit, local_unit_id={}, sync_unit_id={}, local_status={}",
-               *owner_, local_unit_id, sync.unit_id(), static_cast<int>(data_.view().status()));
-    result.accepted = true;
-    result.acknowledge_event_id = sync.unit_view().last_event_id();
+  if (local_unit_id != sync.unit_id()) {
+    FCTXLOGDEBUG(ctx,
+                 "{} ignore matching sync from unexpected Unit, local_unit_id={}, sync_unit_id={}, local_status={}",
+                 *owner_, local_unit_id, sync.unit_id(), static_cast<int>(data_.view().status()));
     return result;
   }
   if (source_matchsvr_id != 0 && data_.matchsvr_server_id() != 0 && data_.matchsvr_server_id() != source_matchsvr_id &&
@@ -731,19 +765,14 @@ int64_t user_matching_manager::get_last_event_id() const { return data_.view().l
 uint64_t user_matching_manager::get_current_matchsvr_server_id() const { return data_.matchsvr_server_id(); }
 
 void user_matching_manager::update_view(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingUnitView& view) {
-  const bool unit_changed = get_current_unit_id() != view.unit().unit_id();
-  if (!unit_changed && view.last_event_id() < get_last_event_id()) {
+  if (view.unit().unit_id() == 0 || view.unit().unit_id() != get_current_unit_id()) {
+    return;
+  }
+  if (view.last_event_id() < get_last_event_id()) {
     return;
   }
   if (!atfw::atapp::protobuf_equal(data_.view(), view)) {
     protobuf_copy_message(*data_.mutable_view(), view);
-    if (unit_changed) {
-      data_.set_acknowledge_event_id(0);
-      processing_event_id_ = 0;
-      last_reported_acknowledge_event_id_ = 0;
-      last_heartbeat_time_ = 0;
-      periodic_heartbeat_inflight_ = false;
-    }
   }
 
   switch (view.status()) {
@@ -760,13 +789,46 @@ void user_matching_manager::update_view(rpc::context& ctx, const PROJECT_NAMESPA
   dirty_ = true;
 }
 
-void user_matching_manager::clear_matching_state(rpc::context& ctx) {
-  set_matching_state(ctx, false);
-  data_.Clear();
+bool user_matching_manager::has_pending_matching_event() const {
+  return processing_event_id_ != 0 || get_acknowledge_event_id() < get_last_event_id();
+}
+
+bool user_matching_manager::prepare_matching_unit(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
+  if (unit_id == 0 || matchsvr_id == 0) {
+    return false;
+  }
+  if (unit_id == get_current_unit_id()) {
+    return matchsvr_id == get_current_matchsvr_server_id();
+  }
+  if (get_current_unit_id() != 0 && (!is_matching_finish(data_.view().status()) || has_pending_matching_event())) {
+    FCTXLOGWARNING(ctx, "{} cannot replace unfinished matching Unit, current_unit_id={}, new_unit_id={}", *owner_,
+                   get_current_unit_id(), unit_id);
+    return false;
+  }
+  if (owner_->get_user_orbit_manager().is_orbit_room_exist()) {
+    return false;
+  }
+  reset_matching_unit();
+  data_.set_matchsvr_server_id(matchsvr_id);
+  data_.mutable_view()->mutable_unit()->set_unit_id(unit_id);
+  data_.mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+  return true;
+}
+
+void user_matching_manager::reset_matching_unit() {
+  data_.clear_view();
+  data_.clear_matchsvr_server_id();
+  data_.clear_acknowledge_event_id();
   processing_event_id_ = 0;
   last_reported_acknowledge_event_id_ = 0;
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
+  dirty_ = true;
+}
+
+void user_matching_manager::clear_matching_state(rpc::context& ctx) {
+  set_matching_state(ctx, false);
+  reset_matching_unit();
   team_logic_.matching_finish(ctx);
 }
 
@@ -1049,12 +1111,16 @@ void user_matching_manager::update_last_battle_users(rpc::context& /*ctx*/,
 
 void user_matching_manager::subscribe_matching_unit(rpc::context& ctx,
                                                     const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& view) {
-  send_heartbeat(ctx, view.unit_id(), view.subscriber_server_id());
+  if (!prepare_matching_unit(ctx, view.unit_id(), view.subscriber_server_id())) {
+    return;
+  }
+  try_send_heartbeat(ctx);
 }
 
 void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
   if (!data_.has_view() || get_current_unit_id() == 0 || periodic_heartbeat_inflight_ ||
-      (!is_in_matching() && last_reported_acknowledge_event_id_ >= get_acknowledge_event_id())) {
+      (!is_in_matching() && !has_pending_matching_event() &&
+       last_reported_acknowledge_event_id_ >= get_acknowledge_event_id())) {
     return;
   }
 
@@ -1062,15 +1128,10 @@ void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
 }
 
 void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
-  if (!is_in_matching()) {
-    // 如果不在匹配中，说明是外部系统触发的订阅，首次需要强制发送心跳以同步状态。
-    last_heartbeat_time_ = 0;
+  if (unit_id == 0 || unit_id != get_current_unit_id()) {
+    return;
   }
-  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
-  time_t heartbeat_interval = static_cast<time_t>(server_cfg.matching().heartbeat_interval().seconds());
-  if (heartbeat_interval <= 0) {
-    heartbeat_interval = 2;
-  }
+  const int64_t heartbeat_interval = get_heartbeat_interval();
   const time_t now = atfw::util::time::time_utility::get_now();
   if (last_heartbeat_time_ > 0 && now < last_heartbeat_time_ + heartbeat_interval) {
     return;
@@ -1083,13 +1144,13 @@ void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, 
       ctx, "user_matching_manager.heartbeat",
       [owner, unit_id, matchsvr_id](rpc::context& child_ctx) -> rpc::result_code_type {
         auto& manager = owner->get_user_matching_manager();
-        if (unit_id == 0) {
+        if (unit_id != manager.get_current_unit_id()) {
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
         }
         auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(child_ctx);
         const int32_t result =
             RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(child_ctx, unit_id, matchsvr_id, *response));
-        if (unit_id == 0) {
+        if (unit_id != manager.get_current_unit_id()) {
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
         }
         manager.periodic_heartbeat_inflight_ = false;
@@ -1107,7 +1168,17 @@ void user_matching_manager::set_level_select_data(rpc::context& ctx,
   protobuf_copy_message(*data_.mutable_level_data(), output);
   team_logic_.level_select_notify(ctx);
 }
+
 void user_matching_manager::fetch_level_select_data(rpc::context& /*ctx*/,
                                                     PROJECT_NAMESPACE_ID::DMatchingStartData& output) const {
   protobuf_copy_message(output, data_.level_data());
+}
+
+int64_t user_matching_manager::get_heartbeat_interval() const {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+  time_t heartbeat_interval = static_cast<time_t>(server_cfg.matching().heartbeat_interval().seconds());
+  if (heartbeat_interval <= 0) {
+    heartbeat_interval = 2;
+  }
+  return heartbeat_interval;
 }

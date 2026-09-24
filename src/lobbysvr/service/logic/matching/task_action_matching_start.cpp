@@ -18,12 +18,17 @@ task_action_matching_start::~task_action_matching_start() = default;
 const char* task_action_matching_start::name() const { return "task_action_matching_start"; }
 
 task_action_matching_start::result_type task_action_matching_start::operator()() {
+  rpc_response_type& rsp_body = get_response_body();
+
   auto user_inst = get_user<user>();
   if (!user_inst) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().start_matching(get_shared_context())));
+
+  rsp_body.set_heartbeat_interval(user_inst->get_user_matching_manager().get_heartbeat_interval());
+
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

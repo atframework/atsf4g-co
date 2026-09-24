@@ -4,13 +4,17 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/config/com.struct.level.config.pb.h>
+#include <protocol/config/com.struct.matching.config.pb.h>
 #include <protocol/config/lobbysvr_config.pb.h>
+#include <protocol/config/pb_header_v3.pb.h>
 #include <protocol/pbdesc/match_service.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
 #include <atframework/testing/mock_discovery.h>
+#include <atframework/testing/mock_resource.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
 
@@ -19,12 +23,15 @@
 
 #include <chrono>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "config/extern_service_types.h"
 #include "config/logic_config.h"
 #include "data/user.h"
 #include "frame/test_macros.h"
+#include "lobbysvr_test_runtime_helper.h"    // NOLINT: build/include_subdir
+#include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
 #include "logic/logic_server_setup.h"
 #include "logic/matching/user_matching_manager.h"
 #include "logic/orbit/user_orbit_manager.h"
@@ -415,7 +422,7 @@ CASE_TEST(lobbysvr_user_matching, rejects_stale_unit_requests) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-CASE_TEST(lobbysvr_user_matching, acknowledges_superseded_unit_without_overwriting_active_state) {
+CASE_TEST(lobbysvr_user_matching, rejects_superseded_unit_without_overwriting_active_state) {
   auto user_inst = user::create(10004, 1, "matching-superseded-unit-test-user");
   CASE_EXPECT_TRUE(!!user_inst);
   if (!user_inst) {
@@ -439,9 +446,9 @@ CASE_TEST(lobbysvr_user_matching, acknowledges_superseded_unit_without_overwriti
   superseded_sync.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED);
   superseded_sync.mutable_unit_view()->mutable_unit()->set_unit_id(1004);
   auto sync_result = manager.acknowledge_matching_sync(ctx, superseded_sync);
-  CASE_EXPECT_TRUE(sync_result.accepted);
+  CASE_EXPECT_FALSE(sync_result.accepted);
   CASE_EXPECT_FALSE(sync_result.has_pending_event);
-  CASE_EXPECT_EQ(3, sync_result.acknowledge_event_id);
+  CASE_EXPECT_EQ(0, sync_result.acknowledge_event_id);
   CASE_EXPECT_EQ(2004, manager.get_view().unit().unit_id());
   CASE_EXPECT_EQ(7, manager.get_last_event_id());
 
@@ -594,4 +601,422 @@ CASE_TEST(lobbysvr_user_matching, derives_pending_confirm_from_recovery_snapshot
   CASE_EXPECT_FALSE(result.has_pending_event);
   CASE_EXPECT_EQ(5, result.acknowledge_event_id);
   CASE_EXPECT_EQ(0, result.confirm_event_id);
+}
+
+CASE_TEST(lobbysvr_user_matching, ignores_unregistered_and_previous_unit_sync) {
+  auto user_inst = user::create(10011, 1, "matching-unregistered-sync-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    return;
+  }
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto& manager = user_inst->get_user_matching_manager();
+  PROJECT_NAMESPACE_ID::SSMatchingEventSync sync;
+  sync.set_unit_id(1011);
+  sync.mutable_unit_view()->mutable_unit()->set_unit_id(1011);
+  sync.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+  sync.mutable_unit_view()->set_last_event_id(1);
+  CASE_EXPECT_FALSE(manager.acknowledge_matching_sync(ctx, sync).accepted);
+  CASE_EXPECT_EQ(0, manager.get_view().unit().unit_id());
+
+  PROJECT_NAMESPACE_ID::table_user table;
+  table.mutable_matching_data()->set_acknowledge_event_id(9);
+  auto* view = table.mutable_matching_data()->mutable_view();
+  view->mutable_unit()->set_unit_id(2011);
+  view->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+  view->set_last_event_id(9);
+  manager.init_from_table_data(ctx, table);
+  CASE_EXPECT_FALSE(manager.acknowledge_matching_sync(ctx, sync).accepted);
+  CASE_EXPECT_EQ(2011, manager.get_view().unit().unit_id());
+  CASE_EXPECT_EQ(9, manager.get_last_event_id());
+}
+
+CASE_TEST(lobbysvr_user_matching, retains_terminal_view_and_stops_heartbeat_when_unit_is_recycled) {
+  constexpr uint64_t kMatchsvrId = 0x1E0031;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("terminal-matchsvr")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr));
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  rpc::unit_test::ss_mock_rule_options rule_options;
+  rule_options.match_node_id = kMatchsvrId;
+  auto rule = rpc::matching::mock::matching_heart_bear(
+      [](rpc::context&, const PROJECT_NAMESPACE_ID::SSMatchingCheckReq& request,
+         PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(1012, request.unit_id());
+        CASE_EXPECT_EQ(9, request.heartbeat_data().acknowledge_event_id());
+        response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
+        RPC_RETURN_CODE(0);
+      },
+      rule_options);
+  CASE_EXPECT_TRUE(!!rule);
+  auto user_inst = user::create(10012, 1, "terminal-heartbeat-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst || !rule) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.terminal_recycled", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(9);
+        data->mutable_view()->mutable_unit()->set_unit_id(1012);
+        data->mutable_view()->set_last_event_id(9);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND,
+                       RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1012, kMatchsvrId, response)));
+        manager.try_send_heartbeat(ctx);
+        PROJECT_NAMESPACE_ID::SCMatchingCheckRsp client_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(manager.check_matching(ctx, client_response)));
+        CASE_EXPECT_EQ(1012, client_response.view().unit_id());
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT,
+                       client_response.view().status());
+        RPC_RETURN_CODE(0);
+      }));
+  lobbysvr_test::pump_rounds(test, 8);
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::matching::packer::get_full_name_of_matching_heart_bear()));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(lobbysvr_user_matching, registers_new_unit_before_create_and_accepts_early_sync) {
+  constexpr uint64_t kMatchsvrId = 0x1E0032;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::db, atfw::testing::feature::resource};
+  options.setup_callback = [](atfw::testing::runtime& runtime) {
+    PROJECT_NAMESPACE_ID::config::ExcelLevel level;
+    level.set_level_id(91001);
+    level.set_level_type(1);
+    level.set_matching_pool_id(91001);
+    level.set_client_template_id(91001);
+    org::xresloader::pb::xresloader_datablocks blocks;
+    blocks.mutable_header()->set_hash_code("lobby-new-matching-level");
+    blocks.add_data_block(level.SerializeAsString());
+    runtime.resource().set_file("level.bytes", blocks.SerializeAsString());
+    PROJECT_NAMESPACE_ID::config::ExcelMatchingPool pool;
+    pool.set_id(91001);
+    pool.set_unit_max_size(1);
+    pool.set_faction_user_max_size(1);
+    pool.set_max_faction_cout_limit(2);
+    pool.set_max_user_cout_limit(2);
+    pool.set_search_timeout_seconds(120);
+    pool.set_confirm_timeout_seconds(15);
+    blocks.clear_data_block();
+    blocks.add_data_block(pool.SerializeAsString());
+    runtime.resource().set_file("matching_pool.bytes", blocks.SerializeAsString());
+    return 0;
+  };
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("new-round-matchsvr")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_name("matchsvr")
+      .add_label("hpa_scaling_ready", "1");
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  if (logic_server_last_common_module()) {
+    logic_server_last_common_module()->reload();
+  }
+  auto user_inst = user::create(10013, 1, "new-matching-round-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  rpc::unit_test::ss_mock_rule_options rule_options;
+  rule_options.match_node_id = kMatchsvrId;
+  auto rule = rpc::matching::mock::create_matching(
+      [user_inst](rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request,
+                  PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        CASE_EXPECT_NE(0, request.unit().unit_id());
+        CASE_EXPECT_NE(1013, request.unit().unit_id());
+        CASE_EXPECT_EQ(request.unit().unit_id(), manager.get_view().unit().unit_id());
+        CASE_EXPECT_EQ(kMatchsvrId, manager.get_current_matchsvr_server_id());
+        CASE_EXPECT_EQ(0, manager.get_last_event_id());
+        CASE_EXPECT_EQ("next-version", request.scope().battle_version());
+        CASE_EXPECT_EQ(1, request.unit().acceptable_level_ids_size());
+        if (request.unit().acceptable_level_ids_size() == 1) {
+          CASE_EXPECT_EQ(91001, request.unit().acceptable_level_ids(0));
+        }
+        // WAL 可早于 create 的回包到达；旧轮 ACK=9 不能影响新轮 event=1。
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync sync;
+        sync.set_unit_id(request.unit().unit_id());
+        *sync.mutable_unit_view()->mutable_unit() = request.unit();
+        sync.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        sync.mutable_unit_view()->set_last_event_id(1);
+        const auto result = manager.acknowledge_matching_sync(ctx, sync, kMatchsvrId);
+        CASE_EXPECT_TRUE(result.accepted);
+        CASE_EXPECT_EQ(1, result.acknowledge_event_id);
+        response.set_matching_id("new-matching-round-room");
+        *response.mutable_snapshot() = sync.unit_view();
+        response.mutable_snapshot()->set_last_event_id(0);
+        RPC_RETURN_CODE(0);
+      },
+      rule_options);
+  CASE_EXPECT_TRUE(!!rule);
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.start_after_terminal", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(9);
+        data->mutable_view()->mutable_unit()->set_unit_id(1013);
+        data->mutable_view()->set_last_event_id(9);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+        data->mutable_level_data()->set_battle_version("next-version");
+        data->mutable_level_data()->mutable_level_select()->add_level_ids(91001);
+        data->add_matched_users()->mutable_room_key()->set_client_id("previous-battle");
+        manager.init_from_table_data(ctx, table);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(manager.start_matching(ctx)));
+        PROJECT_NAMESPACE_ID::table_user persisted;
+        CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+        CASE_EXPECT_EQ(1, persisted.matching_data().acknowledge_event_id());
+        CASE_EXPECT_EQ(1, persisted.matching_data().view().last_event_id());
+        CASE_EXPECT_EQ("next-version", persisted.matching_data().level_data().battle_version());
+        CASE_EXPECT_EQ(1, persisted.matching_data().matched_users_size());
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::matching::packer::get_full_name_of_create_matching()));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(lobbysvr_user_matching, old_heartbeat_cannot_clear_new_subscribed_unit) {
+  constexpr uint64_t kMatchsvrId = 0x1E0033;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("late-heartbeat-matchsvr")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr));
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  auto user_inst = user::create(10014, 1, "late-heartbeat-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto received_new_heartbeat = std::make_shared<bool>(false);
+  rpc::unit_test::ss_mock_rule_options rule_options;
+  rule_options.match_node_id = kMatchsvrId;
+  auto rule = rpc::matching::mock::matching_heart_bear(
+      [user_inst, received_new_heartbeat](rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCheckReq& request,
+                                          PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        if (request.unit_id() == 1014) {
+          CASE_EXPECT_EQ(9, request.heartbeat_data().acknowledge_event_id());
+          PROJECT_NAMESPACE_ID::DMatchingTeamSyncView next;
+          next.set_unit_id(2014);
+          next.set_subscriber_server_id(kMatchsvrId);
+          manager.subscribe_matching_unit(ctx, next);
+          CASE_EXPECT_EQ(2014, manager.get_view().unit().unit_id());
+          response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
+        } else {
+          CASE_EXPECT_EQ(2014, request.unit_id());
+          CASE_EXPECT_EQ(0, request.heartbeat_data().acknowledge_event_id());
+          *received_new_heartbeat = true;
+          response.set_matching_id("new-team-room");
+          response.mutable_snapshot()->mutable_unit()->set_unit_id(2014);
+          response.mutable_snapshot()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        }
+        RPC_RETURN_CODE(0);
+      },
+      rule_options);
+  CASE_EXPECT_TRUE(!!rule);
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.old_heartbeat", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(9);
+        data->mutable_view()->mutable_unit()->set_unit_id(1014);
+        data->mutable_view()->set_last_event_id(9);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING,
+                       RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1014, kMatchsvrId, response)));
+        CASE_EXPECT_EQ(2014, manager.get_view().unit().unit_id());
+        CASE_EXPECT_TRUE(manager.is_in_matching());
+        // 旧事件处理任务恢复后也不得再发一个携带新轮 ACK 的旧 Unit 心跳。
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING,
+                       RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1014, kMatchsvrId, response)));
+        RPC_RETURN_CODE(0);
+      }));
+  for (int i = 0; i < 64 && !*received_new_heartbeat; ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_TRUE(*received_new_heartbeat);
+  CASE_EXPECT_EQ(2014, user_inst->get_user_matching_manager().get_view().unit().unit_id());
+  CASE_EXPECT_EQ(2, test.ss().calls(rpc::matching::packer::get_full_name_of_matching_heart_bear()));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(lobbysvr_user_matching, repeated_subscription_preserves_ack_and_completed_view) {
+  constexpr uint64_t kMatchsvrId = 0x1E0034;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::cs};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("repeated-subscription-matchsvr")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr));
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  auto requests = std::make_shared<std::vector<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>>();
+  rpc::unit_test::ss_mock_rule_options rule_options;
+  rule_options.match_node_id = kMatchsvrId;
+  auto rule = rpc::matching::mock::matching_heart_bear(
+      [requests](rpc::context&, const PROJECT_NAMESPACE_ID::SSMatchingCheckReq& request,
+                 PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        requests->push_back(request);
+        response.set_matching_id("repeated-subscription-room");
+        response.mutable_snapshot()->mutable_unit()->set_unit_id(1015);
+        response.mutable_snapshot()->set_last_event_id(request.heartbeat_data().acknowledge_event_id());
+        response.mutable_snapshot()->set_status(
+            request.heartbeat_data().acknowledge_event_id() == 8
+                ? PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT
+                : PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        RPC_RETURN_CODE(0);
+      },
+      rule_options);
+  CASE_EXPECT_TRUE(!!rule);
+  auto user_inst = user::create(10015, 1, "repeated-subscription-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst || !rule) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  constexpr uint64_t kSessionId = 1015;
+  atfw::testing::mock_client client;
+  CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client, false));
+  const auto dirty_rpc_name = rpc::lobbysvrclientservice::packer::get_full_name_of_user_dirty_chg_sync();
+  const size_t dirty_baseline = lobbysvr_test::find_stream_post_indices(test, kSessionId, dirty_rpc_name).size();
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.repeated_subscription", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(7);
+        data->mutable_view()->mutable_unit()->set_unit_id(1015);
+        data->mutable_view()->set_last_event_id(7);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::DMatchingTeamSyncView subscription;
+        subscription.set_unit_id(1015);
+        subscription.set_subscriber_server_id(kMatchsvrId);
+        manager.subscribe_matching_unit(ctx, subscription);
+        manager.subscribe_matching_unit(ctx, subscription);
+        PROJECT_NAMESPACE_ID::table_user persisted;
+        CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+        CASE_EXPECT_EQ(7, persisted.matching_data().acknowledge_event_id());
+        RPC_RETURN_CODE(0);
+      }));
+  for (int i = 0; i < 64 && requests->empty(); ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(1, requests->size());
+  if (!requests->empty()) {
+    CASE_EXPECT_EQ(7, requests->front().heartbeat_data().acknowledge_event_id());
+  }
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.terminal_ack", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync sync;
+        sync.set_unit_id(1015);
+        sync.mutable_unit_view()->mutable_unit()->set_unit_id(1015);
+        sync.mutable_unit_view()->set_last_event_id(8);
+        sync.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+        CASE_EXPECT_EQ(8, manager.acknowledge_matching_sync(ctx, sync, kMatchsvrId).acknowledge_event_id);
+        PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1015, kMatchsvrId, response)));
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.completed_subscription", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        PROJECT_NAMESPACE_ID::DMatchingTeamSyncView subscription;
+        subscription.set_unit_id(1015);
+        subscription.set_subscriber_server_id(kMatchsvrId);
+        manager.subscribe_matching_unit(ctx, subscription);
+        manager.try_send_heartbeat(ctx);
+        CASE_EXPECT_FALSE(manager.is_in_matching());
+        CASE_EXPECT_EQ(1015, manager.get_view().unit().unit_id());
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT, manager.get_view().status());
+        RPC_RETURN_CODE(0);
+      }));
+  lobbysvr_test::pump_rounds(test, 8);
+  CASE_EXPECT_EQ(2, requests->size());
+  // 最终 ACK 和重复订阅都不应把终态推送替换成空视图，也不应产生额外 dirty 推送。
+  const auto dirty_posts = lobbysvr_test::find_stream_post_indices(test, kSessionId, dirty_rpc_name);
+  CASE_EXPECT_EQ(dirty_baseline + 1, dirty_posts.size());
+  if (dirty_posts.size() > dirty_baseline) {
+    const auto* record = test.cs().call_at(dirty_posts.back());
+    CASE_EXPECT_TRUE(record != nullptr);
+    if (record) {
+      atframework::CSMsg message;
+      PROJECT_NAMESPACE_ID::SCUserDirtyChgSync body;
+      CASE_EXPECT_TRUE(message.ParseFromString(record->message.body().post().content()));
+      CASE_EXPECT_TRUE(body.ParseFromString(message.body_bin()));
+      CASE_EXPECT_TRUE(body.has_dirty_matching_chg());
+      CASE_EXPECT_EQ(1015, body.dirty_matching_chg().client_view().unit_id());
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT,
+                     body.dirty_matching_chg().client_view().status());
+    }
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(lobbysvr_user_matching, new_subscription_cannot_discard_unfinished_business_effects) {
+  auto user_inst = user::create(10016, 1, "unfinished-matching-effects-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    return;
+  }
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto& manager = user_inst->get_user_matching_manager();
+  PROJECT_NAMESPACE_ID::table_user table;
+  auto* data = table.mutable_matching_data();
+  data->set_matchsvr_server_id(0x1E0035);
+  data->set_acknowledge_event_id(7);
+  data->mutable_view()->mutable_unit()->set_unit_id(1016);
+  data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED);
+  data->mutable_view()->set_last_event_id(8);
+  data->mutable_view()->mutable_orbit_room_key()->set_client_id("pending-orbit-handoff");
+  manager.init_from_table_data(ctx, table);
+  PROJECT_NAMESPACE_ID::DMatchingTeamSyncView subscription;
+  subscription.set_unit_id(2016);
+  subscription.set_subscriber_server_id(0x1E0035);
+  manager.subscribe_matching_unit(ctx, subscription);
+  CASE_EXPECT_EQ(1016, manager.get_view().unit().unit_id());
+  CASE_EXPECT_EQ("pending-orbit-handoff", manager.get_view().orbit_room_key().client_id());
+  PROJECT_NAMESPACE_ID::table_user persisted;
+  CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+  CASE_EXPECT_EQ(7, persisted.matching_data().acknowledge_event_id());
 }

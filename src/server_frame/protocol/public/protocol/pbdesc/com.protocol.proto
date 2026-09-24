@@ -114,6 +114,13 @@ service LobbysvrClientService {
     };
   };
 
+  rpc matching_heart_beat(CSMatchingHeartBeatReq) returns (SCMatchingHeartBeatRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "匹配心跳"
+    };
+  };
+
   // Use stream request to disable waiting for response
   rpc user_dirty_chg_sync(google.protobuf.Empty) returns (stream SCUserDirtyChgSync) {
     option (atframework.rpc_options) = {
@@ -282,8 +289,7 @@ service LobbysvrClientService {
     };
   }
 
-  rpc team_update_member_data(CSTeamUpdateMemberDataReq)
-      returns (SCTeamUpdateMemberDataRsp) {
+  rpc team_update_member_data(CSTeamUpdateMemberDataReq) returns (SCTeamUpdateMemberDataRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "更新组队成员数据"
@@ -297,16 +303,14 @@ service LobbysvrClientService {
     };
   }
 
-  rpc team_update_team_data(CSTeamUpdateTeamDataReq)
-      returns (SCTeamUpdateTeamDataRsp) {
+  rpc team_update_team_data(CSTeamUpdateTeamDataReq) returns (SCTeamUpdateTeamDataRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "更新组队数据"
     };
   }
 
-  rpc team_transfer_captain(CSTeamTransferCaptainReq)
-      returns (SCTeamTransferCaptainRsp) {
+  rpc team_transfer_captain(CSTeamTransferCaptainReq) returns (SCTeamTransferCaptainRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "转移组队队长"
@@ -342,21 +346,24 @@ service LobbysvrClientService {
     };
   };
 
-  rpc friend_invite(atframework.friend_api.CSFriendInvitationReq) returns (atframework.friend_api.SCFriendInvitationRsp) {
+  rpc friend_invite(atframework.friend_api.CSFriendInvitationReq)
+      returns (atframework.friend_api.SCFriendInvitationRsp) {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "发送好友邀请"
     };
   };
 
-  rpc friend_accept_invite(atframework.friend_api.CSFriendAcceptInvitationReq) returns (atframework.friend_api.SCFriendAcceptInvitationRsp) {
+  rpc friend_accept_invite(atframework.friend_api.CSFriendAcceptInvitationReq)
+      returns (atframework.friend_api.SCFriendAcceptInvitationRsp) {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "接受好友邀请"
     };
   };
 
-  rpc friend_reject_invite(atframework.friend_api.CSFriendRejectInvitationReq) returns (atframework.friend_api.SCFriendRejectInvitationRsp) {
+  rpc friend_reject_invite(atframework.friend_api.CSFriendRejectInvitationReq)
+      returns (atframework.friend_api.SCFriendRejectInvitationRsp) {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "拒绝好友邀请"
@@ -370,21 +377,24 @@ service LobbysvrClientService {
     };
   };
 
-  rpc friend_send_gift(atframework.friend_api.CSFriendSendGiftReq) returns (atframework.friend_api.SCFriendSendGiftRsp) {
+  rpc friend_send_gift(atframework.friend_api.CSFriendSendGiftReq)
+      returns (atframework.friend_api.SCFriendSendGiftRsp) {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "发送礼物给好友"
     };
   };
 
-  rpc friend_receive_gift(atframework.friend_api.CSFriendReceiveGiftReq) returns (atframework.friend_api.SCFriendReceiveGiftRsp) {
+  rpc friend_receive_gift(atframework.friend_api.CSFriendReceiveGiftReq)
+      returns (atframework.friend_api.SCFriendReceiveGiftRsp) {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "收取好友礼物"
     };
   };
 
-  rpc friend_get_suggest(atframework.friend_api.CSFriendGetSuggestReq) returns (atframework.friend_api.SCFriendGetSuggestRsp) {
+  rpc friend_get_suggest(atframework.friend_api.CSFriendGetSuggestReq)
+      returns (atframework.friend_api.SCFriendGetSuggestRsp) {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "获取推荐好友"

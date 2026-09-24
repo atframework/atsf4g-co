@@ -87,6 +87,10 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int64_t get_last_event_id() const;
   uint64_t get_current_matchsvr_server_id() const;
 
+  // 向当前 Matchsvr 查询 Unit 权威快照。调用方分别决定客户端返回和登录恢复语义。
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_matchsvr_snapshot(
+      rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot);
+
  private:
   rpc::result_code_type start_matching_inner_(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                               const std::string& battle_version,
@@ -95,11 +99,12 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   //  重登时尝试回复匹配状态
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type recover_matching(rpc::context& ctx);
 
-  // 向当前 Matchsvr 查询 Unit 权威快照。调用方分别决定客户端返回和登录恢复语义。
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_matchsvr_snapshot(
-      rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot);
-
   void update_view(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingUnitView& view);
+  bool has_pending_matching_event() const;
+  // 新轮创建和队员订阅共用入口；必须在 RPC 发出前登记 Unit，禁止 WAL 自行创建本地匹配。
+  bool prepare_matching_unit(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id);
+  // 只清本轮数据，不清关卡选择，也不重复发送队伍匹配结束通知。
+  void reset_matching_unit();
   void clear_matching_state(rpc::context& ctx);
   void set_matching_state(rpc::context& ctx, bool matching);
   void dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const;
@@ -141,14 +146,16 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 使用缓存的匹配参数发起匹配请求
   void callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason = 0);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR void set_level_select_data(rpc::context& ctx,
-                                                          const PROJECT_NAMESPACE_ID::DMatchingStartData& output);
+  void set_level_select_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingStartData& output);
 
   void fetch_level_select_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingStartData& output) const;
 
- private:
   void try_send_heartbeat(rpc::context& ctx);
-  void send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t umatchsvr_id);
+
+  int64_t get_heartbeat_interval() const;
+
+ private:
+  void send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id);
 
   void merge_team_matching_parameter(
       rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>& input,
