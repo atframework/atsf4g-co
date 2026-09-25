@@ -27,7 +27,7 @@ statistically validated list of Chinese words that identify AI authorship.
 | Word | Prefer when this is the intended meaning |
 | --- | --- |
 | 补强 | 修复、补充检查、增加测试; name the action being performed. |
-| 投影 | 缓存、副本、派生视图; name the actual data structure or relationship. |
+| 投影 | 缓存、副本、视图; name the actual data structure or relationship. |
 | 水位 | 最大值、上限、已处理的日志序号; identify the value being compared. |
 | 预算 | 重试次数上限、剩余重试次数、超时时间、剩余时间、数量上限; name what is counted or timed. |
 | 赋能、加持 | 提供什么功能、让谁能做什么; describe the capability instead of praising it. |
@@ -47,6 +47,8 @@ statistically validated list of Chinese words that identify AI authorship.
 | 护栏、门禁 | 参数校验、权限检查、合入前必须通过的检查; state what is checked and when it blocks an action. |
 | 钳制 | 限制在某范围、超过上限时取上限值; describe the actual bounds and behavior. |
 | 重新武装定时器 | 重新设置定时器、再次注册定时器; use the wording that matches the timer API. |
+| 秘密 | 密钥、凭据、口令、敏感信息; when the term translates “Secret”, name the key or credential and keep a resource type such as Kubernetes Secret. |
+| 夹具 | 测试数据、测试样本、样本数据; when 夹具 names test data, use the data term and keep 测试夹具 only for a genuine test fixture such as setup/teardown scaffolding. |
 
 For example, replace “耗尽重试预算” with “重试次数达到上限”, “不消耗预算” with “不增加重试计数”, and
 “整个测试进程的总预算” with “整个测试进程的超时时间”. Rewrite the sentence when a word swap would remain awkward:
@@ -55,7 +57,9 @@ For example, replace “耗尽重试预算” with “重试次数达到上限�
 Keep 预算 for financial planning or an established technical term such as SRE 错误预算. A technical topic alone does not
 make it a useful name for a retry count or timeout. Check the code before choosing 上限, 已用次数, or 剩余次数; preserve
 whether the count includes the first attempt and when it resets. Keep identifiers, configuration keys, and quoted
-protocol text unchanged during a wording cleanup.
+protocol text unchanged during a wording cleanup. When translating “Secret”, name the security concept the code means:
+密钥 for a cryptographic or API key, 凭据 or 口令 for a credential, or 敏感信息 for sensitive data in general; keep a named
+resource such as Kubernetes Secret. Do not use 秘密, which reads as an everyday secret and hides which credential is meant.
 
 Preserve terms such as 内存对齐、张量维度、网络链路、链路追踪、算法收敛 and 闭环控制 when used in those technical senses.
 Do not replace a documented convergence guarantee with a one-time assignment or merge. For 兜底 and 钳制, distinguish

@@ -839,7 +839,7 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 ### Issue #259：隐藏输入取消与终端清理（2026-09-23）
 
 - 补充断开的 stdin、raw mode 恢复失败、同步/异步输出失败及 UI 关闭后的清理回归；
-  保留 `MenuCancelled`，不回显秘密值，并检查按键与临时错误监听器释放。
+  保留 `MenuCancelled`，不回显密钥值，并检查按键与临时错误监听器释放。
 - Windows 全套 360 项 JavaScript：358 通过、2 项既有 POSIX 用例跳过；UE 副本的 Agent 套件
   238 项中 236 通过、2 项跳过。Windows 与 WSL 菜单测试各 22/22 通过。
 - Node/Bun/Deno 均通过隐藏输入清理冒烟；两份工程的安装、切换与卸载 dry-run 保持配置内容和 mtime。
