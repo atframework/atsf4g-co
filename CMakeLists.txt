@@ -275,6 +275,15 @@ add_custom_target(
   VERBATIM)
 set_property(TARGET "cleanup-precompile-headers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 
+# 清理生成的协议文件与生成代码的工具目标, 按需手动执行: cmake --build <build dir> --target cleanup-generated-sources
+# 执行后需重新 configure 再构建, 以恢复 configure 阶段生成的文件(如 server_frame_build_feature.h/.cpp)
+add_custom_target(
+  "cleanup-generated-sources"
+  COMMAND "${CMAKE_COMMAND}" "-E" "rm" "-rf" "${PROJECT_GENERATED_DIR}"
+  COMMENT "Cleanup generated protocol files and code under ${PROJECT_GENERATED_DIR}"
+  VERBATIM)
+set_property(TARGET "cleanup-generated-sources" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+
 # 安装目录
 install(
   DIRECTORY "${PROJECT_INSTALL_BAS_DIR}"

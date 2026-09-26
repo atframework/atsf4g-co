@@ -128,25 +128,25 @@ foreach(EXCEL_FILE IN LISTS PROJECT_RESOURCE_EXCEL_FILES_ORIGIN)
 endforeach()
 
 file(GLOB PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES "${PROJECT_SOURCE_DIR}/resource/UeSourceBytes/*.bytes")
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/_generated/xml")
 set(PROJECT_XRESLOADER_XML_DATA_XML "xresconv.data.xml")
 configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml" ESCAPE_QUOTES @ONLY)
+               "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.gen.xml" ESCAPE_QUOTES @ONLY)
 
 add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
-         "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
-         "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
-          "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
+  OUTPUT "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
+         "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
+         "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
+          "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/xresconv.xml"
-          "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
+          "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/validator.yaml"
-          "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
+          "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
   DEPENDS "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/validator.yaml"
           "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/xresconv.xml"
-          "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
-  COMMENT "Generate xresconv.xml,xresconv.data.xml,validator.yaml into ${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
+          "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
+  COMMENT "Generate xresconv.xml,xresconv.data.xml,validator.yaml into ${CMAKE_BINARY_DIR}/_generated/xml")
 
 set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "\"${PROJECT_THIRD_PARTY_XRESLOADER_CLI}\"")
 if(Java_JAVA_EXECUTABLE)
@@ -154,7 +154,7 @@ if(Java_JAVA_EXECUTABLE)
       "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} --java-path \"${Java_JAVA_EXECUTABLE}\"")
 endif()
 set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS
-    "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} \"${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml\"")
+    "${PROJECT_RESOURCE_EXCEL_COMMAND_ARGS} \"${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml\"")
 
 project_build_tool_generate_load_env_powershell("${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1")
 
@@ -215,9 +215,9 @@ if(NOT UNIX AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
             "-NonInteractive" "-NoLogo" "-File" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
-            "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
-            "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
-            "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
             ${PROJECT_RESOURCE_EXCEL_FILES}
             ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
@@ -227,9 +227,9 @@ else()
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
-            "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
-            "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
-            "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
             ${PROJECT_RESOURCE_EXCEL_FILES}
             ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
