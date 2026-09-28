@@ -41,7 +41,7 @@ class item_container_group_request_list final : public item_iterable<T, false> {
   bool empty() const noexcept override { return storage_.empty(); }
   size_t size() const noexcept override { return static_cast<size_t>(storage_.size()); }
 
-  bool foreach(atfw::util::nostd::function_ref<bool(callback_parameter)> callback) const override {
+  bool foreach_item(atfw::util::nostd::function_ref<bool(callback_parameter)> callback) const override {
     for (const auto& item : storage_) {
       if (!callback(item)) {
         return false;
@@ -49,7 +49,7 @@ class item_container_group_request_list final : public item_iterable<T, false> {
     }
     return true;
   }
-  using base_type::foreach;
+  using base_type::foreach_item;
 
  private:
   storage_type storage_;

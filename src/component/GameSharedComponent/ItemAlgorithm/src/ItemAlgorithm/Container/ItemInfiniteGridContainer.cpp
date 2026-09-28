@@ -19,8 +19,8 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::init(
   position_type_ = position_type;
 
   // 不限制行列, 也不维护位图: 位置占用只由子类的 position_index_ 表达 (每件道具占一个位置)
-  FWINSTLOGDEBUG(logger(), "init infinite grid position_type={} container_guid={}",
-                 static_cast<int>(position_type_), container_guid);
+  FWINSTLOGDEBUG(logger(), "init infinite grid position_type={} container_guid={}", static_cast<int>(position_type_),
+                 container_guid);
 }
 
 // ============================================================
@@ -32,14 +32,14 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::on_clear() {
   guid_index_.clear();
 }
 
-ITEM_ALGORITHM_API item_entry_ptr_t ItemInfiniteGridContainer::find_entry_at_position(
-    const ItemGridPosition& position) const {
+ITEM_ALGORITHM_API item_entry_ptr_t
+ItemInfiniteGridContainer::find_entry_at_position(const ItemGridPosition& position) const {
   auto it = position_index_.find(position);
   return (it != position_index_.end()) ? it->second : nullptr;
 }
 
 ITEM_ALGORITHM_API void ItemInfiniteGridContainer::attach_entry_position(const ItemGridPosition& position,
-                                                                        const item_entry_ptr_t& entry) {
+                                                                         const item_entry_ptr_t& entry) {
   position_index_[position] = entry;
 }
 
@@ -126,8 +126,8 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_position_for_infinite
   return false;
 }
 
-ITEM_ALGORITHM_API uint64_t ItemInfiniteGridContainer::make_entry_sort_key(
-    const PROJECT_NAMESPACE_ID::DItemInstance& instance) const {
+ITEM_ALGORITHM_API uint64_t
+ItemInfiniteGridContainer::make_entry_sort_key(const PROJECT_NAMESPACE_ID::DItemInstance& instance) const {
   // 位置知识留在容器这一侧: 条目只保存这个不透明键。
   // 坐标经接入层实现的 extract_position 从 proto 位置字段取出, 库内不解析具体字段
   ItemGridPosition pos = extract_position(instance.item_basic().position().grid_position());
@@ -138,8 +138,8 @@ ITEM_ALGORITHM_API uint64_t ItemInfiniteGridContainer::make_entry_sort_key(
 // 条目校验 (本模式实现)
 // ============================================================
 
-ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::is_item_valid(
-    const excel_config_group_ptr_t& config_group, const PROJECT_NAMESPACE_ID::DItemBasic& basic) const {
+ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::is_item_valid(const excel_config_group_ptr_t& config_group,
+                                                                 const PROJECT_NAMESPACE_ID::DItemBasic& basic) const {
   if (basic.type_id() == 0 || basic.count() <= 0) {
     return false;
   }
@@ -167,8 +167,8 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::is_item_valid(
   return true;
 }
 
-ITEM_ALGORITHM_API item_entry_ptr_t ItemInfiniteGridContainer::get(
-    const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
+ITEM_ALGORITHM_API item_entry_ptr_t
+ItemInfiniteGridContainer::get(const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
   return find_entry_at_position(extract_position(position));
 }
 
@@ -200,8 +200,8 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_positions(
     return false;
   }
 
-  // foreach 返回 false 表示提前中断: 这里只有"道具非法"一条中断路径, 中断后整次寻位失败
-  return items.foreach([&](const PROJECT_NAMESPACE_ID::DItemInstance& item) {
+  // foreach_item 返回 false 表示提前中断: 这里只有"道具非法"一条中断路径, 中断后整次寻位失败
+  return items.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& item) {
     const auto& basic = item.item_basic();
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(basic.type_id());
@@ -238,8 +238,7 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_positions(
       out_basic->mutable_position()->set_container_guid(get_container_guid());
     } else {
       // 子类无法确定位置: 交给调用方决定后续处理
-      FWINSTLOGWARNING(logger(),
-                       "find_positions: on_find_position_for_infinite rejected type={}, move to failed_item",
+      FWINSTLOGWARNING(logger(), "find_positions: on_find_position_for_infinite rejected type={}, move to failed_item",
                        basic.type_id());
       auto* out = failed_item.Add();
       *out = item;

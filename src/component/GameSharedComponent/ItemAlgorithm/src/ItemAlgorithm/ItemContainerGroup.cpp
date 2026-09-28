@@ -150,7 +150,7 @@ ITEM_ALGORITHM_API ItemContainerGroupAddCheckedRequest ItemContainerGroup::check
 
   // Phase 1: 按 position 分片 (同容器的请求攒在同一个分片里)
   container_part_collector<ItemContainerGroupAddCheckedRequest::PerContainerData> collector;
-  bool group_ok = requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
+  bool group_ok = requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
     int32_t type_id = request.item_basic().type_id();
     item_container_ptr_t container = select_container(request.item_basic().position());
     if (container == nullptr) {
@@ -211,7 +211,7 @@ ItemContainerGroup::check_sub(const excel_config_group_ptr_t& config_group,
   auto& result = checked_request.result;
 
   container_part_collector<ItemContainerGroupSubCheckedRequest::PerContainerData> collector;
-  bool group_ok = requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  bool group_ok = requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     int32_t type_id = request.type_id();
     item_container_ptr_t container = select_container(request.position());
     if (container == nullptr) {
@@ -449,7 +449,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainerGroup::check_has(
   std::vector<HasPart> parts;
   std::unordered_map<const ItemContainer*, size_t> part_index;
 
-  bool group_ok = requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  bool group_ok = requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     int32_t type_id = request.type_id();
     item_container_ptr_t container = select_container(request.position());
     if (container == nullptr) {

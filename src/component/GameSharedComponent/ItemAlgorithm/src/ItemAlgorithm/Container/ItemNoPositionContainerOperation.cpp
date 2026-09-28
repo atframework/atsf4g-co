@@ -294,7 +294,7 @@ ITEM_ALGORITHM_API bool ItemNoPositionContainer::on_find_positions(
   failed_item.Clear();
 
   // 回调返回 false 中断遍历并让本次调用整体失败 (结果写到成功列表里的部分由调用方自己丢弃)
-  return items.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstance& item) -> bool {
+  return items.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& item) -> bool {
     const auto& basic = item.item_basic();
 
     if (ItemAlgorithmTypeOption::GetItemType(basic.type_id()) == nullptr || !is_item_valid(config_group, basic)) {

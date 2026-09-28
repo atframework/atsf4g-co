@@ -28,7 +28,7 @@ namespace item_algorithm {
 // google::protobuf::RepeatedPtrField<T>, 而是接收这层视图:
 //   - 调用方可以用任何"可遍历的容器" (RepeatedPtrField / std::vector / 数组 / gsl::span)
 //     通过 make_item_readable_iterable / make_item_writable_iterable 构造视图;
-//   - 容器内部只依赖 foreach / size / empty 三个接口, 不关心数据实际存在哪里。
+//   - 容器内部只依赖 foreach_item / size / empty 三个接口, 不关心数据实际存在哪里。
 // ============================================================
 
 template <class T, bool Writable>
@@ -37,7 +37,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable;
 template <class T>
 struct ATFW_UTIL_SYMBOL_VISIBLE item_iterable_foreach_return_guard;
 
-/// @brief foreach 回调返回 void 时的语法糖: 总是跑完全部元素
+/// @brief foreach_item 回调返回 void 时的语法糖: 总是跑完全部元素
 template <>
 struct ATFW_UTIL_SYMBOL_VISIBLE item_iterable_foreach_return_guard<void> {
   template <class T, bool Writable, class F>
@@ -46,18 +46,18 @@ struct ATFW_UTIL_SYMBOL_VISIBLE item_iterable_foreach_return_guard<void> {
       fn(item);
       return true;
     };
-    self.foreach (delegate_fn);
+    self.foreach_item(delegate_fn);
   }
 };
 
-/// @brief foreach 回调返回 bool 时的语法糖: 返回 false 提前中断, 并把结果传回调用方
+/// @brief foreach_item 回调返回 bool 时的语法糖: 返回 false 提前中断, 并把结果传回调用方
 template <>
 struct ATFW_UTIL_SYMBOL_VISIBLE item_iterable_foreach_return_guard<bool> {
   template <class T, bool Writable, class F>
   ATFW_UTIL_FORCEINLINE static item_iterable_foreach_return_guard invoke(const item_iterable<T, Writable>& self,
                                                                          F&& fn) {
     auto delegate_fn = [&fn](typename item_iterable<T, Writable>::callback_parameter item) -> bool { return fn(item); };
-    return {self.foreach (delegate_fn)};
+    return {self.foreach_item(delegate_fn)};
   }
 
   ATFW_UTIL_FORCEINLINE item_iterable_foreach_return_guard(bool v) noexcept : result_(v) {}
@@ -96,7 +96,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable_access_controller<true> {
 
 /// @brief 物品请求序列视图基类
 ///
-/// Writable 为 true 时 foreach 回调拿到可写引用 (caller 可原地修改元素);
+/// Writable 为 true 时 foreach_item 回调拿到可写引用 (caller 可原地修改元素);
 /// 为 false 时拿到 const 引用。
 template <class T, bool Writable>
 class ATFW_UTIL_SYMBOL_VISIBLE item_iterable : public item_iterable_access_controller<Writable> {
@@ -118,7 +118,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable : public item_iterable_access_contr
 
   /// @brief 依次访问每个元素; 回调返回 false 时中断遍历
   /// @return true 表示所有元素都被访问过 (回调没有提前中断)
-  virtual bool foreach (atfw::util::nostd::function_ref<bool(callback_parameter)>) const = 0;
+  virtual bool foreach_item(atfw::util::nostd::function_ref<bool(callback_parameter)>) const = 0;
 
   virtual bool empty() const noexcept = 0;
 
@@ -129,7 +129,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable : public item_iterable_access_contr
             class R = item_iterable_foreach_return_guard<atfw::util::nostd::invoke_result_t<F, callback_parameter>>,
             class = atfw::util::nostd::enable_if_t<
                 !std::is_convertible<F, atfw::util::nostd::function_ref<bool(callback_parameter)>>::value>>
-  ATFW_UTIL_FORCEINLINE R foreach (F&& fn) const {
+  ATFW_UTIL_FORCEINLINE R foreach_item(F&& fn) const {
     return R::invoke(*this, std::forward<F>(fn));
   }
 };
@@ -159,7 +159,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable_view<gsl::span<T>, Writable>
 
   ~item_iterable_view() override = default;
 
-  bool foreach (atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
+  bool foreach_item(
+      atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
     for (auto& item : container_) {
       if (!callback(internal_access(item))) {
         return false;
@@ -167,7 +168,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable_view<gsl::span<T>, Writable>
     }
     return true;
   }
-  using base_type::foreach;
+  using base_type::foreach_item;
 
   bool empty() const noexcept override { return container_.empty(); }
 
@@ -192,7 +193,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable_view
 
   ~item_iterable_view() override = default;
 
-  bool foreach (atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
+  bool foreach_item(
+      atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
     for (auto& item : *container_) {
       if (!callback(internal_access(item))) {
         return false;
@@ -200,7 +202,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_iterable_view
     }
     return true;
   }
-  using base_type::foreach;
+  using base_type::foreach_item;
 
   bool empty() const noexcept override { return container_->empty(); }
 
@@ -248,7 +250,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_pointer_iterable_view<gsl::span<T>, Writable
 
   ~item_pointer_iterable_view() override = default;
 
-  bool foreach (atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
+  bool foreach_item(
+      atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
     for (auto& item : container_) {
       if (nullptr == item) {
         continue;
@@ -259,7 +262,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_pointer_iterable_view<gsl::span<T>, Writable
     }
     return true;
   }
-  using base_type::foreach;
+  using base_type::foreach_item;
 
   bool empty() const noexcept override { return container_.empty(); }
 
@@ -284,7 +287,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_pointer_iterable_view
 
   ~item_pointer_iterable_view() override = default;
 
-  bool foreach (atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
+  bool foreach_item(
+      atfw::util::nostd::function_ref<bool(typename base_type::callback_parameter)> callback) const override {
     for (auto& item : *container_) {
       if (nullptr == item) {
         continue;
@@ -295,7 +299,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE item_pointer_iterable_view
     }
     return true;
   }
-  using base_type::foreach;
+  using base_type::foreach_item;
 
   bool empty() const noexcept override { return container_->empty(); }
 

@@ -61,7 +61,7 @@ ItemFiniteGridContainer::on_check_add(const ItemAddCheckedRequest& checked_reque
   // 回调返回 false 中断遍历; 失败结果在中断前写进 result
   ItemOperationResult result;
   size_t index = 0;
-  checked_request.requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
+  checked_request.requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
     size_t i = index++;
     const auto& item_basic = request.item_basic();
     int32_t type_id = item_basic.type_id();
@@ -260,7 +260,7 @@ ItemFiniteGridContainer::on_check_sub(const ItemSubCheckedRequest& checked_reque
   // 回调返回 false 中断遍历; 失败结果在中断前写进 result
   ItemOperationResult result;
   size_t index = 0;
-  checked_request.requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  checked_request.requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     size_t i = index++;
     int64_t guid = request.guid();
     int32_t type_id = request.type_id();
@@ -418,7 +418,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemFiniteGridContainer::on_check_has(
   ItemOperationResult result;
   size_t index = 0;
 
-  requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(request.type_id());
     if (item_type_config != nullptr && item_type_config->need_guid) {
       item_entry_ptr_t guid_entry = find_entry_by_guid(request.guid());

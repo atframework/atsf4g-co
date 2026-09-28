@@ -38,7 +38,7 @@ ITEM_ALGORITHM_API ItemAddCheckedRequest ItemContainer::check_add(const excel_co
 
   // 回调返回 false 中断遍历; 错误码在中断前写进 result
   size_t index = 0;
-  checked_request.requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
+  checked_request.requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
     size_t i = index++;
     const auto& item_basic = request.item_basic();
     int32_t type_id = item_basic.type_id();
@@ -139,7 +139,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainer::add(ItemAddCheckedRequest&
 
   size_t index = 0;
   ItemOperationResult one_result;
-  checked_request.requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
+  checked_request.requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
     size_t i = index++;
     // 本模式声明可跳过的请求 (无位置容器的 count == 0): 不落位
     if (should_skip_add_request(request)) {
@@ -181,7 +181,7 @@ ITEM_ALGORITHM_API ItemSubCheckedRequest ItemContainer::check_sub(const excel_co
 
   // 回调返回 false 中断遍历; 错误码在中断前写进 result
   size_t index = 0;
-  checked_request.requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  checked_request.requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     size_t i = index++;
     int32_t type_id = request.type_id();
     int64_t sub_count = request.count();
@@ -267,7 +267,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainer::sub(ItemSubCheckedRequest&
 
   size_t index = 0;
   ItemOperationResult one_result;
-  checked_request.requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  checked_request.requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     size_t i = index++;
     one_result = on_sub_one(checked_request, request, context);
     if (one_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
@@ -413,7 +413,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainer::check_has(const excel_conf
   size_t index = 0;
 
   // 回调返回 false 中断遍历; 错误码在返回 false 之前写进 result
-  requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
+  requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
     size_t current_index = index++;
 
     int32_t check_ret = validate_item_basic(config_group, request);
@@ -548,7 +548,7 @@ ITEM_ALGORITHM_API void ItemContainer::apply_entries(const excel_config_group_pt
   // Phase 2: 按 entry_id 新增或更新
   // ============================================================
   // 回调返回 false 会中断遍历; 跳过本条 (相当于原来循环里的 continue) 时返回 true 继续
-  update_entries.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) -> bool {
+  update_entries.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) -> bool {
     const auto& item_basic = update.instance().item_basic();
     int32_t type_id = item_basic.type_id();
 
@@ -603,7 +603,7 @@ ITEM_ALGORITHM_API bool ItemContainer::find_positions_for_basics(
   // 再把结果里的 item_basic 拆回 DItemBasic, 子类只需要实现一份寻位。
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> wrapped_items;
   wrapped_items.Reserve(static_cast<int>(basics.size()));
-  basics.foreach ([&wrapped_items](const PROJECT_NAMESPACE_ID::DItemBasic& basic) -> bool {
+  basics.foreach_item([&wrapped_items](const PROJECT_NAMESPACE_ID::DItemBasic& basic) -> bool {
     *wrapped_items.Add()->mutable_item_basic() = basic;
     return true;
   });

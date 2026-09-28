@@ -121,7 +121,7 @@ bool ItemFiniteGridFindPositionHelper::find_positions_validate_ignore(
 
   // 消耗的道具在找位置时要从可堆叠容量中扣除 (消耗后原位空出容量, 兑换回来的
   // 道具可以堆回原位)。按 GUID / 位置 / 类型三种方式匹配, 同一批次内累计。
-  return ignore_item.foreach ([&](const PROJECT_NAMESPACE_ID::DItemBasic& ignore) -> bool {
+  return ignore_item.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& ignore) -> bool {
     if (!container->is_item_valid(config_group, ignore) ||
         ignore.position().container_guid() != container->container_guid_ ||
         !container->check_item_position(ignore.position())) {
@@ -253,7 +253,7 @@ bool ItemFiniteGridFindPositionHelper::find_positions_stack_process(
 
   std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> pending_existing_extra;
 
-  return items.foreach ([&](const ItemT& item) -> bool {
+  return items.foreach_item([&](const ItemT& item) -> bool {
     const auto& basic = accessor::get_basic(item);
     auto* item_type_cfg = ItemAlgorithmTypeOption::GetItemType(basic.type_id());
     if (!item_type_cfg) {

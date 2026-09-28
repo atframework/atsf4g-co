@@ -377,7 +377,7 @@ class TestItemRequestList : public ITEM_ALGORITHM_NAMESPACE_ID::item_algorithm::
   bool empty() const noexcept override { return storage_.empty(); }
   size_t size() const noexcept override { return static_cast<size_t>(storage_.size()); }
 
-  bool foreach (atfw::util::nostd::function_ref<bool(callback_parameter)> callback) const override {
+  bool foreach_item(atfw::util::nostd::function_ref<bool(callback_parameter)> callback) const override {
     for (const auto& item : storage_) {
       if (!callback(item)) {
         return false;
@@ -385,7 +385,7 @@ class TestItemRequestList : public ITEM_ALGORITHM_NAMESPACE_ID::item_algorithm::
     }
     return true;
   }
-  using base_type::foreach;
+  using base_type::foreach_item;
 
  private:
   storage_type storage_;
@@ -904,7 +904,7 @@ static void sync_and_verify(ServerTestItemFiniteGridContainer& server, TestItemF
 //           有位置容器对无位置道具的拒绝 / stack overflow / position occupied / out of range,
 //           check_sub / sub (部分/全部/按位置/按GUID/不足失败),
 //           check_move / move (整体/部分拆分/目标占用失败),
-//           load (占格/装备), foreach, clear,
+//           load (占格/装备), foreach_item, clear,
 //           entry_id (自增/独立/拆分产生新条目),
 //           apply_entries (删除/更新/新增/位置变更/装备GUID),
 //           具体容器的单容器 Move 与显式跨容器 sub/add,
@@ -1541,10 +1541,10 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
   }
 
   // ----------------------------------------------------------------
-  // Step 19: foreach + clear — 清空后验证
+  // Step 19: foreach_item + clear — 清空后验证
   // 用独立 Grid 测试
   // ----------------------------------------------------------------
-  CASE_MSG_INFO() << "=== Step 19: foreach + clear ===\n";
+  CASE_MSG_INFO() << "=== Step 19: foreach_item + clear ===\n";
   {
     auto temp_ptr = atfw::util::memory::make_strong_rc<ServerTestItemFiniteGridContainer>();
     auto& temp = *temp_ptr;
