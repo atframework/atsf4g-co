@@ -36,6 +36,7 @@ statistically validated list of Chinese words that identify AI authorship.
 | 投影 | 缓存、副本、视图; name the actual data structure or relationship. |
 | 水位 | 最大值、上限、已处理的日志序号; identify the value being compared. |
 | 预算 | 重试次数上限、剩余重试次数、超时时间、剩余时间、数量上限; name what is counted or timed. |
+| 合同 | In Chinese software plans and docs, name the intended 设计规范、接口约定、字段规则、平台协议 or 验收标准; keep 合同 for legal agreements, quotations, and identifiers. |
 | 赋能、加持 | 提供什么功能、让谁能做什么; describe the capability instead of praising it. |
 | 抓手 | 方法、工具、检查项; identify the specific means. |
 | 底座 | 公共库、运行时、基础服务; name the component and its responsibility. |

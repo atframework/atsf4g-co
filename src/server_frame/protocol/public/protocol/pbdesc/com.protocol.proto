@@ -20,6 +20,7 @@ import "protocol/pbdesc/com.protocol.team.proto";
 import "protocol/pbdesc/com.protocol.user.proto";
 import "protocol/pbdesc/com.protocol.auth.proto";
 import "protocol/pbdesc/com.protocol.match.proto";
+import "protocol/pbdesc/com.protocol.friend_api.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -332,4 +333,61 @@ service LobbysvrClientService {
       api_name: "拒绝加入组队申请"
     };
   }
+
+  // ================ 好友RPC ================
+  rpc friend_get_all(atframework.friend_api.CSFriendGetAllReq) returns (atframework.friend_api.SCFriendGetAllRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "获取全部好友"
+    };
+  };
+
+  rpc friend_invite(atframework.friend_api.CSFriendInvitationReq) returns (atframework.friend_api.SCFriendInvitationRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "发送好友邀请"
+    };
+  };
+
+  rpc friend_accept_invite(atframework.friend_api.CSFriendAcceptInvitationReq) returns (atframework.friend_api.SCFriendAcceptInvitationRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "接受好友邀请"
+    };
+  };
+
+  rpc friend_reject_invite(atframework.friend_api.CSFriendRejectInvitationReq) returns (atframework.friend_api.SCFriendRejectInvitationRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "拒绝好友邀请"
+    };
+  };
+
+  rpc friend_remove(atframework.friend_api.CSFriendRemoveReq) returns (atframework.friend_api.SCFriendRemoveRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "删除好友"
+    };
+  };
+
+  rpc friend_send_gift(atframework.friend_api.CSFriendSendGiftReq) returns (atframework.friend_api.SCFriendSendGiftRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "发送礼物给好友"
+    };
+  };
+
+  rpc friend_receive_gift(atframework.friend_api.CSFriendReceiveGiftReq) returns (atframework.friend_api.SCFriendReceiveGiftRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "收取好友礼物"
+    };
+  };
+
+  rpc friend_get_suggest(atframework.friend_api.CSFriendGetSuggestReq) returns (atframework.friend_api.SCFriendGetSuggestRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "friend_api"
+      api_name: "获取推荐好友"
+    };
+  };
 }

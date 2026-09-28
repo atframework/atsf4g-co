@@ -16,9 +16,19 @@ package atframework.friend_api;
 // 获取好友数据
 message CSFriendGetAllReq {}
 
-message SCFriendGetAllRsp {                          // 统计数据，限频数据
-  repeated DFriendInfo friend_list = 11;             // 游戏好友
-  repeated DFriendInvitationInfo inviter_list = 12;  // 好友请求
+message SCFriendGetAllRsp {
+  DFriendStatistics stats = 1;                              // 统计数据，限频数据
+  repeated DFriendGiftHistory daily_send_list = 2;     // 今日已赠送列表
+  repeated DFriendGiftHistory daily_receive_list = 3;  // 今日已收取列表
+
+  repeated DFriendInfo friend_list = 11;
+  repeated DFriendInvitationInfo inviter_list = 12;
+  repeated DFriendInvitationInfo invitee_list = 13;
+  repeated DFriendGift gift_list = 14;
+
+  repeated DFriendSNSInfo sns_friend_list = 21;  // 社交平台好友信息
+  // repeated SNSShareCfgData sns_share_cfg = 22;   // 社交分享功能配置
+  // UserSNSData sns_data = 23;                     // 社交平台分享和上报数据
 }
 
 // 发送好友申请
@@ -72,7 +82,7 @@ message CSFriendGetSuggestReq {
 }
 
 message SCFriendGetSuggestRsp {
-  // repeated DTeamSuggestData suggest_users = 1;
+  repeated DFriendSuggestInfo suggest_users = 1;
 }
 
 // 一键同意所有好友

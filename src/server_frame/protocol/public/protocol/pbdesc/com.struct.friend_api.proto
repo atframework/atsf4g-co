@@ -88,6 +88,10 @@ message DFriendSNSInfo {
   atframework.shared.DUserProfile profile = 6;
 }
 
+message DFriendSuggestInfo {
+  atframework.shared.DUserIDKey user_key = 1;
+}
+
 // 好友通知数据
 message DFriendEvent {
   int64 event_id = 1;                              // 事件ID
