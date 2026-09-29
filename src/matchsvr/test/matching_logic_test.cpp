@@ -799,7 +799,7 @@ CASE_TEST(matchsvr_matching_logic, none_rule_allows_three_unequal_full_factions)
   scope.set_matching_pool_id(7);
   matching_room room{"unequal-factions", scope, 301, 100, 300};
   for (int32_t size : {1, 2, 3}) {
-    auto unit = make_party_unit(static_cast<uint64_t>(size), 10200 + size * 10, size, 10, false);
+    auto unit = make_party_unit(static_cast<uint64_t>(size), static_cast<uint64_t>(10200 + size * 10), size, 10, false);
     auto joined = size == 1 ? matching_logic::check_unit_can_create_room(scope, unit, 100, 6)
                             : matching_logic::check_unit_can_join(room, unit, 100, 6);
     CASE_EXPECT_TRUE(joined.evaluation.can_join());

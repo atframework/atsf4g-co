@@ -729,7 +729,7 @@ CASE_TEST(lobbysvr_user_matching, registers_new_unit_before_create_and_accepts_e
       .set_type_name("matchsvr")
       .add_label("hpa_scaling_ready", "1");
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
-  if (logic_server_last_common_module()) {
+  if (logic_server_last_common_module() != nullptr) {
     logic_server_last_common_module()->reload();
   }
   auto user_inst = user::create(10013, 1, "new-matching-round-user");
@@ -741,8 +741,8 @@ CASE_TEST(lobbysvr_user_matching, registers_new_unit_before_create_and_accepts_e
   rpc::unit_test::ss_mock_rule_options rule_options;
   rule_options.match_node_id = kMatchsvrId;
   auto rule = rpc::matching::mock::create_matching(
-      [user_inst](rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request,
-                  PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+      [user_inst, kMatchsvrId](rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request,
+                               PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
         auto& manager = user_inst->get_user_matching_manager();
         CASE_EXPECT_NE(0, request.unit().unit_id());
         CASE_EXPECT_NE(1013, request.unit().unit_id());
