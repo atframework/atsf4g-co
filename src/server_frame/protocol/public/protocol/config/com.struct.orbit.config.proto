@@ -19,7 +19,7 @@ message ExcelOrbitClientTemplate {
     file_path: "orbit_client_template.bytes"
     indexes: { fields: "client_template_id" index_type: EN_INDEX_KV }
 
-    tags: "server"
+    tags: "all"
   };
 
   int32 client_template_id = 1 [(org.xresloader.field_unique_tag) = "client_template_id"];
