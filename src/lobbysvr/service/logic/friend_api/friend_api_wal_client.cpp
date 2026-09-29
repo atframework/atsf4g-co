@@ -230,12 +230,16 @@ static user_friend_api_wal_client_type::vtable_pointer create_user_friend_api_cl
   };
 
   ret->on_receive_subscribe_response = [](wal_client_type&, wal_client_type::callback_param_type) -> wal_result_code {
-    // 好友模块不使用订阅机制，接收到订阅回包的处理留空即可
     return wal_result_code::kOk;
   };
 
-  ret->subscribe_request = [](wal_client_type&, wal_client_type::callback_param_type) -> wal_result_code {
-    // 好友模块不使用订阅机制，发送订阅的处理留空即可
+  ret->subscribe_request = [](wal_client_type& wal, wal_client_type::callback_param_type param) -> wal_result_code {
+    if (nullptr == wal.get_private_data()) {
+      return wal_result_code::kInitlization;
+    }
+
+    user_friend_api_manager* friend_manager = wal.get_private_data();
+    friend_manager->set_need_send_wal_heartbeat(param.context);
     return wal_result_code::kOk;
   };
 

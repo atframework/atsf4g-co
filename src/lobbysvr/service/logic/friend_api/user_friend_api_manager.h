@@ -23,6 +23,9 @@
 #include <data/user_key_hash_helper.h>
 
 #include <chrono>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "logic/friend_api/friend_api_defs.h"
 #include "logic/friend_api/friend_api_transaction_client_handle.h"
@@ -93,11 +96,14 @@ class user_friend_api_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type gm_reset_limits(rpc::context& ctx);
 
   // 和get_friend_cache的区别是这里过期返回nullptr
-  const atfw::friend_api::DFriendInfo* get_friend(const atfw::shared::DUserIDKey& user_key) const;
+  const atfw::friend_api::DFriendInfo* ATFW_UTIL_MACRO_NULLABLE
+  get_friend(const atfw::shared::DUserIDKey& user_key) const;
   // 和get_inviter_cache的区别是这里过期返回nullptr
-  const atfw::friend_api::DFriendInvitationInfo* get_inviter(const atfw::shared::DUserIDKey& user_key) const;
+  const atfw::friend_api::DFriendInvitationInfo* ATFW_UTIL_MACRO_NULLABLE
+  get_inviter(const atfw::shared::DUserIDKey& user_key) const;
   // 和get_invitee_cache的区别是这里过期返回nullptr
-  const atfw::friend_api::DFriendInvitationInfo* get_invitee(const atfw::shared::DUserIDKey& user_key) const;
+  const atfw::friend_api::DFriendInvitationInfo* ATFW_UTIL_MACRO_NULLABLE
+  get_invitee(const atfw::shared::DUserIDKey& user_key) const;
   // 和get_gift_cache的区别是这里过期返回nullptr
   const atfw::friend_api::DFriendGift* get_gift(int64_t gift_id) const;
 
@@ -155,13 +161,13 @@ class user_friend_api_manager {
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type receive_gifts(
       rpc::context& ctx, std::vector<int64_t>& gift_ids,
-      ::google::protobuf::RepeatedPtrField<atfw::friend_api::DFriendGift>* out = nullptr);
+      ::google::protobuf::RepeatedPtrField<atfw::friend_api::DFriendGift>* ATFW_UTIL_MACRO_NULLABLE out = nullptr);
 
   int patch_stats(const atfw::friend_api::DFriendStatistics& stats);
   bool add_event_dirty(atfw::friend_api::DFriendEvent&& evt_data);
 
-  void add_send_gift_times(int32_t times);
-  void add_receive_gift_times(int32_t times);
+  void add_send_gift_times(uint32_t times);
+  void add_receive_gift_times(uint32_t times);
 
   bool add_gift_send_list(const atfw::friend_api::DFriendGiftHistory& history);
   bool remove_gift_send_list(const atfw::friend_api::DFriendGiftHistory& history);
@@ -179,31 +185,34 @@ class user_friend_api_manager {
 
   bool add_friend_cache(rpc::context& ctx, const atfw::friend_api::DFriendInfo& friend_data, bool need_notify = true);
   void remove_friend_cache(rpc::context& ctx, const atfw::shared::DUserIDKey& friend_key, bool need_notify = true);
-  const atfw::friend_api::DFriendInfo* get_friend_cache(const atfw::shared::DUserIDKey& friend_key) const;
+  const atfw::friend_api::DFriendInfo* ATFW_UTIL_MACRO_NULLABLE
+  get_friend_cache(const atfw::shared::DUserIDKey& friend_key) const;
   inline const friends_cache_t& get_all_friend_cache() const { return friend_cache_set_; }
 
   bool add_inviter_cache(rpc::context& ctx, const atfw::friend_api::DFriendInvitationInfo& invite_data,
                          bool need_notify = true);
   void remove_inviter_cache(rpc::context& ctx, const atfw::shared::DUserIDKey& friend_key, bool need_notify = true);
-  const atfw::friend_api::DFriendInvitationInfo* get_inviter_cache(const atfw::shared::DUserIDKey& friend_key) const;
+  const atfw::friend_api::DFriendInvitationInfo* ATFW_UTIL_MACRO_NULLABLE
+  get_inviter_cache(const atfw::shared::DUserIDKey& friend_key) const;
   inline const invites_cache_t& get_all_inviter_cache() const { return inviter_cache_set_; }
   atfw::shared::DUserIDKey get_key_from_inviter_cache(const atfw::friend_api::DFriendInvitationInfo& invite_data) const;
 
   bool add_invitee_cache(rpc::context& ctx, const atfw::friend_api::DFriendInvitationInfo& invite_data,
                          bool need_notify = true);
   void remove_invitee_cache(rpc::context& ctx, const atfw::shared::DUserIDKey& friend_key, bool need_notify = true);
-  const atfw::friend_api::DFriendInvitationInfo* get_invitee_cache(const atfw::shared::DUserIDKey& friend_key) const;
+  const atfw::friend_api::DFriendInvitationInfo* ATFW_UTIL_MACRO_NULLABLE
+  get_invitee_cache(const atfw::shared::DUserIDKey& friend_key) const;
   inline const invites_cache_t& get_all_invitee_cache() const { return invitee_cache_set_; }
   atfw::shared::DUserIDKey get_key_from_invitee_cache(const atfw::friend_api::DFriendInvitationInfo& invite_data) const;
 
   bool add_gift_cache(rpc::context& ctx, const atfw::friend_api::DFriendGift& gift_data, bool need_notify = true);
   void remove_gift_cache(rpc::context& ctx, int64_t gift_id, bool need_notify = true);
-  const atfw::friend_api::DFriendGift* get_gift_cache(int64_t gift_id) const;
+  const atfw::friend_api::DFriendGift* ATFW_UTIL_MACRO_NULLABLE get_gift_cache(int64_t gift_id) const;
   inline const gifts_cache_t& get_all_gift_cache() const { return gift_cache_set_; }
 
   bool add_sns_friend_cache(rpc::context& ctx, const atfw::friend_api::DFriendSNSInfo& friend_data);
   void remove_sns_friend_cache(rpc::context& ctx, uint64_t user_id);
-  const atfw::friend_api::DFriendSNSInfo* get_sns_friend_cache(uint64_t user_id) const;
+  const atfw::friend_api::DFriendSNSInfo* ATFW_UTIL_MACRO_NULLABLE get_sns_friend_cache(uint64_t user_id) const;
   inline const sns_friends_cache_t& get_all_sns_friend_cache() const { return sns_friend_cache_set_; }
 
   // ================ 社交分享类接口 ================
@@ -211,7 +220,7 @@ class user_friend_api_manager {
   void update_sns_share(bool daily_reset, bool weekly_reset);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_sns_share(rpc::context& ctx, int32_t share_type, int32_t sub_type, atfw::friend_api::SNSShareRecord*& out,
                     ::google::protobuf::RepeatedPtrField<atfw::friend_api::DItemOffset>* out_reward_items = nullptr);
-  atfw::friend_api::SNSShareRecord* mutable_sns_share(int32_t share_type);
+  atfw::friend_api::SNSShareRecord* ATFW_UTIL_MACRO_NULLABLE mutable_sns_share(int32_t share_type);
   void clear_sns_share(int32_t share_type = 0);
   void dump_sns_share(atfw::friend_api::UserSNSData& out, int32_t share_type = 0);
 #endif
@@ -220,6 +229,8 @@ class user_friend_api_manager {
   inline const user& get_owner() const noexcept { return *owner_; }
 
   bool is_friend_full() const noexcept;
+
+  void set_need_send_wal_heartbeat(rpc::context& ctx);
 
  private:
   bool is_sns_friend_available() const noexcept;

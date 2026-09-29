@@ -32,7 +32,9 @@
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "data/user.h"
 
@@ -240,6 +242,11 @@ int32_t user_friend_api_manager::invoke_async_task(rpc::context &ctx) {
     return 0;
   }
 
+  // 正在运行，不用重复创建
+  if (!task_type_trait::empty(friend_async_task_) && !task_type_trait::is_exiting(friend_async_task_)) {
+    return 0;
+  }
+
   int ret = 0;
   auto user_ptr = owner_->shared_from_this();
   auto invoke_result = rpc::async_invoke(
@@ -333,7 +340,7 @@ int32_t user_friend_api_manager::invoke_async_task(rpc::context &ctx) {
 rpc::result_code_type user_friend_api_manager::pull_friend_data(rpc::context &ctx) {
   auto now = ctx.logical_now();
 
-  if (next_pull_data_timepoint_ >= now) {
+  if (next_pull_data_timepoint_ <= now) {
     need_pull_sns_friend_ = true;
     invoke_async_task(ctx);
   }
@@ -427,6 +434,9 @@ void user_friend_api_manager::load_snapshot(rpc::context &ctx,
       expired_keys.insert(gift_data.first);
     }
     for (const auto &gift_data : snapshot_data.gift_list()) {
+      if (gift_data.removed_time().seconds() > 0) {
+        continue;
+      }
       add_gift_cache(ctx, gift_data, false == is_remote_data_ready_);
       expired_keys.erase(gift_data.gift_id());
     }
@@ -791,7 +801,7 @@ rpc::result_code_type user_friend_api_manager::send_invite(rpc::context &ctx,
 
   ret = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transacation_ptr));
   // if (ret >= 0) {
-  //   TODO(owentou): OSS log
+  // TODO(any): OSS log
   // }
 
   RPC_RETURN_CODE(ret);
@@ -870,7 +880,7 @@ rpc::result_code_type user_friend_api_manager::accept_invite(rpc::context &ctx,
 
   ret = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transacation_ptr));
   // if (ret >= 0) {
-  //   TODO(owentou): OSS log
+  // TODO(any): OSS log
   // }
 
   RPC_RETURN_CODE(ret);
@@ -930,7 +940,7 @@ rpc::result_code_type user_friend_api_manager::reject_invite(rpc::context &ctx,
 
   ret = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transacation_ptr));
   // if (ret >= 0) {
-  //   TODO(owentou): OSS log
+  // TODO(any): OSS log
   // }
 
   RPC_RETURN_CODE(ret);
@@ -998,7 +1008,7 @@ rpc::result_code_type user_friend_api_manager::remove_friend(rpc::context &ctx,
 
   ret = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transacation_ptr));
   // if (ret >= 0) {
-  //   TODO(owentou): OSS log
+  // TODO(any): OSS log
   // }
 
   RPC_RETURN_CODE(ret);
@@ -1083,7 +1093,11 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
   protobuf_copy_message(*history.mutable_user_key(), user_key);
   history.set_gift_type_id(gift_data->gift_type_id());
 
-  add_gift_send_list(history);
+  uint32_t send_count = 0;
+  if (add_gift_send_list(history)) {
+    ++send_count;
+  }
+  add_send_gift_times(send_count);
 
   ret = transaction_client_->add_participator(
       ctx, transacation_ptr,
@@ -1106,7 +1120,7 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_TRANSACTION_FAILED);
   }
 
-  //   TODO(owentou): OSS log
+  // TODO(any): OSS log
   RPC_RETURN_CODE(ret);
 }
 
@@ -1152,7 +1166,7 @@ rpc::result_code_type user_friend_api_manager::receive_gifts(
   // 检查接收礼物次数限制
   int32_t friend_daily_receive_gift_limit = excel::get_const_config().friend_daily_receive_gift_limit();
   if (friend_daily_receive_gift_limit > 0 &&
-      get_local_stats().daily_receive_gift_times() + static_cast<int>(gift_ids.size()) >
+      get_local_stats().daily_receive_gift_times() + static_cast<uint32_t>(gift_ids.size()) >
           static_cast<uint32_t>(friend_daily_receive_gift_limit)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_DAILY_RECEIVE_LIMIT);
   }
@@ -1197,7 +1211,7 @@ rpc::result_code_type user_friend_api_manager::receive_gifts(
     protobuf_from_system_clock(*gift_data->mutable_expired_time(), now);
 
     // history
-    histories.push_back(atfw::friend_api::DFriendGiftHistory());
+    histories.emplace_back();
     atfw::friend_api::DFriendGiftHistory &history = histories.back();
     history.set_gift_id(origin_gift_data->gift_id());
     protobuf_copy_message(*history.mutable_user_key(), origin_gift_data->from_user());
@@ -1217,9 +1231,13 @@ rpc::result_code_type user_friend_api_manager::receive_gifts(
   }
 
   // 计数接收次数
+  uint32_t receive_count = 0;
   for (auto &history : histories) {
-    add_gift_receive_list(history);
+    if (add_gift_receive_list(history)) {
+      ++receive_count;
+    }
   }
+  add_receive_gift_times(receive_count);
 
   // 创建事务
   friend_api_transaction_client_handle::storage_ptr_type transacation_ptr;
@@ -1294,7 +1312,7 @@ bool user_friend_api_manager::add_event_dirty(atfw::friend_api::DFriendEvent &&e
   return true;
 }
 
-void user_friend_api_manager::add_send_gift_times(int32_t times) {
+void user_friend_api_manager::add_send_gift_times(uint32_t times) {
   if (0 == times) {
     return;
   }
@@ -1320,7 +1338,7 @@ void user_friend_api_manager::add_send_gift_times(int32_t times) {
   }
 }
 
-void user_friend_api_manager::add_receive_gift_times(int32_t times) {
+void user_friend_api_manager::add_receive_gift_times(uint32_t times) {
   if (0 == times) {
     return;
   }
@@ -1692,7 +1710,7 @@ bool user_friend_api_manager::is_sns_friend_available() const noexcept {
   return true;
 }
 
-rpc::result_code_type user_friend_api_manager::pull_sns_friend_data(rpc::context &ctx) {
+rpc::result_code_type user_friend_api_manager::pull_sns_friend_data(rpc::context & /*ctx*/) {
   // TODO(any): 接入开放平台，获取平台好友
   // 注意删除过期数据
 
@@ -1721,7 +1739,8 @@ void user_friend_api_manager::update_sns_share(bool daily_reset, bool weekly_res
   }
 }
 
-rpc::result_code_type user_friend_api_manager::add_sns_share(rpc::context& ctx, int32_t reward_type, int32_t sub_type, PROJECT_NAMESPACE_ID::SNSShareRecord *&out,
+rpc::result_code_type user_friend_api_manager::add_sns_share(rpc::context& ctx, int32_t reward_type, int32_t sub_type,
+                                        PROJECT_NAMESPACE_ID::SNSShareRecord *&out,
                                        ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset> *out_reward_items) {
   refresh_feature_limit_minute(ctx);
   out = nullptr;
@@ -1800,4 +1819,10 @@ bool user_friend_api_manager::is_friend_full() const noexcept {
     return true;
   }
   return false;
+}
+
+void user_friend_api_manager::set_need_send_wal_heartbeat(rpc::context &ctx) {
+  need_send_wal_heartbeat_ = true;
+
+  invoke_async_task(ctx);
 }
