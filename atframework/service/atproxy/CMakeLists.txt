@@ -30,6 +30,11 @@ atframework_add_protobuf_library(
   PROTOCOLS
   "${CMAKE_CURRENT_LIST_DIR}/protocol/atproxy/atproxy_protocol.proto")
 
+# 登记 atproxy 在 _generated 下的构建期产物, 供根工程 cleanup-generated-sources 精确清理。
+if(COMMAND project_generated_sources_register_cleanup)
+  project_generated_sources_register_cleanup("${CMAKE_BINARY_DIR}/_generated/atproxy")
+endif()
+
 atframework_add_executable(
   ${ATSF4G_APP_NAME}
   ENABLE_PRIVATE_PRECOMPILE_HEADERS

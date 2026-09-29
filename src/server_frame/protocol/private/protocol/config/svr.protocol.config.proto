@@ -221,10 +221,17 @@ message logic_cache_cfg {
 message logic_friend_api_cfg {
   google.protobuf.Duration wal_gc_expire_duration = 1
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "60s" }];
-  google.protobuf.Duration wal_subscriber_timeout = 2
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "30s" }];
-  uint32 wal_gc_log_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
-  uint32 wal_max_log_size = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
+
+  // 实际发送心跳间隔受限于全局客户端发包频率，不精确。设计如此
+  google.protobuf.Duration wal_subscriber_heartbeat = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "30s" }];
+  // 实际重试间隔受限于全局客户端发包频率，不精确。设计如此
+  google.protobuf.Duration wal_subscriber_retry_interval = 3
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "10s" }];
+  google.protobuf.Duration wal_subscriber_timeout = 4
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "360s" min_value: "30s" }];
+  uint32 wal_gc_log_size = 5 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  uint32 wal_max_log_size = 6 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
 }
 
 message logic_section_cfg {

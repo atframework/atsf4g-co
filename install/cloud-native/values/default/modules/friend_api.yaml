@@ -5,6 +5,10 @@
 enabled: false
 
 wal_gc_expire_duration: 180s
-wal_subscriber_timeout: 180s
+# 实际发送心跳间隔受限于全局客户端发包频率，不精确
+wal_subscriber_heartbeat: 120s
+# 实际重试间隔受限于全局客户端发包频率，不精确
+wal_subscriber_retry_interval: 60s
+wal_subscriber_timeout: 360s
 wal_gc_log_size: 8
 wal_max_log_size: 64

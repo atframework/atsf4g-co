@@ -256,6 +256,11 @@ function(project_server_frame_add_config_target)
 
   set_property(TARGET "config-loader" PROPERTY FOLDER "${PROJECT_NAME}/config")
 
+  # 登记 config-loader 在 _generated 下的构建期产物(excel 加载代码); server_frame_build_feature.h/.cpp 与 temp/ 由 configure 阶段生成,
+  # 不登记以便清理后可直接构建。
+  project_generated_sources_register_cleanup("${PROJECT_SERVER_FRAME_CONFIG_GENERATED_HEADER_DIR}/excel"
+                                             "${PROJECT_SERVER_FRAME_CONFIG_GENERATED_SOURCE_DIR}/excel")
+
   source_group(
     TREE "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config"
     FILES ${PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST}

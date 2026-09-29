@@ -54,6 +54,13 @@ lobbysvr:
     exit_retry_interval: 10s
     exit_timeout: 35s
     wait_add_member_timeout: 5s
+  friend_api:
+    friend_level_lru_max_user_count: 32768
+    friend_level_lru_max_record_count: 65536
+    friend_level_lru_gc_record_count: 256
+    friend_level_lru_record_expire_time: 43200s
+    friend_sns_channel_blacklist: []
+    friend_sns_cache_timeout: 1h
 
 enable_excel_config: true
 enable_session_manager: true

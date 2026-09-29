@@ -435,6 +435,8 @@ enum EnErrorCode {
   [(error_code.description) = "邀请数量达到上限"];
   EN_ERR_FRIEND_INVITER_TOTAL_LIMIT = -1317
   [(error_code.description) = "对方有过多的未处理邀请"];
+  EN_ERR_FRIEND_TRANSACTION_FAILED = -1318
+  [(error_code.description) = "好友事务处理失败"];
   EN_ERR_FRIEND_SNS_SHARE_CFG_NOT_FOUND = -1351
   [(error_code.description) = "分享类型错误"];
 

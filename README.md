@@ -260,11 +260,10 @@ cmake --build <BUILD_DIR> --target config-loader       # regenerate Excel config
 cmake --build <BUILD_DIR> --target serverframe_all_pb  # regenerate protobuf descriptors
 ```
 
-To force a full rebuild of all generated artifacts, use the dedicated `cleanup-generated-sources` target instead of deleting the directory by hand, then reconfigure and rebuild. Because the config-code output list and files such as `server_frame_build_feature.h/.cpp` are generated during the configure stage (`configure_file`/protoc enumeration), a reconfigure is required after the cleanup to restore them:
+To force a full rebuild of all generated artifacts, use the dedicated `cleanup-generated-sources` target instead of deleting the directory by hand, then rebuild. The target only removes artifacts produced by build-time `add_custom_command`/`add_custom_target` (registered by each generator); files produced during the configure stage (`configure_file`/protoc enumeration), such as `server_frame_build_feature.h/.cpp`, the `tools/` scripts, `generate-for-pb/conf`, and `xml/xresconv.gen.xml`, are kept, so a plain rebuild regenerates everything without a reconfigure:
 
 ```bash
-cmake --build <BUILD_DIR> --target cleanup-generated-sources   # remove the whole <BUILD_DIR>/_generated tree
-cmake <BUILD_DIR>                                              # reconfigure to restore the configure-stage generation steps
+cmake --build <BUILD_DIR> --target cleanup-generated-sources   # remove only build-time generated sources under <BUILD_DIR>/_generated
 cmake --build <BUILD_DIR>                                      # rebuild to trigger build-time regeneration
 ```
 

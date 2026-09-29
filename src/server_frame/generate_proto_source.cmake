@@ -134,8 +134,7 @@ configure_file("${PROJECT_SOURCE_DIR}/resource/excel_xml/xresconv.xml.in"
                "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.gen.xml" ESCAPE_QUOTES @ONLY)
 
 add_custom_command(
-  OUTPUT "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
-         "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
+  OUTPUT "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml" "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
          "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
           "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
@@ -147,6 +146,11 @@ add_custom_command(
           "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/xresconv.xml"
           "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
   COMMENT "Generate xresconv.xml,xresconv.data.xml,validator.yaml into ${CMAKE_BINARY_DIR}/_generated/xml")
+
+# 登记 pbdesc 描述符与 xml 构建期产物, 供 cleanup-generated-sources 精确清理; xresconv.gen.xml 由 configure 阶段 生成, 不登记。
+project_generated_sources_register_cleanup(
+  "${PROJECT_GENERATED_PBD_DIR}" "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
+  "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml" "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml")
 
 set(PROJECT_RESOURCE_EXCEL_COMMAND_ARGS "\"${PROJECT_THIRD_PARTY_XRESLOADER_CLI}\"")
 if(Java_JAVA_EXECUTABLE)
@@ -214,24 +218,18 @@ if(NOT UNIX AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}" "-NoProfile" "-InputFormat" "None" "-ExecutionPolicy" "Bypass"
             "-NonInteractive" "-NoLogo" "-File" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.ps1"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
-            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
-            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
-            "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
-            ${PROJECT_RESOURCE_EXCEL_FILES}
-            ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
+    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml" "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
+            ${PROJECT_RESOURCE_EXCEL_FILES} ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 else()
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resource-config.log"
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${CMAKE_CURRENT_BINARY_DIR}/generate-excel-bytes.sh"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
-            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
-            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml"
-            "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
-            ${PROJECT_RESOURCE_EXCEL_FILES}
-            ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
+    DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb" "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.xml"
+            "${CMAKE_BINARY_DIR}/_generated/xml/xresconv.data.xml" "${CMAKE_BINARY_DIR}/_generated/xml/validator.yaml"
+            ${PROJECT_RESOURCE_EXCEL_FILES} ${PROJECT_RESOURCE_UE_SOURCE_BYTES_FILES}
     COMMENT "Generate excel resources [@${CMAKE_CURRENT_BINARY_DIR}]")
 endif()
 

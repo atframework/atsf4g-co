@@ -10,6 +10,7 @@
 
 #include <config/logic_config.h>
 
+#include <rpc/friend_api/friend_algorithm.h>
 #include <rpc/rpc_context.h>
 
 #include "data/friend_object.h"
@@ -164,18 +165,20 @@ struct friend_wal_delegate_helper {
   }
 
   static void setup_delegate_actions(friend_wal_publisher_type::object_type::callback_log_group_map_t& actions) {
-    actions[DFriendEvent::kAddInviter].patch = friend_wal_delegate_helper::add_inviter;
-    actions[DFriendEvent::kRemoveInviter].patch = friend_wal_delegate_helper::remove_inviter;
-    actions[DFriendEvent::kRemoveAllInviter].patch = friend_wal_delegate_helper::remove_all_inviter;
-    actions[DFriendEvent::kAddInvitee].patch = friend_wal_delegate_helper::add_invitee;
-    actions[DFriendEvent::kRemoveInvitee].patch = friend_wal_delegate_helper::remove_invitee;
-    actions[DFriendEvent::kAddGift].patch = friend_wal_delegate_helper::add_gift;
-    actions[DFriendEvent::kRemoveGift].patch = friend_wal_delegate_helper::remove_gift;
-    actions[DFriendEvent::kAddFriendData].patch = friend_wal_delegate_helper::add_friend_data;
-    actions[DFriendEvent::kRemoveFriendData].patch = friend_wal_delegate_helper::remove_friend_data;
-    actions[DFriendEvent::kDailySendList].action = friend_wal_delegate_helper::do_nothing;
-    actions[DFriendEvent::kDailyReceiveList].action = friend_wal_delegate_helper::do_nothing;
-    actions[DFriendEvent::kClearAllData].action = friend_wal_delegate_helper::clear_all_data;
+    actions[static_cast<int32_t>(DFriendEvent::kAddInviter)].patch = friend_wal_delegate_helper::add_inviter;
+    actions[static_cast<int32_t>(DFriendEvent::kRemoveInviter)].patch = friend_wal_delegate_helper::remove_inviter;
+    actions[static_cast<int32_t>(DFriendEvent::kRemoveAllInviter)].patch =
+        friend_wal_delegate_helper::remove_all_inviter;
+    actions[static_cast<int32_t>(DFriendEvent::kAddInvitee)].patch = friend_wal_delegate_helper::add_invitee;
+    actions[static_cast<int32_t>(DFriendEvent::kRemoveInvitee)].patch = friend_wal_delegate_helper::remove_invitee;
+    actions[static_cast<int32_t>(DFriendEvent::kAddGift)].patch = friend_wal_delegate_helper::add_gift;
+    actions[static_cast<int32_t>(DFriendEvent::kRemoveGift)].patch = friend_wal_delegate_helper::remove_gift;
+    actions[static_cast<int32_t>(DFriendEvent::kAddFriendData)].patch = friend_wal_delegate_helper::add_friend_data;
+    actions[static_cast<int32_t>(DFriendEvent::kRemoveFriendData)].patch =
+        friend_wal_delegate_helper::remove_friend_data;
+    actions[static_cast<int32_t>(DFriendEvent::kDailySendList)].action = friend_wal_delegate_helper::do_nothing;
+    actions[static_cast<int32_t>(DFriendEvent::kDailyReceiveList)].action = friend_wal_delegate_helper::do_nothing;
+    actions[static_cast<int32_t>(DFriendEvent::kClearAllData)].action = friend_wal_delegate_helper::clear_all_data;
   }
 };
 
@@ -193,6 +196,8 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
   if (!ret) {
     return ret;
   }
+
+  rpc::friend_api::setup_common_vtable<friend_wal_publisher_type::object_type>(*ret);
 
   // callbacks for wal_object
   ret->load = [](wal_object_type& wal, const wal_object_type::storage_type& from,
@@ -241,25 +246,9 @@ static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable(
     return wal_result_code::kOk;
   };
 
-  ret->get_meta = [](const wal_object_type&,
-                     const wal_object_type::log_type& log) -> wal_object_type::meta_result_type {
-    return wal_object_type::meta_result_type::make_success(protobuf_to_system_clock(log.create_timepoint()),
-                                                           log.event_id(), log.event_case());
-  };
-
-  ret->set_meta = [](const wal_object_type&, wal_object_type::log_type& log, const wal_object_type::meta_type& meta) {
-    // log.event_case = meta.action_case; // event_case will be created by mutable_*
-    protobuf_from_system_clock(*log.mutable_create_timepoint(), meta.timepoint);
-    log.set_event_id(meta.log_key);
-  };
-
   ret->merge_log = [](const wal_object_type&, wal_object_type::callback_param_type, wal_object_type::log_type& to,
                       const wal_object_type::log_type& from) {
     FWLOGDEBUG("Ignore repeated friend WAL event {}, existing event {}", from.event_id(), to.event_id());
-  };
-
-  ret->get_log_key = [](const wal_object_type&, const wal_object_type::log_type& log) -> wal_object_type::log_key_type {
-    return log.event_id();
   };
 
   ret->allocate_log_key = [](wal_object_type& wal, const wal_object_type::log_type& log,
@@ -351,11 +340,6 @@ static friend_wal_publisher_type::configure_pointer create_friend_publisher_cong
 
 friend_wal_publisher_context::friend_wal_publisher_context(rpc::context& ctx, int32_t& output_result)
     : context(std::ref(ctx)), result_code(std::ref(output_result)) {}
-
-DFriendEvent::EventCase friend_wal_publisher_log_action_getter::operator()(
-    const DFriendEvent& event_data) const noexcept {
-  return event_data.event_case();
-}
 
 atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context&) {
   return friend_wal_publisher_type::create(create_friend_publisher_vtable(), create_friend_publisher_congigure(),

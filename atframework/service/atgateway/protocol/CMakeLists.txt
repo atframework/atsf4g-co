@@ -16,6 +16,11 @@ set(ATGATEWAY_GENERATED_SERVICE_DIR "${PROJECT_GENERATED_DIR}/service/atgateway/
 file(MAKE_DIRECTORY "${ATGATEWAY_GENERATED_SERVER_SDK_DIR}/atgateway/protocol")
 file(MAKE_DIRECTORY "${ATGATEWAY_GENERATED_CLIENT_SDK_DIR}/atgateway/protocol/v2")
 file(MAKE_DIRECTORY "${ATGATEWAY_GENERATED_SERVICE_DIR}/atgateway/protocol")
+# 登记 atgateway 在 _generated 下的构建期产物, 供根工程 cleanup-generated-sources 精确清理。
+if(COMMAND project_generated_sources_register_cleanup)
+  project_generated_sources_register_cleanup("${PROJECT_GENERATED_DIR}/service/atgateway"
+                                             "${PROJECT_GENERATED_DIR}/atgateway")
+endif()
 set(ATSF4G_APP_SDK_LIBATGW_SERVER_SDK_TARGET_NAME ${ATFRAMEWORK_SERVICE_GATEWAY_SERVER_SDK})
 set(ATSF4G_APP_SDK_LIBATGW_PROTOCOL_SDK_TARGET_NAME ${ATFRAMEWORK_SERVICE_GATEWAY_CLIENT_SDK})
 set(ATSF4G_APP_SDK_LIBATGW_SERVER_CONFIG_TARGET_NAME atgateway-server-config)

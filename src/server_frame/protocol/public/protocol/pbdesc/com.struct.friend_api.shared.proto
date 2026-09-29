@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/pbdesc/com.struct.friend_api.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+// 不要用friend作为名字，避免关键字冲突
+package atframework.shared;
+
+message DUserFriendApiDirty {
+  repeated atframework.friend_api.DFriendEvent friend_event_data = 1;
+}

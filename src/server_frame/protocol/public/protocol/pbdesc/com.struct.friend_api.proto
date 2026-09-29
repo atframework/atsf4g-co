@@ -33,8 +33,7 @@ message DFriendGift {
 
 message DFriendGiftHistory {
   int64 gift_id = 1;
-  uint64 user_id = 2;
-  uint32 zone_id = 3;
+  atframework.shared.DUserIDKey user_key = 2;
 
   int32 gift_type_id = 5;
 }
@@ -96,6 +95,7 @@ message DFriendSuggestInfo {
 message DFriendEvent {
   int64 event_id = 1;                              // 事件ID
   google.protobuf.Timestamp create_timepoint = 2;  // 创建时间
+  uint64 hash_code = 3;                            // 哈希校验
 
   oneof event {
     bool remove_all_inviter = 10;               // 移除全部邀请者

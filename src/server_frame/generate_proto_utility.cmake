@@ -171,6 +171,9 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
             ${project_server_frame_create_protocol_target_DEPENDS}
     SOURCES ${HEADERS} ${SOURCES})
 
+  # 登记本协议目标在 _generated 下的构建期产物, 供 cleanup-generated-sources 精确清理。
+  project_generated_sources_register_cleanup("${PROJECT_SERVER_FRAME_PROTOCOL_SOURCE_DIR}/${TARGET_NAME}")
+
   project_build_tools_patch_protobuf_sources(${HEADERS} ${SOURCES})
   # project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
 

@@ -131,6 +131,7 @@ service FriendManagementService {
       api_name: "GM接口-重置好友限制类资源"
       router_rpc: true
       user_rpc: true
+      allow_no_wait: true
     };
   };
 
@@ -140,6 +141,7 @@ service FriendManagementService {
       api_name: "订阅好友信息"
       router_rpc: true
       user_rpc: true
+      allow_no_wait: true
     };
   };
 
@@ -148,6 +150,7 @@ service FriendManagementService {
       api_name: "反订阅好友信息"
       router_rpc: true
       user_rpc: true
+      allow_no_wait: true
     };
   };
 
@@ -156,6 +159,7 @@ service FriendManagementService {
       api_name: "移除单个邀请者"
       router_rpc: true
       user_rpc: true
+      allow_no_wait: true
     };
   };
 
@@ -164,6 +168,7 @@ service FriendManagementService {
       api_name: "移除全部邀请"
       router_rpc: true
       user_rpc: true
+      allow_no_wait: true
     };
   };
 }

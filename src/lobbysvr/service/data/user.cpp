@@ -21,6 +21,7 @@
 #include <logic/async_jobs/user_async_jobs_manager.h>
 #include <logic/cache/user_cache_manager.h>
 #include <logic/chat/user_chat_manager.h>
+#include <logic/friend_api/user_friend_api_manager.h>
 #include <logic/item/user_item_container_manager.h>
 #include <logic/item/user_item_manager.h>
 #include <logic/matching/user_matching_manager.h>
@@ -118,7 +119,8 @@ user::user(fake_constructor &ctor)
       user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)),
       user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this)),
       user_item_manager_(atfw::component::memory::stl::make_strong_rc<user_item_manager>(*this)),
-      user_item_container_manager_(atfw::component::memory::stl::make_strong_rc<user_item_container_manager>(*this))
+      user_item_container_manager_(atfw::component::memory::stl::make_strong_rc<user_item_container_manager>(*this)),
+      user_friend_api_manager_(atfw::component::memory::stl::make_strong_rc<user_friend_api_manager>(*this))
 ////////////////// 业务Manager开始 ////////////////////
 
 ////////////////// 业务Manager结束 ////////////////////
@@ -248,6 +250,8 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
 
+  user_friend_api_manager_->login_init(ctx);
+
   user_item_container_manager_->login_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
 
@@ -270,6 +274,10 @@ bool user::is_dirty() const {
   USER_CHECK_RET_DIRTY(ret, user_async_jobs_manager_->is_dirty());
   USER_CHECK_RET_DIRTY(ret, user_rank_manager_->is_dirty());
   USER_CHECK_RET_DIRTY(ret, user_matching_manager_->is_dirty());
+  // USER_CHECK_RET_DIRTY(ret, user_orbit_manager_->is_dirty());
+  USER_CHECK_RET_DIRTY(ret, user_team_manager_->is_dirty());
+  USER_CHECK_RET_DIRTY(ret, user_friend_api_manager_->is_dirty());
+  // USER_CHECK_RET_DIRTY(ret, user_item_container_manager_->is_dirty());
 
 #undef USER_CHECK_RET_DIRTY
 
@@ -281,6 +289,10 @@ void user::clear_dirty() {
   user_async_jobs_manager_->clear_dirty();
   user_rank_manager_->clear_dirty();
   user_matching_manager_->clear_dirty();
+  // user_orbit_manager_->clear_dirty();
+  user_team_manager_->clear_dirty();
+  user_friend_api_manager_->clear_dirty();
+  // user_item_container_manager_->clear_dirty();
 }
 
 void user::refresh_feature_limit(rpc::context &ctx) {
@@ -300,6 +312,7 @@ void user::refresh_feature_limit(rpc::context &ctx) {
     user_orbit_manager_->refresh_feature_limit_second(ctx);
     user_team_manager_->refresh_feature_limit_second(ctx);
     user_matching_manager_->refresh_feature_limit_second(ctx);
+    user_friend_api_manager_->refresh_feature_limit_second(ctx);
 
     ////////////////// 业务Manager开始 ////////////////////
   }
@@ -310,6 +323,7 @@ void user::refresh_feature_limit(rpc::context &ctx) {
     // 每分钟仅需要执行一次的refresh_feature_limit
     user_cache_manager_->refresh_feature_limit_minute(ctx);
     user_team_manager_->refresh_feature_limit_minute(ctx);
+    user_friend_api_manager_->refresh_feature_limit_minute(ctx);
 
     ////////////////// 业务Manager开始 ////////////////////
   }
@@ -429,6 +443,10 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_team_manager_->init_from_table_data(ctx, tb_user);
   }
 
+  if (tb_user.has_friend_data()) {
+    user_friend_api_manager_->init_from_table_data(ctx, tb_user);
+  }
+
   if (tb_user.has_user_item_container_manager_data()) {
     user_item_container_manager_->init_from_table_data(ctx, tb_user);
   }
@@ -482,6 +500,13 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
   ret = user_team_manager_->dump(ctx, table);
   if (ret < 0) {
     FWLOGERROR("{} dump user_team_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_friend_api_manager_->dump(ctx, table);
+  if (ret < 0) {
+    FWLOGERROR("{} dump user_friend_api_manager_ failed, res: {}({})", *this, ret,
+               protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 

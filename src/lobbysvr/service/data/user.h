@@ -37,6 +37,7 @@ class user_matching_manager;
 class user_team_manager;
 class user_item_manager;
 class user_item_container_manager;
+class user_friend_api_manager;
 
 ////////////////// 业务Manager开始 ////////////////////
 
@@ -254,6 +255,7 @@ class user : public user_cache {
   REG_USER_MGR_PTR_DEF(user_team_manager)
   REG_USER_MGR_PTR_DEF(user_item_manager)
   REG_USER_MGR_PTR_DEF(user_item_container_manager)
+  REG_USER_MGR_PTR_DEF(user_friend_api_manager)
 
   ////////////////// 业务Manager开始 ////////////////////
 };

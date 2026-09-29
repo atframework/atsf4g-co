@@ -255,11 +255,10 @@ cmake --build <BUILD_DIR> --target config-loader       # 重新生成 Excel 配�
 cmake --build <BUILD_DIR> --target serverframe_all_pb  # 重新生成 protobuf 描述符
 ```
 
-若要强制完整重建全部生成产物，使用专用的 `cleanup-generated-sources` 目标清理（无需手动删除目录），然后重新配置再构建。因为配置代码的产物清单以及 `server_frame_build_feature.h/.cpp` 等文件是在 configure 阶段（`configure_file`/protoc 枚举）生成的，清理后需要重新 configure 才能恢复：
+若要强制完整重建全部生成产物，使用专用的 `cleanup-generated-sources` 目标清理（无需手动删除目录），然后重新构建。该目标只删除由构建期 `add_custom_command`/`add_custom_target` 生成的产物（由各生成器登记）；在 configure 阶段（`configure_file`/protoc 枚举）生成的文件，如 `server_frame_build_feature.h/.cpp`、`tools/` 脚本、`generate-for-pb/conf`、`xml/xresconv.gen.xml` 会被保留，因此直接重新构建即可重新生成，无需重新 configure：
 
 ```bash
-cmake --build <BUILD_DIR> --target cleanup-generated-sources   # 删除整个 <BUILD_DIR>/_generated 目录树
-cmake <BUILD_DIR>                                              # 重新配置，恢复 configure 阶段的生成步骤
+cmake --build <BUILD_DIR> --target cleanup-generated-sources   # 仅删除 <BUILD_DIR>/_generated 下构建期生成的代码
 cmake --build <BUILD_DIR>                                      # 重新构建，触发构建期重新生成
 ```
 

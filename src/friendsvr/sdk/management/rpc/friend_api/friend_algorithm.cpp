@@ -6,12 +6,15 @@
 #include <common/string_oprs.h>
 #include <string/string_format.h>
 
+#include <xxhash.h>
+
 #include <config/server_frame_build_feature.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.protocol.friend_api.pb.h>
 #include <protocol/pbdesc/distributed_transaction.pb.h>
 #include <protocol/pbdesc/friend_management_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -38,6 +41,43 @@ namespace friend_api {
 namespace {
 constexpr const char* kFriendParticipatorKeyPrefix = "friend:";
 }  // namespace
+
+FRIEND_SDK_MANAGEMENT_API friend_wal_log_action_getter::friend_wal_log_action_getter() = default;
+
+FRIEND_SDK_MANAGEMENT_API friend_wal_log_action_getter::friend_wal_log_action_getter(
+    const friend_wal_log_action_getter&) = default;
+
+FRIEND_SDK_MANAGEMENT_API friend_wal_log_action_getter::friend_wal_log_action_getter(
+    friend_wal_log_action_getter&&) noexcept = default;
+
+FRIEND_SDK_MANAGEMENT_API friend_wal_log_action_getter::~friend_wal_log_action_getter() {}
+
+FRIEND_SDK_MANAGEMENT_API friend_wal_log_action_getter& friend_wal_log_action_getter::operator=(
+    const friend_wal_log_action_getter&) = default;
+
+FRIEND_SDK_MANAGEMENT_API friend_wal_log_action_getter& friend_wal_log_action_getter::operator=(
+    friend_wal_log_action_getter&&) noexcept = default;
+
+FRIEND_SDK_MANAGEMENT_API int32_t
+friend_wal_log_action_getter::operator()(const atfw::friend_api::DFriendEvent& evt) const noexcept {
+  return static_cast<int32_t>(evt.event_case());
+}
+
+FRIEND_SDK_MANAGEMENT_API uint64_t get_hash_code(const atfw::friend_api::DFriendEvent& evt) noexcept {
+  return evt.hash_code();
+}
+
+FRIEND_SDK_MANAGEMENT_API void set_hash_code(atfw::friend_api::DFriendEvent& evt, uint64_t hash_code) noexcept {
+  evt.set_hash_code(hash_code);
+}
+
+FRIEND_SDK_MANAGEMENT_API uint64_t calculate_hash_code(uint64_t previous,
+                                                       const atfw::friend_api::DFriendEvent& evt) noexcept {
+  // 计算Hash仅仅验证事件类型和事件ID即可，设计如此，不用验证内容。
+  uint64_t content_hash = static_cast<uint64_t>(evt.event_case());
+  uint64_t buffer[2] = {static_cast<uint64_t>(evt.event_id()), content_hash};
+  return static_cast<uint64_t>(XXH64(buffer, sizeof(buffer), static_cast<XXH64_hash_t>(previous)));
+}
 
 using atfw::distributed_system::transaction_client_handle;
 

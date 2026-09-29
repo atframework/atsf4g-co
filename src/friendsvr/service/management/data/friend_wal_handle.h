@@ -25,6 +25,8 @@
 
 #include <data/user_key_hash_helper.h>
 
+#include <rpc/friend_api/friend_algorithm.h>
+
 #include <cstdint>
 #include <functional>
 
@@ -81,28 +83,14 @@ struct friend_wal_publisher_context {
   explicit friend_wal_publisher_context(rpc::context& ctx, int32_t& output_result);
 };
 
-struct friend_wal_publisher_log_action_getter {
-  DFriendEvent::EventCase operator()(const DFriendEvent&) const noexcept;
-};
-
 struct friend_wal_subscriber_private_data {
   uint64_t subscriber_server_node_id = 0;
 };
 
-struct friend_log_action_hash_type {
-  inline size_t operator()(const DFriendEvent::EventCase& key) const noexcept { return std::hash<int>()(key); }
-};
-
-struct friend_log_action_equal_type {
-  inline bool operator()(const DFriendEvent::EventCase& l, const DFriendEvent::EventCase& r) const noexcept {
-    return l == r;
-  }
-};
-
 struct friend_wal_publisher_log_operator
     : public atfw::util::distributed_system::wal_log_operator<
-          int64_t, DFriendEvent, friend_wal_publisher_log_action_getter, std::less<>, friend_log_action_hash_type,
-          friend_log_action_equal_type, atfw::memory::stl::allocator<DFriendEvent>,
+          int64_t, DFriendEvent, rpc::friend_api::friend_wal_log_action_getter, std::less<>, std::hash<int32_t>,
+          std::equal_to<>, atfw::memory::stl::allocator<DFriendEvent>,
           atfw::util::distributed_system::wal_mt_mode::kSingleThread> {};
 
 struct friend_wal_subscriber_type

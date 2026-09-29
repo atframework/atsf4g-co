@@ -187,7 +187,16 @@ message user_team_data {
   repeated atframework.team.DTeamJoinRequest pending_join_request = 13;
 }
 
-message user_friend_data {}
+message user_friend_data {
+  // 保存在用户身上的统计数据，限频数据
+  atframework.friend_api.DFriendStatistics local_statistics = 1;
+  // 今日已赠送列表
+  repeated atframework.friend_api.DFriendGiftHistory daily_send_list = 2;
+  // 今日已收取列表
+  repeated atframework.friend_api.DFriendGiftHistory daily_receive_list = 3;
+  // 需要删除的礼物列表
+  repeated int64 confirm_remove_gift_ids = 4;
+}
 
 message friend_transaction_data {
   repeated atframework.friend_api.DFriendEvent event_data = 1;

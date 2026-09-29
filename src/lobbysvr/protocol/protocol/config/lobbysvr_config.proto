@@ -39,10 +39,24 @@ message lobbysvr_matching_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
 }
 
+message lobbysvr_friend_api_cfg {
+  int32 friend_level_lru_max_user_count = 1 [(atapp.protocol.CONFIGURE) = { default_value: "32768" min_value: "1" }];
+  int32 friend_level_lru_max_record_count = 2 [(atapp.protocol.CONFIGURE) = { default_value: "65536" min_value: "1" }];
+  int32 friend_level_lru_gc_record_count = 3 [(atapp.protocol.CONFIGURE) = { default_value: "256" min_value: "1" }];
+  google.protobuf.Duration friend_level_lru_record_expire_time = 4
+      [(atapp.protocol.CONFIGURE) = { default_value: "43200s" min_value: "30s" }];
+  repeated int32 friend_sns_channel_blacklist = 5;
+  google.protobuf.Duration friend_sns_cache_timeout = 6
+      [(atapp.protocol.CONFIGURE) = { default_value: "1h" min_value: "1s" }];
+  google.protobuf.Duration friend_sns_cache_retry = 7
+      [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+}
+
 message lobbysvr_cfg {
   google.protobuf.Duration rank_auto_update_interval = 101
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "30s" }];  // 排行榜强制刷新间隔
   lobbysvr_chat_cfg chat = 201;
   lobbysvr_team_cfg team = 202;
   lobbysvr_matching_cfg matching = 203;
+  lobbysvr_friend_api_cfg friend_api = 204;
 }

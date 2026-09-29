@@ -381,8 +381,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
         "${__GENERATED_PB_FILE_NAME}"
         PARENT_SCOPE)
   endif()
-  # configure 阶段先生成一次描述文件，供后面依赖它的生成器使用。protoc 失败必须立刻中断 configure，
-  # 否则会沿用上一次的 ${__GENERATED_PB_FILE_NAME} 继续配置，把 proto 错误推迟到构建期才暴露。
+  # configure 阶段先生成一次描述文件，供后面依赖它的生成器使用。protoc 失败必须立刻中断 configure， 否则会沿用上一次的 ${__GENERATED_PB_FILE_NAME} 继续配置，把 proto
+  # 错误推迟到构建期才暴露。
   execute_process(
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} -o
             "${__GENERATED_PB_FILE_NAME}" ${project_service_declare_protocol_PROTOCOLS}
@@ -420,6 +420,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES} "${__GENERATED_PB_FILE_NAME}"
     SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
   set_property(TARGET ${TARGET_CODEGEN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
+  # 登记本服务协议在 _generated 下的构建期产物, 供 cleanup-generated-sources 精确清理。
+  project_generated_sources_register_cleanup("${project_service_declare_protocol_OUTPUT_DIR}")
   source_group(TREE ${project_service_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
                                                                          ${__FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)

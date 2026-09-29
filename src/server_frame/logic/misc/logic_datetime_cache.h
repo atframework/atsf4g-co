@@ -26,7 +26,7 @@ template <class Rep, class Period>
 ATFW_UTIL_FORCEINLINE std::chrono::system_clock::time_point logic_datetime_cache_get_next_day_start_timepoint(
     std::chrono::duration<Rep, Period> offset) {
   return logic_datetime_cache_get_next_day_start_timepoint(
-      std::chrono::duration_cast<std::chrono::seconds>(offset).count());
+      static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(offset).count()));
 }
 
 SERVER_FRAME_API std::chrono::system_clock::time_point logic_datetime_cache_get_next_week_start_timepoint(
@@ -36,7 +36,7 @@ template <class Rep, class Period>
 ATFW_UTIL_FORCEINLINE std::chrono::system_clock::time_point logic_datetime_cache_get_next_week_start_timepoint(
     std::chrono::duration<Rep, Period> offset) {
   return logic_datetime_cache_get_next_week_start_timepoint(
-      std::chrono::duration_cast<std::chrono::seconds>(offset).count());
+      static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(offset).count()));
 }
 
 SERVER_FRAME_API std::chrono::system_clock::time_point logic_datetime_cache_get_next_month_start_timepoint(
@@ -46,7 +46,7 @@ template <class Rep, class Period>
 ATFW_UTIL_FORCEINLINE std::chrono::system_clock::time_point logic_datetime_cache_get_next_month_start_timepoint(
     std::chrono::duration<Rep, Period> offset) {
   return logic_datetime_cache_get_next_month_start_timepoint(
-      std::chrono::duration_cast<std::chrono::seconds>(offset).count());
+      static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(offset).count()));
 }
 
 SERVER_FRAME_API std::chrono::system_clock::time_point logic_datetime_cache_get_max_timepoint();
