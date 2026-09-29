@@ -21,8 +21,7 @@ message ExcelDtmqChannelType {
     file_path: "dtmq_channel_type.bytes"
     indexes: { fields: "channel_type" index_type: EN_INDEX_KV }
 
-    tags: "client"
-    tags: "server"
+    tags: "all"
   };
 
   uint32 channel_type = 1 [(org.xresloader.field_unique_tag) = "channel_type"];

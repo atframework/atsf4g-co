@@ -48,7 +48,7 @@ function(project_server_frame_add_config_target)
   execute_process(
     COMMAND
       "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}" --add-package-prefix
-      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "server" -i "${PROJECT_SOURCE_TEMPLATE_DIR}"
+      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "all" --tag "server" -i "${PROJECT_SOURCE_TEMPLATE_DIR}"
       -p "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o
       "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config" -g
       "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
@@ -65,7 +65,7 @@ function(project_server_frame_add_config_target)
   if(NOT ${PROJECT_SERVER_FRAME_CONFIG_SET_RES} EQUAL 0)
     set(_run_command
         "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}" --add-package-prefix
-        "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "server" -i
+        "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "all" --tag "server" -i
         "${PROJECT_SOURCE_TEMPLATE_DIR}" -p "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o
         "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config" -g
         "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
@@ -126,7 +126,7 @@ function(project_server_frame_add_config_target)
     )
   endif()
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
-      "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '--tag' 'server'")
+      "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '--tag' 'server' '--tag' 'all' ")
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
       "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-i' '${PROJECT_SOURCE_TEMPLATE_DIR}'")
 

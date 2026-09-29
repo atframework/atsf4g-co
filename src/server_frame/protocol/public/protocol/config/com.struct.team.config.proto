@@ -21,8 +21,7 @@ message ExcelTeamType {
     file_path: "team_type.bytes"
     indexes: { fields: "team_type" index_type: EN_INDEX_KV }
 
-    tags: "client"
-    tags: "server"
+    tags: "all"
   };
 
   uint32 team_type = 1

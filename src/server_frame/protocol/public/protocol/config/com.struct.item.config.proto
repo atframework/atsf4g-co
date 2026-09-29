@@ -20,8 +20,7 @@ message ExcelItemType {
     file_path: "item_type.bytes"
     indexes: { fields: "type_id" index_type: EN_INDEX_KV allow_not_found: true }
 
-    tags: "client"
-    tags: "server"
+    tags: "all"
   };
 
   // 唯一性检查
@@ -42,8 +41,7 @@ message UESourceInventory {
     file_path: "UeSource_Inventory.bytes"
     indexes: { fields: "type_id" index_type: EN_INDEX_KV allow_not_found: true }
 
-    tags: "client"
-    tags: "server"
+    tags: "all"
   };
 
   int32 type_id = 1 [(org.xresloader.field_unique_tag) = "type_id"];

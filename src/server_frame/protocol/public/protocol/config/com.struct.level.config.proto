@@ -20,8 +20,7 @@ message ExcelLevel {
     file_path: "level.bytes"
     indexes: { fields: "level_id" index_type: EN_INDEX_KV }
 
-    tags: "client"
-    tags: "server"
+    tags: "all"
   };
 
   int32 level_id = 1 [(org.xresloader.field_unique_tag) = "level_id"];
