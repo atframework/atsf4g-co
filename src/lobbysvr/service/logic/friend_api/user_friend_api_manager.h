@@ -105,12 +105,11 @@ class user_friend_api_manager {
   const atfw::friend_api::DFriendInvitationInfo* ATFW_UTIL_MACRO_NULLABLE
   get_invitee(const atfw::shared::DUserIDKey& user_key) const;
   // 和get_gift_cache的区别是这里过期返回nullptr
-  const atfw::friend_api::DFriendGift* get_gift(int64_t gift_id) const;
+  const atfw::friend_api::DFriendGift* ATFW_UTIL_MACRO_NULLABLE get_gift(int64_t gift_id) const;
 
   /**
    * @brief 发送好友邀请的分布式事务接口
-   * @param user_id 对方用户ID
-   * @param user_id 对方大区
+   * @param user_key 对方用户Key
    * @return 0或CS错误码
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_invite(rpc::context& ctx,
@@ -118,8 +117,7 @@ class user_friend_api_manager {
 
   /**
    * @brief 接受好友邀请的分布式事务接口
-   * @param user_id 对方用户ID
-   * @param zone_id 对方大区
+   * @param user_key 对方用户Key
    * @return 0或CS错误码
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type accept_invite(rpc::context& ctx,
@@ -127,8 +125,7 @@ class user_friend_api_manager {
 
   /**
    * @brief 拒绝好友邀请的分布式事务接口
-   * @param user_id 对方用户ID
-   * @param zone_id 对方大区
+   * @param user_key 对方用户Key
    * @return 0或CS错误码
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_invite(rpc::context& ctx,
@@ -136,8 +133,7 @@ class user_friend_api_manager {
 
   /**
    * @brief 移除好友的分布式事务接口
-   * @param user_id 对方用户ID
-   * @param zone_id 对方大区
+   * @param user_key 对方用户Key
    * @return 0或CS错误码
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_friend(rpc::context& ctx,
@@ -145,8 +141,7 @@ class user_friend_api_manager {
 
   /**
    * @brief 发送礼物
-   * @param user_id 对方用户ID
-   * @param zone_id 对方大区
+   * @param user_key 对方用户Key
    * @param gift_type_id 礼物类型ID
    * @return 0或CS错误码
    */
@@ -218,7 +213,8 @@ class user_friend_api_manager {
   // ================ 社交分享类接口 ================
 #if 0
   void update_sns_share(bool daily_reset, bool weekly_reset);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_sns_share(rpc::context& ctx, int32_t share_type, int32_t sub_type, atfw::friend_api::SNSShareRecord*& out,
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_sns_share(rpc::context& ctx, int32_t share_type,
+                    int32_t sub_type, atfw::friend_api::SNSShareRecord*& out,
                     ::google::protobuf::RepeatedPtrField<atfw::friend_api::DItemOffset>* out_reward_items = nullptr);
   atfw::friend_api::SNSShareRecord* ATFW_UTIL_MACRO_NULLABLE mutable_sns_share(int32_t share_type);
   void clear_sns_share(int32_t share_type = 0);
