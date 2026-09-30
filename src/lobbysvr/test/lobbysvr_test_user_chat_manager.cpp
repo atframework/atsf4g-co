@@ -35,6 +35,7 @@
 #include <config/excel/config_manager.h>
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
+#include <router/router_manager_set.h>
 #include <rpc/internal/rpc_template_cs_message.h>
 #include <time/time_utility.h>
 #include <utility/protobuf_mini_dumper.h>
@@ -116,11 +117,14 @@ atframework::dtmq::DChannelIdKey make_sys_announcement_channel_key() {
 
 bool start_chat_runtime(atfw::testing::runtime &test) {
   atfw::testing::runtime_options options;
-  options.features = {atfw::testing::feature::ss, atfw::testing::feature::cs};
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::cs, atfw::testing::feature::db,
+                      atfw::testing::feature::router};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return false;
   }
+  // CS actions refresh all user modules, including the friend service subscription.
+  CASE_EXPECT_GE(router_manager_set::me()->tick(), 0);
   return true;
 }
 
@@ -1069,8 +1073,7 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
 
         test_inventory_container =
             atfw::util::memory::make_strong_rc<user_virtual_inventory_container>(user3.user_inst.get());
-        test_inventory_container->init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
-                                       container_guid);
+        test_inventory_container->init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, container_guid);
 
         PROJECT_NAMESPACE_ID::DItemInstance dirty_item;
         auto *basic = dirty_item.mutable_item_basic();

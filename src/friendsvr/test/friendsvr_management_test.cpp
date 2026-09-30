@@ -381,6 +381,8 @@ CASE_TEST(friendsvr_management, reconnect_at_current_checkpoint_does_not_repeat_
     CASE_EXPECT_EQ(event_id, packets[1].event_target(0).increase().event_log(0).event_id());
 
     subscription.mutable_last_received()->set_sequence(event_id);
+    subscription.mutable_last_received()->set_hash_code(
+        rpc::friend_api::get_hash_code(packets.back().event_target(0).increase().event_log(0)));
     object->unsubscribe(ctx, subscription);
     object->subscribe(ctx, subscription, kNotificationNodeId);
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(object->send_notification(ctx)));
@@ -403,6 +405,8 @@ CASE_TEST(friendsvr_management, reconnect_replays_events_after_checkpoint_withou
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(object->send_notification(ctx)));
     CASE_EXPECT_EQ(2u, notifications(test).size());
     subscription.mutable_last_received()->set_sequence(received_event_id);
+    subscription.mutable_last_received()->set_hash_code(
+        rpc::friend_api::get_hash_code(notifications(test).back().event_target(0).increase().event_log(0)));
     object->unsubscribe(ctx, subscription);
 
     const auto missing_event_id = append_event(ctx, *object, make_friend_event(3003));
@@ -1339,6 +1343,8 @@ CASE_TEST(friendsvr_management, reconnect_replays_later_committed_event_above_ch
         }
         subscription.mutable_last_received()->set_sequence(
             packets.back().event_target(0).increase().event_log(0).event_id());
+        subscription.mutable_last_received()->set_hash_code(
+            rpc::friend_api::get_hash_code(packets.back().event_target(0).increase().event_log(0)));
         object->unsubscribe(ctx, subscription);
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(commit_transaction(ctx, 1001, "late")));
         CASE_EXPECT_EQ(2u, object->get_current_friend_count());

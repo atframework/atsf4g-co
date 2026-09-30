@@ -120,18 +120,33 @@ struct user_friend_wal_delegate_helper {
     return wal_result_code::kOk;
   }
 
-  static wal_result_code clear_all_data(wal_object_type& wal, const wal_object_type::log_type& /*log*/,
+  static wal_result_code remove_all_inviter(wal_object_type& wal, const wal_object_type::log_type& log,
+                                            wal_object_type::callback_param_type param) {
+    auto* manager = wal.get_private_data();
+    if (manager == nullptr) {
+      return wal_result_code::kInitlization;
+    }
+    manager->remove_all_inviter_cache(param.context, log.event_id());
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code clear_all_data(wal_object_type& wal, const wal_object_type::log_type& log,
                                         wal_object_type::callback_param_type param) {
     user_friend_api_manager* friend_manager = wal.get_private_data();
     if (nullptr == friend_manager) {
       return wal_result_code::kInitlization;
     }
 
-    friend_manager->cleanup_friend_data(param.context);
+    friend_manager->cleanup_friend_data(param.context, log.event_id());
+    if (wal.get_global_ingore_key() == nullptr || *wal.get_global_ingore_key() < log.event_id()) {
+      wal.set_global_ingore_key(log.event_id());
+    }
     return wal_result_code::kOk;
   }
 
   static void setup_delegate_actions(user_friend_api_wal_client_type::object_type::callback_log_group_map_t& actions) {
+    actions[static_cast<int32_t>(atfw::friend_api::DFriendEvent::kRemoveAllInviter)].action =
+        user_friend_wal_delegate_helper::remove_all_inviter;
     actions[static_cast<int32_t>(atfw::friend_api::DFriendEvent::kAddInviter)].patch =
         user_friend_wal_delegate_helper::add_inviter;
     actions[static_cast<int32_t>(atfw::friend_api::DFriendEvent::kRemoveInviter)].patch =
@@ -252,6 +267,7 @@ static user_friend_api_wal_client_type::configure_pointer create_user_friend_api
     return ret;
   }
 
+  ret->require_snapshot = true;
   ret->subscriber_heartbeat_interval =
       protobuf_to_system_clock(logic_config::me()->get_logic_cfg().friend_api().wal_subscriber_heartbeat());
   ret->subscriber_heartbeat_retry_interval =

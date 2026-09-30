@@ -25,6 +25,7 @@
 
 #include <rpc/rpc_context.h>
 
+#include <memory>
 #include <unordered_map>
 #include <utility>
 
@@ -61,7 +62,7 @@ task_action_management_event_sync::operator()() {
       if (!user_inst) {
         FCTXLOGDEBUG(get_shared_context(), "user {}:{} maybe logout, ignore friend notification and send subscribe",
                      user_key.zone_id(), user_key.user_id());
-        break;
+        continue;
       }
 
       // 第一次追加数据需要先执行刷新逻辑
@@ -70,8 +71,6 @@ task_action_management_event_sync::operator()() {
       }
 
       user_inst->get_user_friend_api_manager().receive_event_sync(get_shared_context(), receiver_info);
-
-      user_inst->send_all_syn_msg(get_shared_context());
     }
   }
 

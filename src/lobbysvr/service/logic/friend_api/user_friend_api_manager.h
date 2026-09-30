@@ -93,7 +93,9 @@ class user_friend_api_manager {
 
   void load_snapshot(rpc::context& ctx, const atfw::friend_api::table_friend_blob_data& snapshot_data);
 
-  void cleanup_friend_data(rpc::context& ctx);
+  // clear_event_id > 0 时，同时删除不晚于该事件的记录，包括永久好友。
+  void cleanup_friend_data(rpc::context& ctx, int64_t clear_event_id = 0);
+  void remove_all_inviter_cache(rpc::context& ctx, int64_t event_id);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type gm_reset_limits(rpc::context& ctx);
 

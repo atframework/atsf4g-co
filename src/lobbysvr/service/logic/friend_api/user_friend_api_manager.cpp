@@ -31,6 +31,7 @@
 #include <rpc/friend_api/friendmanagementservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
+#include <rpc/rpc_shared_message.h>
 
 #include <unordered_set>
 #include <utility>
@@ -44,7 +45,7 @@
 user_friend_api_manager::user_friend_api_manager(user &owner)
     : owner_(&owner),
       is_dirty_(false),
-      is_remote_data_ready_(true),
+      is_remote_data_ready_(false),
       need_send_wal_heartbeat_(false),
       need_pull_sns_friend_(false),
       next_pull_data_timepoint_(std::chrono::system_clock::from_time_t(0)),
@@ -75,6 +76,9 @@ void user_friend_api_manager::refresh_feature_limit_minute(rpc::context &ctx) {
   if (update_type.first) {
     daily_send_list_.clear();
     daily_receive_list_.clear();
+  }
+  if (update_type.first || update_type.second) {
+    is_dirty_ = true;
   }
 
   // TODO(owentou): 社交分享类接口
@@ -187,13 +191,15 @@ int user_friend_api_manager::dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table
 void user_friend_api_manager::dump_storage(rpc::context &ctx, PROJECT_NAMESPACE_ID::user_friend_data &friend_data) {
   cleanup_friend_data(ctx);
 
+  friend_data.clear_daily_send_list();
+  friend_data.clear_daily_receive_list();
+  friend_data.clear_confirm_remove_gift_ids();
   protobuf_copy_message(*friend_data.mutable_local_statistics(), local_friend_statistics_);
   friend_data.mutable_daily_send_list()->Reserve(static_cast<int>(daily_send_list_.size()));
   for (auto &gift : daily_send_list_) {
     protobuf_copy_message(*friend_data.add_daily_send_list(), gift.second);
   }
 
-  protobuf_copy_message(*friend_data.mutable_local_statistics(), local_friend_statistics_);
   friend_data.mutable_daily_receive_list()->Reserve(static_cast<int>(daily_receive_list_.size()));
   for (auto &gift : daily_receive_list_) {
     protobuf_copy_message(*friend_data.add_daily_receive_list(), gift.second);
@@ -293,7 +299,6 @@ int32_t user_friend_api_manager::invoke_async_task(rpc::context &ctx) {
                 self.next_pull_data_timepoint_ = now;
                 self.next_pull_data_timepoint_ += std::chrono::minutes(5);
               }
-              self.need_pull_sns_friend_ = true;
             } else {
               self.next_pull_data_timepoint_ =
                   now + protobuf_to_system_clock(lobby_cfg.friend_api().friend_sns_cache_timeout());
@@ -323,13 +328,14 @@ int32_t user_friend_api_manager::invoke_async_task(rpc::context &ctx) {
               last_received->set_hash_code(rpc::friend_api::get_hash_code(*last_log));
             }
 
-            // 忽略心跳错误，下次重试会补
+            // 首次拉取需要把订阅失败返回给等待者；后续心跳仍由 WAL 定时重试。
             int32_t heartbeat_ret = RPC_AWAIT_CODE_RESULT(rpc::friend_api::management_subscribe(
                 child_ctx, atfw::friend_api::router_friend_manager::me()->get_type_id(), user_ptr->get_zone_id(),
                 user_ptr->get_user_id(), *req_body, *rsp_body));
             if (heartbeat_ret >= 0) {
               self.wal_client_->receive_subscribe_response(friend_api_wal_client_context(child_ctx, heartbeat_ret));
             }
+            child_ret = heartbeat_ret;
           }
 
           TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
@@ -369,16 +375,22 @@ rpc::result_code_type user_friend_api_manager::pull_friend_data(rpc::context &ct
 
   if (next_pull_data_timepoint_ <= now) {
     need_pull_sns_friend_ = true;
-    invoke_async_task(ctx);
   }
-
-  // pull friend again
-  auto ret = RPC_AWAIT_CODE_RESULT(wait_for_async_task(ctx));
+  if (!is_remote_data_ready_ && !is_async_task_running()) {
+    need_send_wal_heartbeat_ = true;
+  }
+  auto ret = invoke_async_task(ctx);
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
 
-  RPC_RETURN_CODE(ret);
+  // pull friend again
+  ret = RPC_AWAIT_CODE_RESULT(wait_for_async_task(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  RPC_RETURN_CODE(is_remote_data_ready_ ? 0 : PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY);
 }
 
 int32_t user_friend_api_manager::load_logs(
@@ -397,9 +409,6 @@ int32_t user_friend_api_manager::load_logs(
 
 void user_friend_api_manager::load_snapshot(rpc::context &ctx,
                                             const atfw::friend_api::table_friend_blob_data &snapshot_data) {
-  // 刷新事件数据
-  protobuf_copy_message(remote_friend_statistics_, snapshot_data.statistics());
-
   // 好友数据
   {
     std::unordered_set<atfw::shared::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_keys;
@@ -410,11 +419,11 @@ void user_friend_api_manager::load_snapshot(rpc::context &ctx,
       if (friend_data.removed_time().seconds() > 0) {
         continue;
       }
-      add_friend_cache(ctx, friend_data, false == is_remote_data_ready_);
+      add_friend_cache(ctx, friend_data);
       expired_keys.erase(friend_data.user_key());
     }
     for (const auto &friend_key : expired_keys) {
-      remove_friend_cache(ctx, friend_key, false == is_remote_data_ready_);
+      remove_friend_cache(ctx, friend_key);
     }
   }
 
@@ -428,11 +437,11 @@ void user_friend_api_manager::load_snapshot(rpc::context &ctx,
       if (invite_data.removed_time().seconds() > 0) {
         continue;
       }
-      add_inviter_cache(ctx, invite_data, false == is_remote_data_ready_);
+      add_inviter_cache(ctx, invite_data);
       expired_keys.erase(get_key_from_inviter_cache(invite_data));
     }
     for (const auto &friend_key : expired_keys) {
-      remove_inviter_cache(ctx, friend_key, false == is_remote_data_ready_);
+      remove_inviter_cache(ctx, friend_key);
     }
   }
 
@@ -446,11 +455,11 @@ void user_friend_api_manager::load_snapshot(rpc::context &ctx,
       if (invite_data.removed_time().seconds() > 0) {
         continue;
       }
-      add_invitee_cache(ctx, invite_data, false == is_remote_data_ready_);
+      add_invitee_cache(ctx, invite_data);
       expired_keys.erase(get_key_from_invitee_cache(invite_data));
     }
     for (const auto &friend_key : expired_keys) {
-      remove_invitee_cache(ctx, friend_key, false == is_remote_data_ready_);
+      remove_invitee_cache(ctx, friend_key);
     }
   }
 
@@ -464,18 +473,20 @@ void user_friend_api_manager::load_snapshot(rpc::context &ctx,
       if (gift_data.removed_time().seconds() > 0) {
         continue;
       }
-      add_gift_cache(ctx, gift_data, false == is_remote_data_ready_);
+      add_gift_cache(ctx, gift_data);
       expired_keys.erase(gift_data.gift_id());
     }
     for (const auto &gift_id : expired_keys) {
-      remove_gift_cache(ctx, gift_id, false == is_remote_data_ready_);
+      remove_gift_cache(ctx, gift_id);
     }
   }
 
+  // 快照统计已包含邀请记录，覆盖上述缓存更新产生的计数。
+  protobuf_copy_message(remote_friend_statistics_, snapshot_data.statistics());
   is_remote_data_ready_ = true;
 }
 
-void user_friend_api_manager::cleanup_friend_data(rpc::context &ctx) {
+void user_friend_api_manager::cleanup_friend_data(rpc::context &ctx, int64_t clear_event_id) {
   // 清理过期数据
   auto now = ctx.logical_now();
 
@@ -483,12 +494,14 @@ void user_friend_api_manager::cleanup_friend_data(rpc::context &ctx) {
   {
     std::unordered_set<atfw::shared::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_keys;
     for (const auto &friend_data : friend_cache_set_) {
-      if (protobuf_to_system_clock(friend_data.second.expired_time()) < now) {
+      if ((clear_event_id > 0 && friend_data.second.event_id() <= clear_event_id) ||
+          (friend_data.second.expired_time().seconds() > 0 &&
+           protobuf_to_system_clock(friend_data.second.expired_time()) <= now)) {
         expired_keys.insert(friend_data.first);
       }
     }
     for (const auto &friend_key : expired_keys) {
-      remove_friend_cache(ctx, friend_key, false == is_remote_data_ready_);
+      remove_friend_cache(ctx, friend_key);
     }
   }
 
@@ -496,12 +509,13 @@ void user_friend_api_manager::cleanup_friend_data(rpc::context &ctx) {
   {
     std::unordered_set<atfw::shared::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_keys;
     for (const auto &invite_data : inviter_cache_set_) {
-      if (protobuf_to_system_clock(invite_data.second.expired_time()) < now) {
+      if ((clear_event_id > 0 && invite_data.second.event_id() <= clear_event_id) ||
+          protobuf_to_system_clock(invite_data.second.expired_time()) <= now) {
         expired_keys.insert(invite_data.first);
       }
     }
     for (const auto &friend_key : expired_keys) {
-      remove_inviter_cache(ctx, friend_key, false == is_remote_data_ready_);
+      remove_inviter_cache(ctx, friend_key);
     }
   }
 
@@ -509,12 +523,13 @@ void user_friend_api_manager::cleanup_friend_data(rpc::context &ctx) {
   {
     std::unordered_set<atfw::shared::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_keys;
     for (const auto &invite_data : invitee_cache_set_) {
-      if (protobuf_to_system_clock(invite_data.second.expired_time()) < now) {
+      if ((clear_event_id > 0 && invite_data.second.event_id() <= clear_event_id) ||
+          protobuf_to_system_clock(invite_data.second.expired_time()) <= now) {
         expired_keys.insert(invite_data.first);
       }
     }
     for (const auto &friend_key : expired_keys) {
-      remove_invitee_cache(ctx, friend_key, false == is_remote_data_ready_);
+      remove_invitee_cache(ctx, friend_key);
     }
   }
 
@@ -522,17 +537,31 @@ void user_friend_api_manager::cleanup_friend_data(rpc::context &ctx) {
   {
     std::unordered_set<int64_t> expired_keys;
     for (const auto &gift_data : gift_cache_set_) {
-      if (protobuf_to_system_clock(gift_data.second.expired_time()) < now) {
+      if ((clear_event_id > 0 && gift_data.second.event_id() <= clear_event_id) ||
+          protobuf_to_system_clock(gift_data.second.expired_time()) <= now) {
         expired_keys.insert(gift_data.first);
       }
     }
 
     for (const auto &gift_id : expired_keys) {
-      remove_gift_cache(ctx, gift_id, false == is_remote_data_ready_);
+      remove_gift_cache(ctx, gift_id);
     }
   }
 
   refresh_feature_limit_minute(ctx);
+}
+
+void user_friend_api_manager::remove_all_inviter_cache(rpc::context &ctx, int64_t event_id) {
+  std::vector<atfw::shared::DUserIDKey> expired_keys;
+  expired_keys.reserve(inviter_cache_set_.size());
+  for (const auto &invite_data : inviter_cache_set_) {
+    if (invite_data.second.event_id() < event_id) {
+      expired_keys.push_back(invite_data.first);
+    }
+  }
+  for (const auto &friend_key : expired_keys) {
+    remove_inviter_cache(ctx, friend_key);
+  }
 }
 
 rpc::result_code_type user_friend_api_manager::gm_reset_limits(rpc::context &ctx) {
@@ -547,6 +576,7 @@ rpc::result_code_type user_friend_api_manager::gm_reset_limits(rpc::context &ctx
 
   daily_send_list_.clear();
   daily_receive_list_.clear();
+  is_dirty_ = true;
 
 // TODO(any): 社交分享类接口
 #if 0
@@ -627,6 +657,15 @@ const atfw::friend_api::DFriendGift *user_friend_api_manager::get_gift(int64_t g
 }
 
 namespace {
+// 只用时间判断是否通知，客户端仍需按用户 Key 或 gift_id 幂等覆盖记录。
+template <class T>
+static bool is_friend_cache_time_equal(const T &left, const T &right) {
+  return left.expired_time().seconds() == right.expired_time().seconds() &&
+         left.expired_time().nanos() == right.expired_time().nanos() &&
+         left.removed_time().seconds() == right.removed_time().seconds() &&
+         left.removed_time().nanos() == right.removed_time().nanos();
+}
+
 static int32_t transaction_add_friend_event(rpc::context &ctx, user &user, bool is_add_event, uint64_t from_user_id,
                                             uint32_t from_zone_id, uint64_t to_user_id, uint32_t to_zone_id,
                                             PROJECT_NAMESPACE_ID::friend_transaction_data &from_event_datas,
@@ -731,6 +770,7 @@ rpc::result_code_type user_friend_api_manager::send_invite(rpc::context &ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
+  // 同一 user_id 在其他区服的账号也禁止互加，避免刷数据。
   if (owner_->get_user_id() == user_key.user_id()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_CAN_NOT_INVITE_SELF);
   }
@@ -755,7 +795,7 @@ rpc::result_code_type user_friend_api_manager::send_invite(rpc::context &ctx,
   }
 
   // 好友数量上限预检查
-  if (static_cast<int32_t>(friend_cache_set_.size()) >= excel::get_const_config().friend_max_number()) {
+  if (is_friend_full()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_MAX_NUMBER_LIMIT);
   }
 
@@ -847,7 +887,7 @@ rpc::result_code_type user_friend_api_manager::accept_invite(rpc::context &ctx,
   }
 
   // 好友数量上限预检查
-  if (static_cast<int>(friend_cache_set_.size()) >= excel::get_const_config().friend_max_number()) {
+  if (is_friend_full()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_MAX_NUMBER_LIMIT);
   }
 
@@ -1046,7 +1086,7 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
   // 检查发送礼物次数限制
   int32_t friend_daily_send_gift_limit = excel::get_const_config().friend_daily_send_gift_limit();
   if (friend_daily_send_gift_limit > 0 &&
-      get_local_stats().daily_send_gift_times() > static_cast<uint32_t>(friend_daily_send_gift_limit)) {
+      get_local_stats().daily_send_gift_times() >= static_cast<uint32_t>(friend_daily_send_gift_limit)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_DAILY_SEND_LIMIT);
   }
 
@@ -1061,7 +1101,7 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
   }
 
   // 检查礼物ID和发送条件
-  if (0 == gift_type_id) {
+  if (gift_type_id <= 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_CONFIG_NOT_FOUND);
   }
 
@@ -1112,19 +1152,23 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
       *gift_data->mutable_expired_time(),
       ctx.logical_now() + protobuf_to_system_clock(excel::get_const_config().friend_gift_expire()));
 
-  // TODO(any): extract random pool if need
+  // TODO(any): 根据礼物配置或随机池填充 gift_data 的实际道具数据，供领取时发放。
 
-  // 计数发送次数，发起增加礼物的friendsvr请求
+  // 发送前记账，后续事务失败也不回退次数和历史。
   atfw::friend_api::DFriendGiftHistory history;
   history.set_gift_id(gift_data->gift_id());
   protobuf_copy_message(*history.mutable_user_key(), user_key);
   history.set_gift_type_id(gift_data->gift_type_id());
 
-  uint32_t send_count = 0;
-  if (add_gift_send_list(history)) {
-    ++send_count;
+  // 生成 ID 和创建事务可能挂起，记账前重新检查，防止并发发送突破限额。
+  if (friend_daily_send_gift_limit > 0 &&
+      get_local_stats().daily_send_gift_times() >= static_cast<uint32_t>(friend_daily_send_gift_limit)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_DAILY_SEND_LIMIT);
   }
-  add_send_gift_times(send_count);
+  if (!add_gift_send_list(history)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_ALREAD_SEND);
+  }
+  add_send_gift_times(1);
 
   ret = transaction_client_->add_participator(
       ctx, transacation_ptr,
@@ -1135,8 +1179,6 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
 
   ret = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transacation_ptr));
   if (ret < 0) {
-    remove_gift_send_list(history);
-
     // 返回客户端错误码时，服务器流程是正确的，所以不用打错误日志
     if (ret >= PROJECT_NAMESPACE_ID::EnErrorCode_MIN) {
       FCTXLOGINFO(ctx, "{} submit transaction {} to send gift for user {}:{} failed, res: {}({})", *owner_,
@@ -1154,153 +1196,107 @@ rpc::result_code_type user_friend_api_manager::send_gift(rpc::context &ctx, cons
 rpc::result_code_type user_friend_api_manager::receive_gifts(
     rpc::context &ctx, std::vector<int64_t> &gift_ids,
     ::google::protobuf::RepeatedPtrField<atfw::friend_api::DFriendGift> *out) {
-  rpc::result_code_type::value_type ret = 0;
+  if (out != nullptr) {
+    out->Clear();
+  }
 
-  // 检查是否已经在待清理列表
-  std::vector<const atfw::friend_api::DFriendGift *> gifts;
+  // 等待事务时通知可能替换缓存，先复制本次领取的礼物。
+  std::vector<atfw::friend_api::DFriendGift> gifts;
   gifts.reserve(gift_ids.size());
-  if (nullptr != out) {
-    out->Reserve(static_cast<int>(gift_ids.size()));
-  }
-  for (size_t i = 0; i < gift_ids.size(); ++i) {
-    if (confirm_remove_gifts_.end() != confirm_remove_gifts_.find(gift_ids[i])) {
-      gift_ids[i] = gift_ids[gift_ids.size() - 1];
-      gift_ids.pop_back();
+  std::unordered_set<int64_t> selected;
+  std::vector<int64_t> valid_ids;
+  valid_ids.reserve(gift_ids.size());
+  int32_t result = 0;
+  for (auto gift_id : gift_ids) {
+    if (!selected.insert(gift_id).second || confirm_remove_gifts_.count(gift_id) != 0) {
       continue;
     }
-
-    // 检查礼物有效
-    const atfw::friend_api::DFriendGift *gift_data = get_gift(gift_ids[i]);
-    if (nullptr == gift_data) {
-      ret = PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_NOT_FOUND;
-      gift_ids[i] = gift_ids[gift_ids.size() - 1];
-      gift_ids.pop_back();
+    const auto *gift = get_gift(gift_id);
+    if (gift == nullptr) {
+      result = PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_NOT_FOUND;
       continue;
     }
+    valid_ids.push_back(gift_id);
+    gifts.push_back(*gift);
+  }
+  gift_ids.swap(valid_ids);
 
-    gifts.push_back(gift_data);
-
-    if (nullptr != out) {
-      protobuf_copy_message(*out->Add(), *gift_data);
-    }
+  if (gifts.empty() && confirm_remove_gifts_.empty()) {
+    RPC_RETURN_CODE(result);
   }
 
-  // 所有礼物都已领取
-  if (gift_ids.empty()) {
-    RPC_RETURN_CODE(ret);
-  }
-
-  // 检查接收礼物次数限制
-  int32_t friend_daily_receive_gift_limit = excel::get_const_config().friend_daily_receive_gift_limit();
-  if (friend_daily_receive_gift_limit > 0 &&
-      get_local_stats().daily_receive_gift_times() + static_cast<uint32_t>(gift_ids.size()) >
-          static_cast<uint32_t>(friend_daily_receive_gift_limit)) {
+  const auto limit = excel::get_const_config().friend_daily_receive_gift_limit();
+  if (limit > 0 && static_cast<uint64_t>(get_local_stats().daily_receive_gift_times()) + gifts.size() >
+                       static_cast<uint64_t>(limit)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_GIFT_DAILY_RECEIVE_LIMIT);
   }
 
-  std::vector<atfw::friend_api::DFriendGiftHistory> histories;
-  histories.reserve(gifts.size());
-
-  // 这是一个非严格一致性请求
-  PROJECT_NAMESPACE_ID::friend_transaction_data event_datas;
-  auto now = ctx.logical_now();
-
-  // 补上尚未确认的礼物（故障恢复流程）
-  for (const auto &gift_id : confirm_remove_gifts_) {
-    atfw::friend_api::DFriendEvent *evt_data = event_datas.add_event_data();
-    if (nullptr == evt_data) {
-      FCTXLOGERROR(ctx, "{} malloc event", *owner_);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
-    }
-    atfw::friend_api::DFriendGift *gift_data = evt_data->mutable_remove_gift();
-    if (nullptr == gift_data) {
-      FCTXLOGERROR(ctx, "{} malloc gift", *owner_);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
-    }
-
-    gift_data->set_gift_id(gift_id);
-    protobuf_from_system_clock(*gift_data->mutable_expired_time(), now);
+  auto event_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::friend_transaction_data>(ctx);
+  std::vector<int64_t> confirmed_ids(confirm_remove_gifts_.begin(), confirm_remove_gifts_.end());
+  confirmed_ids.insert(confirmed_ids.end(), gift_ids.begin(), gift_ids.end());
+  for (auto gift_id : confirmed_ids) {
+    auto *gift = event_data->add_event_data()->mutable_remove_gift();
+    gift->set_gift_id(gift_id);
+    protobuf_from_system_clock(*gift->mutable_expired_time(), ctx.logical_now());
   }
 
-  for (auto &origin_gift_data : gifts) {
-    atfw::friend_api::DFriendEvent *evt_data = event_datas.add_event_data();
-    if (nullptr == evt_data) {
-      FCTXLOGERROR(ctx, "{} malloc event", *owner_);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+  // 先记录本地领取，再确认远端删除；待确认 ID 防止重试时重复发奖。
+  uint32_t receive_count = 0;
+  for (const auto &gift : gifts) {
+    atfw::friend_api::DFriendGiftHistory history;
+    history.set_gift_id(gift.gift_id());
+    protobuf_copy_message(*history.mutable_user_key(), gift.from_user());
+    history.set_gift_type_id(gift.gift_type_id());
+    if (add_gift_receive_list(history)) {
+      ++receive_count;
     }
-    atfw::friend_api::DFriendGift *gift_data = evt_data->mutable_remove_gift();
-    if (nullptr == gift_data) {
-      FCTXLOGERROR(ctx, "{} malloc gift", *owner_);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+    confirm_remove_gifts_.insert(gift.gift_id());
+    is_dirty_ = true;
+    if (out != nullptr) {
+      protobuf_copy_message(*out->Add(), gift);
     }
-
-    gift_data->set_gift_id(origin_gift_data->gift_id());
-    protobuf_from_system_clock(*gift_data->mutable_expired_time(), now);
-
-    // history
-    histories.emplace_back();
-    atfw::friend_api::DFriendGiftHistory &history = histories.back();
-    history.set_gift_id(origin_gift_data->gift_id());
-    protobuf_copy_message(*history.mutable_user_key(), origin_gift_data->from_user());
-    history.set_gift_type_id(origin_gift_data->gift_type_id());
-
-    confirm_remove_gifts_.insert(origin_gift_data->gift_id());
-
     // TODO(any): 下发道具
 #if 0
-    ret = owner_->add_all_items(origin_gift_data->gift_item(), PROJECT_NAMESPACE_ID::EN_ICMT_FRIEND_GIFT,
-                                origin_gift_data->gift_type_id(), origin_gift_data->gift_id());
-    if (ret < 0) {
-      return ret;
+    result = owner_->add_all_items(gift.gift_item(), PROJECT_NAMESPACE_ID::EN_ICMT_FRIEND_GIFT,
+                                  gift.gift_type_id(), gift.gift_id());
+    if (result < 0) {
+      RPC_RETURN_CODE(result);
     }
 #endif
     // TODO(any): OSS log
   }
-
-  // 计数接收次数
-  uint32_t receive_count = 0;
-  for (auto &history : histories) {
-    if (add_gift_receive_list(history)) {
-      ++receive_count;
-    }
-  }
   add_receive_gift_times(receive_count);
 
-  // 创建事务
-  friend_api_transaction_client_handle::storage_ptr_type transacation_ptr;
-  ret = RPC_AWAIT_CODE_RESULT(transaction_client_->create_transaction(
-      ctx, transacation_ptr, rpc::friend_api::get_force_commit_transaction_options()));
-  if (ret < 0 || !transacation_ptr) {
-    RPC_RETURN_CODE(ret);
+  friend_api_transaction_client_handle::storage_ptr_type transaction;
+  result = RPC_AWAIT_CODE_RESULT(transaction_client_->create_transaction(
+      ctx, transaction, rpc::friend_api::get_force_commit_transaction_options()));
+  if (result < 0) {
+    RPC_RETURN_CODE(result);
   }
-
-  ret = transaction_client_->add_participator(
-      ctx, transacation_ptr,
+  if (!transaction) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_TRANSACTION_FAILED);
+  }
+  result = transaction_client_->add_participator(
+      ctx, transaction,
       rpc::friend_api::friend_key_to_transaction_participator_key(owner_->get_zone_id(), owner_->get_user_id()),
-      event_datas);
-  if (ret < 0) {
-    RPC_RETURN_CODE(ret);
+      *event_data);
+  if (result < 0) {
+    RPC_RETURN_CODE(result);
+  }
+  result = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transaction));
+  if (result < 0) {
+    RPC_RETURN_CODE(result >= PROJECT_NAMESPACE_ID::EnErrorCode_MIN
+                        ? result
+                        : PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_TRANSACTION_FAILED);
   }
 
-  ret = RPC_AWAIT_CODE_RESULT(transaction_client_->submit_transaction(ctx, transacation_ptr));
-
-  if (ret < 0) {
-    // 返回客户端错误码时，服务器流程时正确的，所以不用打错误日志
-    if (ret >= PROJECT_NAMESPACE_ID::EnErrorCode_MIN) {
-      FCTXLOGINFO(ctx, "{} submit transaction {} to receive gifts failed, res: {}({})", *owner_,
-                  transacation_ptr->data.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
-    } else if (ret >= 0) {
-      ret = PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_TRANSACTION_FAILED;
+  for (auto gift_id : confirmed_ids) {
+    if (confirm_remove_gifts_.erase(gift_id) != 0) {
+      is_dirty_ = true;
     }
-  } else {
-    // 如果成功确认就可以清理删除确认列表
-    for (auto gift_id : gift_ids) {
-      confirm_remove_gifts_.erase(gift_id);
-      // 保底删除，错误数据修复
-      remove_gift_cache(ctx, gift_id);
-    }
+    remove_gift_cache(ctx, gift_id);
   }
-  RPC_RETURN_CODE(ret);
+  RPC_RETURN_CODE(result);
 }
 
 int user_friend_api_manager::patch_stats(const atfw::friend_api::DFriendStatistics &stats) {
@@ -1347,22 +1343,7 @@ void user_friend_api_manager::add_send_gift_times(uint32_t times) {
   local_friend_statistics_.set_daily_send_gift_times(local_friend_statistics_.daily_send_gift_times() + times);
   local_friend_statistics_.set_weekly_send_gift_times(local_friend_statistics_.weekly_send_gift_times() + times);
   local_friend_statistics_.set_sum_send_gift_times(local_friend_statistics_.sum_send_gift_times() + times);
-
-  if (times > 0) {
-    return;
-  }
-
-  if (local_friend_statistics_.daily_send_gift_times() < 0) {
-    local_friend_statistics_.set_daily_send_gift_times(0);
-  }
-
-  if (local_friend_statistics_.weekly_send_gift_times() < 0) {
-    local_friend_statistics_.set_weekly_send_gift_times(0);
-  }
-
-  if (local_friend_statistics_.sum_send_gift_times() < 0) {
-    local_friend_statistics_.set_sum_send_gift_times(0);
-  }
+  is_dirty_ = true;
 }
 
 void user_friend_api_manager::add_receive_gift_times(uint32_t times) {
@@ -1373,22 +1354,7 @@ void user_friend_api_manager::add_receive_gift_times(uint32_t times) {
   local_friend_statistics_.set_daily_receive_gift_times(local_friend_statistics_.daily_receive_gift_times() + times);
   local_friend_statistics_.set_weekly_receive_gift_times(local_friend_statistics_.weekly_receive_gift_times() + times);
   local_friend_statistics_.set_sum_receive_gift_times(local_friend_statistics_.sum_receive_gift_times() + times);
-
-  if (times > 0) {
-    return;
-  }
-
-  if (local_friend_statistics_.daily_receive_gift_times() < 0) {
-    local_friend_statistics_.set_daily_receive_gift_times(0);
-  }
-
-  if (local_friend_statistics_.weekly_receive_gift_times() < 0) {
-    local_friend_statistics_.set_weekly_receive_gift_times(0);
-  }
-
-  if (local_friend_statistics_.sum_receive_gift_times() < 0) {
-    local_friend_statistics_.set_sum_receive_gift_times(0);
-  }
+  is_dirty_ = true;
 }
 
 bool user_friend_api_manager::add_gift_send_list(const atfw::friend_api::DFriendGiftHistory &history) {
@@ -1397,6 +1363,7 @@ bool user_friend_api_manager::add_gift_send_list(const atfw::friend_api::DFriend
   }
 
   protobuf_copy_message(daily_send_list_[history.user_key()], history);
+  is_dirty_ = true;
 
   atfw::friend_api::DFriendEvent evt_data;
   protobuf_copy_message(*evt_data.mutable_daily_send_list(), history);
@@ -1418,6 +1385,7 @@ bool user_friend_api_manager::remove_gift_send_list(const atfw::friend_api::DFri
   });
 
   daily_send_list_.erase(iter);
+  is_dirty_ = true;
   return true;
 }
 
@@ -1427,6 +1395,7 @@ bool user_friend_api_manager::add_gift_receive_list(const atfw::friend_api::DFri
   }
 
   protobuf_copy_message(daily_receive_list_[history.user_key()], history);
+  is_dirty_ = true;
 
   atfw::friend_api::DFriendEvent evt_data;
   protobuf_copy_message(*evt_data.mutable_daily_receive_list(), history);
@@ -1443,10 +1412,8 @@ bool user_friend_api_manager::add_friend_cache(rpc::context & /*ctx*/, const atf
   }
 
   auto iter = friend_cache_set_.find(friend_data.user_key());
-  if (iter != friend_cache_set_.end()) {
-    protobuf_copy_message(iter->second, friend_data);
-    iter->second.mutable_removed_time()->Clear();
-    return true;
+  if (iter != friend_cache_set_.end() && is_friend_cache_time_equal(iter->second, friend_data)) {
+    need_notify = false;
   }
 
   auto &new_cache_data = friend_cache_set_[friend_data.user_key()];
@@ -1476,7 +1443,7 @@ void user_friend_api_manager::remove_friend_cache(rpc::context &ctx, const atfw:
     return;
   }
 
-  protobuf_from_system_clock(*iter->second.mutable_expired_time(), ctx.logical_now());
+  protobuf_from_system_clock(*iter->second.mutable_removed_time(), ctx.logical_now());
 
   if (need_notify) {
     atfw::friend_api::DFriendEvent event_data;
@@ -1512,14 +1479,17 @@ bool user_friend_api_manager::add_inviter_cache(rpc::context & /*ctx*/,
   }
 
   auto iter = inviter_cache_set_.find(invite_data.from_user());
-  if (iter != inviter_cache_set_.end()) {
-    protobuf_copy_message(iter->second, invite_data);
-    iter->second.mutable_removed_time()->Clear();
-    return true;
+  if (iter != inviter_cache_set_.end() && is_friend_cache_time_equal(iter->second, invite_data)) {
+    need_notify = false;
   }
 
   auto &new_cache_data = inviter_cache_set_[invite_data.from_user()];
-  protobuf_copy_message(inviter_cache_set_[invite_data.from_user()], invite_data);
+  if (invite_data.event_id() > new_cache_data.event_id()) {
+    remote_friend_statistics_.set_daily_inviter(remote_friend_statistics_.daily_inviter() + 1);
+    remote_friend_statistics_.set_weekly_inviter(remote_friend_statistics_.weekly_inviter() + 1);
+    remote_friend_statistics_.set_sum_inviter(remote_friend_statistics_.sum_inviter() + 1);
+  }
+  protobuf_copy_message(new_cache_data, invite_data);
   new_cache_data.mutable_removed_time()->Clear();
 
   if (need_notify) {
@@ -1535,14 +1505,14 @@ bool user_friend_api_manager::add_inviter_cache(rpc::context & /*ctx*/,
   return true;
 }
 
-void user_friend_api_manager::remove_inviter_cache(rpc::context & /*ctx*/, const atfw::shared::DUserIDKey &friend_key,
+void user_friend_api_manager::remove_inviter_cache(rpc::context &ctx, const atfw::shared::DUserIDKey &friend_key,
                                                    bool need_notify) {
   auto iter = inviter_cache_set_.find(friend_key);
   if (iter == inviter_cache_set_.end()) {
     return;
   }
 
-  iter->second.mutable_removed_time()->Clear();
+  protobuf_from_system_clock(*iter->second.mutable_removed_time(), ctx.logical_now());
 
   if (need_notify) {
     atfw::friend_api::DFriendEvent event_data;
@@ -1582,14 +1552,17 @@ bool user_friend_api_manager::add_invitee_cache(rpc::context & /*ctx*/,
 
   atfw::shared::DUserIDKey key = get_key_from_invitee_cache(invite_data);
   auto iter = invitee_cache_set_.find(key);
-  if (iter != invitee_cache_set_.end()) {
-    protobuf_copy_message(iter->second, invite_data);
-    iter->second.mutable_removed_time()->Clear();
-    return true;
+  if (iter != invitee_cache_set_.end() && is_friend_cache_time_equal(iter->second, invite_data)) {
+    need_notify = false;
   }
 
   auto &new_cache_data = invitee_cache_set_[key];
-  protobuf_copy_message(invitee_cache_set_[key], invite_data);
+  if (invite_data.event_id() > new_cache_data.event_id()) {
+    remote_friend_statistics_.set_daily_invitee(remote_friend_statistics_.daily_invitee() + 1);
+    remote_friend_statistics_.set_weekly_invitee(remote_friend_statistics_.weekly_invitee() + 1);
+    remote_friend_statistics_.set_sum_invitee(remote_friend_statistics_.sum_invitee() + 1);
+  }
+  protobuf_copy_message(new_cache_data, invite_data);
   new_cache_data.mutable_removed_time()->Clear();
 
   if (need_notify) {
@@ -1649,10 +1622,8 @@ bool user_friend_api_manager::add_gift_cache(rpc::context & /*ctx*/, const atfw:
   }
 
   auto iter = gift_cache_set_.find(gift_data.gift_id());
-  if (iter != gift_cache_set_.end()) {
-    protobuf_copy_message(iter->second, gift_data);
-    iter->second.mutable_removed_time()->Clear();
-    return true;
+  if (iter != gift_cache_set_.end() && is_friend_cache_time_equal(iter->second, gift_data)) {
+    need_notify = false;
   }
 
   auto &new_cache_data = gift_cache_set_[gift_data.gift_id()];
@@ -1842,10 +1813,8 @@ void user_friend_api_manager::dump_sns_share(PROJECT_NAMESPACE_ID::UserSNSData &
 #endif
 
 bool user_friend_api_manager::is_friend_full() const noexcept {
-  if (static_cast<int32_t>(friend_cache_set_.size()) >= excel::get_const_config().friend_max_number()) {
-    return true;
-  }
-  return false;
+  auto limit = excel::get_const_config().friend_max_number();
+  return friend_cache_set_.size() >= static_cast<size_t>(limit > 0 ? limit : 200);
 }
 
 void user_friend_api_manager::set_need_send_wal_heartbeat(rpc::context &ctx) {

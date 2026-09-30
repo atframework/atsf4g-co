@@ -36,6 +36,8 @@ project_add_rpc_unit_test(
   FEATURES
   SS
   CS
+  DB
+  ROUTER
   LABELS
   fast
   TIMEOUT
@@ -45,3 +47,32 @@ project_add_rpc_unit_test(
 # populated tables.
 add_dependencies(${PROJECT_NAME}-lobbysvr-unit-test resource-config)
 project_pch_tool_set_precompile_headers(${PROJECT_NAME}-lobbysvr-unit-test REUSE_FROM_TARGET lobbysvr-private)
+
+# Friend API tests also exercise the management service through its generated RPC handlers.
+project_service_get_target_root_dir(service::friendsvr-management::private FRIEND_MANAGEMENT_ROOT_DIR)
+project_add_rpc_unit_test(
+  TARGET
+  ${PROJECT_NAME}-lobbysvr-friend-unit-test
+  COMPONENT
+  lobbysvr-friend
+  CATEGORY
+  service
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_friend_api.cpp"
+  "${LOBBYSVR_ROOT_DIR}/app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.cpp"
+  "${LOBBYSVR_ROOT_DIR}/app/handle_ss_rpc_friendmanagementnotifyservice.atfw.gen.cpp"
+  "${FRIEND_MANAGEMENT_ROOT_DIR}/app/handle_ss_rpc_friendmanagementservice.atfw.gen.cpp"
+  LINK_LIBRARIES
+  service::lobbysvr::private
+  service::friendsvr-management::private
+  FEATURES
+  SS
+  CS
+  DB
+  ROUTER
+  LABELS
+  fast
+  TIMEOUT
+  120)
+add_dependencies(${PROJECT_NAME}-lobbysvr-friend-unit-test resource-config)
+project_pch_tool_set_precompile_headers(${PROJECT_NAME}-lobbysvr-friend-unit-test REUSE_FROM_TARGET lobbysvr-private)
