@@ -4,6 +4,12 @@ This baseline records findings reproduced during the 2026-08-14 review of the wo
 not a substitute for checking current code. Mark an item resolved only after verifying the implementation, generated
 resources, and a regression test.
 
+## Contents
+
+- [Reproduced defects](#reproduced-defects)
+- [Risks requiring design confirmation](#risks-requiring-design-confirmation)
+- [Regression matrix](#regression-matrix)
+
 ## Reproduced defects
 
 ### P1: Excel keys and protobuf fields diverge silently

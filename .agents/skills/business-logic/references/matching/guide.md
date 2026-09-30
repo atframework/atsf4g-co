@@ -1,27 +1,33 @@
----
-name: matching
-description: "Use when: developing, diagnosing, or reviewing matchmaking across matchsvr/lobbysvr, matching pools and rules, faction assignment, matching WAL migration, Orbit battle handoff, Matching.xlsx generation, or matchsvr tests. Do not use when: changing generic lobby, Orbit, RPC, or configuration infrastructure unrelated to matchmaking."
----
-
 # Matchmaking
 
-Use this Skill to preserve end-to-end matchmaking invariants across configuration, lobby ownership, `matchsvr` state,
-WAL migration, faction assignment, Orbit room creation, and client-visible events.
+Read this guide only for matchmaking work. Preserve end-to-end matchmaking invariants across configuration, lobby
+ownership, `matchsvr` state, WAL migration, faction assignment, Orbit room creation, and client-visible events.
+
+## Contents
+
+- [Related guidance](#load-related-guidance)
+- [System map](#system-map)
+- [Review or change workflow](#review-or-change-workflow)
+- [Test and validation requirements](#test-and-validation-requirements)
+- [Review baseline maintenance](#review-baseline-maintenance)
 
 ## Load related guidance
 
-- Read `../engineering-guidelines/SKILL.md` before reviewing or editing C++, protobuf, CMake, or generated-code inputs.
-- Read `../change-workflow/SKILL.md` before fixing a defect or changing matchmaking behavior across modules.
-- Read `../rpc-unit-test/SKILL.md` for the offline mock runtime and `../testing/SKILL.md` for executable filters and
-  Windows DLL lookup.
-- Read `../build/SKILL.md` before configuring or building. Resolve `<BUILD_DIR>` from workspace settings and put all
-  scratch output under `<BUILD_DIR>/_agent_tmp/...`.
+- Read [engineering-guidelines](../../../engineering-guidelines/SKILL.md) before reviewing or editing C++, protobuf,
+  CMake, or generated-code inputs.
+- Read [change-workflow](../../../change-workflow/SKILL.md) before fixing a defect or changing matchmaking behavior
+  across modules.
+- Read [rpc-unit-test](../../../rpc-unit-test/SKILL.md) for offline mock runtime test work and
+  [testing](../../../testing/SKILL.md) for executable filters and Windows DLL lookup.
+- Read [build](../../../build/SKILL.md) before configuring or building. Resolve `<BUILD_DIR>` from workspace settings
+  and put all scratch output under `<BUILD_DIR>/_agent_tmp/...`.
 
 ## System map
 
 - `resource/ExcelTables/Matching.xlsx`: designer-facing pool, rule, and result-template keys.
 - `src/server_frame/protocol/public/protocol/config/com.struct.matching.config.proto`: generated configuration schema.
-- `src/server_frame/config/{include,src}/excel_config_matching_index.*`: matching configuration indexes.
+- `src/server_frame/config/include/config/excel_config_matching_index.h` and
+  `src/server_frame/config/src/excel_config_matching_index.cpp`: matching configuration indexes.
 - `src/server_frame/protocol/public/protocol/pbdesc/com.{protocol,struct}.match.proto`: requests, events, state, scopes,
   teams, and units.
 - `src/lobbysvr/service/logic/matching/`: user-facing start, check, confirm, cancel, and local ownership state.
@@ -118,7 +124,7 @@ WAL migration, faction assignment, Orbit room creation, and client-visible event
      a full room snapshot to a client-visible matched event.
    - Keep old persisted full snapshots read-only and migrate them by locating the current player's Unit; new writes use
      only the player view.
-9. Read [the current review baseline](references/review-baseline.md) when reviewing existing behavior, planning a fix,
+9. Read [the dated review baseline](review-baseline.md) when reviewing existing behavior, planning a fix,
    or touching any path named there. Reverify each item against the current checkout before reporting it as open.
 
 ## Test and validation requirements
@@ -139,7 +145,7 @@ WAL migration, faction assignment, Orbit room creation, and client-visible event
 
 ## Review baseline maintenance
 
-- Keep stable procedures in this file and dated, source-backed findings in `references/review-baseline.md`.
+- Keep stable procedures in this file and dated, source-backed findings in [review-baseline.md](review-baseline.md).
 - Update or remove a baseline item when a fix lands; retain the invariant and regression-test expectation when it is
   still useful.
 - Distinguish reproduced defects from scalability or availability risks. Never present a baseline observation as a

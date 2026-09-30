@@ -1,26 +1,23 @@
----
-name: team
-description: "Use when: developing, diagnosing, or reviewing Lobby team integration, Team Room membership or admission, CS team dirty notifications, or team repair tests. Do not use for matchmaking algorithms or generic DTMQ infrastructure."
----
-
 # Team Integration
+
+Read this guide only for Lobby team integration, Team Room membership/admission, notifications, or repair tests.
 
 ## Establish the contract
 
-- Read the affected paths in [Lobby team](../../../src/lobbysvr/service/logic/team/) and
-  [Team Room](../../../src/teamsvr/service/room/logic/room/team_room.cpp), including the caller, callback, and error producer.
+- Read the affected paths in [Lobby team](../../../../../src/lobbysvr/service/logic/team/) and
+  [Team Room](../../../../../src/teamsvr/service/room/logic/room/team_room.cpp), including the caller, callback, and error producer.
   For an overall review, include every team task handler and the manager's lifecycle paths.
 - For CS changes, compare recent protocol commits with
-  [team data](../../../src/server_frame/protocol/public/protocol/pbdesc/com.struct.team.proto),
-  [team RPCs](../../../src/server_frame/protocol/public/protocol/pbdesc/com.protocol.team.proto), and
-  [user RPCs](../../../src/server_frame/protocol/public/protocol/pbdesc/com.protocol.user.proto).
+  [team data](../../../../../src/server_frame/protocol/public/protocol/pbdesc/com.struct.team.proto),
+  [team RPCs](../../../../../src/server_frame/protocol/public/protocol/pbdesc/com.protocol.team.proto), and
+  [user RPCs](../../../../../src/server_frame/protocol/public/protocol/pbdesc/com.protocol.user.proto).
   For Room RPC changes, also read
-  [the Room service schema](../../../src/teamsvr/protocol/room/protocol/pbdesc/team_room_service.proto).
+  [the Room service schema](../../../../../src/teamsvr/protocol/room/protocol/pbdesc/team_room_service.proto).
 - Keep current behavior and case mappings in
-  [the Lobby team README](../../../src/lobbysvr/service/logic/team/README.md).
+  [the Lobby team README](../../../../../src/lobbysvr/service/logic/team/README.md).
   Recheck current source before reusing historical test results or protocol descriptions.
-- Use [engineering-guidelines](../engineering-guidelines/SKILL.md) for C++/protobuf changes and
-  [rpc-unit-test](../rpc-unit-test/SKILL.md) for runtime fixtures and RPC validation.
+- Use [engineering-guidelines](../../../engineering-guidelines/SKILL.md) for C++/protobuf changes and
+  [rpc-unit-test](../../../rpc-unit-test/SKILL.md) for runtime fixtures and RPC validation.
 
 ## Trace delivery and repair
 
@@ -40,7 +37,7 @@ description: "Use when: developing, diagnosing, or reviewing Lobby team integrat
 
 ## Verify at observable boundaries
 
-- Use [the shared fixture](../../../src/lobbysvr/test/lobbysvr_test_user_team_common.h) and the existing test targets.
+- Use [the shared fixture](../../../../../src/lobbysvr/test/lobbysvr_test_user_team_common.h) and the existing test targets.
   Preserve the real dispatcher, subscriber callback order, and CS pre-refresh path; do not replace them with invented
   production hooks. Use direct manager tests when pre-refresh would hide the boundary being tested.
 - Assert raw notification counts as well as decoded entries. Cover one normal action, multiple actions in one batch,

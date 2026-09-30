@@ -12,8 +12,7 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 | `build/`                  | CMake configure/build and compile, link, or configure failures                        |
 | `testing/`                | Ordinary unit-test targets, test design/review, execution, filters, Windows startup   |
 | `rpc-unit-test/`          | `src/**` RPC/runtime/async-hook unit tests and their mock engines                     |
-| `team/`                   | Lobby team integration, Team Room protocol semantics, dirty notifications, and repairs |
-| `matching/`               | Matchmaking behavior across matchsvr/lobbysvr, WAL migration, rules, and tests       |
+| `business-logic/`         | Matchmaking and team business behavior; select only the relevant module reference    |
 | `deployment-config/`      | Go deployment templates, Helm values, atdtool rendering, and generated scripts        |
 | `configure-expression/`   | `enable_expression` and environment expansion in annotated config fields              |
 | `atgateway-protocol/`     | atgateway v2 wire protocol, handshake, crypto, compression, and reconnection          |
@@ -30,7 +29,9 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 - For a new or materially changed trigger description, check representative should-trigger and near-miss
   should-not-trigger requests; narrow false positives instead of adding keyword lists.
 - Keep each `SKILL.md` focused and procedural. Put only steps and gotchas needed on every activation in the entrypoint;
-  move low-frequency variants into one-level references and state exactly when to read each one.
+  move conditional details into directly linked references and state exactly when to read each one.
+- Keep business modules under `business-logic/references/<module>/`; its `SKILL.md` is the compact module index.
+  Add module guides there, with direct links and load conditions, rather than a separate or nested module `SKILL.md`.
 - Keep compact behavioral guardrails in `AGENTS.md`; do not duplicate the full generic guideline body in every skill.
 - Do not duplicate this Skill table in `AGENTS.md`; native clients already expose metadata, while `CLAUDE.md` imports
   this index as its fallback router.

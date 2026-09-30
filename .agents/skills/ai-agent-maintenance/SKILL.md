@@ -60,8 +60,11 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 - Follow the root writing rule. Write imperative, project-specific procedures, remove explanations the agent already
   knows, use one clear default, and make control stricter only where the workflow is fragile.
 - Treat 500 lines and about 5,000 tokens as ceilings, not targets. Keep the entrypoint much smaller when possible; move
-  low-frequency APIs, examples, platform branches, and diagnostics to one-level `references/` with explicit load
+  low-frequency APIs, examples, platform branches, and diagnostics to directly linked `references/` with explicit load
   conditions. Keep deterministic repeated logic in tested, non-interactive `scripts/` with actionable errors.
+- Consolidate business-module knowledge under `business-logic/references/<module>/`. Keep one compact `business-logic`
+  entrypoint with direct links and load conditions; module guides have no `SKILL.md` or discovery frontmatter.
+  Keep shared engineering, build, and test workflows in their existing Skills.
 - For a new or materially changed trigger, draft 8-10 realistic should-trigger queries and 8-10 near-miss
   should-not-trigger queries. Measure invocation only when the active client exposes observable Skill calls; otherwise
   perform a manual boundary review and report that no trigger rate was measured.
@@ -88,6 +91,8 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 
 ## References
 
+- Read [business routing checks](references/business-routing-checks.md) only when changing the business Skill's scope,
+  module layout, or loading conditions.
 - Read [compatibility sources](references/compatibility-sources.md) only when changing Skill formats, discovery paths,
   bridge behavior, client-specific configuration, MCP guidance, or cross-tool compatibility claims.
 - Read [writing guidance](references/writing-guidance.md) only when changing writing rules or revising terminology in
