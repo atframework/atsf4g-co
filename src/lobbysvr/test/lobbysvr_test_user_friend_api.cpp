@@ -689,7 +689,7 @@ CASE_TEST(lobbysvr_friend_api, notification_skips_offline_subscriber_and_flushes
       *target->add_subscriber_key() = user_key(kOwnerId);
       auto* event = target->mutable_increase()->add_event_log();
       event->set_event_id(20 + index);
-      *event->mutable_add_friend_data() = friend_data(81100 + index);
+      *event->mutable_add_friend_data() = friend_data(static_cast<uint64_t>(81100 + index));
       previous_hash = rpc::friend_api::calculate_hash_code(previous_hash, *event);
       event->set_hash_code(previous_hash);
     }
@@ -856,7 +856,7 @@ CASE_TEST(lobbysvr_friend_api, remove_all_inviters_wal_preserves_newer_records) 
     receive_snapshot(ctx, manager);
     for (int index = 0; index < 4; ++index) {
       atfw::friend_api::DFriendInvitationInfo invitation;
-      *invitation.mutable_from_user() = user_key(81200 + index);
+      *invitation.mutable_from_user() = user_key(static_cast<uint64_t>(81200 + index));
       *invitation.mutable_to_user() = user_key(kOwnerId);
       invitation.set_event_id(10 + 10 * index);
       protobuf_from_system_clock(*invitation.mutable_expired_time(), ctx.logical_now() + std::chrono::hours{1});

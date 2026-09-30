@@ -39,9 +39,8 @@ func MatchingStartTask(task *user_data.TaskActionUser) error {
 	if err != nil {
 		return fmt.Errorf("failed to get matching start response message: %v", err)
 	}
-	protocol.SaveMatchingView(task.User, rsp.GetView())
 	task.User.SetExtralData("MatchingFactionId", int32(0))
-	task.Log("matching start success, unit_id=%d", rsp.GetView().GetUnitId())
+	task.Log("matching start success, heartbeat_interval=%d", rsp.GetHeartbeatInterval())
 	return nil
 }
 
