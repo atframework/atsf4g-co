@@ -41,9 +41,9 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 
 #include <rpc/rpc_context.h>
 
-#include <data/user.h>
-
 #include <utility>
+
+#include "data/user.h"
 
 ${service_dllexport_decl} ${task_class_name}::${task_class_name}(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 

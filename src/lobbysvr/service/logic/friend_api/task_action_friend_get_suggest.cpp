@@ -24,9 +24,10 @@
 
 #include <rpc/rpc_context.h>
 
-#include <data/user.h>
-
 #include <utility>
+
+#include "data/user.h"
+#include "logic/friend_api/user_friend_api_manager.h"
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_friend_get_suggest::task_action_friend_get_suggest(
     dispatcher_start_data_type&& param)
@@ -50,7 +51,23 @@ task_action_friend_get_suggest::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+#if 0  // TODO(any): 本地推荐,暂时留空。需要具体推荐的策略，和业务内容相关
+  std::vector<std::pair<uint64_t, uint32_t> > suggest_users;
+  size_t suggest_count = 100;
+  if (excel::get_const_config().friend_suggest_number() > 0) {
+    suggest_count = static_cast<size_t>(excel::get_const_config().friend_suggest_number());
+  }
+
+  user_level_local_index_manager::me()->get_suggest_friends(*user_inst, suggest_users, suggest_count,
+                                                            user_inst->get_user_id());
+  for (auto& user_info : suggest_users) {
+    PROJECT_NAMESPACE_ID::DPlayerIDKey* user_key = rsp_body.add_suggest_user_keys();
+    if (user_key != nullptr) {
+      user_key->set_user_id(user_info.first);
+      user_key->set_zone_id(user_info.second);
+    }
+  }
+#endif
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

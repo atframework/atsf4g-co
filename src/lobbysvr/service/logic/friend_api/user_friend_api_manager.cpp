@@ -1766,9 +1766,9 @@ void user_friend_api_manager::update_sns_share(bool daily_reset, bool weekly_res
   }
 }
 
-rpc::result_code_type user_friend_api_manager::add_sns_share(rpc::context& ctx, int32_t reward_type, int32_t sub_type,
-                                        PROJECT_NAMESPACE_ID::SNSShareRecord *&out,
-                                       ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset> *out_reward_items) {
+rpc::result_code_type user_friend_api_manager::add_sns_share(
+  rpc::context& ctx, int32_t reward_type, int32_t sub_type, PROJECT_NAMESPACE_ID::SNSShareRecord *&out,
+  ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset> *out_reward_items) {
   refresh_feature_limit_minute(ctx);
   out = nullptr;
 

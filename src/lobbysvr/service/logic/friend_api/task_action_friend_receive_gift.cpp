@@ -24,9 +24,10 @@
 
 #include <rpc/rpc_context.h>
 
-#include <data/user.h>
-
 #include <utility>
+
+#include "data/user.h"
+#include "logic/friend_api/user_friend_api_manager.h"
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_friend_receive_gift::task_action_friend_receive_gift(
     dispatcher_start_data_type&& param)
@@ -40,8 +41,8 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_friend_rece
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_friend_receive_gift::result_type
 task_action_friend_receive_gift::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
   if (!user_inst) {
@@ -50,7 +51,14 @@ task_action_friend_receive_gift::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  user_inst->get_user_friend_api_manager().refresh_feature_limit_minute(get_shared_context());
+
+  std::vector<int64_t> gift_ids;
+  gift_ids.reserve(static_cast<size_t>(req_body.gift_ids_size()));
+  gift_ids.insert(gift_ids.end(), req_body.gift_ids().begin(), req_body.gift_ids().end());
+
+  set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_friend_api_manager().receive_gifts(
+      get_shared_context(), gift_ids, rsp_body.mutable_receive_gifts())));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
