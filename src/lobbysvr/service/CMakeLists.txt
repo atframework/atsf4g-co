@@ -44,6 +44,25 @@ generate_for_pb_add_ss_service(
   GENERATED_FLOW_NAME
   "atframework.dtmq.DtmqProxysvrNotifyService.lobbysvr")
 
+generate_for_pb_add_ss_service(
+  "atframework.friend_api.FriendManagementNotifyService"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE_ID}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk"
+  NO_RPC
+  EXTERNAL_SERVICE_PROTOCOLS
+  "friend-protocol-management-pbdesc"
+  INCLUDE_HEADERS
+  "protocol/pbdesc/friend_management_service.pb.h"
+  GENERATED_FLOW_NAME
+  "atframework.friend_api.FriendManagementNotifyService.lobbysvr")
+
 project_service_declare_instance(
   ${SERVICE_TARGET_NAME}
   "${CMAKE_CURRENT_LIST_DIR}"
@@ -80,5 +99,6 @@ project_service_declare_instance(
   GENERATED_FLOW_NAMES
   "${PROJECT_NAMESPACE}.MatchsvrNotifyService.lobbysvr"
   "atframework.dtmq.DtmqProxysvrNotifyService.lobbysvr"
+  "atframework.friend_api.FriendManagementNotifyService.lobbysvr"
   "${PROJECT_NAMESPACE}.LobbysvrClientService"
   "${PROJECT_NAMESPACE}.LobbysvrService")

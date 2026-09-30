@@ -75,6 +75,8 @@ class user_friend_api_manager {
 
   void dump_storage(rpc::context& ctx, PROJECT_NAMESPACE_ID::user_friend_data& friend_data);
 
+  void receive_event_sync(rpc::context& ctx, const atfw::friend_api::DFriendManagementNotificationEvent& sync_data);
+
   bool is_dirty() const;
 
   void clear_dirty();

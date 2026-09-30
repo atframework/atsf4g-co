@@ -28,11 +28,15 @@ Applied rules (existing user values are preserved unless a repair is required):
 * File-watcher / search exclusions are ensured to keep the editor responsive on workspaces
   with a large build tree. ``files.watcherExclude`` and ``search.exclude`` gain the configured
   build directory (``--build-dir``, sourced by the CMake driver from
-  ``CMAKE_CURRENT_BINARY_DIR``), ``**/atframework/**/build`` (every vendored subproject may
-  own an independent build tree) and the append-only ``**/.git/objects/**`` /
-  ``**/.git/subtree-cache/**``. ``files.exclude`` is intentionally NOT touched: it hides
-  entries from the Explorer, which makes browsing the workspace inconvenient. Existing globs
-  under the touched keys are always kept.
+  ``CMAKE_CURRENT_BINARY_DIR``), the generic ``**/build/**`` output directory, and the
+  append-only ``**/.git/objects/**`` / ``**/.git/subtree-cache/**``. ``files.exclude`` is
+  intentionally NOT touched: it hides entries from the Explorer, which makes browsing the
+  workspace inconvenient. Existing globs under the touched keys are always kept.
+* ``cpplint.excludes``, ``pylint.ignorePatterns`` and ``python.analysis.exclude`` gain the same
+  build directory plus the generic ``build`` output dir so static analysis skips generated code.
+  These keys are arrays and are merged the same way (existing entries kept). Only the actual
+  build dir name and the exact ``build`` are added, never a broad ``build_*`` wildcard, so a
+  source directory such as ``.../build_setting`` stays analyzed and searchable.
 
 JSONC comments are not preserved on rewrite; a ``.bak`` copy is written before any change.
 """
@@ -64,11 +68,16 @@ MIGRATE_TO_ENVIRONMENT = ("VSLANG",)
 # writes thousands of .obj/.pdb/.ilk/.log files, and every change notification has to flow
 # through the watcher queue before an editor save or directory create is acknowledged.
 #
-# ``atframework/**`` is vendored and every subproject may own an independent build tree
-# (e.g. ``atframe_utils/build``); the wildcard form adapts to all of them.
+# ``build`` is the default output directory across most toolchains (and every vendored
+# subproject that owns an independent tree, e.g. ``atframe_utils/build``); the any-depth form
+# adapts to all of them while matching only the exact ``build`` name, so a source directory such
+# as ``.../build_setting`` is never hidden. The actual configured build tree (``--build-dir``,
+# which may be named ``build_jobs_*`` etc.) is added separately from it.
 # ``.git/objects`` and ``.git/subtree-cache`` are very large, append-only, and never edited.
+GENERIC_BUILD_EXCLUDE_GLOB = "**/build/**"
+
 STATIC_EXCLUDE_GLOBS = (
-    "**/atframework/**/build",
+    GENERIC_BUILD_EXCLUDE_GLOB,
     "**/.git/objects/**",
     "**/.git/subtree-cache/**",
 )
@@ -204,15 +213,13 @@ def find_arg_index(args, flag):
     return -1
 
 
-def compute_build_exclude_glob(build_dir, workspace_dir):
-    """Return the ``files.watcherExclude``-style glob that matches the build tree.
+def compute_build_dir_glob(build_dir, workspace_dir):
+    """Return the glob matching the build directory node itself (no trailing ``/**``).
 
-    The build directory (``--build-dir``, sourced by the CMake driver from
-    ``CMAKE_CURRENT_BINARY_DIR``) is the largest source of file-change churn, so it is
-    expressed relative to the workspace when possible (``**/<basename>/**``) to stay valid
-    even if the absolute path is moved. When the build tree lives outside the workspace the
-    absolute path is used directly so the watcher still skips it. ``None`` is returned when no
-    build directory was supplied.
+    Expressed relative to the workspace when possible (``**/<basename>``) so it stays valid even
+    if the absolute path moves; an out-of-workspace tree falls back to its absolute path. Callers
+    append the tool-specific suffix (``/**`` for watcher/search/cpplint, ``/**/*.py`` for pylint,
+    nothing for pyright's directory exclude). ``None`` when no build directory was supplied.
     """
     if not build_dir:
         return None
@@ -223,8 +230,22 @@ def compute_build_exclude_glob(build_dir, workspace_dir):
     except ValueError:
         rel = None
     if rel and not rel.startswith("..") and not os.path.isabs(rel):
-        return "**/%s/**" % normalize_path(rel)
+        return "**/%s" % normalize_path(rel)
     return normalize_path(build_abs)
+
+
+def compute_build_exclude_glob(build_dir, workspace_dir):
+    """Return the ``files.watcherExclude``-style glob that matches the whole build tree.
+
+    The build directory (``--build-dir``, sourced by the CMake driver from
+    ``CMAKE_CURRENT_BINARY_DIR``) is the largest source of file-change churn. A workspace-relative
+    node (``**/<basename>``) gains a ``/**`` suffix so the whole subtree is skipped; an absolute
+    out-of-workspace path is matched as-is. ``None`` is returned when no build dir was supplied.
+    """
+    dir_glob = compute_build_dir_glob(build_dir, workspace_dir)
+    if dir_glob is None:
+        return None
+    return dir_glob + "/**" if dir_glob.startswith("**/") else dir_glob
 
 
 def apply_glob_block(data, key, globs, changes):
@@ -248,6 +269,31 @@ def apply_glob_block(data, key, globs, changes):
             continue
         block[glob] = True
         changes.append("%s: add %s" % (key, glob))
+    data[key] = block
+
+
+def apply_list_block(data, key, values, changes):
+    """Ensure each entry in ``values`` is present in the array at settings key ``key``.
+
+    Existing entries are never removed or reordered; the array is created when missing and left
+    as-is (with a warning) when it already holds a non-array value. Mirrors :func:`apply_glob_block`
+    for keys whose VS Code schema is a list (``cpplint.excludes``, ``pylint.ignorePatterns``,
+    ``python.analysis.exclude``) rather than an object.
+    """
+    block = data.get(key)
+    if block is not None and not isinstance(block, list):
+        print(
+            "[optimize-vscode] skip %s: existing value is not an array" % key,
+            file=sys.stderr,
+        )
+        return
+    if block is None:
+        block = []
+    for value in values:
+        if value is None or value in block:
+            continue
+        block.append(value)
+        changes.append("%s: add %s" % (key, value))
     data[key] = block
 
 
@@ -456,6 +502,22 @@ def main(argv):
         search_globs.insert(0, build_glob)
     apply_glob_block(data, "files.watcherExclude", watcher_globs, changes)
     apply_glob_block(data, "search.exclude", search_globs, changes)
+
+    # Keep C++/Python static analysis off the generated build tree, merge-only (arrays: existing
+    # user entries are preserved). The actual build dir (``--build-dir``) and the generic ``build``
+    # output dir are ensured; no broad ``build_*`` wildcard, so ``.../build_setting`` stays analyzed.
+    build_dir_glob = compute_build_dir_glob(opts.build_dir, opts.workspace_dir)
+    cpplint_excludes = [GENERIC_BUILD_EXCLUDE_GLOB]
+    pylint_ignores = ["**/build/**/*.py"]
+    analysis_excludes = ["**/build"]
+    if build_glob is not None:
+        cpplint_excludes.insert(0, build_glob)
+    if build_dir_glob is not None:
+        pylint_ignores.insert(0, build_dir_glob + "/**/*.py")
+        analysis_excludes.insert(0, build_dir_glob)
+    apply_list_block(data, "cpplint.excludes", cpplint_excludes, changes)
+    apply_list_block(data, "pylint.ignorePatterns", pylint_ignores, changes)
+    apply_list_block(data, "python.analysis.exclude", analysis_excludes, changes)
 
     apply_tool_path(
         data, "cpplint.cpplintPath", opts.cpplint, ["cpplint", "cpplint.exe"], changes

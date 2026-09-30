@@ -810,6 +810,7 @@ rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
         protobuf_copy_message(*event_target->add_subscriber_key(), user_id_key);
       }
 
+      protobuf_copy_message(*event_target->mutable_friend_data_key(), get_user_key());
       dump(ctx, *event_target->mutable_snapshot(), false);
     }
   } while (false);
@@ -851,6 +852,7 @@ rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
 
       auto* event_target = sync_body->add_event_target();
       protobuf_copy_message(*event_target->add_subscriber_key(), user_pair.first);
+      protobuf_copy_message(*event_target->mutable_friend_data_key(), get_user_key());
       protobuf_move_message(*event_target->mutable_increase()->mutable_event_log(),
                             std::move(*user_pair.second->mutable_increase()->mutable_event_log()));
     }

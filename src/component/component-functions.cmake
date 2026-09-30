@@ -319,7 +319,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   endif()
   if(PROJECT_COMPONENT_PUBLIC_PROTO_PATH)
     foreach(PROTO_PATH ${PROJECT_COMPONENT_PUBLIC_PROTO_PATH})
-      list(APPEND APPEND PROTOBUF_PROTO_PATHS "--proto_path" "${PROTO_PATH}")
+      list(APPEND PROTOBUF_PROTO_PATHS "--proto_path" "${PROTO_PATH}")
     endforeach()
   endif()
   unset(__PUBLIC_LINK_TARGETS)
@@ -686,7 +686,7 @@ vcs_user_name: ${PROJECT_GIT_REPO_USER_NAME}
 vcs_branch: ${SERVER_FRAME_VCS_SERVER_BRANCH}
 vcs_commit: ${SERVER_FRAME_VCS_COMMIT}
 vcs_branch: ${SERVER_FRAME_VCS_VERSION}
-use_shared_library: ${project_service_declare_service_USE_SHARED_LIBRARY}
+use_shared_library: ${project_component_declare_service_USE_SHARED_LIBRARY}
 shared_rpath: ${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${CMAKE_INSTALL_LIBDIR}
 private_rpath: ${CMAKE_INSTALL_LIBDIR}/${SERVER_FRAME_VCS_COMMIT_SHORT_SHA}/${TARGET_NAME}/${CMAKE_INSTALL_LIBDIR}
 ${SERVER_FRAME_PACKAGE_COMPILER_FIELD}

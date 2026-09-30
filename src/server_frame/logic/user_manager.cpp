@@ -41,7 +41,7 @@ SERVER_FRAME_API user_manager::user_manager() {}
 SERVER_FRAME_API user_manager::~user_manager() {}
 
 SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, user_manager::user_ptr_t u,
-                                                              bool force_kickoff) {
+                                                            bool force_kickoff) {
   if (!u) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
@@ -51,7 +51,7 @@ SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, u
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                              bool force_kickoff, user_cache *check_user) {
+                                                            bool force_kickoff, user_cache *check_user) {
   if (0 == user_id) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -98,12 +98,12 @@ SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, user_ptr_t u
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                   bool force_kickoff, user_cache *check_user) {
+                                                 bool force_kickoff, user_cache *check_user) {
   auto invoke_result = rpc::async_invoke(
       ctx, "user_manager.async_remove",
       [user_id, zone_id, force_kickoff, check_user](rpc::context &child_ctx) -> rpc::result_code_type {
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-            user_manager::me()->remove(child_ctx, user_id, zone_id, force_kickoff, check_user)));
+        RPC_RETURN_CODE(
+            RPC_AWAIT_CODE_RESULT(user_manager::me()->remove(child_ctx, user_id, zone_id, force_kickoff, check_user)));
       });
 
   if (invoke_result.is_error()) {
@@ -114,7 +114,7 @@ SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, uint64_t use
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API rpc::result_code_type user_manager::save(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                            const user_cache *check_user) {
+                                                          const user_cache *check_user) {
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), zone_id, user_id);
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
@@ -158,7 +158,7 @@ SERVER_FRAME_API bool user_manager::add_save_schedule(uint64_t user_id, uint32_t
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API rpc::result_code_type user_manager::load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                            user_manager::user_ptr_t &output, bool force) {
+                                                          user_manager::user_ptr_t &output, bool force) {
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), zone_id, user_id);
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
@@ -247,8 +247,8 @@ SERVER_FRAME_API rpc::result_code_type user_manager::create(
       auto remove_res = RPC_AWAIT_CODE_RESULT(router_user_manager::me()->remove_user_object(
           ctx, user_id, zone_id, std::static_pointer_cast<router_object_base>(cache), nullptr));
       if (remove_res < 0) {
-        FWLOGERROR("remove user_cache {}:{} object after create_init failed, res: {}({})", zone_id, user_id,
-                   remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
+        FWLOGERROR("remove user_cache {}:{} object after create_init failed, res: {}({})", zone_id, user_id, remove_res,
+                   protobuf_mini_dumper_get_error_msg(remove_res));
       }
       RPC_RETURN_CODE(res);
     }
@@ -261,8 +261,8 @@ SERVER_FRAME_API rpc::result_code_type user_manager::create(
       auto remove_res = RPC_AWAIT_CODE_RESULT(router_user_manager::me()->remove_user_object(
           ctx, user_id, zone_id, std::static_pointer_cast<router_object_base>(cache), nullptr));
       if (remove_res < 0) {
-        FWLOGERROR("remove user_cache {}:{} object after create_init failed, res: {}({})", zone_id, user_id,
-                   remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
+        FWLOGERROR("remove user_cache {}:{} object after create_init failed, res: {}({})", zone_id, user_id, remove_res,
+                   protobuf_mini_dumper_get_error_msg(remove_res));
       }
       RPC_RETURN_CODE(res);
     }
@@ -283,6 +283,10 @@ SERVER_FRAME_API user_manager::user_ptr_t user_manager::find(uint64_t user_id, u
   }
 
   return nullptr;
+}
+
+SERVER_FRAME_API user_manager::user_ptr_t user_manager::find(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const {
+  return find(user_key.user_id(), user_key.zone_id());
 }
 
 SERVER_FRAME_API bool user_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {

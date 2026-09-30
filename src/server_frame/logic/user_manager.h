@@ -2,17 +2,20 @@
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <design_pattern/singleton.h>
 
 #include <config/server_frame_build_feature.h>
 
-#include <list>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -129,9 +132,16 @@ class user_manager {
 
   SERVER_FRAME_API user_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
 
+  SERVER_FRAME_API user_ptr_t find(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const;
+
   template <typename TUSER>
-  ATFW_UTIL_SYMBOL_VISIBLE const std::shared_ptr<TUSER> find_as(uint64_t user_id, uint32_t zone_id) const {
+  ATFW_UTIL_SYMBOL_VISIBLE std::shared_ptr<TUSER> find_as(uint64_t user_id, uint32_t zone_id) const {
     return std::static_pointer_cast<TUSER>(find(user_id, zone_id));
+  }
+
+  template <typename TUSER>
+  ATFW_UTIL_SYMBOL_VISIBLE std::shared_ptr<TUSER> find_as(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const {
+    return std::static_pointer_cast<TUSER>(find(user_key));
   }
 
   SERVER_FRAME_API bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;

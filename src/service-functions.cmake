@@ -376,8 +376,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   endif()
 
   set(__GENERATED_PB_FILE_NAME "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb")
-  if(project_component_declare_protocol_OUTPUT_PBFILE_PATH)
-    set(${project_component_declare_protocol_OUTPUT_PBFILE_PATH}
+  if(project_service_declare_protocol_OUTPUT_PBFILE_PATH)
+    set(${project_service_declare_protocol_OUTPUT_PBFILE_PATH}
         "${__GENERATED_PB_FILE_NAME}"
         PARENT_SCOPE)
   endif()
@@ -446,7 +446,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   # 记录自己的 pb 文件路径 以及使用的组件的 pb 文件路径
   unset(__PBFILE)
   list(APPEND __PBFILE ${__GENERATED_PB_FILE_NAME})
-  foreach(USE_COMPONENT ${project_component_declare_protocol_USE_COMPONENTS})
+  foreach(USE_COMPONENT ${project_service_declare_protocol_USE_COMPONENTS})
     if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
       set(USE_COMPONENT "pc-${USE_COMPONENT}")
     else()
@@ -458,7 +458,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     endif()
     list(APPEND __PBFILE ${__USE_COMPONENT_PBFILE})
   endforeach()
-  foreach(USE_SERVICE_PROTOCOL ${project_component_declare_protocol_USE_SERVICE_PROTOCOL})
+  foreach(USE_SERVICE_PROTOCOL ${project_service_declare_protocol_USE_SERVICE_PROTOCOL})
     if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
       set(USE_SERVICE_PROTOCOL "pp-${USE_SERVICE_PROTOCOL}")
     else()

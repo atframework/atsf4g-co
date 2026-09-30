@@ -7,17 +7,16 @@
 # This script discovers the compiler, build directory and helper tools, then delegates the JSON edits to the sibling
 # ``optimize_vscode_settings.py``. It is idempotent and preserves user-provided values whenever possible.
 #
-# Run in script mode, e.g.:
-#   cmake -DPROJECT_VSCODE_BUILD_DIR=<build dir> -P project/integration/vscode/OptimizeVsCodeSettings.cmake
+# Run in script mode, e.g.: cmake -DPROJECT_VSCODE_BUILD_DIR=<build dir> -P
+# project/integration/vscode/OptimizeVsCodeSettings.cmake
 #
 # It may also be ``include()``-d from a configured project, in which case the live ``CMAKE_CXX_COMPILER*`` and
 # ``CMAKE_BINARY_DIR`` values are used automatically.
 #
-# Optional inputs (all overridable via -D):
-#   PROJECT_VSCODE_WORKSPACE_DIR - repository root that holds .vscode/ (default: three levels above this script)
-#   PROJECT_VSCODE_BUILD_DIR     - build tree with CMakeCache.txt (default: live CMAKE_BINARY_DIR or a detected tree)
-#   PROJECT_VSCODE_PYTHON        - Python interpreter to use (default: discovered via find_program)
-#   PROJECT_VSCODE_DRY_RUN       - when truthy, report changes without writing
+# Optional inputs (all overridable via -D): PROJECT_VSCODE_WORKSPACE_DIR - repository root that holds .vscode/ (default:
+# three levels above this script) PROJECT_VSCODE_BUILD_DIR     - build tree with CMakeCache.txt (default: live
+# CMAKE_BINARY_DIR or a detected tree) PROJECT_VSCODE_PYTHON        - Python interpreter to use (default: discovered via
+# find_program) PROJECT_VSCODE_DRY_RUN       - when truthy, report changes without writing
 # =====================================================================================================================
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -30,8 +29,9 @@ endif()
 # ---------------------------------------------------------------------------------------------------------------------
 # Resolve the build directory. Prefer an explicit value, then the live binary dir, then a couple of common defaults.
 # When ``include()``-d from the top-level project ``CMAKE_BINARY_DIR`` equals the current build tree
-# (``CMAKE_CURRENT_BINARY_DIR`` at the project root), which is the directory whose change events dominate editor
-# latency and that the optimizer excludes from the VSCode watcher/search via ``--build-dir``.
+# (``CMAKE_CURRENT_BINARY_DIR`` at the project root), which is the directory whose change events dominate editor latency
+# and that the optimizer excludes from the VSCode watcher/search and the cpplint/pylint/Pylance analysis scopes via
+# ``--build-dir``.
 # ---------------------------------------------------------------------------------------------------------------------
 if(NOT DEFINED PROJECT_VSCODE_BUILD_DIR OR PROJECT_VSCODE_BUILD_DIR STREQUAL "")
   if(DEFINED CMAKE_BINARY_DIR
@@ -143,16 +143,15 @@ if(NOT PROJECT_VSCODE_RESULT EQUAL 0)
 endif()
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Clean stale clangd preamble cache (preamble-*.pch) from the system temp directory.
-# clangd serializes each file's preamble to the system temp dir (default --pch-storage=disk) and the files persist
-# across editor restarts. They accumulate (one project can produce hundreds of 40-90MB files = tens of GB) and become
-# stale whenever the build tree changes. Removing them once per configure keeps the temp dir bounded; clangd simply
-# regenerates the preamble for any file it opens again. Best-effort, never fatal.
+# Clean stale clangd preamble cache (preamble-*.pch) from the system temp directory. clangd serializes each file's
+# preamble to the system temp dir (default --pch-storage=disk) and the files persist across editor restarts. They
+# accumulate (one project can produce hundreds of 40-90MB files = tens of GB) and become stale whenever the build tree
+# changes. Removing them once per configure keeps the temp dir bounded; clangd simply regenerates the preamble for any
+# file it opens again. Best-effort, never fatal.
 #
-# Temp dir resolution mirrors LLVM's sys::path (what clangd uses) per platform:
-#   Windows:  $TEMP / $TMP            -> default %LOCALAPPDATA%\Temp
-#   Linux:    $TMPDIR                 -> falls back to /tmp when unset
-#   macOS:    $TMPDIR                 -> set by launchd to /var/folders/... (rarely unset)
+# Temp dir resolution mirrors LLVM's sys::path (what clangd uses) per platform: Windows:  $TEMP / $TMP            ->
+# default %LOCALAPPDATA%\Temp Linux:    $TMPDIR                 -> falls back to /tmp when unset macOS:    $TMPDIR ->
+# set by launchd to /var/folders/... (rarely unset)
 # ---------------------------------------------------------------------------------------------------------------------
 set(PROJECT_VSCODE_CLANGD_TMP "")
 if(WIN32)

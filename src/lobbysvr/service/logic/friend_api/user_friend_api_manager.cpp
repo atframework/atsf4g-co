@@ -208,6 +208,30 @@ void user_friend_api_manager::dump_storage(rpc::context &ctx, PROJECT_NAMESPACE_
   // protobuf_copy_message(*friend_data.mutable_sns_data(), sns_data_);
 }
 
+void user_friend_api_manager::receive_event_sync(
+    rpc::context &ctx, const atfw::friend_api::DFriendManagementNotificationEvent &sync_data) {
+  // 不是自己的好友信息不用更新本地数据
+  if (!owner_->is(sync_data.friend_data_key())) {
+    return;
+  }
+
+  if (sync_data.has_snapshot()) {
+    int32_t result_code = 0;
+    wal_client_->receive_snapshot(sync_data.snapshot(), friend_api_wal_client_context(ctx, result_code));
+    if (result_code < 0) {
+      FCTXLOGERROR(ctx, "{} receive snapshot failed with result_code {}({})", *owner_, result_code,
+                   protobuf_mini_dumper_get_error_msg(result_code));
+    }
+    return;
+  }
+
+  int32_t result_code = 0;
+  friend_api_wal_client_context wal_param(ctx, result_code);
+  for (const auto &evt_log : sync_data.increase().event_log()) {
+    wal_client_->receive_hole_log(wal_param, evt_log);
+  }
+}
+
 bool user_friend_api_manager::is_dirty() const { return is_dirty_; }
 
 void user_friend_api_manager::clear_dirty() { is_dirty_ = false; }
@@ -300,9 +324,12 @@ int32_t user_friend_api_manager::invoke_async_task(rpc::context &ctx) {
             }
 
             // 忽略心跳错误，下次重试会补
-            RPC_AWAIT_IGNORE_RESULT(rpc::friend_api::management_subscribe(
+            int32_t heartbeat_ret = RPC_AWAIT_CODE_RESULT(rpc::friend_api::management_subscribe(
                 child_ctx, atfw::friend_api::router_friend_manager::me()->get_type_id(), user_ptr->get_zone_id(),
                 user_ptr->get_user_id(), *req_body, *rsp_body));
+            if (heartbeat_ret >= 0) {
+              self.wal_client_->receive_subscribe_response(friend_api_wal_client_context(child_ctx, heartbeat_ret));
+            }
           }
 
           TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);

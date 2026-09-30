@@ -175,6 +175,7 @@ service FriendManagementService {
 
 message DFriendManagementNotificationEvent {
   repeated atframework.shared.DUserIDKey subscriber_key = 1;
+  atframework.shared.DUserIDKey friend_data_key = 2;
 
   message Increase {
     repeated DFriendEvent event_log = 1;

@@ -21,6 +21,8 @@ class DFriendStatistics;
 class DFriendEvent;
 class DFriendGiftHistory;
 class DFriendGift;
+
+class DFriendManagementNotificationEvent;
 }  // namespace friend_api
 }  // namespace atframework
 
