@@ -7,44 +7,53 @@ title: 项目简介
 
 **atsf4g-co**（AT Service Framework for Game - Coroutine）是一套基于协程的游戏服务器框架，构建在
 [atframework](https://github.com/atframework) 系列组件之上（`atframe_utils`、`libatbus`、`libatapp`、
-`libcopp`），使用 C++17（在可用时使用 C++20/C++23 特性），面向可扩展、高性能的游戏服务器架构。
+`libcopp`）。项目代码要求 **C++14**，支持 **Windows、Linux 和 macOS**。
 
 ## 核心特性
 
-- **协程化异步模型**：单进程单线程事件循环（libuv）+ 协程任务（libcopp cotask 或 C++20 协程），业务并发完全由
-  task action 承载，告别回调地狱。
-- **声明式 RPC 与代码生成**：以 protobuf 为协议源头，通过自定义扩展选项 + Mako 模板批量生成 RPC 调用端、
-  分发 handler、task action 骨架、数据库访问层与配置加载代码。
-- **内置基础设施**：atgateway（客户端网关，ECDH 握手/加密/限流）、atproxy（跨服代理，etcd 服务发现）、
-  路由对象缓存（router）、Redis 数据层、OpenTelemetry 可观测性。
-- **可复用组件**：分布式消息队列（dtmq）、分布式事务（2PC）、排行榜（rank board）、Orbit 等开箱即用的
-  服务组件 + 客户端 SDK。
-- **云原生部署**：Helm chart / Docker / 裸机脚本三种部署形态，由 atdtool 渲染 `install/**/*.tpl` 模板生成。
+- **协程化异步模型**：支持 C++20 协程和 libcopp 传统有栈协程。通过
+  `PROJECT_SERVER_FRAME_USE_STD_COROUTINE` 一键切换后端，使用框架协程接口的业务代码无需修改。
+  C++20 后端需要支持标准协程的工具链；C++14 使用有栈后端。
+- **声明式开发**：协议以 protobuf 为源头，已有生成流程自动生成 RPC 调用接口、handler 注册、
+  task action 骨架、数据库接口和 Excel 配置加载代码。日常扩展只需填写声明配置并实现业务逻辑。
+- **跨平台基础设施**：atgateway 提供客户端接入，atproxy 提供跨服通信；内置服务发现、
+  路由对象缓存、Redis 数据层和 OpenTelemetry 可观测性。
+- **可复用组件与服务**：分布式消息队列（dtmq）、分布式事务、排行榜、好友服务、匹配服务、
+  组队服务及其 SDK。
+- **Orbit**：针对 Unreal Engine（UE）的 Dedicated Server（DS）管理解决方案，通过
+  controller / agent / server / client 管理进程生命周期、心跳和通信。
+- **部署工具**：使用 atdtool 和 values 配置生成 Kubernetes、Docker 或裸机/本地运行所需的资源与脚本。
 
-## 文档导航
+项目代码的 C++14 要求与第三方依赖的工具链要求分别核对；选用较新依赖版本时，构建可能采用更高的语言标准。
+参见[环境准备](getting-started/prerequisites)和[协程后端切换](getting-started/build#coroutine-backend)。
+
+## 从哪里开始
+
+首次使用按[环境准备](getting-started/prerequisites) → [构建](getting-started/build) →
+[运行与部署](getting-started/run-deploy)操作。已有可运行工程时，直接进入[开发快速上手](development/overview)，
+按要完成的任务选择章节。
 
 | 章节 | 内容 |
 | --- | --- |
-| [快速开始](getting-started/prerequisites) | 环境准备、构建、运行与部署 |
-| [架构设计](architecture/overview) | 组件关系、消息流、dispatcher/RPC/router/数据层/配置/可观测性 |
-| [公共组件](components/overview) | dtmq、分布式事务、排行榜、Orbit |
-| [服务](services/overview) | 各业务服务与压测机器人 |
-| [开发指南](development/add-service) | 新增服务、新增 RPC、数据库表、Excel 配置、单元测试 |
+| [开发快速上手](development/overview) | RPC、服务、组件、Excel、服务端配置、协议与数据库表的最小操作路径 |
+| [公共组件](components/overview) | dtmq、分布式事务、排行榜、好友、匹配、组队与 Orbit 的接入入口 |
+| [服务](services/overview) | 各服务职责与本地验证入口 |
+| [架构设计](architecture/overview) | 需要修改底层行为时查阅的设计与实现说明 |
 
 ## 仓库结构速览
 
-```
+```text
 atsf4g-co/
-├── atframework/        # vendored 框架库（atframe_utils / libatbus / libatapp / atproxy / atgateway）
+├── atframework/        # 框架库与 atproxy / atgateway
 ├── src/
-│   ├── server_frame/   # 服务器公共框架：config / dispatcher / router / rpc / data / logic / utility
-│   ├── *svr/           # 业务服务：echosvr、authsvr、cachesvr、lobbysvr、rank_settlement_svr、orbitsvr
-│   ├── component/      # 可复用组件：dtmq、distributed_transaction、rank、orbit、GameSharedComponent
-│   ├── templates/      # Mako 代码生成模板
-│   ├── tools/          # generate-for-pb 代码生成器、etcd 调试工具
-│   └── robot/          # Go 压测机器人
-├── install/            # 部署模板（Helm chart + Go text/template）
-├── resource/           # Excel 策划配置表与 xresloader 配置
-├── project/            # CMake 构建选项与工具
-└── third_party/        # 第三方依赖（预编译包、atdtool、xresloader 等）
+│   ├── server_frame/   # 公共配置、协议、dispatcher、router、RPC、数据层
+│   ├── *svr/           # 大厅、认证、缓存、好友、匹配、组队等服务
+│   ├── component/      # dtmq、distributed_transaction、rank、orbit、共享算法
+│   ├── templates/      # 框架维护者使用的代码生成模板
+│   ├── tools/          # 代码生成器与离线 RPC 测试工具
+│   └── robot/          # Go 压测与模拟客户端
+├── install/            # 部署模板与 values 配置
+├── resource/           # Excel 表格与资源转换配置
+├── project/            # 构建选项与工具
+└── third_party/        # 第三方依赖
 ```

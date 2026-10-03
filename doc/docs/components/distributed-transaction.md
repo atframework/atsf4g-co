@@ -9,7 +9,20 @@ title: 分布式事务
 
 位置：`src/component/distributed_transaction/`（README 见该目录）。
 
-## 组成
+## 快速上手
+
+1. 启用 `dtcoordsvr` 并准备 Redis；使用对应 chart 的事务超时、恢复与清理配置。
+2. 消费方 `USE_COMPONENTS` 加入 `distributed-transaction-sdk`；
+   使用 `sdk/transaction_client_handle.h`、`transaction_participator_handle.h`
+   和 `rpc/transaction/transaction_api.h`。
+3. 参照组件 README 的接入契约实现业务参与者回调，准备参与者、资源 key 和事务数据，
+   由 client handle 提交。业务数据与参与者快照需一致保存。
+4. 先验证正常提交，再验证 prepare 失败后的拒绝；本地动作与恢复回调必须幂等。
+   需要事务语义时先使用普通模式，并核对下面的全局决议与失败恢复规则。
+
+## 定制与详细设计
+
+### 组成
 
 | 部分 | 位置 | 说明 |
 | --- | --- | --- |
@@ -17,11 +30,11 @@ title: 分布式事务
 | SDK | `sdk/` | `transaction_client_handle`（发起者）、`transaction_participator_handle`（参与者）、`transaction_api` |
 | 协议 | `protocol/` | `distributed_transaction.proto`、`dtcoordsvr_config.proto` |
 
-## 协调者 RPC（task action）
+### 协调者 RPC（task action）
 
 `create` / `commit` / `reject` / `query` / `remove` / `commit_participator` / `reject_participator`。
 
-## 流程
+### 流程
 
 ```mermaid
 sequenceDiagram
@@ -47,7 +60,7 @@ sequenceDiagram
 未确认全局终态时，client 先有限次查询，不以失败调用的部分副本响应决定通知方向。
 已确认的全局终态不会因后续本地动作或通知失败而反转。
 
-## 事件与状态
+### 事件与状态
 
 下表按普通模式收到直接通知的正常路径列出回调触发时的状态。若查询或快照已包含终态，保留该终态。
 
@@ -72,7 +85,7 @@ SDK 的失败恢复针对返回错误、任务超时和取消。
 `force_commit` 的显式 `lock` 会登记资源锁，直接调用者须在本次调用结束前用 storage 句柄 `unlock`。
 `check_writable` 及其 vtable 回调同步返回 `int32_t` 错误码，不切出协程。
 
-## 运维注意
+### 运维注意
 
 client 每次派发 prepare 前及最后一次 prepare 返回后检查原截止时间，超时后进入拒绝或补偿流程。
 一次 submit 固定持有入口处的 storage，并在调用结束时释放；回调替换调用者指针不会将后续状态写到新对象。

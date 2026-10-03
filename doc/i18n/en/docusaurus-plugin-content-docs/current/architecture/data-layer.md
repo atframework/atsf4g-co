@@ -4,7 +4,15 @@ title: Data Layer
 
 # Data Layer
 
-## Redis Access (db_msg_dispatcher)
+## Quick Start
+
+1. Prepare Redis and configure service connections in values' `modules/redis.yaml`.
+2. Use generated `rpc::db` APIs for existing tables; follow [database setup](../development/add-db-table) for new tables.
+3. Await results with framework macros and check error codes. Ordinary business code needs no handwritten Redis commands or Lua.
+
+## Customization and Design
+
+### Redis Access (db_msg_dispatcher)
 
 The data layer currently supports only **Redis** (`src/server_frame/dispatcher/db_msg_dispatcher.{h,cpp}`):
 
@@ -12,7 +20,7 @@ The data layer currently supports only **Redis** (`src/server_frame/dispatcher/d
 - Supports `SCRIPT LOAD` and embedded Lua (CAS verification, KL index trimming);
 - After a reply is unpacked, the waiting coroutine is resumed by task id.
 
-## Logical Primitives (rpc/db/hash_table)
+### Logical Primitives (rpc/db/hash_table)
 
 `src/server_frame/rpc/db/hash_table.{h,cpp}` provides business-friendly primitives on top of Redis:
 
@@ -22,7 +30,7 @@ The data layer currently supports only **Redis** (`src/server_frame/dispatcher/d
 | KL | Key-list index: `add` / `get` / `update` / `remove`, monotonic index list trimming (embedded Lua) |
 | TTL | Key expiration management |
 
-## Generated DB Interfaces
+### Generated DB Interfaces
 
 Generated from the table/index extensions in `svr.local.table.proto` / `svr.global.table.proto` +
 `svr.database.extension.proto`, via `db_interface.*.mako` and `db_rpc_redis(.kv/.kl).*.mako`:
@@ -34,15 +42,17 @@ Generated from the table/index extensions in `svr.local.table.proto` / `svr.glob
 
 ```cpp
 // Example: reading a table inside a coroutine
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get(ctx, user_id, ...));
+PROJECT_NAMESPACE_ID::table_login_auth row;
+uint64_t version = 0;
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
 ```
 
-## UUID
+### UUID
 
 `src/server_frame/rpc/db/uuid.{h,cpp}` provides ID generation: `standard` / `short` / `global_increase`
 (DB auto-increment) / `global_unique`.
 
-## Session and User Cache
+### Session and User Cache
 
 - `src/server_frame/data/session.{h,cpp}`: gateway session, key = `(gateway_node_id, session_id)`, responsible
   for downstream sending;

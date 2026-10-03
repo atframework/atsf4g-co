@@ -4,7 +4,16 @@ title: 可观测性
 
 # 可观测性（Telemetry / HPA）
 
-## OpenTelemetry 封装
+## 快速上手
+
+1. 在 values 的 `modules/telemetry.yaml` 配置需要的 trace/metrics 导出目标，
+   使用对应 otelcol 配置准备 Collector。
+2. 生成配置并运行服务，使用一次 RPC 检查 trace，查看服务内置 metrics。
+3. 新业务 action 沿用自动 trace；需要额外业务指标时使用已有 telemetry API。
+
+## 定制与详细设计
+
+### OpenTelemetry 封装
 
 `src/server_frame/rpc/telemetry/` 提供 OpenTelemetry 封装：
 
@@ -17,14 +26,14 @@ title: 可观测性
 `install/cloud-native/values/default/modules/telemetry.yaml` 与 `install/otelcol/`（Collector 启动脚本，
 daemon / systemd 两种模式）。
 
-## Trace 传播
+### Trace 传播
 
 - CS 链路：atgateway 上行不带 trace，服务侧以 task action 为 span 根；
 - SS 链路：`rpc_context`（`src/server_frame/rpc/rpc_context.{h,cpp}`）随 `SSMsg` 传播 trace 上下文，
   跨服务串联 span；
 - DB 调用：Redis 命令作为子 span。
 
-## Metrics 与 HPA
+### Metrics 与 HPA
 
 `src/server_frame/logic/hpa/` 实现 HPA 自动伸缩支持：
 
@@ -34,7 +43,7 @@ daemon / systemd 两种模式）。
 
 `router_manager_set`、dispatcher 等也暴露内置 metrics（对象数、task 数、RPC 延迟）。
 
-## 日志
+### 日志
 
 - 框架日志走 `atframe_utils` 日志模块（libatapp 日志 sink 配置在 atapp YAML）；
 - 结构化日志协议：`protocol/private/protocol/log/`（`svr.mon.log.proto` 监控日志、`svr.oss.log.proto`

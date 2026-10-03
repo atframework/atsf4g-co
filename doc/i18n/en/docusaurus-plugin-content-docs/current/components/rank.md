@@ -9,7 +9,18 @@ for mirrors, WAL master-standby sync, and periodic settlement.
 
 Location: `src/component/rank/`.
 
-## Composition
+## Quick Start
+
+1. Enable `rank-board-svr`, adding `rank-settlement-svr` for periodic settlement, and prepare Redis.
+2. Edit rules, board definitions, and reward pools in `resource/ExcelTables/Rank.xlsx`; export and publish them.
+3. Add `rank-board-svr-sdk` and `rank-logic-sdk` to `USE_COMPONENTS` as needed.
+   Public APIs live in `src/component/rank/sdk/rank_board_svr/rpc/rank_board/rank.h`.
+4. Follow the lobby's `rank/` integration, write test scores, and query the board/ranks.
+   For periodic settlement, verify results/rewards. Ordinary board configuration needs no template changes.
+
+## Customization and Design
+
+### Composition
 
 | Part | Location | Description |
 | --- | --- | --- |
@@ -17,18 +28,18 @@ Location: `src/component/rank/`.
 | SDK | `rank/sdk/` | `rank_board` (sharded RPC client) + `rank_logic` (ranking algorithms) |
 | Protocol | `rank/protocol/` | `rank_board_service.proto` |
 
-## Service Capabilities (task action)
+### Service Capabilities (task action)
 
 Set/modify score, get top, heartbeat, master-standby switchover, etc. WAL master-standby sync uses the same
 `distributed_system::wal_publisher / wal_subscriber` mechanism as dtmq (`rank_wal_handle`).
 
-## Settlement
+### Settlement
 
 `src/rank_settlement_svr/` (`rank_settlement_manager` +
 `task_action_rank_send_settlement / task_action_rank_update_settlement`) handles periodic board settlement: pulling boards
 from rank_board_svr, granting rewards, and writing settlement results.
 
-## Business Integration
+### Business Integration
 
 The `rank/` directory in lobbysvr demonstrates query integration. To integrate: link the rank SDK and use
 the `rank_board` client with shard addressing to send the RPCs in `rank_board_service.proto`.

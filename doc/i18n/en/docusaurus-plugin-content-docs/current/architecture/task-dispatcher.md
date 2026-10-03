@@ -4,7 +4,15 @@ title: Tasks and Dispatching
 
 # Tasks and Dispatching (dispatcher / task action)
 
-## Three-Layer Structure
+## Quick Start
+
+1. Declare a method and generate its action using the [RPC quick start](../development/add-rpc-task).
+2. Implement `operator()`, await asynchronous results with `RPC_AWAIT_*`, and return with `RPC_RETURN_*`.
+3. Reuse standard handler registration/dispatcher initialization; do not register each method again manually.
+
+## Customization and Design
+
+### Three-Layer Structure
 
 ```mermaid
 flowchart LR
@@ -25,7 +33,7 @@ flowchart LR
 - **task_manager** (`dispatcher/task_manager.h`): task creation, timeout management, and a generic start/resume
   generator indexed by `timeout + type + sequence`.
 
-## task action Base Classes
+### task action Base Classes
 
 | Base class | Purpose |
 | --- | --- |
@@ -47,10 +55,11 @@ class task_action_example : public task_action_ss_req_base<ExampleReq, ExampleRs
 };
 ```
 
-The generator only produces skeletons; business logic is filled into `hook_handle()` / `operator()`. Custom code
-inside the `// {% ... %}` marked regions is preserved and will not be overwritten by regeneration.
+Default rules create business skeletons only when absent; implement `hook_handle()` / `operator()` in them.
+Existing skeleton files are preserved as a whole, while generated handlers/APIs are updated.
+Synchronize existing skeletons manually after RPC signature changes; marked regions do not migrate them.
 
-## Dual Coroutine Implementations
+### Dual Coroutine Implementations
 
 `task_type_traits.h` (`dispatcher/task_type_traits.h`) provides a unified abstraction over the two backends:
 
@@ -61,7 +70,7 @@ inside the `// {% ... %}` marked regions is preserved and will not be overwritte
 Business code only uses the `RPC_AWAIT_*` / `RPC_RETURN_*` macros and the
 `rpc::result_code_type / rpc_result<T>` types, without directly perceiving backend differences.
 
-## Built-in task actions
+### Built-in task actions
 
 `src/server_frame/logic/action/` provides framework-level actions: `set_server_time`, `user_logout`,
 `reload_remote_server_configure`, `async_invoke`, etc.; `src/server_frame/router/action/` provides router-related

@@ -4,40 +4,61 @@ title: 新增服务
 
 # 新增服务
 
-以 `echosvr` 为最小模板（仅一个 `app/echosvr_main.cpp`），标准服务参照 `lobbysvr`。
+## 快速上手：复制标准服务
 
-## 步骤
+使用 `src/authsvr/` 作为小型 CS RPC 服务模板；SS RPC 与独立 SDK 可参照
+`src/lobbysvr/protocol/CMakeLists.txt`。复制现有声明即可，不需要编写生成模板。
+`echosvr` 是原始消息回显示例，不包含完整的业务 RPC 装配。
 
-1. **定义协议**：在 `src/server_frame/protocol/`（或组件自己的 `protocol/`）添加 service 与 message；
-   用 `atframework.service_options` / `rpc_options` 标注 `module_name` / `api_name` / `allow_no_wait`。
-2. **声明生成规则**：在服务的 `CMakeLists.txt` 中用 `generate_for_pb_add_ss_service`（SS RPC）/
-   `generate_for_pb_add_cs_service`（CS RPC）（见 `src/tools/generate_for_pb_utility.cmake`）声明：
-   proto 文件 + 模板（`handle_ss_rpc` / `task_action_ss_rpc` / `rpc_call_api_for_ss` / CS 变体）+ 输出路径。
-3. **编写 main**：参照 `src/lobbysvr/service/app/lobbysvr_main.cpp`：
+1. 将 `src/authsvr/` 复制为 `src/examplesvr/`，保留 `protocol/`、`service/app/` 和业务目录结构。
+   替换服务名、main 文件名、配置 message/头文件、配置目标名和导出宏；不要复制
+   `*.atfw.gen.*` 和原服务的业务 action。
+2. 在公共 `com.protocol.proto` 定义新的 `ExamplesvrClientService` 及其消息，
+   按[RPC 上手](add-rpc-task)填写方法声明。在新目录的已有生成声明中，将
+   `AuthsvrClientService` 改为 `ExamplesvrClientService`。
+3. 在复制的 main 中更新配置段与环境变量前缀，以及
+   `register_handles_for_examplesvrclientservice()` 和对应生成头文件。
+   保留原有公共模块/dispatcher 初始化流程。新增业务模块时在其后挂载。
+4. 在 `src/CMakeLists.txt` 加入 `add_subdirectory(examplesvr)`；重新配置/构建，
+   填充生成的 action，再次构建。
+5. 复制 `install/cloud-native/charts/authsvr/` 为新服务 chart，替换名称和配置段。
+   在 `src/server_frame/config/include/config/extern_service_types.h` 的
+   `logic_service_type` 中分配新类型，在新 chart 的 `values.yaml` 填写一致的
+   `proc_name`、`type_id`、`type_name`；在所用 values 的
+   `non_cloud_native/deploy.yaml` 登记实例。
+6. 按[运行与部署](../getting-started/run-deploy)生成配置并启动新实例，检查发现注册和一次正常 RPC。
 
-```cpp
-int main(int argc, char *argv[]) {
-  atfw::atapp::app app;
-  // logic_config 注入本服务配置加载回调
-  project::logic_server_setup_common(app);
-  // 注册生成的 RPC handler
-  register_handles_for_<yourservice>();
-  // 挂载 dispatcher 与业务 module
-  app.add_module(atfw::cs_msg_dispatcher::me());
-  app.add_module(atfw::ss_msg_dispatcher::me());
-  app.add_module(atfw::db_msg_dispatcher::me());
-  app.add_module(<业务 module>);
-  return app.run(uv_default_loop(), argc, argv, nullptr);
-}
+服务或配置名称不能与原服务重复。类型枚举、values 映射和进程布局必须一致。
+
+## 快速上手：新增 SS RPC 服务声明
+
+已有标准服务要增加一组独立 SS RPC 时，沿用其协议目标，把 service 名和输出位置填入已有 helper。
+以大厅服为例，协议文件追加到 `lobbysvr-protocol` 的 `PROTOCOLS`，生成声明为：
+
+```cmake
+generate_for_pb_add_ss_service(
+  "${PROJECT_NAMESPACE}.ExampleService"
+  "${LOBBYSVR_ROOT_DIR}/service"
+  TASK_PATH_PREFIX "logic"
+  HANDLE_PATH_PREFIX "app"
+  PROJECT_NAMESPACE "${PROJECT_NAMESPACE_ID}"
+  RPC_ROOT_DIR "${LOBBYSVR_ROOT_DIR}/sdk"
+  RPC_DLLEXPORT_DECL LOBBY_RPC_API
+  EXTERNAL_SERVICE_PROTOCOLS "lobbysvr-protocol"
+  INCLUDE_HEADERS "protocol/pbdesc/example_service.pb.h")
 ```
 
-4. **填充 task action**：生成器产出 `logic/action/task_action_*` 骨架，在 `operator()` 中写业务逻辑。
-5. **加入构建**：`src/CMakeLists.txt` 中 `add_subdirectory(<name>svr)`。
-6. **部署**：在 `install/cloud-native/charts/` 添加服务 chart（可复制现有服务），`values/` 各 profile
-   补充参数；本地运行补充 `publish/tools/script/config.conf` 模板。
+在服务和 SDK 已有声明的 `GENERATED_FLOW_NAMES` 中加入同一个 service 全名，
+在 main 注册生成的 `register_handles_for_exampleservice()`。
+之后给此 service 增加方法只需修改 proto 和业务 action。
+独立 SDK 的头文件/源文件清单沿用已有 SDK 声明补充新接口文件。
 
-## 注意
+## 定制与详细设计
 
-- 生成物（`*.atfw.gen.*`）不入手工编辑；重新生成的触发是 proto/模板变化。
-- 模块装配顺序遵循 `logic_server_setup_common` 的约定；自定义 module 依赖 dispatcher 时在其后挂载。
-- 新服务默认进入全部构建，没有单独开关。
+服务端公共装配见 `src/server_frame/logic/logic_server_setup.h`；
+生成规则见[RPC 与代码生成](../architecture/rpc-codegen)。
+服务实现会由 helper 组织为可执行文件与 private 静态库，入口目录默认 `app/`。
+测试应使用工程测试 helper；涉及服务端 RPC 的测试见[RPC 单元测试](rpc-unit-test)。
+
+需要自定义编译、生成或部署方式时，再阅读 `src/service-functions.cmake`、
+`src/tools/generate_for_pb_utility.cmake` 和 `install/cloud-native/charts/libapp/`。

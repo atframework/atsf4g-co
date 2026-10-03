@@ -9,6 +9,16 @@ process and replaces every external dependency (SS/DNS/CS/DB/UUID/resource/HPA/t
 so real RPC paths in business code (dispatcher, task, coroutines, generated API) can be driven and asserted in unit
 tests without Redis, etcd, atbus, or system DNS. The library API namespace is `atframework::testing`.
 
+## Quick Start
+
+1. Enable `PROJECT_ENABLE_UNITTEST` and `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` in the existing
+   build directory, then reconfigure, build, and run the target using the [test guide](testing).
+2. For a new case, follow the owning service/component's `test/`, declare its target with
+   `project_add_rpc_unit_test`, and reuse runtime initialization and mock engine setup.
+3. Set deterministic mock responses, drive business logic through generated APIs or dispatchers, and assert
+   results/notifications. Engines replace external dependencies; Redis, etcd, and gateways need not run.
+   The following sections cover target declarations and APIs in detail.
+
 ## Scope and build switch
 
 - Use for: offline unit tests of service/component logic and contract tests of router/SS/CS/DB generated APIs.

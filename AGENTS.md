@@ -9,13 +9,16 @@ libatbus, libatapp, libcopp, and other atframework components. It provides a com
 high-performance game server architectures.
 
 - **Repository**: <https://github.com/atframework/atsf4g-co>
-- **Languages**: C++ (C++17-capable build toolchain; new and modified project-owned C++ uses a C++14-compatible subset)
+- **Languages**: C++14-compatible project code; optional C++20 coroutine backend. Check third-party toolchain requirements separately.
+- **Platforms**: Windows, Linux, and macOS.
 
 ## Project Map
 
 - `src/server_frame/`: shared config, protocol, dispatcher, router, RPC, data, and utility code.
-- `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `teamsvr`, `rank_settlement_svr`, `orbitsvr`).
-- `src/component/`: DTMQ, distributed transaction, rank, orbit, and shared algorithm components plus their SDKs.
+- `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `friendsvr`, `matchsvr`, `teamsvr`,
+  `rank_settlement_svr`, `orbitsvr`).
+- `src/component/`: DTMQ, distributed transaction, rank, Orbit (UE Dedicated Server management), and shared algorithms
+  plus their SDKs.
 - `src/robot/` and `src/tools/`: Go stress client, generators, diagnostics, and the offline mock-RPC test fixture.
 - `src/templates/`: Mako templates for generated RPC/task code.
 - `doc/`: Docusaurus documentation site (architecture + development docs, zh-CN/en i18n).

@@ -1,45 +1,60 @@
 ---
 title: Adding a Database Table
 ---
+
 # Adding a Database Table
 
-The data layer only supports Redis; table structures are described with protos and access code is generated
-from templates.
+The built-in data layer uses Redis. Proto declarations define tables/access options and drive generated APIs.
 
-## Steps
+## Quick Start
 
-1. **Define the table proto**: in `src/server_frame/protocol/private/protocol/pbdesc/`, add a message to
-   `svr.local.table.proto` (this zone's database) or `svr.global.table.proto` (the global database), and
-   annotate primary keys, indexes (KV/KL), TTL, CAS fields, etc. using the extensions in
-   `svr.database.extension.proto`.
-2. **Rebuild**: `db_interface.*.mako` + `db_rpc_redis(.kv/.kl).*.mako` generate
-   `rpc/db/local_db_interface.atfw.gen.{h,cpp}` or `global_db_interface.atfw.gen.{h,cpp}`,
-   under the namespace `rpc::db::<table_name>`.
-3. **Use it**: await directly inside a coroutine:
+1. Add a table to `src/server_frame/protocol/private/protocol/pbdesc/svr.local.table.proto`
+   (zone-local DB) or `svr.global.table.proto` (global DB).
+   Append this declaration to the existing file, reusing its imports/package:
 
-```cpp
-// Read an entire row (version is the output CAS version)
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::get_all(ctx, key, msg, version));
-// Replace the whole row (pass the read CAS version for optimistic locking; the new version is written back)
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::replace(ctx, store, version));
-// Atomic increment of a numeric field (one generated API per incrementable field; inc_value takes the
-// delta and returns the new value)
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::inc_field_<field_name>(ctx, key, inc_value));
+```protobuf
+message table_example {
+  option (atframework.database_table) = {
+    index: {
+      name: "example"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "user_id"
+    }
+  };
+  uint64 user_id = 1;
+  string value = 2;
+}
 ```
 
-Generated table APIs also include `batch_get_all`, `remove_all`, `set_ttl` / `remove_ttl`, and more.
+2. [Reconfigure/build](overview); the existing workflow updates
+   `rpc/db/local_db_interface.atfw.gen.h/.cpp` or `global_db_interface.atfw.gen.h/.cpp`.
+   API namespaces follow the index `name`, for example `rpc::db::example`. No template changes are needed.
+3. Include the generated header, use its declarations from business actions, and check error codes.
+   The existing login table can be read as follows:
 
-## Low-Level Primitives
+```cpp
+PROJECT_NAMESPACE_ID::table_login_auth row;
+uint64_t version = 0;
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
+```
 
-If the generated interface does not meet your needs, you can directly assemble the KV/KL/CAS/TTL primitives
-in `rpc/db/hash_table.h` (refer to the implementation of `rpc/db/local_db_interface.atfw.gen.cpp`).
+   `ctx` is the current RPC context and `open_id` is the login table's string key.
+   New table keys/message types follow their generated APIs. `replace` takes
+   `rpc::shared_message<Table>`, rather than a plain protobuf message.
+4. Configure Redis in values and generate instance YAML. Verify insert, read, and update with valid keys.
+   For CAS-enabled tables, also verify that a version mismatch rejects the update.
 
-## ID Generation
+## Common APIs
 
-When you need distributed IDs, use `rpc/db/uuid.h`: `standard` / `short` / `global_increase` (backed by DB
-auto-increment) / `global_unique`.
+Storage options determine generated `get_all`, `batch_get_all`, `insert`, `replace`, `remove_all`,
+TTL, and field-increment APIs. Keep the CAS `version` returned by reads and pass it to updates;
+check generated headers for actual signatures and available APIs.
+Adding fields to an existing table usually needs only proto and business read/write changes.
 
-## Configuration
+## Customization and Design
 
-Redis connections live in the `logic.db` section of the instance configuration (cluster plus sentinel/raw
-dual channels), rendered on the deployment side by `install/**/cfg/*.yaml.tpl`.
+Use `rpc/db/hash_table.h` KV/KL/CAS/TTL primitives when generated APIs do not meet your needs.
+Annotations are defined in `private/protocol/extension/svr.database.extension.proto`;
+see [RPC and code generation](../architecture/rpc-codegen) for generation rules.
+Distributed IDs use `rpc/db/uuid.h`; see [data layer](../architecture/data-layer) for runtime behavior.

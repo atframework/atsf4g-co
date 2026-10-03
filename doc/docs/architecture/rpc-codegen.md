@@ -4,7 +4,14 @@ title: RPC 与代码生成
 
 # RPC 与代码生成
 
-## 协议即源头
+## 快速上手
+
+增加或修改 RPC、协议、Excel 和数据库表时，从[开发快速上手](../development/overview)选择对应任务。
+现有声明负责生成代码，常规扩展不需要编写模板。下文供修改生成行为时查阅。
+
+## 定制与详细设计
+
+### 协议即源头
 
 所有协议以 protobuf 定义，根目录在 `src/server_frame/protocol/`：
 
@@ -20,7 +27,7 @@ protocol/
 
 **生成物一律重新生成，不手工编辑**（`*.atfw.gen.{h,cpp}`、`*.pb.{h,cc}`、config/db 代码）。
 
-## 自定义选项（atframework.proto）
+### 自定义选项（atframework.proto）
 
 驱动生成的扩展选项分布在三个文件：
 
@@ -29,7 +36,7 @@ protocol/
 - `protocol/extension/xrescode_extensions_v3.proto`：`xrescode.loader` 选项，标记 Excel 配置加载器；
 - `private/protocol/extension/svr.database.extension.proto`：DB 表/索引扩展（KV/KL/CAS/TTL），供 db 模板使用。
 
-## 生成流水线
+### 生成流水线
 
 ```mermaid
 flowchart LR
@@ -43,7 +50,7 @@ flowchart LR
   （服务名 + 模板 + 输出路径）批量渲染；
 - `src/tools/generate_for_pb_utility.cmake`：CMake 侧的模板调用封装。
 
-## 模板清单（src/templates/）
+### 模板清单（src/templates/）
 
 | 模板 | 生成物 |
 | --- | --- |
@@ -66,7 +73,7 @@ orbit fork 模板同样在 `packer` 子命名空间中生成，返回其点分�
 [RPC 单元测试](../development/rpc-unit-test.md)）；orbit fork 的 getter 返回点分全名，且 orbit RPC 经 orbit
 transport 不走 SS 引擎，不可用于 `test.ss()`。
 
-## RPC 调用端 API 形态
+### RPC 调用端 API 形态
 
 生成的调用端返回可 `co_await` 的对象：
 

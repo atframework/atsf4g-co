@@ -4,7 +4,15 @@ title: Gateway and Proxy
 
 # Gateway and Proxy (atgateway / atproxy)
 
-## atgateway
+## Quick Start
+
+1. [Start](../getting-started/run-deploy) atgateway, atproxy, and the target business service.
+2. Configure etcd, gateway listeners, and the target service through values; verify connection/login/requests with [robot](../services/robot).
+3. Use existing gateway protocol SDKs for ordinary integration; no handshake or transport template changes are needed.
+
+## Customization and Design
+
+### atgateway
 
 Location: `atframework/service/atgateway`. The client access gateway, responsible for:
 
@@ -21,7 +29,7 @@ The gateway does not parse business message bodies: upstream, it wraps `CSMsg` t
 `(gateway_node_id, session_id)` into a `gateway::server_message` and delivers it to the target service via atbus;
 downstream, it routes responses back to the client by session.
 
-## atproxy
+### atproxy
 
 Location: `atframework/service/atproxy`. Cross-service-group proxy:
 
@@ -33,7 +41,7 @@ Location: `atframework/service/atproxy`. Cross-service-group proxy:
 Debug tools: `src/tools/etcd-watcher` (watch etcd key changes), `src/tools/etcd-atproxy-ls` (list registered
 atproxy nodes).
 
-## Connection Topology
+### Connection Topology
 
 ```mermaid
 flowchart TB

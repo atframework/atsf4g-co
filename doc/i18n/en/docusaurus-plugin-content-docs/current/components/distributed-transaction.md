@@ -10,7 +10,19 @@ coordinator to record the global decision, then notifies participators to execut
 
 Location: `src/component/distributed_transaction/` (see the README in that directory).
 
-## Composition
+## Quick Start
+
+1. Enable `dtcoordsvr` and prepare Redis; configure transaction timeout, recovery, and cleanup in its chart.
+2. Add `distributed-transaction-sdk` to `USE_COMPONENTS`; use
+   `sdk/transaction_client_handle.h`, `transaction_participator_handle.h`, and `rpc/transaction/transaction_api.h`.
+3. Implement participant callbacks using the component README's contract, prepare participants, resource
+   keys, and transaction data, then submit through the client handle. Persist business data consistently with participant snapshots.
+4. Verify a normal commit and rejection after a prepare failure. Local actions/recovery callbacks must
+   be idempotent. Start with normal transaction mode and follow the decision/recovery rules below.
+
+## Customization and Design
+
+### Composition
 
 | Part | Location | Description |
 | --- | --- | --- |
@@ -18,11 +30,11 @@ Location: `src/component/distributed_transaction/` (see the README in that direc
 | SDK | `sdk/` | `transaction_client_handle` (initiator), `transaction_participator_handle` (participator), `transaction_api` |
 | Protocol | `protocol/` | `distributed_transaction.proto`, `dtcoordsvr_config.proto` |
 
-## Coordinator RPC (task action)
+### Coordinator RPC (task action)
 
 `create` / `commit` / `reject` / `query` / `remove` / `commit_participator` / `reject_participator`.
 
-## Flow
+### Flow
 
 ```mermaid
 sequenceDiagram
@@ -48,7 +60,7 @@ sequenceDiagram
 When the global terminal state is unconfirmed, the client performs bounded queries. Partial replica responses from a
 failed call cannot decide notification direction. Later local or delivery failures cannot reverse a confirmed decision.
 
-## Events and States
+### Events and States
 
 This table shows callback entry states for normal mode with direct notifications. A terminal state already learned
 from a query or snapshot is preserved.
@@ -78,7 +90,7 @@ Explicit `lock` calls register resource locks in `force_commit` mode; direct cal
 handle before their operation ends. `check_writable` and its vtable callback return an `int32_t` error code synchronously
 and do not suspend the coroutine.
 
-## Operational Notes
+### Operational Notes
 
 The client checks the original deadline before every prepare and after the last prepare returns, then rejects or
 compensates on expiry. Each submit retains its initial storage until the call ends. Replacing the caller's pointer in

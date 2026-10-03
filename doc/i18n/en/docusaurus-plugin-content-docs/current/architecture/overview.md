@@ -41,7 +41,7 @@ Main path: **Client → atgateway → atproxy → service → dispatcher → tas
 | Access layer | atgateway / atproxy | Client access, cross-service forwarding, service discovery |
 | Framework layer | `src/server_frame/` | dispatcher, task, router, rpc, config, data, telemetry |
 | Component layer | `src/component/` | Reusable services + SDKs such as dtmq, distributed_transaction, rank, orbit |
-| Business layer | `src/*svr/` | Business logic such as login (authsvr), lobby (lobbysvr), cache (cachesvr) |
+| Business layer | `src/*svr/` | Reusable login, lobby, cache, friend, matchmaking, and team services |
 | Data layer | Redis (`db_msg_dispatcher`) | KV/KL/CAS primitives + DB interfaces generated from `*.table.proto` |
 | Deployment layer | `install/` | Helm chart / Docker / bare-metal scripts, rendered by atdtool |
 
@@ -57,7 +57,8 @@ Main path: **Client → atgateway → atproxy → service → dispatcher → tas
 
 ## Single-Threaded Coroutine Model
 
-There is no worker thread concept anywhere in the repository: all IO (atbus, Redis, timers, DNS) is attached to
-the same libuv loop, and business concurrency is entirely carried by coroutine tasks. The
+Business tasks usually run on the main libuv loop and await results from asynchronous atbus/Redis requests.
+Dependencies can have background threads; Orbit's client runtime includes a separate thread and cross-thread queues.
+Follow the selected module's threading and lifetime rules. The
 `PROJECT_SERVER_FRAME_USE_STD_COROUTINE` switch toggles between the C++20 coroutine and libcopp cotask
 implementations, unified behind `task_type_traits.h` so business code does not need to be aware of the difference.

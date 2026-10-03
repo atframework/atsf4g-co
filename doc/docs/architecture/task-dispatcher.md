@@ -4,7 +4,15 @@ title: 任务与分发
 
 # 任务与分发（dispatcher / task action）
 
-## 三层结构
+## 快速上手
+
+1. 按[RPC 上手](../development/add-rpc-task)声明方法并生成 action。
+2. 在 `operator()` 实现业务，通过 `RPC_AWAIT_*` 等待异步结果，用 `RPC_RETURN_*` 返回。
+3. 沿用标准服务已有 handler 注册与 dispatcher 初始化；不要手动重复注册每个方法。
+
+## 定制与详细设计
+
+### 三层结构
 
 ```mermaid
 flowchart LR
@@ -25,7 +33,7 @@ flowchart LR
 - **task_manager**（`dispatcher/task_manager.h`）：task 的创建、超时管理、按 `timeout + type + sequence`
   索引的 generic start/resume 生成器。
 
-## task action 基类
+### task action 基类
 
 | 基类 | 用途 |
 | --- | --- |
@@ -47,10 +55,11 @@ class task_action_example : public task_action_ss_req_base<ExampleReq, ExampleRs
 };
 ```
 
-生成器只产出骨架；业务在 `hook_handle()` / `operator()` 中填充逻辑，保留 `// {% ... %}` 标记区间内的
-自定义代码不会被重新生成覆盖。
+默认生成规则只在业务骨架不存在时创建文件；业务在 `hook_handle()` / `operator()` 中填充逻辑。
+已有骨架整文件保留，自动生成的 handler/API 则会更新。
+RPC 签名变化后需手工同步已有业务骨架，不能依赖标记区间自动迁移。
 
-## 双协程实现
+### 双协程实现
 
 `task_type_traits.h`（`dispatcher/task_type_traits.h`）统一抽象两套后端：
 
@@ -61,7 +70,7 @@ class task_action_example : public task_action_ss_req_base<ExampleReq, ExampleRs
 业务代码只使用 `RPC_AWAIT_*` / `RPC_RETURN_*` 宏与 `rpc::result_code_type / rpc_result<T>` 类型，不直接
 感知后端差异。
 
-## 内置 task action
+### 内置 task action
 
 `src/server_frame/logic/action/` 提供框架级 action：`set_server_time`、`user_logout`、
 `reload_remote_server_configure`、`async_invoke` 等；`src/server_frame/router/action/` 提供路由相关

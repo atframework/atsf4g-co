@@ -9,6 +9,15 @@ title: RPC 单元测试（离线 mock）
 task、协程、生成 API）可以在单测中被驱动和断言，无需 Redis、etcd、atbus 或系统 DNS。库 API 命名空间是
 `atframework::testing`。
 
+## 快速上手
+
+1. 在已有构建目录启用 `PROJECT_ENABLE_UNITTEST` 和 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`，
+   按[测试指南](testing)重新配置、构建并运行目标测试。
+2. 新增 case 时，参照所属服务或组件的现有 `test/`，使用 `project_add_rpc_unit_test` 声明目标，
+   沿用 runtime 初始化和 mock 引擎装配。
+3. 设置确定的 mock 响应，再通过真实生成 API 或 dispatcher 驱动业务，断言结果与通知。
+   外部依赖由测试引擎替代，不需要启动 Redis、etcd 或网关。下面给出目标声明与 API 的详细用法。
+
 ## 适用范围与构建开关
 
 - 适用：service/component 逻辑的离线单元测试、router/SS/CS/DB 生成 API 的契约测试。
@@ -58,7 +67,7 @@ CMake（`src/tools/rpc-unit-test/cmake/ProjectRpcUnitTest.cmake`，私有框架�
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-my-component-unit-test
   COMPONENT my-component
-  CATEGORY component          # component（默认）| sdk | service
+  CATEGORY component          # component (default) | sdk | service
   SOURCES "my_test.cpp"
   LINK_LIBRARIES my-component-lib
   FEATURES SS DNS DB
@@ -233,7 +242,7 @@ otlp_file 导出；HPA 默认零网络，启用时自动安装 prometheus pull h
 ```powershell
 cmake --build build_jobs_cmake_tools --target atf4g-co-rpc-unit-test-selftest --parallel 12
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
-# 过滤单 case：build_jobs_cmake_tools/test/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.<case>"
+# Filter one case: build_jobs_cmake_tools/test/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.<case>"
 ```
 
 ## 参考

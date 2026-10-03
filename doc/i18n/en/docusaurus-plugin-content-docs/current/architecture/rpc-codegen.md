@@ -4,7 +4,14 @@ title: RPC and Code Generation
 
 # RPC and Code Generation
 
-## Protocol as the Source of Truth
+## Quick Start
+
+For RPC, protocol, Excel, or database changes, select a task in the [development quick start](../development/overview).
+Existing declarations drive generation; routine extensions need no new templates. Use the design sections below for generation changes.
+
+## Customization and Design
+
+### Protocol as the Source of Truth
 
 All protocols are defined in protobuf, rooted at `src/server_frame/protocol/`:
 
@@ -21,7 +28,7 @@ protocol/
 **All generated artifacts are regenerated, never edited by hand** (`*.atfw.gen.{h,cpp}`, `*.pb.{h,cc}`,
 config/db code).
 
-## Custom Options
+### Custom Options
 
 The extension options that drive code generation are spread across three files:
 
@@ -31,7 +38,7 @@ The extension options that drive code generation are spread across three files:
 - `private/protocol/extension/svr.database.extension.proto`: DB table/index extensions (KV/KL/CAS/TTL), used by
   the db templates.
 
-## Generation Pipeline
+### Generation Pipeline
 
 ```mermaid
 flowchart LR
@@ -45,7 +52,7 @@ flowchart LR
   rules declared in each CMakeLists (service name + template + output path);
 - `src/tools/generate_for_pb_utility.cmake`: CMake-side wrapper for invoking templates.
 
-## Template Inventory (src/templates/)
+### Template Inventory (src/templates/)
 
 | Template | Generated artifact |
 | --- | --- |
@@ -71,7 +78,7 @@ SS/CS-template accessor instead of a hardcoded string (see [RPC unit testing](..
 orbit-fork getter returns its dotted name and orbit RPCs traverse orbit transport (not the SS engine), so it must not
 be passed to `test.ss()`.
 
-## RPC Caller API Shape
+### RPC Caller API Shape
 
 Generated callers return awaitable objects:
 

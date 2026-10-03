@@ -4,9 +4,9 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
 
 ## Language and naming
 
-- The build requires a C++17-capable toolchain and may select a newer language mode, but new and modified project-owned
-  source must stay compatible with C++14. Do not treat the configured language mode or nearby newer code as permission
-  to rely on post-C++14 language or standard-library features.
+- Project-owned source requires C++14 compatibility. The build may select a newer language mode for the optional
+  C++20 coroutine backend or third-party dependencies. Do not treat the configured language mode or nearby newer code
+  as permission to rely on post-C++14 language or standard-library features.
 - Do not add post-C++14 syntax or standard-library APIs. Examples include designated initializers, structured bindings,
   `if constexpr`, `<ranges>`/`std::ranges`, `std::optional`, `std::variant`, `std::filesystem`, `std::string_view`, and
   `std::scoped_lock`. Use C++14 loops/algorithms and synchronization types, or established project compatibility APIs

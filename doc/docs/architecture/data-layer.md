@@ -4,7 +4,15 @@ title: 数据层
 
 # 数据层
 
-## Redis 访问（db_msg_dispatcher）
+## 快速上手
+
+1. 准备 Redis，并在 values 的 `modules/redis.yaml` 填写服务连接配置。
+2. 在已有表使用生成的 `rpc::db` 接口；新增表按[数据库上手](../development/add-db-table)声明。
+3. 在 action 中用框架协程宏等待结果并检查错误码；普通业务不需要手写 Redis 命令或 Lua。
+
+## 定制与详细设计
+
+### Redis 访问（db_msg_dispatcher）
 
 数据层目前只支持 **Redis**（`src/server_frame/dispatcher/db_msg_dispatcher.{h,cpp}`）：
 
@@ -12,7 +20,7 @@ title: 数据层
 - 支持 `SCRIPT LOAD` 与内嵌 Lua（CAS 校验、KL 索引裁剪）；
 - 回复解包后按 task id 唤醒等待的协程。
 
-## 逻辑原语（rpc/db/hash_table）
+### 逻辑原语（rpc/db/hash_table）
 
 `src/server_frame/rpc/db/hash_table.{h,cpp}` 在 Redis 之上提供业务友好的原语：
 
@@ -22,7 +30,7 @@ title: 数据层
 | KL | 键列表索引：`add` / `get` / `update` / `remove`，索引列表单调裁剪（内嵌 Lua） |
 | TTL | 键过期管理 |
 
-## 生成的 DB 接口
+### 生成的 DB 接口
 
 由 `svr.local.table.proto` / `svr.global.table.proto` + `svr.database.extension.proto` 的表/索引扩展，经
 `db_interface.*.mako` 与 `db_rpc_redis(.kv/.kl).*.mako` 生成：
@@ -34,15 +42,17 @@ title: 数据层
 
 ```cpp
 // 示例：协程内读表
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get(ctx, user_id, ...));
+PROJECT_NAMESPACE_ID::table_login_auth row;
+uint64_t version = 0;
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
 ```
 
-## UUID
+### UUID
 
 `src/server_frame/rpc/db/uuid.{h,cpp}` 提供 ID 生成：`standard` / `short` / `global_increase`（DB 自增）/
 `global_unique`。
 
-## 会话与用户缓存
+### 会话与用户缓存
 
 - `src/server_frame/data/session.{h,cpp}`：网关会话，key = `(gateway_node_id, session_id)`，负责下行发送；
 - `src/server_frame/data/user_cache.{h,cpp}`：用户数据缓存基类，脏标记、初始化 task 等待；

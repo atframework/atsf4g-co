@@ -4,46 +4,60 @@ title: Adding a Service
 
 # Adding a Service
 
-Use `echosvr` as the minimal template (just a single `app/echosvr_main.cpp`); refer to `lobbysvr` for a
-standard service.
+## Quick Start: Copy a Standard Service
 
-## Steps
+Use `src/authsvr/` as a small CS RPC service template. For SS RPCs and a separate SDK, follow
+`src/lobbysvr/protocol/CMakeLists.txt`. Copy declarations without writing generation templates.
+`echosvr` demonstrates raw message echoing and does not include full business RPC setup.
 
-1. **Define the protocol**: add services and messages in `src/server_frame/protocol/` (or the component's
-   own `protocol/`); annotate `module_name` / `api_name` / `allow_no_wait` with
-   `atframework.service_options` / `rpc_options`.
-2. **Declare generation rules**: in the service's `CMakeLists.txt`, use `generate_for_pb_add_ss_service` (SS RPC) /
-   `generate_for_pb_add_cs_service` (CS RPC) (see `src/tools/generate_for_pb_utility.cmake`) to declare: proto
-   files + templates (`handle_ss_rpc` / `task_action_ss_rpc` / `rpc_call_api_for_ss` / CS variants) + output paths.
-3. **Write main**: follow `src/lobbysvr/service/app/lobbysvr_main.cpp`:
+1. Copy `src/authsvr/` to `src/examplesvr/`, keeping `protocol/`, `service/app/`, and business directories.
+   Rename the service, main file, config message/header, config target, and export macro. Do not copy
+   `*.atfw.gen.*` or the original service's business actions.
+2. Declare `ExamplesvrClientService` and its messages in the shared `com.protocol.proto`,
+   following the [RPC quick start](add-rpc-task). Change `AuthsvrClientService` to
+   `ExamplesvrClientService` in the copied generation declaration.
+3. Update the copied main's config section, environment prefix, generated header, and
+   `register_handles_for_examplesvrclientservice()`. Keep its shared module/dispatcher initialization
+   flow; attach new business modules afterward.
+4. Add `add_subdirectory(examplesvr)` to `src/CMakeLists.txt`, reconfigure/build, implement the generated
+   actions, and build again.
+5. Copy `install/cloud-native/charts/authsvr/` for the new chart and rename its service/config section.
+   Assign a new `logic_service_type` in `src/server_frame/config/include/config/extern_service_types.h`;
+   set matching `proc_name`, `type_id`, and `type_name` in the new chart's `values.yaml`,
+   and add instances to the active values' `non_cloud_native/deploy.yaml`.
+6. [Generate configuration and start](../getting-started/run-deploy) the instance; check discovery registration and one normal RPC.
 
-```cpp
-int main(int argc, char *argv[]) {
-  atfw::atapp::app app;
-  // logic_config injects this service's configuration loading callbacks
-  project::logic_server_setup_common(app);
-  // Register the generated RPC handlers
-  register_handles_for_<yourservice>();
-  // Mount dispatchers and business modules
-  app.add_module(atfw::cs_msg_dispatcher::me());
-  app.add_module(atfw::ss_msg_dispatcher::me());
-  app.add_module(atfw::db_msg_dispatcher::me());
-  app.add_module(<business module>);
-  return app.run(uv_default_loop(), argc, argv, nullptr);
-}
+Use distinct service/config names. Type enums, values mappings, and process layout must agree.
+
+## Quick Start: Declare a New SS RPC Service
+
+For a new SS RPC group in an existing standard service, reuse its protocol target and fill the service name and
+output locations in the existing helper. For the lobby, append the proto to `lobbysvr-protocol`'s
+`PROTOCOLS` and declare:
+
+```cmake
+generate_for_pb_add_ss_service(
+  "${PROJECT_NAMESPACE}.ExampleService"
+  "${LOBBYSVR_ROOT_DIR}/service"
+  TASK_PATH_PREFIX "logic"
+  HANDLE_PATH_PREFIX "app"
+  PROJECT_NAMESPACE "${PROJECT_NAMESPACE_ID}"
+  RPC_ROOT_DIR "${LOBBYSVR_ROOT_DIR}/sdk"
+  RPC_DLLEXPORT_DECL LOBBY_RPC_API
+  EXTERNAL_SERVICE_PROTOCOLS "lobbysvr-protocol"
+  INCLUDE_HEADERS "protocol/pbdesc/example_service.pb.h")
 ```
 
-4. **Fill in task actions**: the generator produces `logic/action/task_action_*` skeletons; write business
-   logic in `operator()`.
-5. **Add to the build**: `add_subdirectory(<name>svr)` in `src/CMakeLists.txt`.
-6. **Deployment**: add the service chart under `install/cloud-native/charts/` (you can copy an existing
-   service), and supplement parameters in each profile under `values/`; for local runs, supplement the
-   `publish/tools/script/config.conf` template.
+Add the same service full name to the service and SDK's existing `GENERATED_FLOW_NAMES`, and register
+`register_handles_for_exampleservice()` in main. Subsequent methods need only proto and business action edits.
+Extend the existing SDK header/source lists for the new API files.
 
-## Notes
+## Customization and Design
 
-- Generated artifacts (`*.atfw.gen.*`) must not be edited manually; regeneration is triggered by
-  proto/template changes.
-- Module assembly order follows the conventions of `logic_server_setup_common`; mount custom modules after
-  the dispatcher when they depend on it.
-- New services are included in all builds by default, with no separate switch.
+Shared service setup is declared in `src/server_frame/logic/logic_server_setup.h`;
+see [RPC and code generation](../architecture/rpc-codegen) for generation rules.
+Helpers organize service code into an executable and a private static library, with `app/` as the default
+entry-point directory. Use project test helpers; see [RPC tests](rpc-unit-test) for service RPC paths.
+
+For custom build, generation, or deployment behavior, read `src/service-functions.cmake`,
+`src/tools/generate_for_pb_utility.cmake`, and `install/cloud-native/charts/libapp/`.

@@ -40,7 +40,7 @@ flowchart LR
 | 接入层 | atgateway / atproxy | 客户端接入、跨服转发、服务发现 |
 | 框架层 | `src/server_frame/` | dispatcher、task、router、rpc、config、data、telemetry |
 | 组件层 | `src/component/` | dtmq、distributed_transaction、rank、orbit 等可复用服务 + SDK |
-| 业务层 | `src/*svr/` | 登录（authsvr）、大厅（lobbysvr）、缓存（cachesvr）等业务逻辑 |
+| 业务层 | `src/*svr/` | 登录、大厅、缓存、好友、匹配、组队等可复用服务与业务逻辑 |
 | 数据层 | Redis（`db_msg_dispatcher`） | KV/KL/CAS 原语 + 由 `*.table.proto` 生成的 DB 接口 |
 | 部署层 | `install/` | Helm chart / Docker / 裸机脚本，atdtool 渲染 |
 
@@ -56,6 +56,7 @@ flowchart LR
 
 ## 单线程协程模型
 
-全仓库没有 worker 线程概念：所有 IO（atbus、Redis、定时器、DNS）都挂在同一个 libuv loop 上，业务并发完全
-由协程 task 承载。`PROJECT_SERVER_FRAME_USE_STD_COROUTINE` 开关在 C++20 协程与 libcopp cotask 两套实现间
+服务业务任务通常在主 libuv 事件循环上调度，atbus、Redis 等异步请求通过协程等待结果。
+这不表示所有依赖都没有后台线程；例如 Orbit client 运行时含独立线程与线程间队列。
+业务逻辑应遵循所用模块的线程与生命周期约定。`PROJECT_SERVER_FRAME_USE_STD_COROUTINE` 开关在 C++20 协程与 libcopp cotask 两套实现间
 切换，由 `task_type_traits.h` 统一抽象，业务代码无需感知差异。

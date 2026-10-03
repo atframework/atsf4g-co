@@ -4,7 +4,15 @@ title: Observability
 
 # Observability (Telemetry / HPA)
 
-## OpenTelemetry Wrappers
+## Quick Start
+
+1. Set trace/metrics export destinations in values' `modules/telemetry.yaml` and prepare a Collector with the corresponding otelcol configuration.
+2. Generate configuration, run services, verify a trace with an RPC, and inspect built-in metrics.
+3. Business actions reuse automatic tracing; use existing telemetry APIs for additional business metrics.
+
+## Customization and Design
+
+### OpenTelemetry Wrappers
 
 `src/server_frame/rpc/telemetry/` provides OpenTelemetry wrappers:
 
@@ -19,14 +27,14 @@ Configuration is defined by `svr.telemetry.config.proto`, and instance configura
 `install/cloud-native/values/default/modules/telemetry.yaml` and `install/otelcol/` (Collector startup scripts in
 daemon and systemd modes).
 
-## Trace Propagation
+### Trace Propagation
 
 - CS path: atgateway upstream messages carry no trace; the service side uses the task action as the span root;
 - SS path: `rpc_context` (`src/server_frame/rpc/rpc_context.{h,cpp}`) propagates the trace context along with
   `SSMsg`, chaining spans across services;
 - DB calls: Redis commands appear as child spans.
 
-## Metrics and HPA
+### Metrics and HPA
 
 `src/server_frame/logic/hpa/` implements HPA autoscaling support:
 
@@ -37,7 +45,7 @@ daemon and systemd modes).
 `router_manager_set`, dispatchers, and others also expose built-in metrics (object count, task count, RPC
 latency).
 
-## Logging
+### Logging
 
 - Framework logs go through the `atframe_utils` logging module (the libatapp log sink is configured in the atapp
   YAML);

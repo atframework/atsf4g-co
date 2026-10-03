@@ -4,57 +4,79 @@ title: 新增 RPC 与 task action
 
 # 新增 RPC 与 task action
 
-## SS RPC（服务间）
+## 快速上手：已有服务增加 SS RPC
 
-1. 在 proto 中给已有 service（或新 service）添加方法：
+以大厅服为例，修改 `src/lobbysvr/protocol/protocol/pbdesc/lobby_service.proto`。
+沿用文件已有的 package 和 import，增加请求/响应，并将方法加入已有 `LobbysvrService`：
 
 ```protobuf
-service MyService {
-  option (atframework.service_options) = {module_name: "my_module"};
-  rpc my_method(MyMethodReq) returns (MyMethodRsp) {
-    option (atframework.rpc_options) = {api_name: "my_method" allow_no_wait: false};
-  }
+message SSEchoTextReq { string text = 1; }
+message SSEchoTextRsp { string text = 1; }
+
+// Add inside the existing LobbysvrService.
+rpc echo_text(SSEchoTextReq) returns (SSEchoTextRsp) {
+  option (atframework.rpc_options) = {
+    module_name: "action"
+    api_name: "EchoText"
+    allow_no_wait: false
+  };
 }
 ```
 
-2. 重新构建：protoc + mako-generator 自动产出：
-   - 服务端 task action 骨架 `task_action_my_method.{h,cpp}`（已存在的手写部分保留在标记区间内）；
-   - handler 注册 `handle_ss_rpc_<service>.atfw.gen.*` 更新；
-   - 调用端 API `rpc_call_api`（`<service>.atfw.gen.*`）。
-3. 在骨架的 `operator()` 中实现业务：
+按[统一构建步骤](overview)重新配置并构建，不用新增模板或修改现有生成流程。
+生成器创建 `src/lobbysvr/service/logic/action/task_action_echo_text.h/.cpp`，并更新注册代码和 SDK。
+在新 action 的 `operator()` 中写入：
 
 ```cpp
-task_action_my_method::result_type task_action_my_method::operator()() {
-  MyMethodRsp &rsp = get_response_body();
-  // ... 业务逻辑，可 RPC_AWAIT_CODE_RESULT(rpc::db::xxx(...))
+task_action_echo_text::result_type task_action_echo_text::operator()() {
+  get_response_body().set_text(get_request_body().text());
   RPC_RETURN_CODE(0);
 }
 ```
 
-4. 调用方：
+再次构建后，服务端通过已有的 `register_handles_for_lobbysvrservice()` 注册新方法。
+调用方包含生成的 `rpc/lobby/lobbysvrservice.atfw.gen.h`，使用其中的 `echo_text` 接口；
+目标参数和命名空间以生成的函数声明为准。
 
-```cpp
-MyMethodReq req;
-// ... 填充请求
-auto res = RPC_AWAIT_CODE_RESULT(rpc::MyService::my_method(ctx, req, /*目标*/...));
-```
+## 快速上手：已有服务增加 CS RPC
 
-## CS RPC（客户端）
+1. 在 `src/server_frame/protocol/public/protocol/pbdesc/` 定义客户端消息，参照已有
+   `com.protocol.*.proto`，并由 `com.protocol.proto` import。
+2. 在 `com.protocol.proto` 的已有 `LobbysvrClientService` 或 `AuthsvrClientService` 中添加方法，
+   按同类 RPC 填写 `module_name`、`api_name` 和请求/响应类型。
+3. 重新配置并构建，在新 `task_action_*` 中实现业务，再构建并同步客户端协议。
+   已有服务的生成配置和 handler 注册无需重复添加。
 
-在 `com.protocol*.proto`（public）中定义消息与 service，CMake 声明 `handle_cs_rpc` /
-`task_action_cs_rpc` 模板；生成的 action 基类是 `task_action_cs_req_base`，自带 session 校验与下行打包。
-下行推送 API 由 `session_downstream_api_for_cs.*.mako` 生成。
+`task_action_cs_req_base` 提供 session 与响应处理。已有服务配置启用了
+`RPC_IGNORE_EMPTY_REQUEST`，新增上行请求应定义实际请求 message，并参照现有方法的方向约定；
+流式下行通常用 `google.protobuf.Empty` 请求。
+
+## 修改已有 RPC
+
+已有业务骨架默认不覆盖；自动生成的 handler 和调用接口会更新。
+改变请求/响应类型、方法名或 `module_name` 时，检查原 action 的基类、头文件、目录和调用点，
+手工迁移已有业务逻辑。删除 RPC 后也要清理不再使用的业务 action。
+`*.atfw.gen.*` 不应手改。
+
+## 常用声明选项
+
+| 声明 | 用途 |
+| --- | --- |
+| `rpc_options.module_name` | action 所在的业务子目录 |
+| `service_options.module_name` | SDK 输出目录与命名空间组织 |
+| `api_name` | RPC 的 API 标识；生成的 C++ 函数名仍按 rpc 方法名生成 |
+| `allow_no_wait: true` | 允许生成免等待调用方式；以生成的具体接口为准 |
+| `returns (stream X)` | 服务端流式下行，例如 `user_dirty_chg_sync` |
+| `rpc x(stream Req)` | 请求流，例如 `channel_event_sync` |
 
 ## 无消息任务
 
-定时/自驱动任务使用 `task_action_no_msg.*.mako` 模板，或用
-`src/generate-nomsg-task.sh`（`.in`）快速生成骨架；框架内示例：`task_action_auto_save_objects`。
+不经 RPC 触发的定时任务可参照 `src/server_frame/router/action/task_action_auto_save_objects`。
+生成骨架的辅助入口为 `src/generate-nomsg-task.sh`；业务仍需安排启动或定时触发。
 
-## 常用选项
+## 定制与详细设计
 
-| rpc_options | 效果 |
-| --- | --- |
-| `allow_no_wait: true` | 调用端只发不等响应（无 `co_await` 结果） |
-| stream 返回（`returns (stream X)`） | 服务端流式下行推送（如 `com.protocol.proto` 的 `user_dirty_chg_sync`） |
-| stream 请求（`rpc x(stream Req) returns (...)`） | 调用端流式上行/免等待响应（如 dtmq 的 `channel_event_sync`） |
-| `api_name` | 生成的调用端函数名 |
+新 protobuf service 的一次性接入见[新增服务](add-service)；
+需要改生成布局、过滤规则或模板时阅读[RPC 与代码生成](../architecture/rpc-codegen)，
+修改调度行为时阅读[任务与分发](../architecture/task-dispatcher)。
+验证真实调用路径可使用[离线 RPC 单元测试](rpc-unit-test)。

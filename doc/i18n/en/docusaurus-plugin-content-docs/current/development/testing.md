@@ -4,10 +4,10 @@ title: Unit Testing
 
 # Unit Testing
 
-## Existing Tests
+## Quick Start
 
 - The framework uses atframe_utils' private test framework (`CASE_TEST`, not GTest);
-- Component tests live in `src/component/test/` (e.g., `ItemAlgorithmTest` for inventory slot algorithms);
+- Component/service tests live in their module's `test/`; shared algorithms also use `src/component/test/`;
 - Build: configure with `-DPROJECT_ENABLE_UNITTEST=YES`, then run with CTest:
 
 ```powershell

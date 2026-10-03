@@ -10,7 +10,20 @@ channel migration.
 
 Location: `src/component/dtmq/` (see design notes in `dtmq-proxysvr/Note.md`).
 
-## Composition
+## Quick Start
+
+1. Enable `dtmq-proxysvr` and prepare Redis. Use channel types from
+   `resource/ExcelTables/DtMq.xlsx` and [export configuration](../development/excel-config).
+2. Add `dtmq-proxy-sdk` to `USE_COMPONENTS`; use
+   `src/component/dtmq/sdk/proxy/rpc/dtmq/dtmq_client_api.h` and `dtmq_client_subscriber.h`.
+3. For event streams, follow the lobby's `DtmqProxysvrNotifyService` registration and deliver events
+   through `logic/dtmq/task_action_channel_event_sync` to subscribers.
+4. Verify subscribing, sending, notifications, and history queries. Use the API's creation option for
+   absent channels; set history retention and replicas for your workload.
+
+## Customization and Design
+
+### Composition
 
 | Part | Location | Description |
 | --- | --- | --- |
@@ -19,9 +32,9 @@ Location: `src/component/dtmq/` (see design notes in `dtmq-proxysvr/Note.md`).
 | `dtmq-common-sdk` | `dtmq/sdk/common/` | Channel hashing/replica selection algorithms (`dtmq_algorithm`) |
 | `dtmq-proxy-sdk` | `dtmq/sdk/proxy/` | Client API and in-process subscriber |
 
-## Service Protocol (DtmqProxysvrService)
+### Service Protocol (DtmqProxysvrService)
 
-`dtmq_proxy.proto` (package `atframework.dtmq`, module_name `"dtmq"`), all with `allow_no_wait: true`:
+`dtmq_proxy.proto` (package `atframework.dtmq`, module_name `"dtmq"`), waiting modes follow each method’s options and SDK declarations:
 
 `subscribe` / `unsubscribe` / `send_message` / `transfer_channel` / `destroy_channel` / `update` /
 `reset_lock` / `find_message` / `page_query_message` / `pull`.
@@ -29,7 +42,7 @@ Location: `src/component/dtmq/` (see design notes in `dtmq-proxysvr/Note.md`).
 There is also `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEventSync)`: the server
 **streams** incremental channel messages / full snapshots to the nodes where subscribers reside.
 
-## Data Model
+### Data Model
 
 - Channel structures are defined in the public protocol
   `src/server_frame/protocol/public/protocol/pbdesc/com.struct.dtmq.proto`:
@@ -44,7 +57,7 @@ There is also `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEve
 - DB persistence: `table_dtmq_channel_record` (the generated `rpc::db::dtmq_channel_record` Redis
   interface).
 
-## Replicas and Routing
+### Replicas and Routing
 
 ```mermaid
 flowchart LR
@@ -63,14 +76,14 @@ flowchart LR
 - Supports channel migration (`transfer_channel`), subscriber merging/unsubscription during scale-out/in,
   writable⇄readonly promotion/demotion, and forwarding during the migration window.
 
-## WAL Master-Slave Sync
+### WAL Master-Slave Sync
 
 `dtmq-proxysvr/data/mq_channel_wal_handle.{h,cpp}` wraps atframe_utils'
 `distributed_system::wal_publisher / wal_subscriber` (single-thread mode); logs are merged by
 `DChannelMessageDetail::CommandCase` category. This is the same mechanism as the rank component's
 `rank_wal_handle`. `SSChannelUpdateReq` supports log compaction via `compact_sequence`.
 
-## Client SDK
+### Client SDK
 
 - `dtmq_client_api`: `get_target_server_id(s)`, `send_message`, `find_message`, `page_query_message`,
   `normalize_replicate_index`;
@@ -78,7 +91,7 @@ flowchart LR
   optimistic lock/snapshot/message callbacks, heartbeat, and receiving the `channel_event_sync` event
   stream.
 
-## Business Integration Example (lobbysvr)
+### Business Integration Example (lobbysvr)
 
 `src/lobbysvr/service/` links `dtmq-proxy-sdk`, generates handlers for `DtmqProxysvrNotifyService`
 (`app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.*`), and calls

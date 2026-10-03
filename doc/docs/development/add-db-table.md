@@ -1,42 +1,57 @@
 ---
 title: 新增数据库表
 ---
+
 # 新增数据库表
 
-数据层只支持 Redis；表结构用 proto 描述，由模板生成访问代码。
+内置数据层使用 Redis。表结构和访问选项由 proto 声明，工程自动生成接口。
 
-## 步骤
+## 快速上手
 
-1. **定义表 proto**：在 `src/server_frame/protocol/private/protocol/pbdesc/` 的
-   `svr.local.table.proto`（本 zone 库）或 `svr.global.table.proto`（全局库）中添加 message，并用
-   `svr.database.extension.proto` 的扩展标注主键、索引（KV/KL）、TTL、CAS 字段等。
-2. **重新构建**：`db_interface.*.mako` + `db_rpc_redis(.kv/.kl).*.mako` 生成
-   `rpc/db/local_db_interface.atfw.gen.{h,cpp}` 或 `global_db_interface.atfw.gen.{h,cpp}`，
-   命名空间为 `rpc::db::<table_name>`。
-3. **使用**：协程内直接 await：
+1. 在 `src/server_frame/protocol/private/protocol/pbdesc/svr.local.table.proto`（本 zone 库）
+   或 `svr.global.table.proto`（全局库）中增加表。下面的声明追加到已有文件，复用其 import 和 package：
 
-```cpp
-// 读取整行（version 为输出的 CAS 版本）
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::get_all(ctx, key, msg, version));
-// 整体替换（version 传入读到的 CAS 版本做乐观锁，成功后写回新版本）
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::replace(ctx, store, version));
-// 数值字段原子自增（每个可自增字段生成独立接口，inc_value 为输入增量并写回新值）
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::inc_field_<field_name>(ctx, key, inc_value));
+```protobuf
+message table_example {
+  option (atframework.database_table) = {
+    index: {
+      name: "example"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "user_id"
+    }
+  };
+  uint64 user_id = 1;
+  string value = 2;
+}
 ```
 
-生成的表接口还包括 `batch_get_all`、`remove_all`、`set_ttl` / `remove_ttl` 等。
+2. 按[统一构建步骤](overview)重新配置/构建；已有流程更新
+   `rpc/db/local_db_interface.atfw.gen.h/.cpp` 或 `global_db_interface.atfw.gen.h/.cpp`。
+   接口命名空间按索引的 `name` 生成，例如 `rpc::db::example`，无需修改模板。
+3. 包含对应生成头文件，在业务 action 中按生成声明读写，并检查错误码。
+   现有登录表的读取示例为：
 
-## 底层原语
+```cpp
+PROJECT_NAMESPACE_ID::table_login_auth row;
+uint64_t version = 0;
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
+```
 
-如果生成的接口不满足需求，可直接使用 `rpc/db/hash_table.h` 的 KV/KL/CAS/TTL 原语自行组装（参考
-`rpc/db/local_db_interface.atfw.gen.cpp` 的实现方式）。
+   `ctx` 是当前 RPC context，`open_id` 是登录表的字符串键。新表的 key 和消息类型以生成接口为准。
+   `replace` 使用 `rpc::shared_message<Table>`，不要直接传入普通 protobuf message。
+4. 在 values 中配置 Redis 并生成实例 YAML；用有效 key 验证插入、读取和更新。
+   启用 CAS 的表还应验证版本不匹配时更新失败。
 
-## ID 生成
+## 常用接口
 
-需要分布式 ID 时使用 `rpc/db/uuid.h`：`standard` / `short` / `global_increase`（走 DB 自增）/
-`global_unique`。
+生成接口按存储选项提供 `get_all`、`batch_get_all`、`insert`、`replace`、`remove_all`、
+TTL 与字段自增等。CAS 的 `version` 在读后保存并传给更新；具体参数与可用接口查生成头文件。
+已有表增加字段通常只需修改 proto 和业务读写逻辑。
 
-## 配置
+## 定制与详细设计
 
-Redis 连接在实例配置的 `logic.db` 段（cluster 与 sentinel/raw 双通道），部署侧由
-`install/**/cfg/*.yaml.tpl` 渲染。
+生成接口不能满足需求时，再使用 `rpc/db/hash_table.h` 的 KV/KL/CAS/TTL 原语。
+表注解定义在 `private/protocol/extension/svr.database.extension.proto`，
+生成规则见[RPC 与代码生成](../architecture/rpc-codegen)。
+分布式 ID 接口在 `rpc/db/uuid.h`，数据层运行方式见[数据层](../architecture/data-layer)。

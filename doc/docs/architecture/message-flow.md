@@ -4,20 +4,29 @@ title: 消息流与线程模型
 
 # 消息流与线程模型
 
-## 事件循环
+## 快速上手
+
+按[RPC 上手](../development/add-rpc-task)编写业务 action，并用框架 `RPC_AWAIT_*`、
+`RPC_RETURN_*` 接口读写异步结果。标准服务保留已有 main 装配；
+切换协程后端见[构建](../getting-started/build#coroutine-backend)。
+
+## 详细设计
+
+### 事件循环
 
 每个服务进程的 main（如 `src/lobbysvr/service/app/lobbysvr_main.cpp`）执行：
 
 1. 构造 `atfw::atapp::app`；
 2. `logic_server_setup_common`（`src/server_frame/logic/logic_server_setup.cpp`）装配公共模块、事件回调与
    service discovery 索引；
-3. `app.add_module(cs_msg_dispatcher::me(), ss_msg_dispatcher::me(), db_msg_dispatcher::me(), 业务module...)`；
+3. 分别调用 `app.add_module(...)` 挂载 CS、SS、DB dispatcher 和业务 module；
 4. `app.run(uv_default_loop(), argc, argv, nullptr)`。
 
-所有 atbus 收发、Redis 回复、定时器、DNS 查询都在这一个 libuv loop 上回调；耗时操作一律封装为协程 task，
-`co_await`（或 libcopp 等价宏）挂起等待，由 dispatcher 按 `task_id + sequence` 唤醒。
+服务侧的 atbus、Redis、定时器和 DNS 完成回调在主 libuv loop 上交给业务任务。
+异步等待通过协程挂起并由 dispatcher 按 `task_id + sequence` 唤醒；
+同步计算不会因包装为协程而自动移到后台线程。依赖或专用运行时可包含独立线程。
 
-## 客户端消息流（CS）
+### 客户端消息流（CS）
 
 ```mermaid
 sequenceDiagram
@@ -41,7 +50,7 @@ sequenceDiagram
 启动 CS task action）、`kRemoveSession`（登出）、`kSetRouterRsp`。下行由 `session::send_msg_to_client` /
 `cs_msg_dispatcher::send_data / broadcast_data / send_kickoff / send_set_router` 回传 atgateway。
 
-## 服务间消息流（SS）
+### 服务间消息流（SS）
 
 - 调用端代码由 `rpc_call_api_for_ss.*.mako` 生成：组装 `SSMsg` → `ss_msg_dispatcher::send_to_proc`（按
   bus id / 名字 / discovery node）→ `app::send_message` → atbus；跨服务组可经 atproxy 转发。
@@ -50,12 +59,12 @@ sequenceDiagram
 - 响应经 `internal::wait_and_unpack_ss_response` 按 `destination_task_id + sequence` 唤醒等待中的 task。
 - `ss_msg_dispatcher` 内嵌 DNS lookup（`uv_getaddrinfo` + `custom_resume`），供按需解析对端地址。
 
-## 数据库消息流
+### 数据库消息流
 
 `db_msg_dispatcher` 基于 hiredis-happ 管理 Redis cluster 与 raw（sentinel）双通道连接，支持 SCRIPT LOAD 与
 内嵌 Lua（CAS、KL 索引裁剪）；回复解包后唤醒对应 task。详见[数据层](data-layer)。
 
-## 挂起/唤醒原语
+### 挂起/唤醒原语
 
 | 原语 | 位置 | 用途 |
 | --- | --- | --- |

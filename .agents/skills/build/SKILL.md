@@ -5,7 +5,8 @@ description: "Use when: configuring or building atsf4g-co with CMake, or diagnos
 
 # Build (atsf4g-co)
 
-This project uses CMake >= 3.24 and requires a C++17-capable toolchain.
+This project uses CMake >= 3.24. Project-owned code requires C++14; the optional standard coroutine backend requires
+C++20 coroutine support. Check third-party toolchain requirements separately from the project source requirement.
 
 ## Workspace CMake Settings
 

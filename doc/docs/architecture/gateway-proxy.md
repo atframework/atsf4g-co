@@ -4,7 +4,15 @@ title: 网关与代理
 
 # 网关与代理（atgateway / atproxy）
 
-## atgateway
+## 快速上手
+
+1. 按[运行与部署](../getting-started/run-deploy)启动 atgateway、atproxy 和目标业务服务。
+2. 通过 values 配置 etcd 地址、网关监听和目标服务；用[robot](../services/robot)验证连接、登录与业务请求。
+3. 普通接入使用已有网关协议 SDK，无需修改握手或通信模板。
+
+## 定制与详细设计
+
+### atgateway
 
 位置：`atframework/service/atgateway`。客户端接入网关，职责：
 
@@ -20,7 +28,7 @@ title: 网关与代理
 网关不解析业务消息体：上行时把 `CSMsg` 连同 `(gateway_node_id, session_id)` 封装为
 `gateway::server_message` 经 atbus 投递给目标服务；下行时按 session 路由回客户端。
 
-## atproxy
+### atproxy
 
 位置：`atframework/service/atproxy`。跨服务组代理：
 
@@ -32,7 +40,7 @@ title: 网关与代理
 调试工具：`src/tools/etcd-watcher`（watch etcd key 变化）、`src/tools/etcd-atproxy-ls`（列出注册的
 atproxy 节点）。
 
-## 连接拓扑
+### 连接拓扑
 
 ```mermaid
 flowchart TB

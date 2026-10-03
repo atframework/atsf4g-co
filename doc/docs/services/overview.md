@@ -4,44 +4,60 @@ title: 服务总览
 
 # 服务总览
 
-## 业务服务（src/*svr/）
+## 快速上手
 
-| 服务 | 说明 |
-| --- | --- |
-| `echosvr` | 最简示例服务：原样回显客户端数据（仅 `app/echosvr_main.cpp`），适合作为新服务模板 |
-| `authsvr` | 认证/登录服：CS RPC `AuthsvrClientService`（`task_action_login_auth`），处理客户端登录鉴权 |
-| `cachesvr` | 分布式对象缓存服：`cache_group` / `cache_group_manager` 管理缓存分组，对外提供 `cache_service.proto` 的 SS RPC，带 `sdk/` |
-| `lobbysvr` | 大厅服（核心逻辑服）：登录、踢下线、用户信息、用户异步任务（`async_jobs/`）、全局/用户缓存（`cache/`）、排行榜查询（`rank/`）、dtmq 频道事件接收（`logic/dtmq/`），带 `sdk/` |
-| `rank_settlement_svr` | 排行榜结算服：`rank_settlement_manager` + `task_action_rank_send_settlement / task_action_rank_update_settlement` |
-| `orbitsvr` | Orbit 示例服务：演示 orbit 组件 server/client RPC |
+先按[运行与部署](../getting-started/run-deploy)生成本地配置，再根据需要在 `proc_desc` 启用服务。
+消费方通过 SDK 使用其他服务的能力；公共功能的接入见[组件总览](../components/overview)。
 
-## 组件服务（src/component/）
+| 服务/部署 chart | 用途 | 最小验证入口 |
+| --- | --- | --- |
+| `echosvr` | 原始消息回显示例 | 经 atgateway 发送数据并检查回显 |
+| `authsvr` | 登录鉴权，`AuthsvrClientService` | robot 登录请求与认证响应 |
+| `cachesvr` | 分布式对象缓存，带 SDK | 参照大厅服 `cache/` 的现有缓存调用 |
+| `lobbysvr` | 玩家登录、用户数据、好友、队伍、匹配及通知 | robot 登录后执行已有业务命令 |
+| `friendsvr-management` / `friendsvr-recommend` | 好友管理；推荐策略待实现 | [好友上手](../components/friend) |
+| `matchsvr` | 匹配池与房间 | [匹配上手](../components/matching-team) |
+| `teamsvr-room` / `teamsvr-match` | 队伍房间与组队匹配 | [组队上手](../components/matching-team) |
+| `dtmq-proxysvr` | 消息频道、订阅与同步 | [DTMQ 上手](../components/dtmq) |
+| `dtcoordsvr` | 分布式事务协调者 | [事务上手](../components/distributed-transaction) |
+| `rank-board-svr` / `rank-settlement-svr` | 排行榜与周期结算 | [排行榜上手](../components/rank) |
+| `orbit-controller` / `orbit-agent` / `orbit-server` | UE DS 管理；server 由 `orbitsvr` 示例实现 | [Orbit 上手](../components/orbit) |
+| `atgateway` / `atproxy` | 客户端接入与跨服通信 | [接入配置](../architecture/gateway-proxy) |
 
-| 服务 | 组件 |
-| --- | --- |
-| `dtmq-proxysvr` | 分布式消息队列入口服务 |
-| `dtcoordsvr` | 分布式事务协调者 |
-| `rank_board_svr` | 排行榜榜单服务 |
-| orbit controller / agent | Orbit 调度框架 |
+部署 chart 的连字符名称与部分源码目录中的下划线名称不同，登记实例时使用实际 chart 名。
 
-## 内置接入服务（atframework/service/）
+### 认证与大厅
 
-| 服务 | 说明 |
-| --- | --- |
-| `atgateway` | 客户端网关（ECDH 握手、加密、限流、路由切换） |
-| `atproxy` | 跨服代理（etcd 服务发现、在线检测） |
+启用 `authsvr`、`lobbysvr` 和所需的网关、代理、Redis/组件实例，沿用已有配置生成流程。
+用 robot 完成登录鉴权，再调用大厅已有的用户信息或业务命令，检查响应与客户端通知。
+新增登录策略或大厅业务方法从 [RPC 上手](../development/add-rpc-task)开始。
 
-## 服务目录约定
+### 对象缓存
 
-```
+启用 `cachesvr` 并配置 Redis。消费方在已有声明的 `USE_SERVICE_SDK` 中加入 `cachesvr-sdk`，
+参照 `src/lobbysvr/service/logic/cache/user_cache_manager.h/.cpp` 使用缓存 API。
+先验证同一对象的读取和更新，需要订阅时再接入更新通知。
+
+### 回显示例
+
+将测试网关的目标配置为 `echosvr`，发送测试数据并检查原样回显。
+它适合验证接入链路；需要用户/session 校验和业务 RPC 的新服务使用标准服务模板。
+
+## 新增服务
+
+参见[新增服务](../development/add-service)。标准服务保留公共装配和 handler 注册，
+在业务 action 中实现逻辑。扩展已有服务的方法则直接按[RPC 上手](../development/add-rpc-task)操作。
+
+## 定制与目录约定
+
+```text
 <name>svr/
-├── service/ or app/        # main 入口（*_main.cpp）+ 生成的 RPC handler 注册
-├── logic/                  # 业务逻辑与 task action
-│   └── action/             # task_action_*（骨架由模板生成，业务填充）
-├── sdk/                    # 可选：对外客户端 SDK
-└── CMakeLists.txt          # 协议生成规则（服务名 + 模板 + 输出路径）
+├── protocol/       # 可选：服务协议与配置
+├── service/        # app/ 入口、logic/ 业务及 task action
+├── sdk/            # 可选：对外 API
+└── CMakeLists.txt  # 使用已有 helper 的声明
 ```
 
-## 压测机器人
-
-见[压测机器人（robot）](robot)。
+各服务可含多个进程角色，实际结构以源码为准。
+需要改变装配时参照 `src/server_frame/logic/logic_server_setup.h`；
+压测和模拟客户端见[robot](robot)。

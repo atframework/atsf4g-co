@@ -4,10 +4,10 @@ title: 单元测试
 
 # 单元测试
 
-## 现有测试
+## 快速上手
 
 - 框架使用 atframe_utils 的私有测试框架（`CASE_TEST`，非 GTest）；
-- 组件测试在 `src/component/test/`（如 `ItemAlgorithmTest` 背包格子算法）；
+- 组件与服务测试位于各模块的 `test/`；共享算法另有 `src/component/test/`；
 - 构建：`-DPROJECT_ENABLE_UNITTEST=YES` 后用 CTest 运行：
 
 ```powershell

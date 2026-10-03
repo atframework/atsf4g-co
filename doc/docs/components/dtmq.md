@@ -9,7 +9,20 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
 
 位置：`src/component/dtmq/`（设计笔记见 `dtmq-proxysvr/Note.md`）。
 
-## 组成
+## 快速上手
+
+1. 启用 `dtmq-proxysvr` 实例并准备 Redis。使用 `resource/ExcelTables/DtMq.xlsx`
+   的频道类型配置，按[Excel 上手](../development/excel-config)导出。
+2. 消费方 `USE_COMPONENTS` 加入 `dtmq-proxy-sdk`；使用
+   `src/component/dtmq/sdk/proxy/rpc/dtmq/dtmq_client_api.h` 与 `dtmq_client_subscriber.h`。
+3. 需要事件流时，参照大厅服注册 `DtmqProxysvrNotifyService`，
+   由 `logic/dtmq/task_action_channel_event_sync` 把事件交给订阅者。
+4. 验证订阅、发送、收到通知和历史查询；频道不存在时按调用 API 的创建选项处理。
+   按实际场景配置历史保留量和副本数。
+
+## 定制与详细设计
+
+### 组成
 
 | 部分 | 位置 | 说明 |
 | --- | --- | --- |
@@ -18,9 +31,9 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
 | `dtmq-common-sdk` | `dtmq/sdk/common/` | 频道哈希/副本选择算法（`dtmq_algorithm`） |
 | `dtmq-proxy-sdk` | `dtmq/sdk/proxy/` | 客户端 API 与进程内订阅者 |
 
-## 服务协议（DtmqProxysvrService）
+### 服务协议（DtmqProxysvrService）
 
-`dtmq_proxy.proto`（package `atframework.dtmq`，module_name `"dtmq"`），全部 `allow_no_wait: true`：
+`dtmq_proxy.proto`（package `atframework.dtmq`，module_name `"dtmq"`），各方法的等待模式以其选项与 SDK 声明为准：
 
 `subscribe` / `unsubscribe` / `send_message` / `transfer_channel` / `destroy_channel` / `update` /
 `reset_lock` / `find_message` / `page_query_message` / `pull`。
@@ -28,7 +41,7 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
 另有 `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEventSync)`：服务端**流式**推送频道
 增量消息/全量快照给订阅者所在节点。
 
-## 数据模型
+### 数据模型
 
 - 频道结构定义在公共协议 `src/server_frame/protocol/public/protocol/pbdesc/com.struct.dtmq.proto`：
   `DChannelMetadata` / `DChannelRuntime` / `DChannelMessage(Detail)` / `DChannelSnapshot` /
@@ -40,7 +53,7 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
   `DChannelConfigure`；
 - DB 落地：`table_dtmq_channel_record`（生成的 `rpc::db::dtmq_channel_record` Redis 接口）。
 
-## 副本与路由
+### 副本与路由
 
 ```mermaid
 flowchart LR
@@ -58,21 +71,21 @@ flowchart LR
 - 支持频道迁移（`transfer_channel`）、扩缩容时订阅者合并/反订阅、Writable⇄Readonly 升降级、迁移窗口期
   转发。
 
-## WAL 主从同步
+### WAL 主从同步
 
 `dtmq-proxysvr/data/mq_channel_wal_handle.{h,cpp}` 包装 atframe_utils 的
 `distributed_system::wal_publisher / wal_subscriber`（单线程模式），日志按
 `DChannelMessageDetail::CommandCase` 分类 merge；与 rank 组件的 `rank_wal_handle` 是同一套机制。
 `SSChannelUpdateReq` 支持 `compact_sequence` 日志压缩。
 
-## 客户端 SDK
+### 客户端 SDK
 
 - `dtmq_client_api`：`get_target_server_id(s)`、`send_message`、`find_message`、`page_query_message`、
   `normalize_replicate_index`；
 - `dtmq_client_subscriber`：进程内共享订阅者（`shared_subscriber`）：本地 WAL 日志缓存、乐观锁/快照/
   消息回调、心跳、接收 `channel_event_sync` 事件流。
 
-## 业务接入示例（lobbysvr）
+### 业务接入示例（lobbysvr）
 
 `src/lobbysvr/service/` 链接 `dtmq-proxy-sdk`，为 `DtmqProxysvrNotifyService` 生成 handler
 （`app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.*`），在 `lobbysvr_main.cpp` 中

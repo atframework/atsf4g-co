@@ -7,7 +7,15 @@ title: Router System
 The router system answers the question "which service instance owns this stateful object": objects (such as
 users or teams) are routed by key to their owning instance, cached in memory, and periodically saved back.
 
-## Core Classes
+## Quick Start
+
+1. Use existing routed service SDK APIs, such as lobby users or friends, retaining their object types/managers.
+2. Call them from business actions; change existing TTL/save intervals through [server configuration](../development/server-config).
+3. Verify reads, changes, and saves for the same object. Implement a router specialization for a new object type or migration semantics.
+
+## Customization and Design
+
+### Core Classes
 
 | Class | Location | Responsibility |
 | --- | --- | --- |
@@ -18,20 +26,19 @@ users or teams) are routed by key to their owning instance, cached in memory, an
 
 Object key = `type_id + zone_id + object_id`.
 
-## Object Access
+### Object Access
 
-```cpp
-auto mgr = router_manager_set::me()->get_manager<MyManager>(type_id);
-// Pull the object (if not cached, loads from DB/source instance via the pull_object coroutine RPC)
-auto obj = RPC_AWAIT_TYPE_RESULT(mgr->mutable_object(ctx, zone_id, object_id));
-// After modification, mark dirty; task_action_auto_save_objects periodically saves back (save_object)
-```
+An existing manager's `mutable_object` returns `rpc::result_code_type` and writes the object through an output reference.
+Pass the full object key and required private parameters, then check the result with `RPC_AWAIT_CODE_RESULT`.
+`router_manager_set::get_manager(type_id)` returns a base-class pointer; use the SDK's typed manager API for specialized calls.
+See `src/server_frame/router/router_manager.h` for signatures and
+`src/friendsvr/sdk/management/router/router_friend_manager.h` for friend integration.
 
 - IO for the same key is serialized through `io_schedule_order_` to avoid concurrent read/write races;
 - Objects have TTL and degradation policies; objects not accessed for a long time are automatically closed
   (`router_close_manager_set`).
 
-## Router Addressing and Migration
+### Router Addressing and Migration
 
 - Addressing is **not consistent hashing**: ownership is determined by the DB route table plus online probing.
   `router_manager_base::send_msg` fills in the `SSRouterHead`, resolves the target server via the route cache,
@@ -40,7 +47,7 @@ auto obj = RPC_AWAIT_TYPE_RESULT(mgr->mutable_object(ctx, zone_id, object_id));
   `router/handle_ss_rpc_routerservice.atfw.gen.*`), together with `task_action_router_transfer` /
   `task_action_router_update_sync`, transfer objects between instances and update the route table.
 
-## Message Flow
+### Message Flow
 
 ```mermaid
 sequenceDiagram

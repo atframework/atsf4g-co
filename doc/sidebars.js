@@ -37,6 +37,8 @@ const sidebars = {
         'components/distributed-transaction',
         'components/rank',
         'components/orbit',
+        'components/friend',
+        'components/matching-team',
       ],
     },
     {
@@ -48,7 +50,11 @@ const sidebars = {
       type: 'category',
       label: '开发指南',
       items: [
+        'development/overview',
         'development/add-service',
+        'development/add-component',
+        'development/add-protocol',
+        'development/server-config',
         'development/add-rpc-task',
         'development/add-db-table',
         'development/excel-config',
