@@ -1545,7 +1545,7 @@ rpc::result_code_type transaction_participator_handle::handle_finished_transacti
   }
 
   if (result >= 0) {
-    // ACK 成功才完成本地确认；查询或快照中已经获知的终态保持不变。
+    // ACK 成功才完成本地确认；查询或快照中已经获知的结束状态保持不变。
     if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
       transaction_ptr->mutable_metadata()->set_status(
           atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);

@@ -186,7 +186,7 @@ CASE_TEST(lobbysvr_user_team, member_update_full_fields_and_dirty_projection) {
   CASE_EXPECT_TRUE(team_test::pump_until(
       test, [&] { return team_test::collect_team_dirty(test, kSessionId, kTeamId).actions.size() >= 3; }));
 
-  // 缓存终态: member_data 业务字段逐项断言
+  // 缓存最终状态: member_data 业务字段逐项断言
   {
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     dump_team_snapshot(*current, snapshot);

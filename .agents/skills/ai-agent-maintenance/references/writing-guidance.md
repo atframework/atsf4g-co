@@ -44,6 +44,7 @@ Use these as contextual editing cues. Keep defined technical meanings, such as �
 | 抓手、底座 | Name the method, tool, library, runtime, or service. |
 | 打通、沉淀、落地、闭环 | State the connection, saved content, implementation, deployment, persistence, or completion steps. |
 | 对齐、拉齐、收敛 | Name the reference, merge, state update, or scope reduction. |
+| 终态 | 结束状态、最终状态 or 最终决议; choose by context. |
 | 口径、维度、颗粒度、链路 | State the calculation, scope, time source, processing unit, or request path. |
 | 兜底、钳制 | State the trigger and actual retry, default, rejection, or limiting behavior. |
 | 重新武装定时器 | 重新设置定时器、再次注册定时器. |
@@ -52,6 +53,12 @@ Use these as contextual editing cues. Keep defined technical meanings, such as �
 | 值得注意的是、显然、本质上、全面、强大、无缝 | State the fact, scope, cause, prerequisite, or measured behavior. |
 
 Rewrite the sentence when a word substitution stays awkward. Keep legal uses of 合同/证据 and accurate uses of 门槛.
+Use 结束状态 for a lifecycle that has ended, including failure, cancellation,
+and timeout; ending does not imply success. Use 最终状态 for the result after a
+described sequence of operations or replay; the object may still change later.
+Use 最终决议 for a transaction's commit/reject decision; distinguish it from
+completed local actions and successful ACK. Keep formal terminology required by
+a definition or quotation, and preserve identifiers.
 Translate English prose naturally; avoid long noun chains, repeated “enabling …, ensuring …”, and needless synonyms.
 
 ## Semantic preservation

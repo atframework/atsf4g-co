@@ -263,7 +263,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_02_callback_captain_request_failure_
     }
     expect_team_is_matching_condition(finish_req.action().team_update());
   }
-  // 终态: 本地匹配状态已复位, 队伍派生状态从未被上行流程直接改写(等 room 权威广播)
+  // 最终状态: 本地匹配状态已复位, 队伍派生状态从未被上行流程直接改写(等 room 权威广播)
   CASE_EXPECT_FALSE(captain_inst->get_user_matching_manager().is_in_matching());
   auto captain_team =
       captain_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kCaptainTeamId));
@@ -658,7 +658,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
   CASE_EXPECT_TRUE(member_team->is_member());
   CASE_EXPECT_FALSE(non_member_team->is_member());
 
-  // 普通队员不会调用 start_matching；上一轮终态和 ACK 必须在队伍通知订阅新 Unit 时重置。
+  // 普通队员不会调用 start_matching；上一轮匹配的结束状态和 ACK 必须在队伍通知订阅新 Unit 时重置。
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.mts06_previous_terminal", [member_inst](rpc::context& ctx) -> rpc::result_code_type {
         PROJECT_NAMESPACE_ID::table_user table;

@@ -200,7 +200,7 @@ size_t count_running_teams(user& user_inst) {
 // KICK-01 顺序一(§3.1.1): 队伍频道 remove_member(self) 先到。
 // - self 成员缓存删除、role 回到 GUEST、客户端立即收到该队伍的 team_remove(只此一次);
 // - 个人 remove_member 到达后 manager 移除该队伍, 不重复下发第二次 team_remove;
-// - 共同终态: 索引/分组/table 均无该队; 迟到的重复通知不重建队伍、不产生二次脏数据。
+// - 两种通知顺序的最终状态相同: 索引/分组/table 均无该队; 迟到的重复通知不重建队伍、不产生二次脏数据。
 CASE_TEST(lobbysvr_user_team, kick_channel_event_first_then_personal) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -322,7 +322,7 @@ CASE_TEST(lobbysvr_user_team, kick_channel_event_first_then_personal) {
 //   reason 必须来自个人通知(不能写回 DEFAULT);
 // - 推进到 exit retry 边界后 minute refresh 补发 remove 请求, reason 等于个人通知中的真实 reason;
 // - 随后队伍频道 remove_member(self) 只完成缓存收敛, 不重复下发第二次 team_remove; minute refresh 收编队伍;
-// - 共同终态同顺序一。
+// - 最终状态与顺序一相同。
 CASE_TEST(lobbysvr_user_team, kick_personal_event_first_then_channel) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));

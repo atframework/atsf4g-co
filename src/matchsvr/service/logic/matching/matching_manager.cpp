@@ -613,7 +613,7 @@ rpc::result_code_type matching_manager::orbit_room_ready(
       response.set_result(result);
     } else if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED ||
                room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED) {
-      // 同一 Orbit 的重复或延迟回调只返回既有终态，不允许覆盖已经提交的结果。
+      // 同一 Orbit 的重复或延迟回调只返回已有的匹配结果，不允许覆盖已经提交的结果。
       response.set_result(room->get_result());
     } else {
       response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);

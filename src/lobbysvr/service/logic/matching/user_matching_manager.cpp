@@ -499,7 +499,7 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
   if (snapshot.result() != 0) {
     if (is_matching_not_found(snapshot.result()) && is_matching_finish(data_.view().status()) &&
         !has_pending_matching_event()) {
-      // Unit 已回收，无需再补 ACK。终态结果保留到下一轮开始；非终态仍交给登录恢复处理。
+      // Unit 已回收，无需再补 ACK。匹配结束后的结果保留到下一轮开始；尚未结束的匹配仍交给登录恢复处理。
       last_reported_acknowledge_event_id_ = get_acknowledge_event_id();
       RPC_RETURN_CODE(snapshot.result());
     }

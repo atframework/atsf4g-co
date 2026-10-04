@@ -50,15 +50,15 @@ sequenceDiagram
     else 准备失败或超时
         C->>D: reject
     end
-    D-->>C: 已确认的全局终态
+    D-->>C: 已确认的全局决议
     C->>P: commit/reject（逐个通知）
     P->>P: 本地动作和生命周期回调
     P->>D: commit_participator/reject_participator（ACK）
     D-->>P: 确认结果
 ```
 
-未确认全局终态时，client 先有限次查询，不以失败调用的部分副本响应决定通知方向。
-已确认的全局终态不会因后续本地动作或通知失败而反转。
+未确认全局决议时，client 先有限次查询，不以失败调用的部分副本响应决定通知方向。
+已确认的全局决议不会因后续本地动作或通知失败而反转。
 
 资源冲突、复制、失败恢复、回调状态与运行契约见[分布式事务白皮书](../whitepaper/distributed-transactions)。
 接入时同时核对组件 README 中的回调与参数说明。

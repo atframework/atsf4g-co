@@ -35,7 +35,7 @@ class main_service_module : public atfw::atapp::module_impl {
     return matching_manager::me()->init();
   }
 
-  // 驱动搜索超时与终态房间回收。
+  // 驱动搜索超时处理和匹配结束后的房间回收。
   int tick() override { return matching_manager::me()->tick(); }
 
   const char* name() const override { return "main_service_module"; }

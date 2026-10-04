@@ -973,7 +973,7 @@ CASE_TEST(lobbysvr_user_matching, repeated_subscription_preserves_ack_and_comple
       }));
   lobbysvr_test::pump_rounds(test, 8);
   CASE_EXPECT_EQ(2, requests->size());
-  // 最终 ACK 和重复订阅都不应把终态推送替换成空视图，也不应产生额外 dirty 推送。
+  // 最终 ACK 和重复订阅都不应把匹配结束时的推送替换成空视图，也不应产生额外 dirty 推送。
   const auto dirty_posts = lobbysvr_test::find_stream_post_indices(test, kSessionId, dirty_rpc_name);
   CASE_EXPECT_EQ(dirty_baseline + 1, dirty_posts.size());
   if (dirty_posts.size() > dirty_baseline) {

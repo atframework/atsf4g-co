@@ -343,7 +343,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 
         rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
         if (!storage.metadata().memory_only()) {
-          // 相同 UUID 的重放不能覆盖已持久化的终态或参与者确认；由 DB 原子判定是否首次创建。
+          // 相同 UUID 的重放不能覆盖已持久化的全局决议或参与者确认；由 DB 原子判定是否首次创建。
           ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, &db_version));
           if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
             // 插入成功后 TTL 设置可能失败或响应丢失；重放补设原记录的 TTL，不覆盖数据。

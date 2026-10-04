@@ -316,7 +316,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
         ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
         break;
       }
-      // 未达到副本要求的调用也可能填入部分终态，只接纳成功调用的结果。
+      // 未达到副本要求的调用也可能返回部分副本的决议，只接纳成功调用的结果。
       protobuf_copy_message(*coordinator_metadata, input->data.metadata());
       ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(child_ctx, *coordinator_metadata));
       if (ret >= 0) {

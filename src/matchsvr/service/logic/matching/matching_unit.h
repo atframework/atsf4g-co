@@ -42,7 +42,7 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
 
   // Room 可替换，但 Unit 对象、订阅者和事件游标在整个匹配生命周期内不变。
   void bind_room(const std::shared_ptr<matching_room>& room) noexcept { room_ = room; }
-  // 非迁移摘房即结束本轮匹配；终态 Unit 仅作为 WAL 补发墓碑保留，不再关联 Room。
+  // 非迁移摘房即结束本轮匹配；已结束匹配的 Unit 仅作为 WAL 补发墓碑保留，不再关联 Room。
   void unbind_room() noexcept { room_.reset(); }
   std::shared_ptr<matching_room> get_room() const noexcept { return room_.lock(); }
 

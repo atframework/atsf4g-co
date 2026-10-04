@@ -1910,7 +1910,7 @@ CASE_TEST(lobbysvr_user_team, self_join_request_receipt_full_payload) {
 }
 
 // ADM-SELF-03: 两类个人缓存的同 team_key 同 expiry 原位覆盖、不同 expiry 重排、不同 team_key 共存;
-// 通过 get 返回的最新完整内容与分段 cleanup 终态证明 list/map 同步。
+// 核对 get 返回的最新完整内容与分段 cleanup 后的最终状态，确认 list/map 同步。
 CASE_TEST(lobbysvr_user_team, self_pending_upsert_reorder_and_segmented_cleanup) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));

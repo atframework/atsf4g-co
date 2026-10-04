@@ -1180,7 +1180,7 @@ CASE_TEST(teamsvr_room_compact, snapshot_coverage_beyond_compact_replay_idempote
   // 裁剪边界与覆盖范围不混用(CMP-08): compact 保持更早边界, saved 覆盖快照
   CASE_EXPECT_EQ(compact_sequence, room->debug_last_compact_sequence());
   CASE_EXPECT_EQ(saved_sequence, room->debug_saved_action_sequence());
-  // 重叠区日志不重复应用: 成员恰好 owner+admin(不重复), 状态为快照后增量终态
+  // 重叠区日志不重复应用: 成员恰好 owner+admin(不重复), 状态等于在快照上应用后续增量的结果
   CASE_EXPECT_EQ(2u, room->debug_member_lru_keys().size());
   auto owner_member = room->find_member(key_owner, false);
   auto admin_member = room->find_member(key_admin, false);
@@ -2852,7 +2852,8 @@ CASE_TEST(teamsvr_room_lock, reset_lock_response_loss_idempotent) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ RCV-11: 固定 seed 混合 action trace, 各压缩/重启点恢复后规范化终态与全量日志 oracle 相同 ============
+// ============ RCV-11: 固定 seed 混合 action trace,
+// 各压缩/重启点恢复后，规范化的最终状态与全量日志 oracle 相同 ============
 namespace {
 constexpr uint32_t kMixedTraceSeed = 20260915;
 constexpr int32_t kMixedTraceOpCount = 24;
@@ -3163,7 +3164,7 @@ bool drive_until_fresh_compact(room_test_env& env, fake_team_room_channel& fake,
 
 // 驱动一次真实维护产生 compact update, 取其快照内容规范化并序列化:
 // 剔除随运行环境/压缩进度变化的游标、压缩点与时间戳, repeated 字段按稳定 key 排序,
-// 使"全量日志直连"与"压缩+快照恢复"两种路径的业务终态可直接比较
+// 使"全量日志直连"与"压缩+快照恢复"两种路径的最终业务状态可直接比较
 std::string capture_compact_snapshot_state(room_test_env& env, fake_team_room_channel& fake, int64_t team_id) {
   const size_t updates_before = fake.update_requests().size();
   CASE_EXPECT_TRUE(drive_until_fresh_compact(env, fake, updates_before));
@@ -3186,7 +3187,7 @@ std::string capture_compact_snapshot_state(room_test_env& env, fake_team_room_ch
   CASE_EXPECT_TRUE(compact_update->custom_data().UnpackTo(&storage));
   CASE_EXPECT_TRUE(compact_update->private_data().UnpackTo(&private_data));
 
-  // 消费游标/保存边界/压缩点与 team_key(两遍运行取不同 team id)不属于业务终态
+  // 消费游标/保存边界/压缩点与 team_key(两遍运行取不同 team id)不属于待比较的最终业务状态
   storage.clear_team_key();
   storage.clear_acknowledge_action_sequence();
   storage.clear_acknowledge_action_hash_code();
@@ -3264,7 +3265,7 @@ CASE_TEST(teamsvr_room_recovery, seeded_mixed_trace_restore_oracle) {
   // team id 依赖 discovery 就绪且不同 env 的哈希环可能不同, 每遍各自在 env.start 之后取号;
   // 规范化时剔除 team_key, 两遍业务状态可直接比较
 
-  // 第一遍: 全量日志直连(不驱动维护、不压缩), 产出规范化终态 oracle
+  // 第一遍: 全量日志直连(不驱动维护、不压缩), 产出规范化的最终状态 oracle
   std::string oracle_state;
   {
     room_test_env env(cfg);
@@ -3291,7 +3292,7 @@ CASE_TEST(teamsvr_room_recovery, seeded_mixed_trace_restore_oracle) {
   }
 
   // 第二遍: 同一 team 同一 trace; 两个检查点经真实维护压缩 + 丢弃房间从快照和剩余日志恢复,
-  // 恢复后继续后续操作, 终态必须与全量 oracle 相同
+  // 恢复后继续后续操作, 最终状态必须与全量 oracle 相同
   std::string restored_state;
   {
     room_test_env env(cfg);

@@ -5,8 +5,8 @@
 //
 // Covered here:
 // - ROBUST-01: 重复事件等幂(同一 WAL 消息重投去重, 缓存/dirty/SS 调用数不重复叠加);
-// - ROBUST-02: 乱序事件最终一致(update 先于 add 不建幽灵缓存, admit 乱序收敛到正序终态);
-// - ROBUST-03: 频道销毁(WAL destroy 日志)后迟到的 action/个人事件不改变终态;
+// - ROBUST-02: 乱序事件最终一致(update 先于 add 不建幽灵缓存, admit 乱序处理结果与正序一致);
+// - ROBUST-03: 频道销毁(WAL destroy 日志)后迟到的 action/个人事件不改变销毁后的状态;
 // - ROBUST-04: 快照重建清理旧 pending/成员/共享数据, manager 索引与 table 数据一致, 脏推送 handle 随对象释放注销。
 // 文件末尾四例对应计划 §5.6 P2 健壮性矩阵: 个人频道错误 Any、队伍快照错误 Any、共享数据错误 Any、夹具卫生。
 
@@ -439,9 +439,9 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
 // - update 先于 add(同一 WAL 批次内保证应用顺序): member_update 不会为未知成员创建幽灵缓存,
 //   随后的 add_member 以其自身业务字段落地(成员字段逐项断言);
 // - 过期/乱序的 WAL 同步重投被已保存序号拒绝(kIgnore), 不改变已落地状态;
-// - 权威快照重建后终态与正序一致(快照后 WAL 日志存储被清空, 后续增量按空存储重新起 hash 链);
+// - 权威快照重建后的最终状态与正序处理结果一致(快照后 WAL 日志存储被清空, 后续增量按空存储重新起 hash 链);
 // - admit 乱序: approve 先于 add 到达为幂等无操作, add_member 落地后迟到的 add_invitation/add_join_request
-//   被成员身份抑制, 终态与正序(add -> approve)一致: 成员在队、两类 pending 均无残留。
+//   被成员身份抑制, 最终状态与正序(add -> approve)处理结果一致: 成员在队、两类 pending 均无残留。
 CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -557,7 +557,7 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
     CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kAddMember)));
   }
 
-  // A3. 权威快照(saved 覆盖已收日志)重建: 终态与正序处理同一 room 日志流一致(逐项断言)
+  // A3. 权威快照(saved 覆盖已收日志)重建: 最终状态与正序处理同一 room 日志流的结果一致(逐项断言)
   atfw::team::DTeamStorage rebuilt_storage = team_test::make_team_storage(kTeamId, team_chain.sequence);
   team_test::add_storage_member(rebuilt_storage, team_test::kCaptainUserId,
                                 team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
@@ -670,7 +670,7 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
     CASE_EXPECT_TRUE(nullptr != team_test::find_snapshot_member(snapshot, kAdmitUserId));
   }
 
-  // B4. 正序对照(W): add -> approve 收敛到同样的终态(无 pending 残留, 非成员)
+  // B4. 正序对照(W): add -> approve 得到同样的最终状态(无 pending 残留, 非成员)
   {
     atfw::team::DTeamAction action;
     fill_invitation(*action.mutable_add_invitation(), kTeamId, kInOrderUserId, late_expired);
@@ -706,7 +706,7 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
     return 0 == snapshot.snapshot().pending_join_request_size();
   }));
   {
-    // 终态一致: 乱序 admit 的 Z 是正序结果的成员且无 pending; 正序对照的 W 非成员且无 pending
+    // 最终状态一致: 乱序 admit 的 Z 是正序结果的成员且无 pending; 正序对照的 W 非成员且无 pending
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     dump_team_snapshot(*current, snapshot);
     CASE_EXPECT_EQ(0, snapshot.snapshot().pending_invitation_size());
@@ -718,9 +718,9 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// ROBUST-03: 频道销毁期间迟到 action 不改变终态。
+// ROBUST-03: 频道销毁期间迟到 action 不改变销毁后的状态。
 // 频道经 WAL destroy 日志销毁、manager 收编后, 迟到的队伍 action/重复 destroy 日志/迟到个人通知
-// 均不改变终态: manager 索引/分组为空、table 无残留、无新增 dirty 推送、无新增 SS 调用。
+// 均不改变销毁后的状态: manager 索引/分组为空、table 无残留、无新增 dirty 推送、无新增 SS 调用。
 CASE_TEST(lobbysvr_user_team, robust_late_events_after_channel_destroy_ignored) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -833,7 +833,7 @@ CASE_TEST(lobbysvr_user_team, robust_late_events_after_channel_destroy_ignored) 
   const size_t send_message_after_destroy = ss_capture.send_message_reqs.size();
   CASE_EXPECT_EQ(0, static_cast<int>(send_message_after_destroy));
 
-  // 迟到事件: 不改变终态
+  // 迟到事件: 不改变销毁后的状态
   test.cs().clear_history();
   // 迟到的队伍频道 action(频道已销毁, 订阅端整条忽略)
   CASE_EXPECT_TRUE(
@@ -857,7 +857,7 @@ CASE_TEST(lobbysvr_user_team, robust_late_events_after_channel_destroy_ignored) 
       make_personal_remove_action(kTeamId, kUserId, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM)));
   team_test::pump_rounds(test, 3);
 
-  // 终态断言: manager 空、table 无残留、无新增 dirty、无新增 SS 调用
+  // 最终状态断言: manager 空、table 无残留、无新增 dirty、无新增 SS 调用
   CASE_EXPECT_TRUE(!team_mgr.get_team_by_team_key(team_test::make_team_key(kTeamId)));
   CASE_EXPECT_TRUE(!team_mgr.get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL));
   CASE_EXPECT_EQ(0, static_cast<int>(count_running_teams(*user_inst)));
@@ -1191,7 +1191,7 @@ CASE_TEST(lobbysvr_user_team, robust_snapshot_rebuild_cleans_pendings_and_indexe
 
 // =============================================================================
 // 以下四例对应计划 §5.6 P2 健壮性矩阵(Any 解包错误与夹具卫生);
-// 上文 ROBUST-01..04 四例对应 §3 消息缺失/乱序叙事的等幂与终态契约。
+// 上文 ROBUST-01..04 四例对应 §3 消息缺失/乱序叙事的幂等性与最终状态约定。
 // =============================================================================
 
 // §5.6 ROBUST-01: 个人频道错误 Any(类型不符/无法解包)的 action 不修改任一缓存;

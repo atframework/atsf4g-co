@@ -109,7 +109,7 @@ CASE_TEST(teamsvr_room_wal, channel_smoke_and_ready) {
 }
 
 // ============ WAL-01: publisher 混合 DTeamAction 提交，真实 sequence/hash 链经 SSChannelEventSync 后
-// Room 终态与 journal 一致 ============
+// Room 最终状态与 journal 一致 ============
 CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
   room_test_env env;
   env.wal_journal_mode = true;
@@ -233,7 +233,7 @@ CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
   }
   CASE_EXPECT_EQ(0, env.wal_converge());
 
-  // 终态与 journal 重放结果一致: 成员/角色/成员数据
+  // 最终状态与 journal 重放结果一致: 成员/角色/成员数据
   auto owner_member = room->find_member(owner_key, false);
   CASE_EXPECT_TRUE(!!owner_member);
   if (owner_member) {
@@ -1646,7 +1646,7 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
 // ============ WAL-07: 多订阅者不同 checkpoint/心跳/超时；GC 与快照兜底不越过未保存状态 ============
 // 三类订阅者并存: 跟得上的(增量)、心跳过期的(投递被跳过并被订阅者管理器 GC)、房间真实订阅者。
 // 契约: 心跳过期订阅者不进入任何投递批次(而非收到跳日志的错误增量)；GC 后可重新订阅恢复；
-// 跟得上的订阅者与房间真实订阅者持续只收连续增量，终态完整
+// 跟得上的订阅者与房间真实订阅者持续只收连续增量，最终状态完整
 CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
   room_test_env env;
   env.wal_journal_mode = true;
@@ -1870,7 +1870,7 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
     }
   }
 
-  // 房间真实订阅者终态完整(持续增量应用)
+  // 房间真实订阅者最终状态完整(持续增量应用)
   for (uint64_t user_id = 9201; user_id <= 9206; ++user_id) {
     CASE_EXPECT_TRUE(nullptr != room->find_member(teamsvr_room_test::make_user_key(1, user_id), false));
   }

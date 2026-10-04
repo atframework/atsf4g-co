@@ -58,7 +58,7 @@ class matching_room {
   int64_t get_created_time() const noexcept { return created_time_; }
   // 返回搜索超时时间。
   int64_t get_expire_time() const noexcept { return expire_time_; }
-  // 返回终态发生时间，用于延迟回收以支持查询。
+  // 返回房间进入结束状态的时间，用于延迟回收以支持查询。
   int64_t get_terminal_time() const noexcept { return terminal_time_; }
   // 返回确认阶段截止时间；非确认阶段为 0。
   int64_t get_confirm_expire_time() const noexcept { return confirm_expire_time_; }
@@ -188,7 +188,7 @@ class matching_room {
   int64_t created_time_;
   // 匹配搜索截止时间。
   int64_t expire_time_;
-  // 进入终态的时间，非终态时为 0。
+  // 进入结束状态的时间，尚未结束时为 0。
   int64_t terminal_time_;
   // 确认阶段截止时间。
   int64_t confirm_expire_time_;

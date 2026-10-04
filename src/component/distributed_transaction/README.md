@@ -15,7 +15,7 @@
   已确认提交后的本地动作仍可能因重试耗尽而被清理，因此 client 成功表示全局决议为提交，不保证所有业务动作已成功。
   回调须在内部捕获 C++ 异常并返回错误码。当前协程框架不把未捕获的 `throw` 转为 RPC 错误，异常越过
   `noexcept` 的任务启动或取消边界会终止进程；SDK 的重试与清理契约适用于返回错误、任务超时和取消。
-- 同 UUID 的 `create` 重放保留已有终态和参与者确认；内存模式复用已有缓存。
+- 同 UUID 的 `create` 重放保留已有全局决议和参与者确认；内存模式复用已有缓存。
   持久化模式沿用 `insert → set_ttl`，TTL 失败时尝试删除新记录并返回原错误；保存沿用 `replace`。
   这些独立 DB 调用不提供跨进程原子性保证。
   UUID 必须全局唯一，同 UUID 请求必须属于同一事务；记录清理后的去重需要业务层保证。
@@ -47,12 +47,13 @@
   两种模型首次 prepare 通过检查后均将 `CREATED` 推进到 `PREPARED`，再触发 `on_start_running`。
   普通模式在 `on_start_running` 返回后才登记原截止时间的恢复定时器；回调在途的 commit/reject 返回
   `EN_SYS_BUSY`，不会提前执行业务动作或完成事件。启动回调报错或任务超时后仍可恢复；快照重载不重放启动回调。
-  普通事务的 `commit_participator`/`reject_participator` 成功后，才将本地 `COMMITING`/`REJECTING` 推进到对应终态，
-  并单向合并服务端状态和完成时间。回调及是否设置 `do_event` 不决定终态。
-  查询已获知的终态直接保留；`load` 原样恢复状态，不因本地执行或 ACK 尚未完成而回退。
+  普通事务的 `commit_participator`/`reject_participator` 成功后，才将本地 `COMMITING`/`REJECTING`
+  推进到对应的 `COMMITED`/`REJECTED` 结束状态，并单向合并服务端状态和完成时间。
+  回调及是否设置 `do_event` 不决定本地的结束状态。
+  查询已获知的结束状态直接保留；`load` 原样恢复状态，不因本地执行或 ACK 尚未完成而回退。
   `on_finished` 成功后记录 `finished_callback_completed` 并启动 ACK；失败重试耗尽则清理记录，不发送 ACK。
   running 恢复本地动作；finished 根据回调完成标记恢复回调或 ACK，ACK 重试不重放已成功的回调。
-  已知终态仍可重复发送同方向 ACK，由协调者保证幂等。
+  已知结束状态仍可重复发送同方向 ACK，由协调者保证幂等。
   ACK 失败（含未达到副本成功数）时不应用部分响应，下一次确认沿用当前已知状态。
   快照重载后，旧查询、本地动作和 ack 结果按对象身份校验，不能改写新对象或替换其恢复定时器。
 - `on_commited`/`on_rejected` 返回后才登记 ACK 定时器，避免通知切出期间被 ACK 推进状态或删除记录。
@@ -119,7 +120,7 @@ ctest --test-dir <BUILD_DIR> -L distributed-transaction --output-on-failure
 | API | 单节点与 R/N 副本响应、畸形 payload、输出及请求复用、单次调用错误传播 |
 | Client | 两种模式的 prepare/通知顺序与回调状态、截止时间、有限次重试、重入、storage 替换和任务超时释放 |
 | 参与者 | 两种模式的生命周期、锁冲突、快照恢复、启动及完成回调切出、重试耗尽、弱引用和定时器清理 |
-| 协调者 | DB 与 `memory_only`、终态及 ACK 幂等、TTL、缓存淘汰、旧句柄和并发 IO |
+| 协调者 | DB 与 `memory_only`、全局决议及 ACK 幂等、TTL、缓存淘汰、旧句柄和并发 IO |
 | 协调者停服 | `stop`/`cleanup`、在途 create/query/save、输出句柄及缓存释放 |
 | 压力 | 连续事务、失败重试和回调数量，结束后的 SDK 容器清理 |
 

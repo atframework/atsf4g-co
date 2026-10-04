@@ -78,7 +78,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
  public:
   // 初始化匹配管理器。
   int32_t init();
-  // 处理搜索超时和终态房间延迟回收。
+  // 处理搜索超时，并延迟回收已结束匹配的房间。
   int32_t tick();
   // 清空所有运行时房间和索引，主要用于服务退出与测试隔离。
   void clear();
@@ -101,7 +101,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
 
   // 返回当前处于搜索阶段的玩家总数，用于选择规则组。
   int32_t get_total_matching_user_count() const noexcept;
-  // 返回当前保留的房间数，包括短暂保留供查询的终态房间。
+  // 返回当前保留的房间数，包括匹配结束后短暂保留供查询的房间。
   size_t get_room_count() const noexcept;
   // 返回指定房间的 Unit/faction 数量；房间不存在时为 0。
   size_t get_room_unit_count(const std::string& matching_id) const noexcept;
