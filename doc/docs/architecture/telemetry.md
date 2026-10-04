@@ -10,6 +10,11 @@ title: 可观测性
    使用对应 otelcol 配置准备 Collector。
 2. 生成配置并运行服务，使用一次 RPC 检查 trace，查看服务内置 metrics。
 3. 新业务 action 沿用自动 trace；需要额外业务指标时使用已有 telemetry API。
+4. 需要自动伸缩时，在 `modules/hpa.yaml` 配置查询与策略，注册业务就绪和状态检查。
+   Kubernetes 还需指标适配器与原生 HPA，按[HPA 接入步骤](../whitepaper/hpa-controller)验证。
+
+设计与故障处理见[可观测性与动态策略白皮书](../whitepaper/observability-policy)。
+订单撮合、搜索索引和战斗房间的指标与执行流程见[应用场景](../whitepaper/metric-driven-scenarios)。
 
 ## 定制与详细设计
 
@@ -40,6 +45,11 @@ daemon / systemd 两种模式）。
 - `pull/prometheus/`：从 Prometheus 拉取指标；
 - discovery provider：向 atproxy/etcd 汇报就绪状态，供 `logic_hpa_discovery_select_mode`（如 `kReady`）
   选择目标节点（dtmq 等组件按此选择副本节点）。
+- 自定义 policy 与 discovery：拉取业务指标、计算参数，并通过 etcd 写入和监听分发业务策略；
+- 副本控制：发布预期副本数和仍 Ready 节点的状态索引，分阶段调整 `hpa_scaling_target` / `hpa_scaling_ready`。
+
+状态检查、对象转移和扩缩容执行器需要按业务接入。指标采集成功不表示策略已应用，
+详见[动态策略最小接入](../whitepaper/observability-policy)与[HPA 详细设计](../whitepaper/hpa-controller)。
 
 `router_manager_set`、dispatcher 等也暴露内置 metrics（对象数、task 数、RPC 延迟）。
 

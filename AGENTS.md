@@ -30,14 +30,13 @@ high-performance game server architectures.
 ## Always-On Rules
 
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
-- Write comments, docs, and agent guidance for their intended reader, in the file's own language. Use familiar, literal
-  terms and keep established technical terms when they are exact. For example, name the actual 缓存/副本/派生视图 instead
-  of calling it 投影, name the actual action instead of using 补强, name the actual 最大值/上限 instead of calling it
-  水位, and state the actual 次数上限/剩余次数/超时时间 when 预算 only means a count or time limit.
-  Start with the fact or action, keep one idea per sentence, and remove repeated setup, conclusions, vague praise,
-  and formulaic label-plus-explanation lists. Treat
-  suspicious words as editing signals, not a blacklist; replace a term only when it is vague, inaccurate, redundant,
-  or unfamiliar to the intended reader.
+- Write comments, docs, and guidance for the intended reader in the file's language. Lead with the fact or action,
+  use precise, familiar terms, and remove repeated framing and filler. Prefer direct statements; keep corrective
+  contrasts when they resolve a relevant misunderstanding, and do not frame compatible facts as mutually exclusive.
+  Preserve technical terms, conditions, negation, bounds, versions, and the distinction between unchecked,
+  missing-input, and failed-check states. Review wording in context instead of applying a word blacklist.
+  Read [writing guidance](.agents/skills/ai-agent-maintenance/references/writing-guidance.md) when revising writing
+  rules or terminology.
 - Start with the current task, nearest instructions, and capabilities exposed by the active harness. Use exposed Skill
   metadata for routing; consult `.agents/skills/README.md` only when the harness lacks discovery. Load a `SKILL.md` only
   after the task matches it, and load its references only under their stated conditions.

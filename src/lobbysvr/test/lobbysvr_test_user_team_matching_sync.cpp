@@ -561,7 +561,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_05_minute_refresh_reverse_repair_and
 // MTS-06: 频道 matching_team_view 的本地行为 — 成员收到权威 team_view{unit_id, subscriber_server_id} 时,
 // glue_layer_event_on_team_action_update_matching_team_view 经 subscribe_matching_unit 向 matchsvr 发起一次
 // 心跳查询以订阅该匹配单元(捕获的 SSMatchingCheckReq.unit_id 精确等于视图值), 视图同时按 key 合并进队伍缓存;
-// 不是成员的玩家跳过订阅(同样的本地匹配状态下也不产生心跳), 缓存合并不受门槛影响。
+// 不是成员的玩家跳过订阅(同样的本地匹配状态下也不产生心跳), 缓存合并不受成员身份限制。
 CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gate) {
   constexpr uint64_t kMatchsvrId = 0x1E0011;
   atfw::testing::runtime test;
@@ -706,7 +706,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
   }
   CASE_EXPECT_EQ(kMemberUnitId, user_team_battle_library_function::get_matching_team_sync_view(*member_team).unit_id());
 
-  // 非成员: 同样的权威视图只合并缓存, 订阅被 is_member 门槛拒绝, 零心跳
+  // 非成员: 同样的权威视图只合并缓存, is_member 检查不通过时跳过订阅, 零心跳
   team_test::channel_event_chain non_member_team_chain;
   non_member_team_chain.channel_key = team_test::make_team_channel_key(kNonMemberTeamId);
   {
@@ -953,7 +953,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_09_async_update_member_shared_data_c
     return;
   }
 
-  // 普通成员身份(成员共享数据是本人数据, 无队长门槛)
+  // 普通成员身份(成员共享数据是本人数据, 不要求队长身份)
   team_test::channel_event_chain private_chain;
   private_chain.channel_key = private_channel_key;
   CASE_EXPECT_TRUE(team_test::join_team_with_snapshot(test, user_inst, private_chain, kTeamId,

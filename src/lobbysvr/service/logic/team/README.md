@@ -9,7 +9,7 @@
 | `user_team_manager` | 当前队伍和退出队列、两类个人 pending、个人事件序号、table dump/init、RPC 打包和结果处理、组队 dirty 的统一登记与导出 |
 | `user_team` | 成员/队长/配置/共享数据/队伍级 admission 缓存、快照与事件消费、心跳和退出重试、客户端视图、对象替换后的回调隔离 |
 | `user_team_algorithm` | 共享数据 key 编码和客户端可写模块判断 |
-| `user_team_battle_library_function` | 默认共享数据、规范化处理、匹配/关卡回调的队长和成员门槛、缓存只读接口及本地数据修复 |
+| `user_team_battle_library_function` | 默认共享数据、规范化处理、匹配/关卡回调的队长和成员身份检查、缓存只读接口及本地数据修复 |
 | `task_action_team_*` | 12 个组队 CS 请求的参数、登录和权限检查，以及 manager/user_team 调用结果 |
 
 Room、DTMQ、matching、chat、user 和 RPC 框架是外部依赖。
@@ -64,7 +64,7 @@ matching 更新附带 matching_team_view，ready 更新附带 matching_parameter
 ready 更新附加队伍未匹配条件；开始 matching 附加全员 ready 条件；
 取消 matching 附加队伍匹配中条件，matching 未变化时整笔更新被拒绝，避免意外重置 matching_team_view。
 glue 与 CS 任务的上行统一经 `async_update_team_shared_data` / `async_update_member_shared_data` 走批量更新，
-同样完成规范化和条件附加；两个入口显式拒绝空数组，角色/权限门槛由 glue 各入口与 CS 任务自行把关。
+同样完成规范化和条件附加；两个入口显式拒绝空数组，操作所需角色及权限由 glue 各入口与 CS 任务分别检查。
 非队长发起匹配时 glue 以 `EN_ERR_TEAM_PERMISSION_DENY` 取消本地待匹配状态；
 权威广播 matching=false 取消本地待匹配时使用 `EN_ERR_TEAM_MEMBER_NOT_READY`；
 start_matching 的队伍上行被 room 以负数 client_result 否决时，失败 callback 以同一错误码回滚本地待匹配
@@ -79,9 +79,9 @@ start_matching 的队伍上行被 room 以负数 client_result 否决时，失�
 | --- | --- |
 | `manager.cpp`、`lifecycle.cpp` | 注册、切队、退出、心跳、table 往返、完整拉取和快照/增量消费 |
 | `cache.cpp`、`admission.cpp` | 成员/队长/共享数据、两层邀请申请、更新/删除/到期及数据裁剪 |
-| `kick.cpp`、`dirty.cpp` | 个人通知缺失后的本地恢复、移除去重、首拉门槛、通知内容和实际下发边界 |
+| `kick.cpp`、`dirty.cpp` | 个人通知缺失后的本地恢复、移除去重、首次拉取前禁止推送、通知内容和实际下发边界 |
 | `cs.cpp` | 组队 CS 参数、权限、完整上行 payload、业务错误及本目录关卡回调 |
-| `matching_sync.cpp` | 本目录匹配 glue 的门槛、上行、频道回调、待匹配取消（含队伍上行失败回滚）、async_update 批量契约、定期修复和缓存读取 |
+| `matching_sync.cpp` | 本目录匹配 glue 的成员/队长身份检查、上行、频道回调、待匹配取消（含队伍上行失败回滚）、async_update 批量契约、定期修复和缓存读取 |
 | `robust.cpp` | 非法输入、重复/乱序/迟到事件和缓存恢复 |
 | `contract.cpp` | 独立 key 编码检查，已有派生条目的清空、输入顺序、上行和客户端通知 |
 

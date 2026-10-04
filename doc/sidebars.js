@@ -62,6 +62,18 @@ const sidebars = {
         'development/rpc-unit-test',
       ],
     },
+    {
+      type: 'category',
+      label: '技术白皮书',
+      items: [
+        'whitepaper/overview',
+        'whitepaper/wal-replication',
+        'whitepaper/distributed-transactions',
+        'whitepaper/observability-policy',
+        'whitepaper/hpa-controller',
+        'whitepaper/metric-driven-scenarios',
+      ],
+    },
   ],
 };
 

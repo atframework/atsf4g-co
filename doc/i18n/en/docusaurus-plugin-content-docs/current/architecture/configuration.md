@@ -38,7 +38,7 @@ Loading pipeline:
 ```mermaid
 flowchart LR
     X["resource/ExcelTables/*.xlsx"] -->|xresloader| B[binary configuration]
-    B -->|config_manager (generated code)| S[service process]
+    B -->|"config_manager (generated code)"| S[service process]
     L[logic_config excel section] -->|loader path/grouping| S
 ```
 

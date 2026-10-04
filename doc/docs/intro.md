@@ -39,6 +39,7 @@ title: 项目简介
 | [公共组件](components/overview) | dtmq、分布式事务、排行榜、好友、匹配、组队与 Orbit 的接入入口 |
 | [服务](services/overview) | 各服务职责与本地验证入口 |
 | [架构设计](architecture/overview) | 需要修改底层行为时查阅的设计与实现说明 |
+| [技术白皮书](whitepaper/overview) | WAL、事务、指标动态策略与 HPA 的问题分析、恢复设计及应用场景 |
 
 ## 仓库结构速览
 

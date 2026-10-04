@@ -374,7 +374,7 @@ static bool team_member_update_no_change(const atfw::team::DTeamMemberUpdateData
 }
 
 // team_update 事件的空操作判定: 对照 apply_team_update 的应用语义(configure 整体覆盖、
-// 共享数据按 key 覆盖)。configure 要求双方均已完成默认门槛修订后再比较(send_action 写入前
+// 共享数据按 key 覆盖)。configure 要求双方均已补齐默认操作角色下限后再比较(send_action 写入前
 // 修订事件载荷，storage_ 中的配置在 create_team/restore_snapshot/apply_team_update 后修订)。
 // 与 member_update 相同，不携带任何可落地字段的空更新不判定为空操作
 static bool team_update_no_change(const atfw::team::DTeamUpdateData& update_data,
@@ -441,9 +441,9 @@ static bool team_member_condition_match(const atfw::team::DTeamMemberConditionCh
          team_condition_range_match(static_cast<int64_t>(member.member_data.role()), condition.permission());
 }
 
-// 角色门槛解析: GUEST/NORMAL/ADMIN/OWNER 只是当前定义的档位参考点，方便以后在任意档位之间按需
-// 插入新角色。因此角色与门槛的比较一律按大小进行，不做等值判断；配置值不高于 GUEST(0，含非法
-// 负值)视为未配置，使用默认门槛，其余值(包括低于 NORMAL 或高于 OWNER 的自定义档位)按数值直接生效。
+// 操作角色下限解析: GUEST/NORMAL/ADMIN/OWNER 只是当前定义的档位参考点，方便以后在任意档位之间按需
+// 插入新角色。角色数值必须不低于配置下限，不做等值判断；配置值不高于 GUEST(0，含非法
+// 负值)视为未配置，使用默认下限，其余值(包括低于 NORMAL 或高于 OWNER 的自定义档位)按数值直接生效。
 static inline atfw::team::EnTeamPermissionRole resolve_permission_role(
     atfw::team::EnTeamPermissionRole role, atfw::team::EnTeamPermissionRole default_role) noexcept {
   if (role <= atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
@@ -452,7 +452,7 @@ static inline atfw::team::EnTeamPermissionRole resolve_permission_role(
   return role;
 }
 
-// 修订配置中的角色门槛默认值: 未配置(不高于 GUEST)的门槛就地改写为各字段默认值。
+// 补齐配置中的操作角色下限: 未配置(不高于 GUEST)的下限就地改写为各字段默认值。
 // storage_.configure 每次被修改后都必须重新修订(create_team/restore_snapshot/apply_team_update)，
 // 且 team_update 事件在写入频道日志前同样修订(send_action)，保证随快照和增量事件下发给
 // member 订阅者的始终是修订后的完整配置，订阅者无需再自行补默认值。
@@ -830,7 +830,7 @@ rpc::result_code_type team_room::send_actions(rpc::context& ctx,
         if (action_ptr->team_update().condition_size() > 0) {
           mutable_action().mutable_team_update()->clear_condition();
         }
-        // 配置变更写入频道日志前修订默认门槛，保证订阅者收到的增量事件携带完整配置
+        // 配置变更写入频道日志前补齐默认操作角色下限，保证订阅者收到的增量事件携带完整配置
         if (action_ptr->team_update().has_configure()) {
           normalize_configure_default_values(get_team_type(),
                                              *mutable_action().mutable_team_update()->mutable_configure());
@@ -857,7 +857,7 @@ rpc::result_code_type team_room::send_actions(rpc::context& ctx,
           break;
         }
         case atfw::team::DTeamAction::kTeamUpdate:
-          // 此处的 configure 已在上方完成默认门槛修订，可与 storage_ 中的修订后配置直接比较
+          // 此处的 configure 已在上方补齐默认操作角色下限，可与 storage_ 中的修订后配置直接比较
           if (team_update_no_change(action_ptr->team_update(), storage_.configure(), shared_team_data_,
                                     ctx.get_protobuf_arena().get())) {
             skip_event = true;
@@ -1070,7 +1070,7 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   public_data->set_team_type(get_team_type());
   protobuf_copy_message(*public_data->mutable_captain_user_key(), req.sender_user_key());
   protobuf_copy_message(*public_data->mutable_configure(), req.configure());
-  // 修订默认值后再写入频道快照与 storage_，保证下发给订阅者的配置总是完整门槛
+  // 修订默认值后再写入频道快照与 storage_，保证下发给订阅者的配置总是包含全部操作角色下限
   normalize_configure_default_values(get_team_type(), *public_data->mutable_configure());
   protobuf_copy_message(*public_data->mutable_shared_team_data(), req.shared_team_data());
 
@@ -1889,8 +1889,8 @@ void team_room::apply_member_update(const atfw::team::DTeamMemberUpdateData& upd
 void team_room::apply_team_update(const atfw::team::DTeamUpdateData& update_data) {
   if (update_data.has_configure()) {
     protobuf_copy_message(*storage_.mutable_configure(), update_data.configure());
-    // 修订默认门槛(新事件已在 send_action 写入前修订，此处兜底旧世代日志回放)，
-    // 保证 storage_ 中的配置与后续快照下发总是完整门槛
+    // 补齐默认操作角色下限(新事件已在 send_action 写入前修订，此处处理旧世代日志回放)，
+    // 保证 storage_ 中的配置与后续下发的快照总是包含全部操作角色下限
     normalize_configure_default_values(get_team_type(), *storage_.mutable_configure());
   }
 
@@ -2696,7 +2696,7 @@ bool team_room::check_member_condition_group(rpc::context& ctx,
       break;
   }
 
-  // 数量/百分比维度: 遍历前把限制统一换算成绝对数量门槛(只计算一次)，遍历中不再做 scope 分支与
+  // 数量或百分比条件: 遍历前把限制统一换算成人数上下限(只计算一次)，遍历中不再做 scope 分支与
   // 百分比换算，只剩整数比较。百分比换算: satisfied * kTeamPercentBase >= total * percent
   // 等价于 satisfied >= ceil(total * percent / kTeamPercentBase)，max 侧取 floor
   const int64_t total_count = static_cast<int64_t>(member_.size());
@@ -2752,14 +2752,14 @@ bool team_room::check_member_condition_group(rpc::context& ctx,
             decided = true;
             return false;
           }
-          // 达到 min 门槛且 max 不可能被违反，提前通过
+          // 达到 min 人数下限且 max 上限不可能被违反，提前通过
           if (max_never_violated && satisfied_count >= pass_at) {
             passed = true;
             decided = true;
             return false;
           }
         }
-        // 剩余成员全部满足也不足以达到 min 门槛，提前拒绝
+        // 剩余成员全部满足也不足以达到 min 人数下限，提前拒绝
         if (satisfied_count + (total_count - visited_count) < pass_at) {
           passed = false;
           decided = true;

@@ -569,7 +569,7 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
     // 客户端版本与成员通知路由
     CASE_EXPECT_EQ(std::string("create-01-client-v1"), req.client_version());
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), req.user_router_server_id());
-    // configure 保持默认空值(由 room 修订默认门槛)
+    // configure 保持默认空值(由 room 补齐默认操作角色下限)
     CASE_EXPECT_TRUE(!req.has_configure());
     // 初始 shared data: 队伍 battle.matching=false + 空的 battle.matching_team_view + 空的
     // battle.matching_start_data(只打 key 表示模块有效); 成员 battle.ready=false + 空的 battle.matching_parameter

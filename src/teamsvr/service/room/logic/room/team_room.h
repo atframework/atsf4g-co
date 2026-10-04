@@ -175,7 +175,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_join_request(
       rpc::context& ctx, const atfw::team::SSTeamRoomRejectJoinRequestReq& req);
 
-  // 校验外部请求的操作权限(成员身份与角色门槛，见 DTeamConfigure；member_update/team_update 还需通过
+  // 校验外部请求的操作权限(成员身份与操作角色下限，见 DTeamConfigure；member_update/team_update 还需通过
   // 其携带的 DTeamConditionChecker 数据条件检查，未通过返回 EN_ERR_TEAM_CONDITION_NOT_MATCH)，
   // 通过返回 0，否则返回错误码且不提交频道事件。
   // 条件检查中 Any 解包的临时对象分配在 ctx 绑定的任务 arena 上，减少内存碎片
@@ -361,7 +361,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 保留最近若干条日志(keep_percent/keep_count)，且保留 compact_log_keep_time 窗口内的日志
   int64_t pick_compact_sequence(rpc::context& ctx, std::chrono::system_clock::time_point now);
 
-  // 操作角色门槛(DTeamConfigure 可配置，GUEST 表示使用默认值)
+  // 操作角色下限(DTeamConfigure 可配置，GUEST 表示使用默认值)
   atfw::team::EnTeamPermissionRole get_manage_member_role() const;         // 默认 ADMIN
   atfw::team::EnTeamPermissionRole get_approve_join_request_role() const;  // 默认 NORMAL
   atfw::team::EnTeamPermissionRole get_invite_role() const;                // 默认 NORMAL
@@ -381,7 +381,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
                                const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions);
   // 单个 checker(与关系): 共享队伍数据等值 + 成员数量范围 + 全部成员条件组
   bool check_condition_checker(rpc::context& ctx, const atfw::team::DTeamConditionChecker& checker);
-  // 成员条件组: 按 scope(指定成员/全部/任意/数量/百分比门槛)统计满足 member_condition 的成员并判定
+  // 成员条件组: 按 scope(指定成员/全部/任意/数量或百分比范围)统计满足 member_condition 的成员并判定
   bool check_member_condition_group(rpc::context& ctx,
                                     const atfw::team::DTeamConditionChecker::DMemberConditionGroup& group);
 

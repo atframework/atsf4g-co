@@ -415,7 +415,7 @@ Windsurf（`~/.codeium/windsurf/mcp_config.json`，支持变量插值）。
 
 ### 客户端信任与批准（2026-09-20 实测记录）
 
-多数客户端在“读到了项目配置”和“真正连接”之间还有一步用户确认。实测各家的步骤与门槛：
+多数客户端在“读到了项目配置”和“真正连接”之间还有一步用户确认。实测各客户端连接前需要完成的步骤：
 
 | 客户端 | 实测版本 | 项目配置被发现 | 连接前需要的用户步骤 | 连接验收 |
 | --- | --- | --- | --- | --- |
@@ -425,7 +425,7 @@ Windsurf（`~/.codeium/windsurf/mcp_config.json`，支持变量插值）。
 | MiMo CLI | 0.1.14 | 是（`.mimocode/mimocode.json`，列表还标注配置来源文件） | 无 | ✓ `mimo mcp list` 显示 connected（真实握手） |
 | Cline CLI | 3.0.62 | 是（经 `launch.mjs` 显式路径，Windows/WSL 双平台） | 无（导出文件即配置源）；会话需登录模型供应商 | `cline config` MCP 标签显示已加载（双平台）；会话内调用未验收 |
 | Codex CLI | 0.155.1 | 是（需项目信任） | 用户级 `config.toml` 写 `project_config_enabled = true` + `[projects.'<仓库绝对路径>'] trust_level = "trusted"`（或交互式首跑的信任对话） | `mcp list`/`get` 正确解析；会话内连接需 ChatGPT 登录，未验收 |
-| Gemini CLI | 0.60.0 | 是 | 目录信任（未信任目录按官方行为禁用项目 MCP）+ 模型认证 | 认证门槛（rc=41）后停止，未验收 |
+| Gemini CLI | 0.60.0 | 是 | 目录信任（未信任目录按官方行为禁用项目 MCP）+ 模型认证 | 模型认证未完成（rc=41），停止检查，未验收 |
 | Claude Code | 2.1.278 | 是 | 交互式运行 `claude` 批准项目 `.mcp.json`（官方帮助：未批准的服务器不会被连接；离线写 `enabledMcpjsonServers` 等状态实测无效） | Pending approval 后停止，未验收 |
 
 Kimi Code（2.0.2）与 oh-my-pi（18.2.7）当前版本没有免登录的非交互 MCP 查看命令
@@ -885,7 +885,7 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 | Linux x64（WSL/Debian，Node 20.19.2） | 默认启用改造前：281/281，零跳过（2026-09-22）；本次新增用例未在 WSL 复跑。独立 ext4 工具副本运行四套测试，包括 POSIX 权限与符号链接 | 本轮未复跑真实后端；既有验收：2026-09-21 真实 prepare、chmod/EXDEV 与 PTY；2026-09-18 后端冒烟 |
 
 macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）、Kimi/omp（无非交互
-命令面）与登录后 Agent 会话内的工具调用未验收（认证/交互门槛）。
+命令面）与登录后 Agent 会话内的工具调用未验收（尚未完成认证或交互式操作）。
 本轮 DSH、TRAE、Visual Studio 与 JetBrains 两种插件验证到官方格式、安装器和 MCP 协议层；
 未启动登录后的客户端会话，也未对完整 UE 引擎执行首次索引。单元测试日志位于
 `<BUILD_DIR>/_agent_tmp/mcp-refresh-windows/`（Windows，新增首次索引取消用例另行运行）及

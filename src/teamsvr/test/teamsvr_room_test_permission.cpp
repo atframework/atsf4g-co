@@ -323,7 +323,7 @@ atfw::team::DTeamAction make_invitation_action(const PROJECT_NAMESPACE_ID::DUser
 }
 }  // namespace
 
-// ============ PERM-01: remove_member 默认门槛 ============
+// ============ PERM-01: remove_member 默认角色要求 ============
 CASE_TEST(teamsvr_room_permission, remove_member_default_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -381,7 +381,7 @@ CASE_TEST(teamsvr_room_permission, remove_member_default_roles) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-02: add_member 门槛与约束 ============
+// ============ PERM-02: add_member 角色要求与约束 ============
 CASE_TEST(teamsvr_room_permission, add_member_constraints) {
   room_test_env env;
   if (!env.start()) {
@@ -468,7 +468,7 @@ CASE_TEST(teamsvr_room_permission, add_member_constraints) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-03: member_update 门槛 ============
+// ============ PERM-03: member_update 角色要求 ============
 CASE_TEST(teamsvr_room_permission, member_update_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -518,7 +518,7 @@ CASE_TEST(teamsvr_room_permission, member_update_roles) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-04: team_update 默认与自定义门槛 ============
+// ============ PERM-04: team_update 默认与自定义角色下限 ============
 CASE_TEST(teamsvr_room_permission, team_update_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -546,7 +546,7 @@ CASE_TEST(teamsvr_room_permission, team_update_roles) {
   }
 
   {
-    // 自定义 ADMIN 门槛: NORMAL 失败、ADMIN 成功
+    // 自定义角色下限 ADMIN: NORMAL 失败、ADMIN 成功
     int64_t team_id = next_test_team_id();
     team_room::ptr_t room;
     standard_team_members members;
@@ -575,7 +575,7 @@ CASE_TEST(teamsvr_room_permission, team_update_roles) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-05: election_captain 门槛 ============
+// ============ PERM-05: election_captain 角色要求 ============
 CASE_TEST(teamsvr_room_permission, election_captain_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -629,7 +629,7 @@ CASE_TEST(teamsvr_room_permission, election_captain_roles) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-06: destroy_team 固定 OWNER 门槛 ============
+// ============ PERM-06: destroy_team 固定角色下限为 OWNER ============
 CASE_TEST(teamsvr_room_permission, destroy_team_owner_only) {
   room_test_env env;
   if (!env.start()) {
@@ -647,7 +647,7 @@ CASE_TEST(teamsvr_room_permission, destroy_team_owner_only) {
 
   auto& fake = env.channel(team_id);
 
-  // 配置字段不能降低固定门槛
+  // 配置字段不能降低销毁队伍所需的角色下限 OWNER
   atfw::team::DTeamConfigure configure;
   configure.set_manage_member_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
   atfw::team::DTeamAction config_action;
@@ -678,7 +678,7 @@ CASE_TEST(teamsvr_room_permission, destroy_team_owner_only) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-07: add_invitation 门槛 ============
+// ============ PERM-07: add_invitation 角色要求 ============
 CASE_TEST(teamsvr_room_permission, add_invitation_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -728,7 +728,7 @@ CASE_TEST(teamsvr_room_permission, add_invitation_roles) {
     CASE_EXPECT_EQ(members.normal.user_id(), env.personal_messages()[0].action.invited().inviter().user_id());
   }
 
-  // 自定义 ADMIN 门槛后 NORMAL 失败
+  // 将角色下限设为 ADMIN 后 NORMAL 失败
   atfw::team::DTeamConfigure configure;
   configure.set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
   atfw::team::DTeamAction config_action;
@@ -807,7 +807,7 @@ CASE_TEST(teamsvr_room_permission, approve_invitation_self_only) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-09: reject_invitation 门槛 ============
+// ============ PERM-09: reject_invitation 角色要求 ============
 CASE_TEST(teamsvr_room_permission, reject_invitation_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -880,7 +880,7 @@ CASE_TEST(teamsvr_room_permission, reject_invitation_roles) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-10: add_join_request 门槛(FIX-03 回归: 未创建队伍) ============
+// ============ PERM-10: add_join_request 条件检查(FIX-03 回归: 未创建队伍) ============
 CASE_TEST(teamsvr_room_permission, add_join_request_gates) {
   room_test_env env;
   if (!env.start()) {
@@ -988,7 +988,7 @@ CASE_TEST(teamsvr_room_permission, add_join_request_gates) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-11: approve/reject join 门槛 ============
+// ============ PERM-11: approve/reject join 角色要求 ============
 CASE_TEST(teamsvr_room_permission, approve_reject_join_roles) {
   room_test_env env;
   if (!env.start()) {
@@ -1112,9 +1112,9 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-14: 角色门槛按阶梯大小比较(未来可插入新档位) ============
-// GUEST/NORMAL/ADMIN/OWNER 是档位参考点: 门槛比较一律用 >=/<，不用 ==；
-// 配置值不高于 GUEST 视为未配置(默认门槛)，其余值(含 NORMAL/ADMIN 之间或高于 OWNER 的自定义档位)按数值生效。
+// ============ PERM-14: 操作角色下限按数值大小比较(未来可插入新档位) ============
+// GUEST/NORMAL/ADMIN/OWNER 是档位参考点: 角色与下限比较一律用 >=/<，不用 ==；
+// 配置值不高于 GUEST 视为未配置(使用默认下限)，其余值(含 NORMAL/ADMIN 之间或高于 OWNER 的自定义档位)按数值生效。
 CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   room_test_env env;
   if (!env.start()) {
@@ -1142,7 +1142,7 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
     CASE_EXPECT_EQ(0, env.sync(team_id));
   };
 
-  // GUEST(0) 使用默认门槛: NORMAL 不能删除他人(默认 ADMIN)
+  // GUEST(0) 使用默认角色下限: NORMAL 不能删除他人(默认 ADMIN)
   write_configure(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST);
   auto before = snapshot_counters(env, fake);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
@@ -1150,7 +1150,7 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_remove_action(members.admin)));
   expect_no_write(fake, env, before);
 
-  // 低于 NORMAL 的自定义门槛 25 按大小生效: NORMAL(50) >= 25 可以删除当前角色严格低于自己的成员
+  // 低于 NORMAL 的自定义角色下限 25 按数值生效: NORMAL(50) >= 25 可以删除当前角色严格低于自己的成员
   // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
   write_configure(static_cast<atfw::team::EnTeamPermissionRole>(25));
   auto junior = make_user_key(1, 7107);
@@ -1169,7 +1169,7 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
                                                                    static_cast<atfw::team::EnTeamPermissionRole>(75))));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // 默认门槛(ADMIN=100)下 75 < 100 不能删除他人
+  // 默认角色下限为 ADMIN(100)时 75 < 100 不能删除他人
   write_configure(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST);
   before = snapshot_counters(env, fake);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
@@ -1177,7 +1177,7 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, vip, make_remove_action(members.normal)));
   expect_no_write(fake, env, before);
 
-  // 自定义门槛 75 下 75 >= 75 可以删除他人(>= 而非 >，含等于档位本身)
+  // 自定义角色下限为 75 时 75 >= 75 可以删除他人(>= 而非 >，含等于档位本身)
   write_configure(static_cast<atfw::team::EnTeamPermissionRole>(75));
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, vip, make_remove_action(members.normal)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -1204,8 +1204,8 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-16: member_set_role 默认门槛与授权上限 ============
-// 默认门槛 ADMIN；目标必须是成员；不能授予 GUEST(无效)或高于操作者自身的角色。
+// ============ PERM-16: member_set_role 默认角色下限与授权上限 ============
+// 默认角色下限为 ADMIN；目标必须是成员；不能授予 GUEST(无效)或高于操作者自身的角色。
 CASE_TEST(teamsvr_room_permission, member_set_role_default_gates) {
   room_test_env env;
   if (!env.start()) {
@@ -1254,7 +1254,7 @@ CASE_TEST(teamsvr_room_permission, member_set_role_default_gates) {
                                  make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_GUEST)));
   expect_no_write(fake, env, before);
 
-  // NORMAL 操作者低于默认门槛(ADMIN): no permission
+  // NORMAL 操作者低于默认角色下限(ADMIN): no permission
   before = snapshot_counters(env, fake);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
                  check_permission(env, room, members.normal,
@@ -1314,7 +1314,7 @@ CASE_TEST(teamsvr_room_permission, member_set_role_default_gates) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-17: member_set_role 自定义门槛 ============
+// ============ PERM-17: member_set_role 自定义角色下限 ============
 CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
   room_test_env env;
   if (!env.start()) {
@@ -1330,7 +1330,7 @@ CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
     return;
   }
 
-  // 自定义门槛 NORMAL: 授予上限与目标角色约束不随门槛降低(目标当前角色必须严格低于操作者)
+  // 自定义角色下限 NORMAL: 授予上限与目标角色约束不随操作角色下限降低(目标当前角色必须严格低于操作者)
   atfw::team::DTeamConfigure configure;
   configure.set_set_member_role_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner, make_team_update_configure_action(configure)));
@@ -1348,7 +1348,7 @@ CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
                                  make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
   expect_no_write(fake, env, before);
 
-  // 授予高于自身的角色仍被拒绝(自定义门槛不改变授权上限)
+  // 授予高于自身的角色仍被拒绝(自定义角色下限不改变授权上限)
   before = snapshot_counters(env, fake);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
                  check_permission(env, room, members.normal,
@@ -1362,9 +1362,9 @@ CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-18: 配置默认门槛修订后随快照/事件下发 ============
+// ============ PERM-18: 配置中的默认操作角色下限补齐后随快照/事件下发 ============
 // storage_.configure 在 create_team/apply_team_update 时被就地修订(见 revise_configure_default_permission)，
-// 订阅者收到的快照 custom_data 与 team_update 增量事件都必须携带完整门槛(不允许出现 GUEST 占位)。
+// 订阅者收到的快照 custom_data 与 team_update 增量事件都必须携带全部操作角色下限(不允许出现 GUEST 占位)。
 CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
   room_test_env env;
   if (!env.start()) {
@@ -1382,7 +1382,7 @@ CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
 
   auto& fake = env.channel(team_id);
 
-  // create 路径: 未配置任何门槛时，快照 custom_data 下发全部默认门槛
+  // create 路径: 未配置任何操作角色下限时，快照 custom_data 下发全部默认下限
   {
     atfw::team::DTeamStorage snapshot;
     CASE_EXPECT_TRUE(fake.custom_data().UnpackTo(&snapshot));
@@ -1395,7 +1395,7 @@ CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, configure.set_member_role_role());
   }
 
-  // team_update 路径: 只自定义一个门槛，WAL 事件中的配置必须包含全部修订后的门槛
+  // team_update 路径: 只自定义一个操作角色下限，WAL 事件中的配置必须包含全部修订后的下限
   atfw::team::DTeamConfigure configure;
   configure.set_set_member_role_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner, make_team_update_configure_action(configure)));
@@ -1414,7 +1414,7 @@ CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ PERM-19: 未显式配置时默认门槛与上限来自 ExcelTeamType 配置行 ============
+// ============ PERM-19: 未显式配置时默认操作角色下限与数量上限来自 ExcelTeamType 配置行 ============
 CASE_TEST(teamsvr_room_permission, configure_defaults_from_excel_team_type) {
   room_test_env env;
   if (!env.start()) {
@@ -1435,7 +1435,7 @@ CASE_TEST(teamsvr_room_permission, configure_defaults_from_excel_team_type) {
       static_cast<decltype(original_blocks.mutable_header()->count())>(original_blocks.data_block_size()));
   const std::string original_team_type_bytes = original_blocks.SerializeAsString();
 
-  // 覆盖 team_type 配置表: NORMAL 类型行携带自定义默认门槛与上限
+  // 覆盖 team_type 配置表: NORMAL 类型行携带自定义默认操作角色下限与数量上限
   atfw::team::DTeamConfigure excel_defaults;
   excel_defaults.set_max_member_count(5);
   excel_defaults.set_max_invitation_count(6);
@@ -1775,7 +1775,7 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_count_and_or) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ COND-04: 成员条件组 scope(全员/任意/指定成员/数量门槛)与角色范围 ============
+// ============ COND-04: 成员条件组 scope(全员/任意/指定成员/数量范围)与角色范围 ============
 CASE_TEST(teamsvr_room_permission, member_condition_group_scopes) {
   room_test_env env;
   if (!env.start()) {
@@ -1837,7 +1837,7 @@ CASE_TEST(teamsvr_room_permission, member_condition_group_scopes) {
     expect_no_write(fake, env, before);
   }
 
-  // 数量门槛: 角色 >= NORMAL 满足全部 3 人
+  // 人数下限: 角色 >= NORMAL 的成员达到 3 人
   // members_count.min=2 通过; min=4 拒绝
   {
     atfw::team::DTeamAction pass_action = make_group_action();

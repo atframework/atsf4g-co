@@ -36,7 +36,7 @@ title: 配置系统
 ```mermaid
 flowchart LR
     X["resource/ExcelTables/*.xlsx"] -->|xresloader| B[二进制配置]
-    B -->|config_manager（生成代码）| S[服务进程]
+    B -->|"config_manager（生成代码）"| S[服务进程]
     L[logic_config excel 段] -->|loader 路径/分组| S
 ```
 

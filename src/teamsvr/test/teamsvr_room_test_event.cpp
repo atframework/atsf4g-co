@@ -638,7 +638,7 @@ CASE_TEST(teamsvr_room_event, update_dedup_no_change) {
   }
   CASE_EXPECT_EQ(events_before, count_events());
 
-  // 完全相同的 team_update(configure 只写门槛字段，写入前修订后与现值相等): 跳过
+  // 完全相同的 team_update(configure 只写操作角色下限字段，写入前修订后与现值相等): 跳过
   {
     atfw::team::DTeamAction action;
     action.mutable_team_update()->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);

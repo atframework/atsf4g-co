@@ -1056,7 +1056,7 @@ CASE_TEST(matchsvr_matching_logic, priority_factions_require_full_capacity) {
       CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
       CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
       CASE_EXPECT_EQ(4, room.get_user_count());
-      // 当前人数满足两项最小门槛，但两个容量 3 的 faction 都没有补满。
+      // 当前人数和阵营数均达到下限，但两个容量 3 的 faction 都没有补满。
       const auto ready = matching_logic::check_room_ready(room, 100, 4);
       CASE_EXPECT_EQ(0, ready.result());
       CASE_EXPECT_FALSE(ready.ready());
@@ -1763,7 +1763,7 @@ CASE_TEST(matchsvr_matching_logic, balanced_downgrade_does_not_shrink_an_oversiz
   CASE_EXPECT_EQ(2, room.get_faction_assignments().size());
   CASE_EXPECT_EQ(first_before, room.get_faction_assignments().Get(0).SerializeAsString());
   CASE_EXPECT_EQ(second_before, room.get_faction_assignments().Get(1).SerializeAsString());
-  // 降低开局人数门槛不会改变已有容量，原房间仍须继续补满。
+  // 降低开局所需的最少人数不会改变已有容量，原房间仍须继续补满。
   const auto incoming = make_party_unit(3, 39630, 2, 10, true);
   const auto joined = matching_logic::check_unit_can_join(room, incoming, 160, 6);
   CASE_EXPECT_TRUE(joined.evaluation.can_join());

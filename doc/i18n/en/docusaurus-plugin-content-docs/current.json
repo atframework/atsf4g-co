@@ -4,5 +4,6 @@
   "sidebar.docs.category.架构设计": {"message": "Architecture", "description": "The label for category 架构设计 in sidebar docs"},
   "sidebar.docs.category.公共组件": {"message": "Components", "description": "The label for category 公共组件 in sidebar docs"},
   "sidebar.docs.category.服务": {"message": "Services", "description": "The label for category 服务 in sidebar docs"},
-  "sidebar.docs.category.开发指南": {"message": "Development", "description": "The label for category 开发指南 in sidebar docs"}
+  "sidebar.docs.category.开发指南": {"message": "Development", "description": "The label for category 开发指南 in sidebar docs"},
+  "sidebar.docs.category.技术白皮书": {"message": "Technical Whitepapers", "description": "The label for category 技术白皮书 in sidebar docs"}
 }

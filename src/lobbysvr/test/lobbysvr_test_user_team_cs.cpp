@@ -272,7 +272,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     CASE_EXPECT_EQ(private_channel_key.channel_type(), create_req.sender_user_channel().channel_type());
     CASE_EXPECT_EQ(std::string(kCsClientVersion), create_req.client_version());
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), create_req.user_router_server_id());
-    // configure 保持默认空值(默认门槛由 room 修订)
+    // configure 保持默认空值(由 room 补齐默认操作角色下限)
     CASE_EXPECT_FALSE(create_req.has_configure());
     // 初始队伍共享数据: battle matching=false + 空 matching_team_view + 空 matching_start_data(只打 key);
     // 初始成员共享数据: battle ready=false + 空 matching_parameter
@@ -766,7 +766,7 @@ CASE_TEST(lobbysvr_user_team, cs_join_02_accept_reject_join_request_contract) {
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
   }
 
-  // 门槛降为 NORMAL 后: accept 经队伍频道上行 approve_join_request, action 目标完整
+  // 审批所需角色下限降为 NORMAL 后: accept 经队伍频道上行 approve_join_request, action 目标完整
   {
     atfw::team::DTeamConfigure configure;
     configure.set_approve_join_request_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
@@ -915,7 +915,7 @@ CASE_TEST(lobbysvr_user_team, cs_member_01_exit_remove_role_contract) {
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
   }
 
-  // 自己 NORMAL + configure 门槛 ADMIN: 移除他人/设置角色均权限不足零上行
+  // 自己 NORMAL + configure 要求角色至少为 ADMIN: 移除他人/设置角色均权限不足零上行
   {
     atfw::team::DTeamConfigure configure;
     configure.set_manage_member_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
@@ -1562,7 +1562,7 @@ CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
   }
 
-  // 门槛放开后(configure 默认空): 空列表显式拒绝; 队伍共享数据当前没有客户端可写模块
+  // 恢复默认角色要求后(configure 默认空): 空列表显式拒绝; 队伍共享数据当前没有客户端可写模块
   // (匹配只能由内部匹配流程经 glue 回调发起), 任何模块一律权限拒绝且零上行
   CASE_EXPECT_TRUE(join_team_with_snapshot(test, user_inst, private_chain, kTeamId,
                                            atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, false, nullptr, {}, 2));

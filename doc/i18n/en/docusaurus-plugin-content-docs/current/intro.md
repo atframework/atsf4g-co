@@ -41,6 +41,7 @@ For a first run, follow [prerequisites](getting-started/prerequisites) → [buil
 | [Components](components/overview) | Integration entry points for dtmq, transactions, rank, friends, matchmaking, teams, and Orbit |
 | [Services](services/overview) | Service responsibilities and local validation entry points |
 | [Architecture](architecture/overview) | Design and implementation details for changes to framework behavior |
+| [Technical Whitepapers](whitepaper/overview) | Problems, recovery designs, and scenarios for WAL, transactions, metric-driven policies, and HPA |
 
 ## Repository Layout at a Glance
 

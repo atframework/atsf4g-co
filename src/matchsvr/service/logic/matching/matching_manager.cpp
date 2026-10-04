@@ -478,7 +478,7 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
 
   if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
     const int64_t now = atfw::util::time::time_utility::get_now();
-    // 规则时间窗可能降低成局人数门槛；先成局，避免 ready 房间被 rebalance 拆走。
+    // 规则时间窗可能降低成局所需的最少人数；先成局，避免 ready 房间被 rebalance 拆走。
     const auto ready = evaluate_room(ctx, room, now);
     if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING &&
         rebalance_room(ctx, room, now, matching_logic::get_max_rebalance_migrations_per_target(), &ready) > 0) {

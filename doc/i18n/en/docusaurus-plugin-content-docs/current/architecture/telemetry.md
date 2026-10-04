@@ -9,6 +9,11 @@ title: Observability
 1. Set trace/metrics export destinations in values' `modules/telemetry.yaml` and prepare a Collector with the corresponding otelcol configuration.
 2. Generate configuration, run services, verify a trace with an RPC, and inspect built-in metrics.
 3. Business actions reuse automatic tracing; use existing telemetry APIs for additional business metrics.
+4. For autoscaling, configure queries/policies in `modules/hpa.yaml` and register business readiness/state checks.
+   Kubernetes also needs a metrics adapter and native HPA; follow the [HPA integration steps](../whitepaper/hpa-controller).
+
+See [Observability and Dynamic Policies](../whitepaper/observability-policy) for design and recovery, and
+[application scenarios](../whitepaper/metric-driven-scenarios) for order matching, search indexes, and battle rooms.
 
 ## Customization and Design
 
@@ -41,6 +46,12 @@ daemon and systemd modes).
 - `pull/prometheus/`: pulls metrics from Prometheus;
 - Discovery provider: reports readiness status to atproxy/etcd so that `logic_hpa_discovery_select_mode` (e.g.
   `kReady`) can select target nodes (components such as dtmq select replica nodes based on this).
+- Custom policies/discovery: pull business metrics, compute parameters, and distribute policies through etcd writes/watches;
+- Replica control: publish expected replicas and state indexes of still-Ready nodes, with staged `hpa_scaling_target` / `hpa_scaling_ready` changes.
+
+State checks, object transfers, and scaling executors require business integration. Successful collection does
+not mean a policy was applied. See [minimal policy integration](../whitepaper/observability-policy) and
+[HPA design](../whitepaper/hpa-controller).
 
 `router_manager_set`, dispatchers, and others also expose built-in metrics (object count, task count, RPC
 latency).

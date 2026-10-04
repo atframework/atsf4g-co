@@ -23,6 +23,9 @@ Location: `src/component/dtmq/` (see design notes in `dtmq-proxysvr/Note.md`).
 
 ## Customization and Design
 
+See the [WAL and State Replication whitepaper](../whitepaper/wal-replication) for ordering, snapshot repair,
+compaction, and persistence boundaries. The following describes dtmq protocols and SDK integration.
+
 ### Composition
 
 | Part | Location | Description |
