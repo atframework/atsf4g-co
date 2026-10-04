@@ -15,8 +15,8 @@ Orbit 的 client 是被管理进程的角色，可用于 UE DS，不等同于玩
 1. 在 values 中启用 `orbit-controller`、`orbit-agent` 和 `orbit-server`；
    `orbit-server` chart 对应 `src/orbitsvr/` 示例。
 2. 配置 `resource/ExcelTables/OrbitClient.xlsx` 的进程模板并导出。
-   agent 的可执行文件和启动参数为 `orbit_agent_cfg.client_path`、`client_command_line`，
-   values 入口为 `orbit-agent.yaml`。
+   在 values 的 `orbit-agent.yaml` 中设置 `orbit_agent.client_path` 和
+   `orbit_agent.client_command_line`；生成配置的类型为 `orbit_agent_cfg`。
 3. 业务 server 沿用 `src/orbitsvr/` 的 SDK 依赖与注册方式；
    UE DS 接入 `src/component/GameSharedComponent/Orbit/include/Orbit/` 的 client 运行时，
    参照 `OrbitClientRuntime.h`、`OrbitEasyApi.h` 和示例 `orbit_config.yaml`。

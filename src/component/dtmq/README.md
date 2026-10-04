@@ -5,7 +5,8 @@
 + sdk: client端接口
 + protocol: 相关协议描述
 
-> 请设置自动清理时间。大于容忍值+最大事务等待时间即可。
+频道日志保留通过 `DChannelConfigure` 的 `gc_expire_duration`、`gc_log_count` 和
+`max_log_count` 控制，按业务所需的历史范围与订阅恢复需求配置。
 
 ## Writable 转移与订阅恢复
 

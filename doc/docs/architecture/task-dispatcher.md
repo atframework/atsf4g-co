@@ -40,22 +40,13 @@ flowchart LR
 | `task_action_base` | 所有 action 的基类：`operator()` 协程体、超时、trace、result code |
 | `task_action_cs_req_base` | 客户端请求：session 校验、响应打包 |
 | `task_action_ss_req_base` | 服务间请求：`prepare_handle` 链、SS 响应打包 |
+| `task_action_ss_rpc_base<Req, Rsp>` | 生成的 SS RPC action 使用的类型化请求/响应基类 |
 | `task_action_no_req_base` | 无请求触发的定时/自驱动任务（如 `task_action_auto_save_objects`） |
 
-典型 action 实现模式：
+生成的 action 在 `operator()` 中通过 `get_request_body()` 读取请求，用 `get_response_body()` 填充响应，
+再以 `RPC_RETURN_CODE` 返回。可直接使用的示例见[RPC 上手](../development/add-rpc-task)。
 
-```cpp
-class task_action_example : public task_action_ss_req_base<ExampleReq, ExampleRsp> {
- public:
-  result_type operator()() override {
-    // 1. 校验与读请求
-    // 2. RPC_AWAIT_CODE_RESULT(rpc::db::xxx(...)) 挂起等待 DB/SS
-    // 3. 组装响应并 RPC_RETURN_CODE(0)
-  }
-};
-```
-
-默认生成规则只在业务骨架不存在时创建文件；业务在 `hook_handle()` / `operator()` 中填充逻辑。
+默认生成规则只在业务骨架不存在时创建文件；业务在 `operator()` 中填充逻辑。
 已有骨架整文件保留，自动生成的 handler/API 则会更新。
 RPC 签名变化后需手工同步已有业务骨架，不能依赖标记区间自动迁移。
 
@@ -65,10 +56,12 @@ RPC 签名变化后需手工同步已有业务骨架，不能依赖标记区间�
 
 - **C++20 协程**（`PROJECT_SERVER_FRAME_USE_STD_COROUTINE=ON`）：`copp::generator_future/callable_future`，
   `RPC_AWAIT_TYPE_RESULT(x)` 即 `co_await x`；
-- **libcopp cotask**：走 `rpc_result_guard` 惰性 poller。
+- **libcopp cotask**：异步等待通过有栈协程挂起/恢复，`rpc_result` 用 poller 保存结果，`rpc_result_guard` 包装返回值。
 
 业务代码只使用 `RPC_AWAIT_*` / `RPC_RETURN_*` 宏与 `rpc::result_code_type / rpc_result<T>` 类型，不直接
-感知后端差异。
+感知后端差异。需要 RPC 回包时用 `RPC_AWAIT_CODE_RESULT` 或 `RPC_AWAIT_TYPE_RESULT` 等待完成，
+不关注结果时也要用 `RPC_AWAIT_IGNORE_RESULT` 显式等待。宏定义见 `src/server_frame/rpc/rpc_common_types.h`，
+用法见[等待 RPC 完成](../development/add-rpc-task#await-rpc)。
 
 ### 内置 task action
 

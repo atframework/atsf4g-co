@@ -5,7 +5,7 @@ title: Matchmaking and Teams
 # Matchmaking and Teams
 
 `src/matchsvr/` provides matchmaking pools, rooms, and result notifications;
-`src/teamsvr/` provides team room and team matchmaking services.
+`src/teamsvr/` provides team rooms; its `teamsvr-match` teammate-search service remains a placeholder.
 The lobby's `logic/matching/` and `logic/team/` integrate player-facing behavior.
 
 ## Quick Start: Matchmaking
@@ -24,12 +24,15 @@ need business implementations. See [Orbit](orbit) for battle process management 
 
 ## Quick Start: Teams
 
-1. Enable `teamsvr-room`; add `teamsvr-match` and `matchsvr` for team matching.
+1. Enable `teamsvr-room`; add `matchsvr` when teams enter battle matchmaking.
    Edit and export team types in `resource/ExcelTables/Team.xlsx`.
 2. Add `team-common-sdk` and `team-sdk-room` to the consumer's `USE_SERVICE_SDK`.
    Room APIs live in `src/teamsvr/sdk/room/rpc/team/team_room_client_api.h`.
 3. Follow `src/lobbysvr/service/logic/team/user_team_manager.h/.cpp` for members, invitations, captains, and state synchronization.
 4. With test users, verify team creation, invitations/joining, leaving, and any matching workflow; inspect client state and notifications.
+
+`TeamMatchService.search` in `teamsvr-match` has no teammate-search implementation. It is separate from entering
+teams into `matchsvr` and is outside the minimal integration above.
 
 ## Customization and Design
 

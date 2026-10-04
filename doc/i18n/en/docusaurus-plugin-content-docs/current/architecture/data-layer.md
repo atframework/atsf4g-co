@@ -26,8 +26,8 @@ The data layer currently supports only **Redis** (`src/server_frame/dispatcher/d
 
 | Primitive | Semantics |
 | --- | --- |
-| KV | `get_all` / `partly_get` / `batch` reads; `set` (optionally with CAS version); `inc_field` atomic increment |
-| KL | Key-list index: `add` / `get` / `update` / `remove`, monotonic index list trimming (embedded Lua) |
+| KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`; `set` / `insert`; atomic `inc_field` |
+| KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`; monotonically increasing indexes with count-based trimming (embedded Lua) |
 | TTL | Key expiration management |
 
 ### Generated DB Interfaces
@@ -37,8 +37,8 @@ Generated from the table/index extensions in `svr.local.table.proto` / `svr.glob
 
 - `rpc/db/local_db_interface.atfw.gen.{h,cpp}`: interface for the local-zone database;
 - `rpc/db/global_db_interface.atfw.gen.{h,cpp}`: interface for the global database;
-- Namespaces look like `rpc::db::login_auth` / `rpc::db::dtmq_channel_record`, etc.; each table provides
-  coroutine-based APIs such as get/set/replace/CAS.
+- Namespaces look like `rpc::db::login_auth` / `rpc::db::dtmq_channel_record`, etc.; index options determine generated
+  read, `insert`, `replace`, and other coroutine APIs. Only CAS-enabled indexes have version parameters.
 
 ```cpp
 // Example: reading a table inside a coroutine

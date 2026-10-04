@@ -38,6 +38,20 @@ task_action_echo_text::result_type task_action_echo_text::operator()() {
 调用方包含生成的 `rpc/lobby/lobbysvrservice.atfw.gen.h`，使用其中的 `echo_text` 接口；
 目标参数和命名空间以生成的函数声明为准。
 
+## 等待 RPC 完成 {#await-rpc}
+
+调用需要回包的 RPC 时，使用以下宏等待 RPC 完成后再处理回包。
+即使不关注回包或返回值，也要用 `RPC_AWAIT_IGNORE_RESULT` 显式标明，不直接丢弃调用返回的框架结果对象。
+
+| 用法 | 作用 |
+| --- | --- |
+| `RPC_AWAIT_CODE_RESULT(call)` | 等待调用完成并取得整数错误码 |
+| `RPC_AWAIT_TYPE_RESULT(call)` | 等待调用完成并取得对应类型的结果值 |
+| `RPC_AWAIT_IGNORE_RESULT(call)` | 等待调用完成，显式忽略返回结果 |
+
+这些宏统一适配 C++20 协程和传统有栈协程，业务代码使用同一套等待方式。
+忽略结果仍会等待 RPC 完成；需要只发送不等回包时，使用声明允许的生成 no-wait 接口。
+
 ## 快速上手：已有服务增加 CS RPC
 
 1. 在 `src/server_frame/protocol/public/protocol/pbdesc/` 定义客户端消息，参照已有

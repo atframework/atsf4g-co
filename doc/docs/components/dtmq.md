@@ -29,7 +29,7 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
 
 | 部分 | 位置 | 说明 |
 | --- | --- | --- |
-| `dtmq-proxysvr` | `dtmq/dtmq-proxysvr/` | 入口服务：频道管理、消息持久化、订阅者分发（当前版本数据层集成一体，TODO 拆分） |
+| `dtmq-proxysvr` | `dtmq/dtmq-proxysvr/` | 频道管理、消息持久化、订阅者分发 |
 | 协议 | `dtmq/protocol/` | `dtmq_proxy.proto`（服务协议）、`dtmq_proxy.config.proto`（配置） |
 | `dtmq-common-sdk` | `dtmq/sdk/common/` | 频道哈希/副本选择算法（`dtmq_algorithm`） |
 | `dtmq-proxy-sdk` | `dtmq/sdk/proxy/` | 客户端 API 与进程内订阅者 |
@@ -41,8 +41,8 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
 `subscribe` / `unsubscribe` / `send_message` / `transfer_channel` / `destroy_channel` / `update` /
 `reset_lock` / `find_message` / `page_query_message` / `pull`。
 
-另有 `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEventSync)`：服务端**流式**推送频道
-增量消息/全量快照给订阅者所在节点。
+另有 `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEventSync)`：用 SS 通知消息向订阅者节点
+发送频道增量或快照，`stream` 表示无需等待普通响应。
 
 ### 数据模型
 
@@ -50,7 +50,8 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
   `DChannelMetadata` / `DChannelRuntime` / `DChannelMessage(Detail)` / `DChannelSnapshot` /
   `DChannelSubscribeNode` / `DChannelSyncPoint`；
 - 订阅者 key 形如 `U:{zone}:{user}` / `T:{team}` / `G:{guild}`，带心跳 sequence + hash；
-- 乐观锁：`channel_lock_checker`（CAS），`reset_lock` 解锁；
+- 频道乐观锁：`channel_lock_checker` 比较预期持有者，并按请求重置锁；`reset_lock` 提供修改入口。
+  频道记录索引未启用 DB CAS；
 - 频道类型配置经 Excel（`com.struct.dtmq.config.proto` 的 `ExcelDtmqChannelType`：`channel_type`、
   `show_max_log_count`、`readonly_replicate_count`），由 `excel_config_dtmq_index.cpp` 加载为
   `DChannelConfigure`；
@@ -63,8 +64,8 @@ flowchart LR
     Pub[发布方] -->|send_message| W[Writable 副本]
     W -->|WAL 同步| R1[Readonly 副本 1]
     W -->|WAL 同步| R2[Readonly 副本 N]
-    Sub[订阅方 SDK] -->|pull / 事件流| R1
-    Sub -->|pull / 事件流| W
+    Sub[订阅方 SDK] <-->|订阅与拉取 / 事件通知| R1
+    Sub <-->|订阅与拉取 / 事件通知| W
 ```
 
 - 每个频道 1 个 Writable 副本 + N 个 Readonly 副本（`readonly_replicate_count` 可配）；
@@ -77,8 +78,8 @@ flowchart LR
 ### WAL 主从同步
 
 `dtmq-proxysvr/data/mq_channel_wal_handle.{h,cpp}` 包装 atframe_utils 的
-`distributed_system::wal_publisher / wal_subscriber`（单线程模式），日志按
-`DChannelMessageDetail::CommandCase` 分类 merge；与 rank 组件的 `rank_wal_handle` 是同一套机制。
+`distributed_system::wal_publisher / wal_client`（单线程模式），用 `wal_subscriber` 记录发布者的订阅者。
+`DChannelMessageDetail::CommandCase` 决定日志的 action delegate；rank 的 `rank_wal_handle` 也复用该 WAL 算法库。
 `SSChannelUpdateReq` 支持 `compact_sequence` 日志压缩。
 
 ### 客户端 SDK

@@ -14,7 +14,7 @@ title: 可观测性
    Kubernetes 还需指标适配器与原生 HPA，按[HPA 接入步骤](../whitepaper/hpa-controller)验证。
 
 设计与故障处理见[可观测性与动态策略白皮书](../whitepaper/observability-policy)。
-订单撮合、搜索索引和战斗房间的指标与执行流程见[应用场景](../whitepaper/metric-driven-scenarios)。
+订单撮合、搜索索引和战斗房间的指标用途示例见[应用场景](../whitepaper/metric-driven-scenarios)。
 
 ## 定制与详细设计
 
@@ -33,7 +33,8 @@ daemon / systemd 两种模式）。
 
 ### Trace 传播
 
-- CS 链路：atgateway 上行不带 trace，服务侧以 task action 为 span 根；
+- CS 链路：客户端可在 `CSMsg.head.rpc_trace` 中传入上下文，服务侧据此建立父子 span；
+  未提供上下文时由 task action 开始 trace。atgateway 透传业务消息体，不负责注入业务 trace；
 - SS 链路：`rpc_context`（`src/server_frame/rpc/rpc_context.{h,cpp}`）随 `SSMsg` 传播 trace 上下文，
   跨服务串联 span；
 - DB 调用：Redis 命令作为子 span。
@@ -43,7 +44,7 @@ daemon / systemd 两种模式）。
 `src/server_frame/logic/hpa/` 实现 HPA 自动伸缩支持：
 
 - `pull/prometheus/`：从 Prometheus 拉取指标；
-- discovery provider：向 atproxy/etcd 汇报就绪状态，供 `logic_hpa_discovery_select_mode`（如 `kReady`）
+- discovery provider：更新本进程的服务发现 metadata 标签，供 `logic_hpa_discovery_select_mode`（如 `kReady`）
   选择目标节点（dtmq 等组件按此选择副本节点）。
 - 自定义 policy 与 discovery：拉取业务指标、计算参数，并通过 etcd 写入和监听分发业务策略；
 - 副本控制：发布预期副本数和仍 Ready 节点的状态索引，分阶段调整 `hpa_scaling_target` / `hpa_scaling_ready`。

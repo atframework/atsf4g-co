@@ -40,7 +40,7 @@ flowchart LR
     L[logic_config excel 段] -->|loader 路径/分组| S
 ```
 
-- 生成的 `config/excel/config_manager.*`（`config_manager.*.mako`）按 proto 反射解析 buffer；
+- 生成的 `config_manager` 调用各表的 `config_set`，由生成的 protobuf 类型解析资源并建立索引；
 - `excel_config_wrapper`（`config/src/excel_config_wrapper.cpp`）负责 buffer/version loader、`reload_all`、
   按 version 分组热更与回调；
 - 便捷读取 API 由 `config_easy_api.*.mako` 生成，业务侧用 `excel_config_wrapper_reload_all` 热更；

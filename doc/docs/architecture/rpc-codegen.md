@@ -13,7 +13,8 @@ title: RPC 与代码生成
 
 ### 协议即源头
 
-所有协议以 protobuf 定义，根目录在 `src/server_frame/protocol/`：
+业务 RPC 和数据协议以 protobuf 定义。共享框架协议位于 `src/server_frame/protocol/`，
+服务和组件另有自己的 `protocol/`；atgateway 客户端线协议使用 FlatBuffers。
 
 ```
 protocol/
@@ -75,15 +76,14 @@ transport 不走 SS 引擎，不可用于 `test.ss()`。
 
 ### RPC 调用端 API 形态
 
-生成的调用端返回可 `co_await` 的对象：
+需要回包的 RPC 使用 `RPC_AWAIT_CODE_RESULT` 或 `RPC_AWAIT_TYPE_RESULT` 等待完成并取得结果；
+不关注回包或返回值时也要用 `RPC_AWAIT_IGNORE_RESULT` 显式等待并忽略结果。
+这些宏统一适配 C++20 协程和传统有栈协程，用法见[等待 RPC 完成](../development/add-rpc-task#await-rpc)。
 
-```cpp
-// unary：挂起等待响应
-auto res = RPC_AWAIT_CODE_RESULT(rpc::SomeService::some_rpc(ctx, req, ...));
+`allow_no_wait` 允许生成只发送不等待的接口。SS 请求或响应声明为 stream 时生成通知接口，
+例如 `channel_event_sync`，每次调用发送一条 SSMsg，不建立 gRPC 式的持续流连接。
+具体返回类型、目标参数和命名空间以生成头文件为准。
 
-// no-wait（rpc_options.allow_no_wait）：只发不等
-// stream：服务端流式推送（如 dtmq 的 channel_event_sync）
-```
-
-错误处理约定：框架级失败走 `rpc::result_code_type`（含 HTTP 风格错误码与 PB 解包错误），业务错误码定义在
-`svr.const.err.proto` / `com.const.proto`。
+框架调用结果是整数错误码；`rpc::result_code_type` 包装需要协程等待的结果，不是 HTTP 状态码类型。
+系统、atbus、DB 等错误定义在 `svr.const.err.proto`，客户端业务错误定义在 `com.const.proto`。
+业务响应中的结果字段需另行检查。

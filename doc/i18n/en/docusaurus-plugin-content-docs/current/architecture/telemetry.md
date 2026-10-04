@@ -13,7 +13,7 @@ title: Observability
    Kubernetes also needs a metrics adapter and native HPA; follow the [HPA integration steps](../whitepaper/hpa-controller).
 
 See [Observability and Dynamic Policies](../whitepaper/observability-policy) for design and recovery, and
-[application scenarios](../whitepaper/metric-driven-scenarios) for order matching, search indexes, and battle rooms.
+[application scenarios](../whitepaper/metric-driven-scenarios) for examples of metric uses in order matching, search indexes, and battle rooms.
 
 ## Customization and Design
 
@@ -34,7 +34,8 @@ daemon and systemd modes).
 
 ### Trace Propagation
 
-- CS path: atgateway upstream messages carry no trace; the service side uses the task action as the span root;
+- CS path: clients can supply context through `CSMsg.head.rpc_trace`, which the service uses as the parent span;
+  without context, the task action starts the trace. atgateway passes through business payloads without injecting business traces;
 - SS path: `rpc_context` (`src/server_frame/rpc/rpc_context.{h,cpp}`) propagates the trace context along with
   `SSMsg`, chaining spans across services;
 - DB calls: Redis commands appear as child spans.
@@ -44,7 +45,7 @@ daemon and systemd modes).
 `src/server_frame/logic/hpa/` implements HPA autoscaling support:
 
 - `pull/prometheus/`: pulls metrics from Prometheus;
-- Discovery provider: reports readiness status to atproxy/etcd so that `logic_hpa_discovery_select_mode` (e.g.
+- Discovery provider: updates this process's discovery metadata labels so that `logic_hpa_discovery_select_mode` (e.g.
   `kReady`) can select target nodes (components such as dtmq select replica nodes based on this).
 - Custom policies/discovery: pull business metrics, compute parameters, and distribute policies through etcd writes/watches;
 - Replica control: publish expected replicas and state indexes of still-Ready nodes, with staged `hpa_scaling_target` / `hpa_scaling_ready` changes.

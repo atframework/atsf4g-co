@@ -21,5 +21,5 @@ Windows 下若测试启动失败（DLL 找不到），检查 PATH 是否包含�
 ## RPC 单元测试（离线 mock）
 
 已实现：`src/tools/rpc-unit-test/` 在**不起真实 Redis/DNS/atbus/网关**的前提下跑真实生成的
-RPC/dispatcher/task，用内存 mock 引擎替代全部外部依赖（SS/DNS/CS/DB/UUID/resource/HPA/telemetry）。完整的
+RPC/dispatcher/task，用内存 mock 引擎替代已支持的框架依赖路径（SS/DNS/CS/DB/UUID/resource/HPA/telemetry）。完整的
 工作原理、使用指南与语义契约见 [RPC 单元测试（离线 mock）](rpc-unit-test)。

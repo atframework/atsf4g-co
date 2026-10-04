@@ -62,7 +62,7 @@ dependencies. This workspace's C++20 setting chooses a backend rather than defin
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `PROJECT_ENABLE_SAMPLE` | OFF | Build samples |
-| `PROJECT_ENABLE_UNITTEST` | OFF | Build unit tests |
+| `PROJECT_ENABLE_UNITTEST` | Follows defined `BUILD_TESTING`; otherwise ON in Debug, OFF in other configurations | Build unit tests |
 | `PROJECT_ENABLE_PRECOMPILE_HEADERS` | ON | Precompiled headers |
 | `PROJECT_ENABLE_UNITY_BUILD` | OFF | Unity build |
 | `ATFRAMEWORK_USE_DYNAMIC_LIBRARY` | ON except macOS; follows explicit `BUILD_SHARED_LIBS` | Dynamic libraries |

@@ -13,7 +13,8 @@ Existing declarations drive generation; routine extensions need no new templates
 
 ### Protocol as the Source of Truth
 
-All protocols are defined in protobuf, rooted at `src/server_frame/protocol/`:
+Business RPC and data protocols use protobuf. Shared framework protocols live in `src/server_frame/protocol/`;
+services and components have their own `protocol/` directories. The atgateway client wire protocol uses FlatBuffers.
 
 ```
 protocol/
@@ -80,16 +81,14 @@ be passed to `test.ss()`.
 
 ### RPC Caller API Shape
 
-Generated callers return awaitable objects:
+RPCs requiring a response await completion and obtain results through `RPC_AWAIT_CODE_RESULT` or `RPC_AWAIT_TYPE_RESULT`.
+Even when the response or return value is unused, use `RPC_AWAIT_IGNORE_RESULT` to explicitly await and ignore it.
+These macros adapt C++20 and traditional stackful coroutines; see [awaiting RPC completion](../development/add-rpc-task#await-rpc).
 
-```cpp
-// unary: suspends to wait for the response
-auto res = RPC_AWAIT_CODE_RESULT(rpc::SomeService::some_rpc(ctx, req, ...));
+`allow_no_wait` permits send-only APIs. SS methods with a streaming request or response generate notification APIs,
+such as `channel_event_sync`; each call sends an SSMsg rather than opening a persistent gRPC-style stream.
+Use generated headers for exact return types, target parameters, and namespaces.
 
-// no-wait (rpc_options.allow_no_wait): send without waiting
-// stream: server-side streaming push (e.g. dtmq's channel_event_sync)
-```
-
-Error handling convention: framework-level failures go through `rpc::result_code_type` (including HTTP-style
-error codes and PB unpacking errors); business error codes are defined in `svr.const.err.proto` /
-`com.const.proto`.
+Framework calls return integer error codes; `rpc::result_code_type` wraps results that require coroutine waits
+and is not an HTTP status type. System, atbus, and DB errors are defined in `svr.const.err.proto`;
+client business errors are defined in `com.const.proto`. Check business result fields in responses separately.

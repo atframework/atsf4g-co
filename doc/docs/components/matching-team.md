@@ -5,7 +5,7 @@ title: 匹配与组队
 # 匹配与组队
 
 `src/matchsvr/` 提供匹配池、匹配房间与匹配结果通知；
-`src/teamsvr/` 提供组队房间和组队匹配服务。
+`src/teamsvr/` 提供组队房间；其 `teamsvr-match` 队友搜索服务仍是占位实现。
 大厅服的 `logic/matching/`、`logic/team/` 提供玩家侧接入。
 
 ## 快速上手：匹配
@@ -26,12 +26,15 @@ title: 匹配与组队
 
 ## 快速上手：组队
 
-1. 启用 `teamsvr-room`；需要组队匹配时配套 `teamsvr-match` 和 `matchsvr`。
+1. 启用 `teamsvr-room`；队伍进入战斗匹配时配套 `matchsvr`。
    修改 `resource/ExcelTables/Team.xlsx` 的组队类型配置并导出。
 2. 消费方 `USE_SERVICE_SDK` 加入 `team-common-sdk`、`team-sdk-room`。
    房间接口位于 `src/teamsvr/sdk/room/rpc/team/team_room_client_api.h`。
 3. 参照 `src/lobbysvr/service/logic/team/user_team_manager.h/.cpp` 接入成员、邀请、队长和状态同步。
 4. 用测试用户验证创建队伍、邀请/加入、离开，以及所需的匹配流程；检查客户端状态与通知。
+
+`teamsvr-match` 的 `TeamMatchService.search` 尚未实现寻找队友逻辑；它与队伍进入 `matchsvr` 撮合的流程不同，
+不属于上述最小接入。
 
 ## 定制与详细设计
 

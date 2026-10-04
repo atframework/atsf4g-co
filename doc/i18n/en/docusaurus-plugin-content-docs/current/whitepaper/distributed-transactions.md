@@ -101,9 +101,9 @@ automatically execute arbitrary external calls exactly once.
 
 | Failure | Recovery | Invalid inference |
 | --- | --- | --- |
-| Lost prepare response | Recover/retry with the original UUID and deadline | Timeout does not mean the remote owner acquired no locks |
+| Lost prepare response | The initiator attempts rejection; participants complete according to the confirmed decision or recover on timeout | Timeout does not mean the remote owner acquired no locks |
 | Unconfirmed commit/reject response | Bounded coordinator queries, preserving unknown state | Partial responses from failed calls cannot choose the terminal state |
-| Local action completed, ACK lost | Query the original decision and idempotently replay/acknowledge | Confirmed commit cannot reverse |
+| Local action and completion callbacks succeeded, ACK lost | Retry ACK in the same direction using the completion marker; do not replay successful callbacks | ACK failure cannot reverse the decision |
 | Too few successful coordinator replicas | Keep the outcome unconfirmed and retry under recovery rules | Insufficient responses do not establish global absence |
 | NOTFOUND or expired record | Handle unconfirmable transactions under the integration contract and alert | Do not universally interpret this as rejection or send a rejection ACK |
 | Repeated recovery callback failures | Bounded retries and recorded unfinished outcomes | Local cleanup is not business success or global acknowledgement |
@@ -118,9 +118,9 @@ read/write response sets intersect, provided they access the same replica set. I
 Raft/Paxos consensus or database external consistency. Current merging favors commit on contradictory terminal
 records and reports serious inconsistency; this merge rule cannot replace prevention of conflicting decisions.
 
-Configure transaction validity, recovery deadlines, DB retention, and business deduplication retention separately.
-Coordinator TTL uses remaining time until the original expiration plus grace, bounded by maximum TTL. Retention
-must cover allowed retries/recovery; deleted records cannot deduplicate a later replay of the old UUID. Record
+Coordinator TTL uses remaining time until the original expiration plus grace, bounded by maximum TTL.
+Participant recovery attempts and intervals are configured separately; business code manages its deduplication records.
+Retention must cover allowed retries/recovery; deleted records cannot deduplicate a later replay of the old UUID. Record
 creation and TTL assignment are separate DB calls without cross-process atomicity.
 
 ## References and Implementation

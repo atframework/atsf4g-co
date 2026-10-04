@@ -17,7 +17,7 @@ title: 服务总览
 | `lobbysvr` | 玩家登录、用户数据、好友、队伍、匹配及通知 | robot 登录后执行已有业务命令 |
 | `friendsvr-management` / `friendsvr-recommend` | 好友管理；推荐策略待实现 | [好友上手](../components/friend) |
 | `matchsvr` | 匹配池与房间 | [匹配上手](../components/matching-team) |
-| `teamsvr-room` / `teamsvr-match` | 队伍房间与组队匹配 | [组队上手](../components/matching-team) |
+| `teamsvr-room` / `teamsvr-match` | 队伍房间；队友搜索服务待实现 | [组队上手](../components/matching-team) |
 | `dtmq-proxysvr` | 消息频道、订阅与同步 | [DTMQ 上手](../components/dtmq) |
 | `dtcoordsvr` | 分布式事务协调者 | [事务上手](../components/distributed-transaction) |
 | `rank-board-svr` / `rank-settlement-svr` | 排行榜与周期结算 | [排行榜上手](../components/rank) |

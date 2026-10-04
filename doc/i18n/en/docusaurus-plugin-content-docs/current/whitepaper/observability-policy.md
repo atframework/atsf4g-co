@@ -32,7 +32,7 @@ flowchart LR
     M --> O[OpenTelemetry export]
     O --> C[Collector receive and processing]
     C --> P[Prometheus or compatible query backend]
-    P --> Q[Controller pulls and validates]
+    P --> Q[Controller pulls metrics]
     Q --> D[Calculate dynamic policy]
     D --> E[etcd policy record]
     E --> W[Services watch and apply]
@@ -62,20 +62,11 @@ bounded queues cannot guarantee no loss under arbitrary failures.
 ## Minimal Custom-Policy Integration
 
 Existing CPU/memory policies use values configuration. New business metrics/decisions require a small business
-integration using existing APIs, without changing code-generation templates or CMake implementation. For a metric
-whose decisions belong entirely to business callbacks, add this to values' `modules/hpa.yaml`:
-
-```yaml
-rule:
-  custom:
-    - metrics_name: "market_pending_orders"
-      aggregation: EN_HPA_POLICY_AGGREGATION_SUM
-      scaling_up_value: 0
-      scaling_down_value: 0
-```
-
-Define and register `market_pending_orders` in the business integration. Zero thresholds disable direct replica
-recommendations from this policy. Treat missing metric data as unknown. Full policy fields are defined in `svr.hpa.config.proto`.
+integration using existing APIs, without changing code-generation templates or CMake implementation. Declare business
+metrics through `rule.custom` in values' `modules/hpa.yaml`; fields are defined in `svr.hpa.config.proto`. Business code
+supplies metric names and algorithms; the repository has no built-in trading-order metric. Positive `scaling_up_value`
+and `scaling_down_value` thresholds participate in default replica calculations. Leave thresholds nonpositive when
+not using those calculations.
 
 1. Define units, type, aggregation dimensions, and updates. Register `add_observer_int64`, `add_observer_double`,
    or existing observation APIs in `set_on_setup_custom_policy`.
@@ -83,8 +74,9 @@ recommendations from this policy. Treat missing metric data as unknown. Full pol
    required policies again. Rebind after configuration reload instead of retaining a cleaned-up policy.
 3. Register `add_event_on_pull_instant` or `add_event_on_pull_range` and error handling. After validating input,
    the selected controller computes and publishes through discovery's `set_value`.
-4. Services use `add_event_on_changed` for the key/subkey, validate versions and ranges, apply idempotently,
-   and report results. Separate business domains use separate discovery names or subkeys.
+4. Register `add_event_on_changed` and call `watch` to start watching the key or directory, then apply received
+   business policies. Discovery's `set_value` accepts a string; business code defines the payload, validation,
+   and application results.
 
 Policies support explicit queries or generated PromQL using metric names, aggregation, functions, and selectors.
 For cross-service queries, check automatically injected service-type selectors. Use `without_auto_selectors` as
@@ -110,17 +102,23 @@ Define maximum data age, minimum coverage, bounds, change limits, and stabilizat
 the last valid policy or enter an explicit safe policy, especially avoiding scale-down based on missing-as-zero
 data. Implement these business conditions explicitly; they are not automatic in every custom policy.
 
-The business defines its policy payload, which can include version, input interval, validity, target parameters,
-and reason. Executors reject old/invalid values, prepare resources before
-switching traffic, and report actual outcomes. Decision periods must account for collection, query, publication,
-and execution latency; changing again before a previous action takes effect can cause oscillation.
+These validity and application checks are integration requirements; the SDK provides no uniform business-policy
+payload or execution workflow.
 
 ## Controller Selection and Propagation
 
-The current controller chooses a primary from the workload's discovery list and waits for a pull cycle after
-switching before publishing. Custom discovery uses etcd KV writes/watches; `set_value` is not a CAS publication
+The built-in HPA controller chooses a primary from the workload's discovery list and waits for a pull cycle after
+switching before publishing. Custom discovery callbacks and publication timing belong to the integration;
+`set_value` does not automatically check whether the caller is primary. Custom discovery uses etcd KV writes/watches;
+`set_value` is not a CAS publication
 with a lease epoch. If partitions must strictly prevent multiple writers, add lease, epoch, or CAS enforcement
 rather than relying on list ordering alone.
+`set_value` returning true means the asynchronous request started, not that etcd saved it or business code applied it.
+
+Currently `create_custom_discovery` uses inconsistent registration keys, instance paths, and
+`find_custom_discovery` / `remove_custom_discovery` lookup paths. Different names within the same domain also
+construct the same instance path. Correct and validate these paths before integration; names alone do not provide
+independent policy publication/watch namespaces in the current implementation.
 
 [etcd API guarantees](https://etcd.io/docs/v3.6/learning/api_guarantees/) distinguish KV operations from watch
 semantics. Watchers must still handle reconnection, compacted history, and re-reading current values, using
@@ -128,10 +126,9 @@ revisions/business versions to prevent stale overwrites. Store consistency does 
 
 ## Validation and Implementation
 
-Observe metrics and record recommendations first, then allow bounded adjustments before enabling automation.
-Validate peaks, collection gaps, delayed responses, controller changes, duplicate/out-of-order policies, executor
-failure, and rollback. Record input age, policy-change counts, recommended/actual differences, application latency,
-and business effects.
+Integration validation should cover collection gaps, delayed responses, controller changes, duplicate policies,
+and business application failures. These are suggested checks, not existing business algorithms, monitoring metrics,
+or fault tests supplied by the repository.
 
 Collection/traces live in `src/server_frame/rpc/telemetry/`; policies, queries, and watches live in
 `src/server_frame/logic/hpa/logic_hpa_{controller,policy,discovery}.*` and `pull/prometheus/`.

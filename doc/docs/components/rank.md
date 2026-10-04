@@ -15,7 +15,7 @@ title: 排行榜（rank）
 3. 消费方 `USE_COMPONENTS` 按需加入 `rank-board-svr-sdk` 与 `rank-logic-sdk`；
    公开接口在 `src/component/rank/sdk/rank_board_svr/rpc/rank_board/rank.h`。
 4. 参照大厅服的 `rank/` 查询入口，写入测试分数并查询榜单/排名；
-   使用周期结算时验证结算结果与奖励发放。普通榜单配置不需要修改生成模板。
+   使用周期结算时验证结算结果与奖励异步任务。实际发奖需业务注册处理，普通榜单配置不需要修改生成模板。
 
 ## 定制与详细设计
 
@@ -31,12 +31,16 @@ title: 排行榜（rank）
 
 set/modify score、get top、心跳、主备切换等；WAL 主备同步使用与 dtmq 相同的
 `distributed_system::wal_publisher / wal_subscriber` 机制（`rank_wal_handle`）。
+当前 `rank_wal_handle` 的 `send_snapshot` 回调只记录日志，未实际发送完整快照；
+增量同步超出保留范围时的恢复不能仅依赖这一回调，需核对主备数据拉取路径。
 
 ### 结算
 
 `src/rank_settlement_svr/`（`rank_settlement_manager` +
 `task_action_rank_send_settlement / task_action_rank_update_settlement`）负责榜单周期结算：从 rank_board_svr 拉取榜单，
-发奖并写入结算结果。
+生成奖励异步任务、调整分数并保存历史记录。
+奖励任务通过 `rpc::async_jobs::add_jobs` 写入；当前大厅服未注册 `settle_rank` 的业务处理回调，
+接入方还需实现实际道具或邮件发放。
 
 ### 业务接入
 

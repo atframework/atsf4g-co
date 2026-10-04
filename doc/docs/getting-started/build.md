@@ -63,7 +63,7 @@ ON 依赖编译器的标准协程检测结果；不支持时该选项被强制�
 | 选项 | 默认 | 用途 |
 | --- | --- | --- |
 | `PROJECT_ENABLE_SAMPLE` | OFF | 构建 sample |
-| `PROJECT_ENABLE_UNITTEST` | OFF | 构建单元测试 |
+| `PROJECT_ENABLE_UNITTEST` | 已定义 `BUILD_TESTING` 时跟随它，否则 Debug ON、其他 OFF | 构建单元测试 |
 | `PROJECT_ENABLE_PRECOMPILE_HEADERS` | ON | 预编译头 |
 | `PROJECT_ENABLE_UNITY_BUILD` | OFF | 联合编译 |
 | `ATFRAMEWORK_USE_DYNAMIC_LIBRARY` | 默认 ON（macOS 除外；显式设置 `BUILD_SHARED_LIBS` 时跟随它） | 动态库 |

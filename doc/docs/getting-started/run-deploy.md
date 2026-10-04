@@ -51,11 +51,12 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 
 | 形态 | 输入与输出 |
 | --- | --- |
-| Kubernetes | `install/cloud-native/charts/` 与 values，生成工作负载、HPA、网络和日志资源 |
+| Kubernetes | `install/cloud-native/charts/` 与 values，生成工作负载、网络、存储和日志配置 |
 | Docker | `install/cloud-native/images/server/` 的 Dockerfile 与 entrypoint |
 | 裸机/本地 | `non_cloud_native/deploy.yaml` 的进程布局与 sh/ps1 实例脚本 |
 
 日常调整只改 values。新增实例填写 `proc_desc` 的 chart 名、实例数、起始实例号和启动分组。
+服务侧 HPA 配置随实例生成；Kubernetes HPA 和指标适配器需要另行配置，见 [HPA 接入](../whitepaper/hpa-controller)。
 
 ## 定制与详细设计
 

@@ -26,8 +26,8 @@ title: 数据层
 
 | 原语 | 语义 |
 | --- | --- |
-| KV | `get_all` / `partly_get` / `batch` 读取；`set`（可带 CAS 版本）；`inc_field` 原子自增 |
-| KL | 键列表索引：`add` / `get` / `update` / `remove`，索引列表单调裁剪（内嵌 Lua） |
+| KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`；`set` / `insert`；`inc_field` 原子自增 |
+| KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`；索引单调递增，按数量裁剪（内嵌 Lua） |
 | TTL | 键过期管理 |
 
 ### 生成的 DB 接口
@@ -37,8 +37,8 @@ title: 数据层
 
 - `rpc/db/local_db_interface.atfw.gen.{h,cpp}`：本 zone 库接口；
 - `rpc/db/global_db_interface.atfw.gen.{h,cpp}`：全局库接口；
-- 命名空间形如 `rpc::db::login_auth` / `rpc::db::dtmq_channel_record` 等，每个表提供 get/set/replace/CAS 等
-  协程化 API。
+- 命名空间形如 `rpc::db::login_auth` / `rpc::db::dtmq_channel_record` 等，按各索引选项生成读取、
+  `insert`、`replace` 等协程化 API；只有启用 CAS 的索引才有对应版本参数。
 
 ```cpp
 // 示例：协程内读表

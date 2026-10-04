@@ -5,9 +5,11 @@ title: 好友服务
 # 好友服务
 
 `src/friendsvr/` 提供好友管理与推荐服务，配套协议和 SDK。
-大厅服的 `logic/friend_api/` 接入好友列表、邀请、接受/拒绝、删除和礼物。
+大厅服的 `logic/friend_api/` 接入好友列表、邀请、接受/拒绝和删除。
 当前推荐服务的 `task_action_recommend_search` 与大厅 `friend_get_suggest` 仍未实现推荐策略，
 调用成功不表示已有推荐结果。
+大厅服保留了礼物接口与本地记录逻辑，但好友管理事务当前拒绝礼物事件，流程尚未贯通。
+礼物道具配置、实际道具填充与发放也仍待业务接入。
 
 ## 快速上手
 
@@ -22,7 +24,7 @@ title: 好友服务
 5. 用两个测试用户完成“发送邀请 → 接受 → 查询双方列表 → 删除”，核对双方数据与通知。
    客户端消息定义见 `com.protocol.friend_api.proto`，robot 的 `cmd/friend.go` 提供现有命令入口。
 
-已有邀请、礼物与数量限制从配置入口调整；修改 RPC 声明按[RPC 上手](../development/add-rpc-task)。
+已有邀请与好友数量限制从配置入口调整；修改 RPC 声明按[RPC 上手](../development/add-rpc-task)。
 
 ## 定制与详细设计
 

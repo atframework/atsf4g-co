@@ -20,8 +20,8 @@ serving. Expected replicas, Target membership, and Ready membership express thes
 ## Metrics to Replica Recommendations
 
 Built-in policies cover CPU, main-thread CPU, memory, recent task counts, and controller status, with custom
-policies available. For aggregate load with a positive threshold, recommendations can be expressed as
-`ceil(aggregate load / per-replica target load)`. Multiple policies use the larger recommendation, followed by
+policies available. For a positive integer sample V and positive threshold T, current code calculates
+`(V - 1) / T + 1`, equivalent to rounding up. Multiple policies use the larger recommendation, followed by
 scaling rules, stabilization, and minimum/maximum replica bounds. Separate up/down thresholds allow a stable middle range.
 
 Metric semantics must match: pair totals with per-replica targets rather than dividing a per-node average as if
@@ -68,6 +68,9 @@ sequenceDiagram
 leave Target at the start time. After the end time, a true `set_on_stateful_checking` result (state remains)
 preserves Ready. Without that registered check, business-state protection is unavailable. New-node business
 readiness uses `set_on_ready_checking`, based on actual resource/data availability.
+Initial setup allows approximately one minute of waiting. Without a Ready check, the node can become Ready when
+that time expires; this does not establish business-data readiness. Resource preparation and state transfers in
+the diagram are business implementations; HPA label changes do not automatically migrate arbitrary objects.
 
 Uninterrupted service also depends on [router transfers](../architecture/router): single-writer ownership, version
 repair, forwarding, draining active requests, retained connections, and reachable destinations. Target/Ready are
@@ -91,6 +94,9 @@ flowchart LR
     W --> B
 ```
 
+The metrics adapter and Kubernetes HPA in the diagram are deployment additions; the repository does not supply
+their complete configuration.
+
 | Metric | Current meaning | Adapter requirement |
 | --- | --- | --- |
 | Expected replicas, default `hpa_expect_replicas` | Controller reports the phase-appropriate recommendation | Scope to the workload and use the maximum valid recommendation; never sum duplicate controller recommendations |
@@ -110,9 +116,7 @@ additional draining and termination coordination.
 [Kubernetes HPA](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/) needs appropriate
 APIs/adapters for custom/external metrics and takes the largest recommendation across metrics. Absolute desired
 replica counts must match [HPA v2 API](https://kubernetes.io/docs/reference/kubernetes-api/autoscaling/horizontal-pod-autoscaler-v2/)
-metric/target semantics to avoid multiplying by current replicas again. For example, an adapter returning absolute
-workload recommendation N can use External `AverageValue` target 1 to derive N, with a separate protection
-recommendation. Verify actual adapter responses/calculations; HPA bounds and stabilization still apply. The
+metric/target semantics to avoid multiplying by current replicas again. The
 service-side controller does not directly patch Kubernetes workload replica fields.
 
 ## Integration and Failure Validation
@@ -125,12 +129,14 @@ service-side controller does not directly patch Kubernetes workload replica fiel
    need an actual scaling executor.
 4. Test failures through state removal, metric updates, HPA execution, and process exit before enabling scale-down.
 
+The table lists deployment integration checks; existing unit tests do not cover these complete fault workflows.
+
 | Failure | Behavior to validate |
 | --- | --- |
 | Failed queries, stale metrics, missing nodes | No unsafe shrink from unknown input; alerts and last valid policy |
 | Controller changes or duplicate policies | Idempotent decisions/application without repeated resource creation/removal |
 | Migration exceeds the configured window | State checks retain nodes until draining completes |
-| Forced process termination | Recover under DB/WAL/router contracts, distinguished from normal draining |
+| Forced process termination | Check data against the service's persistence/recovery implementation, distinguished from normal draining |
 | Adapter or etcd unavailable | Observable policy/execution status; revalidate replicas and ownership after recovery |
 
 Implementation is in `src/server_frame/logic/hpa/`, with `svr.hpa.config.proto` and deployment template

@@ -38,6 +38,21 @@ Build again. The existing `register_handles_for_lobbysvrservice()` registers the
 Callers include the generated `rpc/lobby/lobbysvrservice.atfw.gen.h` and use its `echo_text` API;
 use the generated declaration for the exact namespace and target arguments.
 
+## Await RPC Completion {#await-rpc}
+
+For an RPC requiring a response, use the following macros to await completion before processing the response.
+Even when the response or return value is unused, explicitly use `RPC_AWAIT_IGNORE_RESULT` instead of discarding
+the framework result object returned by the call.
+
+| Usage | Effect |
+| --- | --- |
+| `RPC_AWAIT_CODE_RESULT(call)` | Await completion and obtain the integer error code |
+| `RPC_AWAIT_TYPE_RESULT(call)` | Await completion and obtain the result of the corresponding type |
+| `RPC_AWAIT_IGNORE_RESULT(call)` | Await completion and explicitly ignore the result |
+
+These macros adapt C++20 coroutines and traditional stackful coroutines to the same business-code waiting pattern.
+Ignoring the result still waits for completion; for send-only behavior, use a generated no-wait API permitted by the declaration.
+
 ## Quick Start: Add a CS RPC to an Existing Service
 
 1. Define client messages under `src/server_frame/protocol/public/protocol/pbdesc/`, following

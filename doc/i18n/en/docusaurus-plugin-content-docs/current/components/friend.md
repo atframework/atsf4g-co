@@ -5,9 +5,11 @@ title: Friend Services
 # Friend Services
 
 `src/friendsvr/` provides management and recommendation services with protocols and SDKs.
-The lobby's `logic/friend_api/` integrates lists, invitations, acceptance/rejection, removal, and gifts.
+The lobby's `logic/friend_api/` integrates lists, invitations, acceptance/rejection, and removal.
 Recommendation strategies remain unimplemented in `task_action_recommend_search` and the lobby's
 `friend_get_suggest`; a successful call does not imply populated recommendations.
+The lobby retains gift interfaces and local bookkeeping, but management transactions currently reject gift events,
+so the flow is incomplete. Gift-item configuration, payload population, and granting also require business integration.
 
 ## Quick Start
 
@@ -24,7 +26,7 @@ Recommendation strategies remain unimplemented in `task_action_recommend_search`
    Verify both users' data and notifications. Client messages are in `com.protocol.friend_api.proto`;
    robot's `cmd/friend.go` provides existing command entry points.
 
-Adjust existing invitation, gift, and count limits through configuration.
+Adjust existing invitation and relationship count limits through configuration.
 Follow the [RPC quick start](../development/add-rpc-task) for RPC declarations.
 
 ## Customization and Design

@@ -5,7 +5,7 @@ title: RPC 单元测试（离线 mock）
 # RPC 单元测试（离线 mock）
 
 `src/tools/rpc-unit-test` 是本工程的 RPC 级单元测试支持库：在普通进程内启动一个最小 atapp runtime，用内存 mock
-引擎替代全部外部依赖（SS/DNS/CS/DB/UUID/resource/HPA/telemetry），让业务代码的真实 RPC 路径（dispatcher、
+引擎替代框架已支持的外部依赖路径（SS/DNS/CS/DB/UUID/resource/HPA/telemetry），让业务代码的真实 RPC 路径（dispatcher、
 task、协程、生成 API）可以在单测中被驱动和断言，无需 Redis、etcd、atbus 或系统 DNS。库 API 命名空间是
 `atframework::testing`。
 
@@ -25,7 +25,7 @@ task、协程、生成 API）可以在单测中被驱动和断言，无需 Redis
 - 所有测试 executable 只使用 atframe_utils 私有测试框架（`CASE_TEST`/`CASE_EXPECT_*`），不引入 GTest。
 
 单元测试 seam 由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 整体门控（`cmake_dependent_option`，默认跟随
-`BUILD_TESTING OR PROJECT_ENABLE_UNITTEST`）。hooks-off 的生产构建中：无测试状态、无热路径分支、无 `mock`
+`PROJECT_ENABLE_UNITTEST`）。hooks-off 的生产构建中：无测试状态、无热路径分支、无 `mock`
 符号、无测试库依赖；生产 fallback 一直保留，只有 fixture 显式安装 hook 后才接管。所有 `mock` 子命名空间接口
 （生成 SS/DB mock、HPA 功能 mock）同样被宏整体裁剪。
 
@@ -182,7 +182,7 @@ SS handler 返回 `rpc::result_code_type`，可以是协程并用 `RPC_AWAIT_COD
   unary SS 同链（`mock://` connector），不改 Mako。
 - **DNS**：`test.dns().mock_a(domain, ip)` / `mock(records)` / `mock_error(domain)`；hook 在 `uv_getaddrinfo`
   之前，测试不产生系统 DNS 请求。
-- **DB**：默认即完整 presence-aware 内存 backend（field merge/CAS/KL/TTL，语义对齐 Redis/Lua），无需注册规则；
+- **DB**：默认内存 backend 支持字段 presence 合并、CAS、KL 和 TTL，按对应 Redis/Lua 契约实现，无需注册规则；
   生成层 per-table typed handler（`rpc::db::<ns>::mock::<interface>`）与引擎层 `test.db().mock_table(name)` 回调
   可覆盖单个接口，未覆盖的回落内存 backend。raw entry API（`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`）用于
   CAS 版本种子/精确 bytes。

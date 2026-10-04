@@ -30,7 +30,7 @@ compaction, and persistence boundaries. The following describes dtmq protocols a
 
 | Part | Location | Description |
 | --- | --- | --- |
-| `dtmq-proxysvr` | `dtmq/dtmq-proxysvr/` | Entry service: channel management, message persistence, subscriber distribution (in the current version the data layer is integrated; TODO: split it out) |
+| `dtmq-proxysvr` | `dtmq/dtmq-proxysvr/` | Channel management, message persistence, subscriber distribution |
 | Protocol | `dtmq/protocol/` | `dtmq_proxy.proto` (service protocol), `dtmq_proxy.config.proto` (configuration) |
 | `dtmq-common-sdk` | `dtmq/sdk/common/` | Channel hashing/replica selection algorithms (`dtmq_algorithm`) |
 | `dtmq-proxy-sdk` | `dtmq/sdk/proxy/` | Client API and in-process subscriber |
@@ -42,8 +42,8 @@ compaction, and persistence boundaries. The following describes dtmq protocols a
 `subscribe` / `unsubscribe` / `send_message` / `transfer_channel` / `destroy_channel` / `update` /
 `reset_lock` / `find_message` / `page_query_message` / `pull`.
 
-There is also `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEventSync)`: the server
-**streams** incremental channel messages / full snapshots to the nodes where subscribers reside.
+`DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEventSync)` sends SS notifications containing
+channel increments or snapshots to subscriber nodes. `stream` means no ordinary response is awaited.
 
 ### Data Model
 
@@ -53,7 +53,8 @@ There is also `DtmqProxysvrNotifyService::channel_event_sync(stream SSChannelEve
   `DChannelSubscribeNode` / `DChannelSyncPoint`;
 - Subscriber keys look like `U:{zone}:{user}` / `T:{team}` / `G:{guild}`, carrying a heartbeat sequence +
   hash;
-- Optimistic locking: `channel_lock_checker` (CAS), unlocked via `reset_lock`;
+- Channel optimistic locking: `channel_lock_checker` compares the expected holder and resets the lock as requested;
+  `reset_lock` provides the update API. The channel-record index does not enable DB CAS;
 - Channel type configuration comes from Excel (`ExcelDtmqChannelType` in `com.struct.dtmq.config.proto`:
   `channel_type`, `show_max_log_count`, `readonly_replicate_count`), loaded by
   `excel_config_dtmq_index.cpp` as `DChannelConfigure`;
@@ -67,8 +68,8 @@ flowchart LR
     Pub[Publisher] -->|send_message| W[Writable Replica]
     W -->|WAL sync| R1[Readonly Replica 1]
     W -->|WAL sync| R2[Readonly Replica N]
-    Sub[Subscriber SDK] -->|pull / event stream| R1
-    Sub -->|pull / event stream| W
+    Sub[Subscriber SDK] <-->|Subscribe and pull / event notifications| R1
+    Sub <-->|Subscribe and pull / event notifications| W
 ```
 
 - Each channel has 1 writable replica + N readonly replicas (`readonly_replicate_count` is configurable);
@@ -82,9 +83,9 @@ flowchart LR
 ### WAL Master-Slave Sync
 
 `dtmq-proxysvr/data/mq_channel_wal_handle.{h,cpp}` wraps atframe_utils'
-`distributed_system::wal_publisher / wal_subscriber` (single-thread mode); logs are merged by
-`DChannelMessageDetail::CommandCase` category. This is the same mechanism as the rank component's
-`rank_wal_handle`. `SSChannelUpdateReq` supports log compaction via `compact_sequence`.
+`distributed_system::wal_publisher / wal_client` in single-thread mode, using `wal_subscriber` for publisher-side
+subscriber records. `DChannelMessageDetail::CommandCase` selects each log's action delegate. The rank component's
+`rank_wal_handle` also reuses this WAL library. `SSChannelUpdateReq` supports log compaction via `compact_sequence`.
 
 ### Client SDK
 

@@ -52,12 +52,14 @@ See [server configuration](../development/server-config) for configuration chang
 
 | Mode | Inputs and outputs |
 | --- | --- |
-| Kubernetes | `install/cloud-native/charts/` and values generate workloads, HPA, networking, and log resources |
+| Kubernetes | `install/cloud-native/charts/` and values generate workloads, networking, storage, and logging configuration |
 | Docker | Dockerfile and entrypoint under `install/cloud-native/images/server/` |
 | Bare metal/local | Process layout in `non_cloud_native/deploy.yaml` and sh/ps1 instance scripts |
 
 Routine adjustments use values. For new instances, fill `proc_desc` with the chart name, instance count,
 starting id, and startup group.
+Service-side HPA configuration is generated with each instance. Kubernetes HPA and metrics adapters require
+separate configuration; see [HPA integration](../whitepaper/hpa-controller).
 
 ## Customization and Design
 

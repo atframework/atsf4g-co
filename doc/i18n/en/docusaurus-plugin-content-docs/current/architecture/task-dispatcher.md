@@ -40,22 +40,13 @@ flowchart LR
 | `task_action_base` | Base of all actions: `operator()` coroutine body, timeout, trace, result code |
 | `task_action_cs_req_base` | Client requests: session validation, response packing |
 | `task_action_ss_req_base` | Inter-service requests: `prepare_handle` chain, SS response packing |
+| `task_action_ss_rpc_base<Req, Rsp>` | Typed request/response base for generated SS RPC actions |
 | `task_action_no_req_base` | Timer/self-driven tasks without a triggering request (e.g. `task_action_auto_save_objects`) |
 
-Typical action implementation pattern:
+Generated actions read requests through `get_request_body()` and populate `get_response_body()` inside `operator()`,
+then return with `RPC_RETURN_CODE`. See the [RPC quick start](../development/add-rpc-task) for a usable example.
 
-```cpp
-class task_action_example : public task_action_ss_req_base<ExampleReq, ExampleRsp> {
- public:
-  result_type operator()() override {
-    // 1. Validate and read the request
-    // 2. RPC_AWAIT_CODE_RESULT(rpc::db::xxx(...)) suspends to wait for DB/SS
-    // 3. Assemble the response and RPC_RETURN_CODE(0)
-  }
-};
-```
-
-Default rules create business skeletons only when absent; implement `hook_handle()` / `operator()` in them.
+Default rules create business skeletons only when absent; implement `operator()` in them.
 Existing skeleton files are preserved as a whole, while generated handlers/APIs are updated.
 Synchronize existing skeletons manually after RPC signature changes; marked regions do not migrate them.
 
@@ -65,10 +56,14 @@ Synchronize existing skeletons manually after RPC signature changes; marked regi
 
 - **C++20 coroutines** (`PROJECT_SERVER_FRAME_USE_STD_COROUTINE=ON`): `copp::generator_future/callable_future`,
   `RPC_AWAIT_TYPE_RESULT(x)` is simply `co_await x`;
-- **libcopp cotask**: goes through the `rpc_result_guard` lazy poller.
+- **libcopp cotask**: asynchronous waits suspend/resume stackful coroutines; `rpc_result` stores results in a poller,
+  and `rpc_result_guard` wraps return values.
 
 Business code only uses the `RPC_AWAIT_*` / `RPC_RETURN_*` macros and the
 `rpc::result_code_type / rpc_result<T>` types, without directly perceiving backend differences.
+Await an RPC response with `RPC_AWAIT_CODE_RESULT` or `RPC_AWAIT_TYPE_RESULT`; even when its result is unused,
+explicitly await it with `RPC_AWAIT_IGNORE_RESULT`. Macro definitions are in `src/server_frame/rpc/rpc_common_types.h`;
+see [awaiting RPC completion](../development/add-rpc-task#await-rpc) for usage.
 
 ### Built-in task actions
 

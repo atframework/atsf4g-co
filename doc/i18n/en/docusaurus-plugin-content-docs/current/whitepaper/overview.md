@@ -16,17 +16,13 @@ storage, or control policies. For routine RPC, service, component, and configura
 | Complete an operation involving several resource owners | [Distributed Transactions](distributed-transactions) | Global decisions, conflicts, idempotent execution, recovery, cleanup |
 | Turn runtime metrics into executable business policies | [Observability and Dynamic Policies](observability-policy) | Metric semantics, collection, queries, publication, application |
 | Preserve service capacity during stateful scaling | [HPA Controller](hpa-controller) | Replica recommendations, staged Target/Ready changes, Kubernetes integration |
-| Apply these capabilities to trading and battles | [Metric-Driven Scenarios](metric-driven-scenarios) | Order matching, search indexes, matchmaking, room preparation |
-
-These capabilities can work together. WAL synchronizes changes to one resource, transactions coordinate decisions
-across resources, metrics inform capacity and policy choices, and HPA with the [router](../architecture/router)
-turns capacity changes into service distribution and object transfers.
+| Apply business metrics to trading and battles | [Metric-Driven Scenarios](metric-driven-scenarios) | Order matching, search indexes, matchmaking, room preparation |
 
 ## Implementation and Design Scope
 
 “Current implementation” refers to protocols, SDKs, services, and configuration in this repository. “Integration
 design” and “recommendation” describe logic the business must implement and validate.
-Metric names, policy fields, and formulas in the three scenarios illustrate designs and need business integration.
+The three scenarios illustrate uses of business metrics; businesses define and integrate their metrics and decision logic.
 Trading-related discovery selectors in the repository do not establish that a complete trading system exists.
 
 | Existing capability | Integration responsibility |
@@ -47,6 +43,6 @@ scale-down past nodes that still own state. Then identify failures before/after 
 partitions, stale metrics, policy publication, and object transfers. Define idempotency keys, version checks,
 recovery entry points, and metrics for each.
 
-Each paper includes implementation pointers, public references, and validation checklists. These are integration
+Papers include implementation pointers, public references, and validation checklists as applicable. These are integration
 checks to perform, not substitutes for fault testing in the real environment. Existing unit-test coverage is
 distinguished from deployment validation.

@@ -5,7 +5,7 @@ title: RPC Unit Testing (Offline Mock)
 # RPC Unit Testing (Offline Mock)
 
 `src/tools/rpc-unit-test` is the RPC-level unit test support library: it boots a minimal atapp runtime in a normal
-process and replaces every external dependency (SS/DNS/CS/DB/UUID/resource/HPA/telemetry) with in-memory mock engines,
+process and replaces supported framework dependency paths (SS/DNS/CS/DB/UUID/resource/HPA/telemetry) with in-memory mock engines,
 so real RPC paths in business code (dispatcher, task, coroutines, generated API) can be driven and asserted in unit
 tests without Redis, etcd, atbus, or system DNS. The library API namespace is `atframework::testing`.
 
@@ -26,7 +26,7 @@ tests without Redis, etcd, atbus, or system DNS. The library API namespace is `a
 - Every test executable uses only the atframe_utils private test framework (`CASE_TEST`/`CASE_EXPECT_*`), not GTest.
 
 Unit test seams are gated as a whole by `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` (a `cmake_dependent_option`,
-default following `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST`). In a hooks-off production build: no test state, no
+default following `PROJECT_ENABLE_UNITTEST`). In a hooks-off production build: no test state, no
 hot-path branches, no `mock` symbols, no test library dependency; the production fallback is always preserved and a
 seam only takes over once a fixture installs a hook. All `mock` sub-namespace interfaces (generated SS/DB mock, HPA
 feature mock) are likewise stripped by the macro.
@@ -194,8 +194,8 @@ Rule options (`ss_rule_options`): `match_node_id`, `times` (FIFO script), `delay
   the unary SS chain (`mock://` connector) without touching Mako.
 - **DNS**: `test.dns().mock_a(domain, ip)` / `mock(records)` / `mock_error(domain)`; the hook sits before
   `uv_getaddrinfo`, so tests issue no system DNS requests.
-- **DB**: a complete presence-aware in-memory backend by default (field merge/CAS/KL/TTL, semantics aligned with
-  Redis/Lua) with no rule registration needed; generated per-table typed handlers (`rpc::db::<ns>::mock::<interface>`)
+- **DB**: the default in-memory backend supports field-presence merging, CAS, KL, and TTL under their Redis/Lua
+  contracts, with no rule registration needed; generated per-table typed handlers (`rpc::db::<ns>::mock::<interface>`)
   and engine-level `test.db().mock_table(name)` callbacks can override individual interfaces, with everything else
   falling back to the in-memory backend. Raw entry APIs (`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`) seed CAS versions
   or exact bytes.

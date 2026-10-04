@@ -1,62 +1,55 @@
 
-# 环境操作指南
+# 本地环境操作指南
 
-## 连接端口 8001
+以下命令在构建产物 `<BUILD_DIR>/publish/` 下执行。先配置
+`install/cloud-native/values/personal/` 并构建，或临时调整 publish 中的 values；
+确认 etcd、Redis 地址与实例布局。完整说明见[运行与部署](../doc/docs/getting-started/run-deploy.md)。
 
-## Orbit客户端启动参数需要更改 orbit-agent\cfg\orbit-agent_*.yaml 内的 configured_client_command_line 参数
+## 启动
 
-## Linux/macOS
+本地依赖脚本启动 etcd 和 Redis。使用外部依赖时可跳过该脚本，并在 values 中填写对应地址。
+`generate_config` 加载 `default`、`dev`、`personal`，使用 `global.world_id=1`，
+生成实例配置以及 `start_all`、`stop_all`、`kill_all` 脚本。
 
-Linux 和 macOS 环境使用 `tools/script/start_local_test_env.sh` 和 `tools/script/stop_local_test_env.sh`。
-首次运行会自动下载 etcd；redis 通过容器运行（自动探测 docker / podman / nerdctl，也可用
-`--container-engine` 指定），请确保容器引擎已安装且守护进程已启动（macOS 上如
-`podman machine start` 或 Docker Desktop）。
+Windows 使用 PowerShell 7+：
 
-## 启动步骤
+```powershell
+Set-Location <BUILD_DIR>/publish
+pwsh -NoLogo -NoProfile -File ./tools/script/start_local_test_env.ps1
+pwsh -NoLogo -NoProfile -File ./tools/script/generate_config.ps1
+pwsh -NoLogo -NoProfile -File ./start_all.ps1
+```
 
-1. **启动本地测试环境**
+Linux/macOS：
 
-   ```powershell
-   tools\script\start_local_test_env.ps1
-   ```
+```bash
+cd <BUILD_DIR>/publish
+bash tools/script/start_local_test_env.sh
+bash tools/script/generate_config.sh
+bash start_all.sh
+```
 
-   若使用 Windows PowerShell 5.1 且执行策略受限，请用：
+客户端连接地址以生成的 `atgateway/cfg/atgateway_*.yaml` 中 `atgateway.listen.address` 为准。
+端口由 `atgateway.listen.begin_port` 与实例号计算，不是所有实例都使用 8001。
 
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File tools\script\start_local_test_env.ps1
-   ```
+Orbit 被管理进程的路径与启动参数在 values 的 `orbit-agent.yaml` 中设置：
+`orbit_agent.client_path`、`orbit_agent.client_command_line`；seed 模式使用相应的
+`seed_client_path`、`seed_client_command_line`。修改后重新生成配置并重启对应 agent。
 
-   Linux/macOS：
+## 停止
 
-   ```bash
-   sh tools/script/start_local_test_env.sh
-   ```
-2. **启动所有服务**
+先停止服务，再停止本地依赖。Windows：
 
-   ```powershell
-   start_all.ps1
-   ```
+```powershell
+pwsh -NoLogo -NoProfile -File ./stop_all.ps1
+pwsh -NoLogo -NoProfile -File ./tools/script/stop_local_test_env.ps1
+```
 
-## 关闭步骤
+Linux/macOS：
 
-1. **停止所有服务**
+```bash
+bash stop_all.sh
+bash tools/script/stop_local_test_env.sh
+```
 
-   ```powershell
-   stop_all.ps1
-   ```
-2. **强制停止所有服务（必要时使用）**
-
-   ```powershell
-   kill_all.ps1
-   ```
-3. **停止本地测试环境**
-
-   ```powershell
-   tools\script\stop_local_test_env.ps1
-   ```
-
-   Linux/macOS：
-
-   ```bash
-   sh tools/script/stop_local_test_env.sh
-   ```
+正常停止无法结束进程时，可使用 publish 根目录的 `kill_all.ps1` 或 `kill_all.sh` 强制终止。

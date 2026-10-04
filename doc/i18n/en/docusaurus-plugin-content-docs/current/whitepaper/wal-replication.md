@@ -4,9 +4,9 @@ title: WAL and State Replication
 
 # WAL and State Replication
 
-WAL (Write-Ahead Log) describes object changes as ordered logs so subscribers can replay increments, detect
-divergence, and recover. The framework provides reusable algorithms and callbacks; storage and business integration
-determine durability before acknowledgement and rejection of writes from old owners. For message channels, start
+The WAL (Write-Ahead Log) component describes object changes as ordered logs so subscribers can replay increments,
+detect divergence, and recover. It provides log management and synchronization algorithms, with storage and transport
+supplied through callbacks; it does not guarantee persistence before acknowledgement. For message channels, start
 with the [dtmq quick start](../components/dtmq).
 
 ## Problems to Solve
@@ -41,12 +41,11 @@ synchronization logic.
 sequenceDiagram
     participant C as Subscriber
     participant P as Publisher
-    participant B as Snapshot and log storage
+    participant B as Business snapshot callback
     C->>P: subscribe (applied checkpoint and optional hash)
     alt Business requires snapshot or checkpoint predates removed logs or hash differs
-        P->>B: Obtain consistent state and checkpoint
-        B-->>P: Snapshot
-        P-->>C: send_snapshot
+        P->>B: Invoke send_snapshot
+        B-->>C: Business serializes and sends snapshot
         C->>C: Replace corresponding state and set checkpoint
     else Retained logs suffice
         P-->>C: send_logs (ordered logs after checkpoint)
@@ -56,15 +55,15 @@ sequenceDiagram
     C->>P: Heartbeat or resubscription
 ```
 
-The current publisher selects a snapshot when the requested checkpoint predates `last_removed`, configured hash
-validation fails, or business logic forces synchronization. Otherwise it sends retained logs after the checkpoint.
-Clients support subscription heartbeats, retry intervals, and requesting a snapshot. Snapshot callbacks should
-replace the corresponding data rather than merge full snapshots into stale state.
+The publisher first checks the business callback for a forced snapshot, then whether the checkpoint predates
+`last_removed`. It compares checksums only when the checkpoint's log still exists, the request supplies a hash,
+and all publisher hash callbacks are configured. A mismatch invokes `send_snapshot`. Otherwise `send_logs` sends
+retained logs after the checkpoint; with no increments, only the subscription result is returned.
 
-Integration must also resolve races at the snapshot/log boundary: record the snapshot checkpoint, restore the
-snapshot, then apply newer logs. Define object generations so a reused checkpoint cannot skip a recreated object's
-changes. SDK key comparisons and ignore ranges do not replace generation design. External notifications or payments
-need separate idempotency keys or transaction records; receiving a log once is not an exactly-once side-effect guarantee.
+Clients support subscription heartbeats, retry intervals, and requiring an initial snapshot. Business code restores
+state through `on_receive_snapshot`; the SDK neither reads storage directly nor creates snapshots. Keep state and
+checkpoints consistent and replace the snapshot's data according to the callback contract. The dtmq snapshot callback
+calls `wal.load`, whose load callback restores channel data and logs.
 
 ## Retention, Compaction, and Distribution
 
@@ -72,43 +71,37 @@ Log age/count limits determine how far subscribers can catch up incrementally. S
 recover through snapshots. Balance log storage, snapshot size, recovery time, and the slowest subscriber.
 Log GC does not authorize deletion of business data.
 
-| Content | Possible compaction | Required condition |
-| --- | --- | --- |
-| Current state, such as member attributes | Consistent snapshot plus recent increments | Complete current state and support for full replacement |
-| Events that must each be processed, such as settlement records | Retain events or use a separate event store | Acknowledgement, replay, and deduplication meet business retention requirements |
-| Query indexes or notification views | Rebuild from snapshot, then catch up | Validate derived-data versions and checkpoints |
+| Current integration | Retention and compaction |
+| --- | --- |
+| WAL algorithms | GC uses configured log age/count and records the removed-log boundary |
+| dtmq | `gc_expire_duration`, `gc_log_count`, and `max_log_count` configure retention; `compact_sequence` provides state-log compaction |
+| Team rooms | Store current room state in channel custom data and submit state/compaction progress through channel updates |
 
 An in-process shared subscriber lets local consumers reuse an upstream subscription and reduces cross-process
-fanout. Relays still need upstream/downstream progress and bounded buffers. Slow subscribers switch to snapshots
-when retention is exceeded rather than accumulating unlimited backlog. dtmq provides an in-process subscriber SDK;
+fanout. dtmq provides an in-process subscriber SDK;
 each player need not establish a separate cross-service WAL connection.
 
 ## Persistence and Ownership Transfer
 
 The WAL algorithm library connects load/dump and transport through callbacks without a disk-flush protocol.
-If acknowledgement promises survival across restart, design and verify this order: validate write ownership,
-persist logs and recovery state, then acknowledge and publish. Failures remain retryable. Asynchronous batched
-persistence needs its own acknowledgement boundary and documented loss allowance.
+dtmq saves channel records to Redis through `mq_channel` IO tasks and schedules saves using dirty versions.
+WAL's `on_log_added` and `on_log_removed` callbacks mark the channel dirty, so successful log synchronization
+does not mean Redis persistence has completed.
 
-dtmq uses channel records, DB CAS, and routing to maintain a writable owner while replicating logs to read-only
-replicas. During migration the new owner restores state/checkpoints and catches up before ownership switches.
-Versions or CAS must reject delayed writes from the old owner. Changing discovery addresses alone cannot ensure
-one writer. See [router design](../architecture/router) for transfers, forwarding, and session continuity.
-
-WAL handles changes within one resource. Use [distributed transactions](distributed-transactions) when multiple
-resources must commit together. Idempotent actions after transaction confirmation can update state and logs, but
-business data, logs, and participant snapshots need a consistent persistence boundary.
+dtmq calculates replica distribution from discovery and HPA Target/Ready sets. Migration uses channel snapshots,
+subscriber merging, and request forwarding. Its `mq_channel` / `mq_channel_manager` do not use the generic router
+object ownership-transfer flow. See [router design](../architecture/router) separately for generic objects.
+Business recovery depends on save intervals, snapshot contents, and migration implementation; WAL algorithms alone
+cannot establish durability or single-writer guarantees.
 
 ## Validation and Implementation
 
-| Check | Expected result |
+| Integration validation | What to check |
 | --- | --- |
-| Duplicate delivery and resubscription | No repeated state changes or external effects |
-| Checkpoint removed by GC or hash mismatch | Snapshot recovery followed by subsequent increments |
-| New writes during snapshot creation | Consistent checkpoint/log boundary without omissions or stale overwrites |
-| Lost response after persistence and replay after restart | Retries recognize the operation and honor promised durability |
-| Migration and delayed old-owner writes | New owner recovers; old-version writes are rejected |
-| Slow subscribers and fanout peaks | Bounded buffers, observable lag and snapshot fallback counts |
+| Increments, duplicate delivery, resubscription | Log-key filtering and business replay results |
+| Checkpoint predates GC boundary or a verifiable hash differs | Snapshot callbacks and subsequent increments |
+| Exit before saving and recovery after restart | State/logs in actual storage and permitted unsaved changes |
+| Channel migration and subscriber merging | Destination data, subscriptions, and old-node forwarding |
 
 Algorithms live in `atframework/atframe_utils/include/distributed_system/wal_*.h`. Tests include
 `atframework/atframe_utils/test/case/wal_object_test.cpp`, `wal_publisher_test.cpp`, and `wal_client_test.cpp`.

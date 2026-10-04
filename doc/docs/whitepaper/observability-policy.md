@@ -30,7 +30,7 @@ flowchart LR
     M --> O[OpenTelemetry 导出]
     O --> C[Collector 接收与处理]
     C --> P[Prometheus 或兼容查询后端]
-    P --> Q[控制节点拉取与验证]
+    P --> Q[控制节点拉取指标]
     Q --> D[计算动态策略]
     D --> E[etcd 策略记录]
     E --> W[服务监听与应用]
@@ -58,19 +58,9 @@ OpenTelemetry 异步指标回调可能在采集线程执行。HPA policy 的 obs
 ## 自定义策略的最小接入
 
 已有 CPU、内存等策略只需调整 values；增加新的业务指标与决策时需要少量业务接入，使用现有接口即可，
-无需修改生成模板或 CMake 的实现。以仅由业务回调决策的指标为例，values 中 `modules/hpa.yaml` 可加入：
-
-```yaml
-rule:
-  custom:
-    - metrics_name: "market_pending_orders"
-      aggregation: EN_HPA_POLICY_AGGREGATION_SUM
-      scaling_up_value: 0
-      scaling_down_value: 0
-```
-
-`market_pending_orders` 需由业务定义并注册。零阈值使该项不直接计算副本建议，缺失指标应按未知输入处理。
-完整策略字段由 `svr.hpa.config.proto` 定义。
+无需修改生成模板或 CMake 的实现。在 values 的 `modules/hpa.yaml` 中用 `rule.custom` 声明业务指标，
+字段参照 `svr.hpa.config.proto`；指标名称及决策算法由业务提供，仓库没有内置交易行订单指标。
+`scaling_up_value`、`scaling_down_value` 为正时参与默认副本计算；不使用默认副本计算时不设置正阈值。
 
 1. 定义指标的单位、类型、聚合维度和更新方式，在 `set_on_setup_custom_policy` 回调中注册
    `add_observer_int64`、`add_observer_double` 或已有指标观察接口。
@@ -78,8 +68,8 @@ rule:
    配置重载后重新关联，不能继续持有已清理的旧 policy。
 3. 注册 `add_event_on_pull_instant` 或 `add_event_on_pull_range` 和错误处理。
    验证输入后，由选定控制节点计算策略，通过 discovery 的 `set_value` 发布。
-4. 服务通过 `add_event_on_changed` 监听相应 key 或子 key，校验版本和参数范围，幂等应用并报告结果。
-   不同业务域使用不同 discovery 名称或子 key。
+4. 服务注册 `add_event_on_changed`，调用 `watch` 启动对应 key 或目录的监听，再应用收到的业务策略。
+   discovery 的 `set_value` 接收字符串；载荷格式、参数校验和应用结果由业务定义。
 
 policy 支持显式查询，也支持按指标、聚合、函数和 selector 构造 PromQL。
 跨服务查询时检查自动注入的服务类型等 selector；按需使用 `without_auto_selectors` 并明确补上地区、工作负载和环境范围。
@@ -103,15 +93,19 @@ Prometheus 的 [HTTP 查询 API](https://prometheus.io/docs/prometheus/latest/qu
 输入未知时保留上次有效策略或进入明确的安全策略，尤其禁止将缺失值直接解释为可以缩容。
 这些业务条件需要自行实现，不能假设每个自定义 policy 都已自动具备。
 
-业务自行定义策略载荷，可包含业务版本、输入时间范围、有效期、目标参数与原因。
-执行者拒绝旧版本和非法值，先准备资源，再切换流量，最后报告实际结果。
-计算周期至少考虑采集、查询、发布和执行总延迟；在上一次调整未生效前继续调整容易形成振荡。
+上述数据有效性和应用校验是接入要求，SDK 不提供统一的业务策略载荷或执行流程。
 
 ## 控制节点与传播边界
 
-当前控制器按工作负载的发现列表选择主控制节点，并在切换后等待拉取周期再发布。
+内置 HPA 控制器按工作负载的发现列表选择主控制节点，并在切换后等待拉取周期再发布。
+自定义 discovery 的决策回调和发布时机由接入方安排，`set_value` 不自动检查调用者是否为主控制节点。
 自定义 discovery 使用 etcd KV 写入和 watch 传播；`set_value` 当前不是带租约代次的 CAS 发布。
+`set_value` 返回 true 表示异步请求已启动，不表示 etcd 已保存或业务已应用。
 如果业务要求网络分区下严格禁止多个控制者写入，应另外设计租约、代次或 CAS 检查，不能只依赖列表排序。
+
+当前 `create_custom_discovery` 的注册 key、实例路径和 `find_custom_discovery` / `remove_custom_discovery`
+使用的路径不一致；同一 domain 内的不同名称也会构造到相同实例路径。
+接入前需修正并验证这些路径，不能假定不同名称已提供独立的策略发布与监听空间。
 
 [etcd API 保证](https://etcd.io/docs/v3.6/learning/api_guarantees/) 区分 KV 读写与 watch 的语义。
 监听者仍要处理重连、历史压缩和重新读取当前值，按 revision 或业务版本防止旧值覆盖新策略。
@@ -119,9 +113,8 @@ Prometheus 的 [HTTP 查询 API](https://prometheus.io/docs/prometheus/latest/qu
 
 ## 验证与实现入口
 
-先观察指标和只记录策略建议，再开放有界调整，最后启用自动控制。
-验证正常高峰、采集缺失、延迟响应、控制节点切换、重复或乱序策略、执行器失败与回滚。
-同时记录输入年龄、策略变更次数、建议与实际差异、应用耗时和业务效果。
+接入验证应覆盖采集缺失、延迟响应、控制节点切换、重复策略和业务应用失败。
+这些是建议检查项，不表示仓库已有对应业务算法、监控指标或故障测试。
 
 采集与 trace 位于 `src/server_frame/rpc/telemetry/`；策略、查询和监听位于
 `src/server_frame/logic/hpa/logic_hpa_{controller,policy,discovery}.*` 与 `pull/prometheus/`。

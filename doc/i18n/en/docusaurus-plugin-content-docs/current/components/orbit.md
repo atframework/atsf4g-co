@@ -16,8 +16,8 @@ Location: `src/component/orbit/`.
 1. Enable `orbit-controller`, `orbit-agent`, and `orbit-server` in values.
    The `orbit-server` chart uses the `src/orbitsvr/` example.
 2. Configure/export process templates in `resource/ExcelTables/OrbitClient.xlsx`.
-   Agent executable/arguments are `orbit_agent_cfg.client_path` and `client_command_line`;
-   the values entry point is `orbit-agent.yaml`.
+   Set `orbit_agent.client_path` and `orbit_agent.client_command_line` in the values file
+   `orbit-agent.yaml`; the generated configuration type is `orbit_agent_cfg`.
 3. Follow `src/orbitsvr/` for business server SDK dependencies and registration.
    Integrate UE DS with the client runtime under
    `src/component/GameSharedComponent/Orbit/include/Orbit/`, using `OrbitClientRuntime.h`,

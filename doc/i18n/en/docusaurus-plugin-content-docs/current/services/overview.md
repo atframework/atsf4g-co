@@ -17,7 +17,7 @@ title: Services Overview
 | `lobbysvr` | Player login/data, friends, teams, matching, notifications | Login with robot and run existing business commands |
 | `friendsvr-management` / `friendsvr-recommend` | Friend management; recommendation strategies remain unimplemented | [Friend quick start](../components/friend) |
 | `matchsvr` | Matchmaking pools and rooms | [Matchmaking quick start](../components/matching-team) |
-| `teamsvr-room` / `teamsvr-match` | Team rooms and team matching | [Team quick start](../components/matching-team) |
+| `teamsvr-room` / `teamsvr-match` | Team rooms; teammate search remains unimplemented | [Team quick start](../components/matching-team) |
 | `dtmq-proxysvr` | Message channels, subscriptions, synchronization | [DTMQ quick start](../components/dtmq) |
 | `dtcoordsvr` | Distributed transaction coordinator | [Transaction quick start](../components/distributed-transaction) |
 | `rank-board-svr` / `rank-settlement-svr` | Leaderboards and periodic settlement | [Rank quick start](../components/rank) |
