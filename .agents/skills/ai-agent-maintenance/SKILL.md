@@ -95,7 +95,9 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
   module layout, or loading conditions.
 - Read [compatibility sources](references/compatibility-sources.md) only when changing Skill formats, discovery paths,
   bridge behavior, client-specific configuration, MCP guidance, or cross-tool compatibility claims.
-- Read [writing guidance](references/writing-guidance.md) only when changing writing rules or revising terminology in
-  comments, documentation, or AI-generated prose.
+- Read [writing guidance](references/writing-guidance.md) only when changing
+  writing rules or revising titles, promotional/navigation copy, or terminology
+  in comments, documentation, or AI-generated prose. Review related copy in both
+  languages and retain technical meaning; keep detailed writing rules there.
 - Read [upstream change-workflow methods](../change-workflow/references/upstream-methods.md) only when changing risk
   routing or OpenSpec/Superpowers integration policy.

@@ -35,8 +35,11 @@ high-performance game server architectures.
   contrasts when they resolve a relevant misunderstanding, and do not frame compatible facts as mutually exclusive.
   Preserve technical terms, conditions, negation, bounds, versions, and the distinction between unchecked,
   missing-input, and failed-check states. Review wording in context instead of applying a word blacklist.
+  Use short, concrete topic headings. Follow the title and promotional copy
+  rules in the writing guidance; preserve real technical sequences, ranges,
+  and corrections.
   Read [writing guidance](.agents/skills/ai-agent-maintenance/references/writing-guidance.md) when revising writing
-  rules or terminology.
+  rules, titles, promotional/navigation copy, or terminology.
 - Start with the current task, nearest instructions, and capabilities exposed by the active harness. Use exposed Skill
   metadata for routing; consult `.agents/skills/README.md` only when the harness lacks discovery. Load a `SKILL.md` only
   after the task matches it, and load its references only under their stated conditions.
