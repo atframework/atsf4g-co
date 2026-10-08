@@ -35,6 +35,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "logic/action/task_action_user_async_jobs.h"
 #include "rpc/rpc_common_types.h"
@@ -461,7 +462,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::kickoff_other_sessio
     RPC_RETURN_CODE(ret);
   }
 
-  // 如果在线则尝试踢出 TODO
+  // TODO(yousongyang) 如果在线则尝试踢出
 
   RPC_RETURN_CODE(0);
 }

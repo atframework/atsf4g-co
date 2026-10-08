@@ -51,7 +51,6 @@ task_action_matching_level_select::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
   user_inst->get_user_matching_manager().set_level_select_data(get_shared_context(), get_request_body().data());
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

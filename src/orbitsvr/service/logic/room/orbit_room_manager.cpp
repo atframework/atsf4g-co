@@ -61,7 +61,7 @@ int orbit_room_manager::stop() {
     return 0;
   }
   is_closing_ = true;
-  // 关注所有房间的退出状态，等待所有房间退出 TODO
+  // TODO(yousongyang) 关注所有房间的退出状态，等待所有房间退出
   if (!room_index_by_client_id_.empty()) {
     FWLOGINFO("orbit_room_manager stop, waiting for {} rooms to exit", room_index_by_client_id_.size());
   }

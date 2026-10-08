@@ -798,7 +798,6 @@ int32_t orbit_agent_manager::agent_heartbeat(rpc::context& ctx, uint64_t control
 }
 
 const atfw::orbit::DServerIdentity* orbit_agent_manager::find_server_identity(uint64_t server_unique_id) const {
-  // TODO(yousongyang): 消息缓存
   auto iter = server_unique_id_to_identity_.find(server_unique_id);
   if (iter == server_unique_id_to_identity_.end()) {
     return nullptr;
