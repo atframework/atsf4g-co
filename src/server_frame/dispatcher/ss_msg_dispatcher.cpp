@@ -774,7 +774,6 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   }
 
   head->set_user_user_id(real_msg->head().user_user_id());
-  head->set_user_open_id(real_msg->head().user_open_id());
   head->set_user_zone_id(real_msg->head().user_zone_id());
 
   int res = send_to_proc(real_msg->head().node_id(), *rsp);

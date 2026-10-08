@@ -30,6 +30,9 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <utility>
+
 #include "config/compile_optimize.h"
 
 namespace task_action_ss_req_base_inner {
@@ -155,9 +158,6 @@ SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uin
   }
   if (request_head.has_rpc_trace()) {
     protobuf_copy_message(*head->mutable_rpc_trace(), request_head.rpc_trace());
-  }
-  if (!request_head.user_open_id().empty()) {
-    head->set_user_open_id(request_head.user_open_id());
   }
   if (request_head.user_user_id() != 0) {
     head->set_user_user_id(request_head.user_user_id());
@@ -433,7 +433,6 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(
         head->set_external_error_message(forward_response->head().external_error_message());
       }
       head->set_user_user_id(forward_response->head().user_user_id());
-      head->set_user_open_id(forward_response->head().user_open_id());
       head->set_user_zone_id(forward_response->head().user_zone_id());
 
       // Swap body
@@ -475,7 +474,6 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(uint
         head->set_external_error_message(forward_response->head().external_error_message());
       }
       head->set_user_user_id(forward_response->head().user_user_id());
-      head->set_user_open_id(forward_response->head().user_open_id());
       head->set_user_zone_id(forward_response->head().user_zone_id());
 
       // Swap body

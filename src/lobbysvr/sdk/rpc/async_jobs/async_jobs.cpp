@@ -27,6 +27,8 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "rpc/db/db_utils.h"
 #include "rpc/lobby/lobbysvrservice.atfw.gen.h"
@@ -175,9 +177,7 @@ LOBBY_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_ty
       break;
     }
 
-    rpc::lobby::user_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
-                                     atfw::util::log::format("{}", user_id), *req_body)
-        .unwrap();
+    rpc::lobby::user_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id, *req_body).unwrap();
   } while (false);
   RPC_DB_RETURN_CODE(ret);
 }
@@ -269,9 +269,7 @@ LOBBY_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs
       break;
     }
 
-    rpc::lobby::user_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
-                                     atfw::util::log::format("{}", user_id), *req_body)
-        .unwrap();
+    rpc::lobby::user_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id, *req_body).unwrap();
   } while (false);
 
   RPC_DB_RETURN_CODE(ret);

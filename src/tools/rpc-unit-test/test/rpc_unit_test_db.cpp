@@ -201,9 +201,8 @@ CASE_TEST(rpc_unit_test, db_kv_insert_only_contract) {
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(1, static_cast<int>(output->version));
     if (output->message) {
-      CASE_EXPECT_EQ(11,
-                     static_cast<int>(static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get())
-                                          .counter()));
+      CASE_EXPECT_EQ(11, static_cast<int>(
+                             static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get()).counter()));
     } else {
       CASE_EXPECT_TRUE(false);
     }
@@ -211,9 +210,9 @@ CASE_TEST(rpc_unit_test, db_kv_insert_only_contract) {
     // No CAS_VERSION field was ever written by the unversioned HSET: the insert script still reads
     // version 0 and accepts the insert into the existing data.
     table->set_name("insert-unversioned");
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
-        ctx, kTestDbChannel, "ut:kv:insert-unversioned", rpc::shared_abstract_message<google::protobuf::Message>{table},
-        nullptr));
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::hash_table::key_value::set(ctx, kTestDbChannel, "ut:kv:insert-unversioned",
+                                            rpc::shared_abstract_message<google::protobuf::Message>{table}, nullptr));
     CASE_EXPECT_EQ(0, res);
 
     table->set_counter(21);
@@ -484,66 +483,63 @@ CASE_TEST(rpc_unit_test, db_kl_add_index_eviction_contract) {
     return;
   }
 
-  auto task =
-      test.run_task("db_kl_eviction", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc::shared_message<rpc_unit_test::RpcUnitTestListEntry> entry{ctx};
-        std::vector<db_key_list_message_result_t> output;
+  auto task = test.run_task("db_kl_eviction", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc::shared_message<rpc_unit_test::RpcUnitTestListEntry> entry{ctx};
+    std::vector<db_key_list_message_result_t> output;
 
-        for (int i = 0; i < 3; ++i) {
-          entry->set_id(static_cast<uint64_t>(100 + i));
-          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-              ctx, kTestDbChannel, "ut:kl:evict", static_cast<uint64_t>(10),
-              rpc::shared_abstract_message<google::protobuf::Message>{entry}));
-          CASE_EXPECT_EQ(0, res);
-        }
+    for (int i = 0; i < 3; ++i) {
+      entry->set_id(static_cast<uint64_t>(100 + i));
+      int32_t res = RPC_AWAIT_CODE_RESULT(
+          rpc::db::hash_table::key_list::add_index(ctx, kTestDbChannel, "ut:kl:evict", static_cast<uint64_t>(10),
+                                                   rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+      CASE_EXPECT_EQ(0, res);
+    }
 
-        // Reorder so the smallest index sits at the newest insertion position: remove index 1 and
-        // re-create it through update_by_index (which appends the missing index at the back).
-        uint64_t removed[] = {1};
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(
-            ctx, kTestDbChannel, "ut:kl:evict", gsl::span<uint64_t>{removed}));
-        CASE_EXPECT_EQ(0, res);
-        entry->set_payload("recreated");
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(
-            ctx, kTestDbChannel, "ut:kl:evict", 1, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
-        CASE_EXPECT_EQ(0, res);
+    // Reorder so the smallest index sits at the newest insertion position: remove index 1 and
+    // re-create it through update_by_index (which appends the missing index at the back).
+    uint64_t removed[] = {1};
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(
+        ctx, kTestDbChannel, "ut:kl:evict", gsl::span<uint64_t>{removed}));
+    CASE_EXPECT_EQ(0, res);
+    entry->set_payload("recreated");
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(
+        ctx, kTestDbChannel, "ut:kl:evict", 1, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+    CASE_EXPECT_EQ(0, res);
 
-        // At capacity the add evicts the smallest index (1) and appends a fresh monotonic one (4).
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-            ctx, kTestDbChannel, "ut:kl:evict", 3, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
-        CASE_EXPECT_EQ(0, res);
+    // At capacity the add evicts the smallest index (1) and appends a fresh monotonic one (4).
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+        ctx, kTestDbChannel, "ut:kl:evict", 3, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+    CASE_EXPECT_EQ(0, res);
 
-        uint64_t probe[] = {1, 2, 3, 4};
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(
-            ctx, kTestDbChannel, "ut:kl:evict", gsl::span<uint64_t>{probe}, output, nullptr));
-        CASE_EXPECT_EQ(0, res);
-        CASE_EXPECT_EQ(4, static_cast<int>(output.size()));
-        if (output.size() == 4) {
-          CASE_EXPECT_FALSE(!!output[0].message);  // index 1 was evicted
-          CASE_EXPECT_TRUE(!!output[1].message);   // index 2 survived
-          CASE_EXPECT_TRUE(!!output[2].message);   // index 3 survived
-          CASE_EXPECT_TRUE(!!output[3].message);   // index 4 was appended
-        }
+    uint64_t probe[] = {1, 2, 3, 4};
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(
+        ctx, kTestDbChannel, "ut:kl:evict", gsl::span<uint64_t>{probe}, output, nullptr));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(4, static_cast<int>(output.size()));
+    if (output.size() == 4) {
+      CASE_EXPECT_FALSE(!!output[0].message);  // index 1 was evicted
+      CASE_EXPECT_TRUE(!!output[1].message);   // index 2 survived
+      CASE_EXPECT_TRUE(!!output[2].message);   // index 3 survived
+      CASE_EXPECT_TRUE(!!output[3].message);   // index 4 was appended
+    }
 
-        // max_list_length 0 still counts the counter field: exactly one entry is kept.
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-            ctx, kTestDbChannel, "ut:kl:evict-max0", 0,
-            rpc::shared_abstract_message<google::protobuf::Message>{entry}));
-        CASE_EXPECT_EQ(0, res);
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-            ctx, kTestDbChannel, "ut:kl:evict-max0", 0,
-            rpc::shared_abstract_message<google::protobuf::Message>{entry}));
-        CASE_EXPECT_EQ(0, res);
-        res = RPC_AWAIT_CODE_RESULT(
-            rpc::db::hash_table::key_list::get_all(ctx, kTestDbChannel, "ut:kl:evict-max0", output, nullptr));
-        CASE_EXPECT_EQ(0, res);
-        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
-        if (output.size() == 1) {
-          // The evicted index is never reused: the survivor carries the second allocated index.
-          CASE_EXPECT_EQ(2, static_cast<int>(output[0].list_index));
-        }
-        RPC_RETURN_CODE(0);
-      });
+    // max_list_length 0 still counts the counter field: exactly one entry is kept.
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+        ctx, kTestDbChannel, "ut:kl:evict-max0", 0, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+    CASE_EXPECT_EQ(0, res);
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+        ctx, kTestDbChannel, "ut:kl:evict-max0", 0, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+    CASE_EXPECT_EQ(0, res);
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::hash_table::key_list::get_all(ctx, kTestDbChannel, "ut:kl:evict-max0", output, nullptr));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+    if (output.size() == 1) {
+      // The evicted index is never reused: the survivor carries the second allocated index.
+      CASE_EXPECT_EQ(2, static_cast<int>(output[0].list_index));
+    }
+    RPC_RETURN_CODE(0);
+  });
   if (task.empty()) {
     CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
     test.stop();
@@ -851,8 +847,8 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
         rpc_unit_test::RpcUnitTestEchoReq nested_req;
         nested_req.set_payload("db-handler");
         rpc_unit_test::RpcUnitTestEchoRsp nested_rsp;
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_user(ctx, 0x130071, 1, 10001, "openid-nested", nested_req, nested_rsp));
+        int32_t res =
+            RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x130071, 1, 10001, nested_req, nested_rsp));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ("nested:db-handler", nested_rsp.echo());
         output.set_open_id(input.open_id());

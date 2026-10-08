@@ -223,7 +223,6 @@ CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
         auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
         CASE_EXPECT_EQ(kZoneId, request.head.user_zone_id());
         CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.user_user_id()));
-        CASE_EXPECT_EQ("openid-x", request.head.user_open_id());
         typed_response.set_echo(typed_request.payload());
         RPC_RETURN_CODE(0);
       });
@@ -237,8 +236,8 @@ CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
     rpc_unit_test::RpcUnitTestEchoReq req_body;
     req_body.set_payload("user-rpc");
     rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-    int32_t res = RPC_AWAIT_CODE_RESULT(
-        rpc::unit_test::rpc_unit_test_user(ctx, 0x140011, kZoneId, 10001, "openid-x", req_body, rsp_body));
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x140011, kZoneId, 10001, req_body, rsp_body));
     CASE_EXPECT_EQ("user-rpc", rsp_body.echo());
     RPC_RETURN_CODE(res);
   });

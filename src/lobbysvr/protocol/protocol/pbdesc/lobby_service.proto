@@ -21,7 +21,7 @@ package atframework.shared;
 /////////////////////////////////////////////////////
 
 message SSUserKickOffReq {
-  uint32 reason = 1;          // 原因
+  int32 reason = 1;          // 原因
   string reason_message = 2;  // 原因文本
 }
 

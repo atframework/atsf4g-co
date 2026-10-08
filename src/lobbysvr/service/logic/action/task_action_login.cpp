@@ -38,6 +38,7 @@
 #include <utility>
 
 #include "logic/action/task_action_user_async_jobs.h"
+#include "rpc/lobby/lobbysvrservice.atfw.gen.h"
 #include "rpc/rpc_common_types.h"
 #include "rpc/rpc_context.h"
 
@@ -462,7 +463,51 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::kickoff_other_sessio
     RPC_RETURN_CODE(ret);
   }
 
-  // TODO(yousongyang) 如果在线则尝试踢出
+  // 如果在线则尝试踢出
+  if (0 != login_lock_tb->router_server_id()) {
+    PROJECT_NAMESPACE_ID::SSUserKickOffReq kickoff_req;
+    PROJECT_NAMESPACE_ID::SSUserKickOffRsp kickoff_rsp;
+    kickoff_req.set_reason(static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::lobby::user_kickoff(get_shared_context(), login_lock_tb->router_server_id(),
+                                                         login_lock_tb->login_zone_id(), login_lock_tb->user_id(),
+                                                         kickoff_req, kickoff_rsp));
+    if (ret) {
+      FCTXLOGERROR(get_shared_context(), "user {}:{} send message to {:#x} fail: {}", login_lock_tb->login_zone_id(),
+                   user_id, login_lock_tb->router_server_id(), ret);
+      // 超出最后行为时间，视为服务器异常断开。直接允许登入
+      if (protobuf_to_system_clock(login_lock_tb->access_token_expired()) > util::time::time_utility::sys_now()) {
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_ALREADY_ONLINE);
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_USER_KICKOUT);
+      } else {
+        FCTXLOGWARNING(get_shared_context(), "user {}:{} send kickoff failed, but login time timeout, conitnue login.",
+                       login_lock_tb->login_zone_id(), user_id);
+        login_lock_tb->set_router_server_id(0);
+        ret = 0;
+      }
+    } else {
+      // 8. 验证踢出后的登入pd
+      uint64_t old_svr_id = login_lock_tb->router_server_id();
+      login_lock_tb->Clear();
+      ret = RPC_AWAIT_CODE_RESULT(
+          rpc::db::login_lock::get_all(get_shared_context(), user_id, *login_lock_tb, login_lock_cas_version));
+      if (ret < 0) {
+        FCTXLOGERROR(get_shared_context(), "call login rpc method for user user {}:{} failed, res: {}",
+                     login_lock_tb->login_zone_id(), user_id, ret);
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_ALREADY_ONLINE);
+        RPC_RETURN_CODE(ret);
+      }
+
+      // 可能目标服务器重启后没有这个玩家的数据而直接忽略请求直接返回成功
+      // 这时候走故障恢复流程，直接把router_server_id设成0即可
+      if (0 != login_lock_tb->router_server_id() && old_svr_id != login_lock_tb->router_server_id()) {
+        FCTXLOGERROR(get_shared_context(), "user {}:{} logout failed.", login_lock_tb->login_zone_id(), user_id);
+        // 踢下线失败的错误码
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_ALREADY_ONLINE);
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_USER_KICKOUT);
+      }
+      login_lock_tb->set_router_server_id(0);
+    }
+  }
 
   RPC_RETURN_CODE(0);
 }

@@ -36,6 +36,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 task_action_user_kickoff::task_action_user_kickoff(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 task_action_user_kickoff::~task_action_user_kickoff() {}
@@ -48,10 +49,9 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
 
   uint64_t user_user_id = req_msg.head().user_user_id();
   uint32_t user_zone_id = req_msg.head().user_zone_id();
-  const std::string user_open_id = req_msg.head().user_open_id();
   user::ptr_t user_inst = user_manager::me()->find_as<user>(user_user_id, user_zone_id);
   if (!user_inst) {
-    FWLOGERROR("user {}({}:{}) not found, maybe already logout.", user_open_id, user_zone_id, user_user_id);
+    FWLOGERROR("user ({}:{}) not found, maybe already logout.", user_zone_id, user_user_id);
 
     // 尝试保存用户数据
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> user_lg{get_shared_context()};
@@ -59,14 +59,14 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
     int res =
         RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), user_user_id, *user_lg, version));
     if (res < 0) {
-      FWLOGERROR("user {}({}:{}) try load login data failed.", user_open_id, user_zone_id, user_user_id);
+      FWLOGERROR("user ({}:{}) try load login data failed.", user_zone_id, user_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     if (user_lg->router_server_id() != logic_config::me()->get_local_server_id()) {
-      FWLOGERROR("user {}({}:{}) login pd error(expected: 0x{:x}, real: 0x{:x})", user_open_id, user_zone_id,
-                 user_user_id, logic_config::me()->get_local_server_id(), user_lg->router_server_id());
+      FWLOGERROR("user ({}:{}) login pd error(expected: 0x{:x}, real: 0x{:x})", user_zone_id, user_user_id,
+                 logic_config::me()->get_local_server_id(), user_lg->router_server_id());
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -74,7 +74,7 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
     user_lg->set_router_server_id(0);
     res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(get_shared_context(), user_lg, version));
     if (res < 0) {
-      FWLOGERROR("user {}({}:{}) try load login data failed.", user_open_id, user_zone_id, user_user_id);
+      FWLOGERROR("user ({}:{}) try load login data failed.", user_zone_id, user_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_SEND_FAILED);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }

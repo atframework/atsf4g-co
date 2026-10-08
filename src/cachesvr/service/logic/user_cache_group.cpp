@@ -171,8 +171,7 @@ rpc::result_code_type user_cache_group::pull_user_cache_fn(::rpc::context &ctx,
           protobuf_copy_message(*req_body->mutable_key(), table_key);
 
           auto res = RPC_AWAIT_CODE_RESULT(rpc::lobby::object_cache_get_user_cache_data(
-              child_ctx, destination_server_id, table_key.zone_id(), table_key.instance_id(),
-              std::to_string(table_key.instance_id()), *req_body, *rsp_body));
+              child_ctx, destination_server_id, table_key.zone_id(), table_key.instance_id(), *req_body, *rsp_body));
           if (res < 0) {
             FWLOGERROR("user {}:{} get_user_cache_data failed.res: {}({})", table_key.zone_id(),
                        table_key.instance_id(), res, protobuf_mini_dumper_get_error_msg(res));

@@ -17,6 +17,7 @@
 #include <atframework/testing/runtime.h>
 
 #include <chrono>
+#include <string>
 
 #include "dispatcher/ss_msg_dispatcher.h"
 #include "frame/test_macros.h"
@@ -383,8 +384,8 @@ CASE_TEST(rpc_unit_test, ss_mock_handler_awaits_nested_rpc) {
         rpc_unit_test::RpcUnitTestEchoReq nested_req;
         nested_req.set_payload(typed_request.payload());
         rpc_unit_test::RpcUnitTestEchoRsp nested_rsp;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(
-            *request.context, 0x130061, 1, 10001, "openid-nested", nested_req, nested_rsp));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::unit_test::rpc_unit_test_user(*request.context, 0x130061, 1, 10001, nested_req, nested_rsp));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ("inner:nested-payload", nested_rsp.echo());
         static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo(nested_rsp.echo() + "-outer");
@@ -397,8 +398,8 @@ CASE_TEST(rpc_unit_test, ss_mock_handler_awaits_nested_rpc) {
     rpc_unit_test::RpcUnitTestEchoReq req_body;
     req_body.set_payload("nested-payload");
     rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-    int32_t res = RPC_AWAIT_CODE_RESULT(
-        rpc::unit_test::rpc_unit_test_user(ctx, 0x130062, 1, 10001, "openid-nested", req_body, rsp_body));
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x130062, 1, 10001, req_body, rsp_body));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ("inner:nested-payload-outer", rsp_body.echo());
     RPC_RETURN_CODE(res);
@@ -499,16 +500,16 @@ CASE_TEST(rpc_unit_test, ss_preempt_rule_shadows_default_once) {
   CASE_EXPECT_TRUE(!!preempt_rule);
 
   auto call_once = [&test](const char *payload, std::string &echo_out) {
-    auto task = test.run_task("ss_preempt_call", std::chrono::seconds{2},
-                              [payload, &echo_out](rpc::context &ctx) -> rpc::result_code_type {
-                                rpc_unit_test::RpcUnitTestEchoReq req_body;
-                                req_body.set_payload(payload);
-                                rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-                                int32_t res = RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(
-                                    ctx, 0x130071, 1, 10001, "openid-preempt", req_body, rsp_body));
-                                echo_out = rsp_body.echo();
-                                RPC_RETURN_CODE(res);
-                              });
+    auto task = test.run_task(
+        "ss_preempt_call", std::chrono::seconds{2}, [payload, &echo_out](rpc::context &ctx) -> rpc::result_code_type {
+          rpc_unit_test::RpcUnitTestEchoReq req_body;
+          req_body.set_payload(payload);
+          rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
+          int32_t res =
+              RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x130071, 1, 10001, req_body, rsp_body));
+          echo_out = rsp_body.echo();
+          RPC_RETURN_CODE(res);
+        });
     if (task.empty()) {
       return INT32_MIN;
     }

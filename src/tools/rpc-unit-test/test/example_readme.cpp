@@ -155,8 +155,8 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
     rpc_unit_test::RpcUnitTestEchoReq req_body;
     req_body.set_payload("world");
     rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-    int32_t res = RPC_AWAIT_CODE_RESULT(
-        rpc::unit_test::rpc_unit_test_user(ctx, 0x130091, 1, 10001, "openid-readme", req_body, rsp_body));
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x130091, 1, 10001, req_body, rsp_body));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ("hello world", rsp_body.echo());
     RPC_RETURN_CODE(res);

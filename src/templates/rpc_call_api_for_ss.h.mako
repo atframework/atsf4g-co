@@ -101,18 +101,16 @@ ${ns}
         rpc_unicast_params_decl.append('const atfw::atapp::etcd_discovery_node& destination_server')
         rpc_unicast_params_docs.append('destination_server  target server')
         if rpc_is_user_rpc:
-            rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
+            rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id'])
             rpc_unicast_params_docs.extend([
                 'zone_id             zone id that will be passsed into header',
-                'user_id             user id that will be passsed into header',
-                'open_id             open id that will be passsed into header'
+                'user_id             user id that will be passsed into header'
             ])
     if rpc_is_user_rpc:
-        rpc_broadcast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
+        rpc_broadcast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id'])
         rpc_broadcast_params_docs.extend([
             'zone_id             zone id that will be passsed into header',
-            'user_id             user id that will be passsed into header',
-            'open_id             open id that will be passsed into header'
+            'user_id             user id that will be passsed into header'
         ])
 
     rpc_unicast_params_decl.append('{0} &request_body'.format(rpc.get_request().get_cpp_class_name()))

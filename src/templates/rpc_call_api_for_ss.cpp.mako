@@ -94,11 +94,11 @@ ${ns}
         rpc_unicast_params_decl.append('TargetServerNode&& destination_server')
         rpc_unicast_params_forward.append('destination_server')
         if rpc_is_user_rpc:
-            rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
-            rpc_unicast_params_forward.extend(['zone_id', 'user_id', "open_id"])
+            rpc_unicast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id'])
+            rpc_unicast_params_forward.extend(['zone_id', 'user_id'])
     if rpc_is_user_rpc:
-        rpc_broadcast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id', "const std::string& open_id"])
-        rpc_broadcast_params_forward.extend(['zone_id', 'user_id', "open_id"])
+        rpc_broadcast_params_decl.extend(['uint32_t zone_id', 'uint64_t user_id'])
+        rpc_broadcast_params_forward.extend(['zone_id', 'user_id'])
     rpc_unicast_params_decl.append('{0} &request_body'.format(rpc.get_request().get_cpp_class_name()))
     rpc_unicast_params_forward.append('request_body')
     rpc_broadcast_params_decl.append('{0} &request_body'.format(rpc.get_request().get_cpp_class_name()))
@@ -216,7 +216,6 @@ ${rpc_dllexport_decl} rpc::always_ready_code_type ${rpc.get_name()}(
 %   if rpc_is_user_rpc:
   req_msg.mutable_head()->set_user_user_id(user_id);
   req_msg.mutable_head()->set_user_zone_id(zone_id);
-  req_msg.mutable_head()->set_user_open_id(open_id);
   if (__child_trace_span) {
     __child_trace_span->SetAttribute("user_id", user_id);
     __child_trace_span->SetAttribute("zone_id", zone_id);
@@ -347,7 +346,6 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %     else:
   req_msg.mutable_head()->set_user_user_id(user_id);
   req_msg.mutable_head()->set_user_zone_id(zone_id);
-  req_msg.mutable_head()->set_user_open_id(open_id);
   if (__child_trace_span) {
     __child_trace_span->SetAttribute("user_id", user_id);
     __child_trace_span->SetAttribute("zone_id", zone_id);

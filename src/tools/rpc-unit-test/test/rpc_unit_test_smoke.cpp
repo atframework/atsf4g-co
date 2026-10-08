@@ -215,8 +215,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
         rpc_unit_test::RpcUnitTestEchoReq req_body;
         req_body.set_payload(records[0].address);
         rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-        res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_user(ctx, 0x130081, 1, 10001, "openid-combined", req_body, rsp_body));
+        res = RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x130081, 1, 10001, req_body, rsp_body));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ("combined:10.7.7.7", rsp_body.echo());
         if (res < 0) {
