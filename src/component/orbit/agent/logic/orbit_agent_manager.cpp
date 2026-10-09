@@ -38,12 +38,13 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <algorithm>
 #include <cctype>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <algorithm>
+#include <limits>
 #include <list>
 #include <map>
 #include <memory>
@@ -457,6 +458,15 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   }
 
   {
+    // 初始化负载限制值
+    load_limit_ = calculate_load_limit();
+    if (load_limit_ <= std::numeric_limits<double>::epsilon()) {
+      FWLOGERROR("Calculated load limit is too small");
+      return -1;
+    }
+  }
+
+  {
     logic_server_common_module* common_mod = logic_server_last_common_module();
     if (nullptr != common_mod) {
       auto hpa_controller = common_mod->get_hpa_controller();
@@ -464,7 +474,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
         return -1;
       }
       hpa_controller->set_on_setup_custom_policy(
-          "orbit_agent_load",
+          "orbit_agent_load_current",
           [local_server_id](logic_hpa_controller&, const std::shared_ptr<logic_hpa_policy>& custom_policy) {
             custom_policy->add_observer_custom(
                 logic_hpa_policy::custom_observer_register_type::kDouble,
@@ -473,7 +483,20 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
                       {"region", orbit_agent_manager::me()->region_},
                       {"tag", orbit_agent_manager::me()->tag_},
                       {"agent_id", local_server_id}};
-                  observer.observe(orbit_agent_manager::get_load_value(), attributes);
+                  observer.observe(orbit_agent_manager::me()->get_load_value(), attributes);
+                });
+          });
+      hpa_controller->set_on_setup_custom_policy(
+          "orbit_agent_load_limit",
+          [local_server_id](logic_hpa_controller&, const std::shared_ptr<logic_hpa_policy>& custom_policy) {
+            custom_policy->add_observer_custom(
+                logic_hpa_policy::custom_observer_register_type::kDouble,
+                [local_server_id](logic_hpa_policy&, logic_hpa_observer& observer) {
+                  std::pair<gsl::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+                      {"region", orbit_agent_manager::me()->region_},
+                      {"tag", orbit_agent_manager::me()->tag_},
+                      {"agent_id", local_server_id}};
+                  observer.observe(orbit_agent_manager::me()->get_load_limit_value(), attributes);
                 });
           });
     }
@@ -1115,8 +1138,8 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
   if (record->state == state) {
     return;
   }
-  FWLOGDEBUG("orbit agent client {} (client_id={}) state changed: {} -> {}", record->local_client_id,
-             record->client_id, static_cast<int>(record->state), static_cast<int>(state));
+  FWLOGDEBUG("orbit agent client {} (client_id={}) state changed: {} -> {}", record->local_client_id, record->client_id,
+             static_cast<int>(record->state), static_cast<int>(state));
   if (record->state == atfw::orbit::EN_CLIENT_STATE_STARTING) {
     batch_startup_count_--;
   }
@@ -2292,9 +2315,85 @@ void orbit_agent_manager::delete_client(const orbit_agent_client_record_ptr& cli
   client_record->process_handle_main_thread = nullptr;
 }
 
+// 计算负载系数
+// 负载分为两个数据 一个上限与当前值
 double orbit_agent_manager::get_load_value() {
-  // TODO(yousongyang): 计算负载系数
-  return 1.0f;
+  // 这边给出的是当前值
+  // 具体含义为启动的Client数量 如果单个Client超过预设的CPU或内存,取实际值
+  // 如果大量的Client超过预设的CPU或内存,可能会出现负载低于最大值1.0,但是已经无法启动Client了
+  // Agent预设的CPU和内存容量应该小于Pod的容量，用于应对运行时的Client负载波动,可以是可用数据的80%左右
+  // 1.计算当前的CPU与内存
+  update_etcd_load_snapshot();
+  // 2.计算比值
+  double cpu_load = load_record_.agent().cpu_used() / cpu_capacity_;
+  double memory_load = load_record_.agent().memory_used_mb() / memory_capacity_mb_;
+  double load_value = std::max(cpu_load, memory_load);
+  FWLOGDEBUG("CPU load: {}, Memory load: {}, Load value: {}", cpu_load, memory_load, load_value);
+  load_value = std::min(load_value, 1.0);
+  load_value = load_limit_ * load_value;
+  FWLOGDEBUG("Load value after applying load limit: {}", load_value);
+  return load_value;
+}
+
+double orbit_agent_manager::get_load_limit_value() {
+  // 这边给出的是上限值
+  return load_limit_;
+}
+
+double orbit_agent_manager::calculate_load_limit() {
+  // 对于混合部署的情况 各个Pod的上限可能不同 但是这个上限值在运行时不变
+  // 由CPU与内存的预设上限决定 CPU与内存的给出的值相同
+  // 1.计算Agent匹配的Tag Client
+  std::vector<std::pair<
+      excel::excel_config_type_traits::shared_ptr<const PROJECT_NAMESPACE_ID::config::ExcelOrbitClientTemplate>,
+      uint32_t>>
+      match_template;
+  const auto& all_templates = excel::get_ExcelOrbitClientTemplate_all_of_client_template_id();
+  uint32_t total_load_percentage = 0;
+  for (const auto& kv : all_templates) {
+    if (kv.second == nullptr) {
+      continue;
+    }
+    if (tag_ != kv.second->match_tag()) {
+      continue;
+    }
+    match_template.push_back(std::make_pair(kv.second, kv.second->load_percentage()));
+    total_load_percentage += kv.second->load_percentage();
+  }
+  // 2.根据占比与负载计算平均CPU与内存
+  double load_cpu = 0;
+  double load_memory = 0;
+  for (const auto& client_template : match_template) {
+    double load_percentage = 0.0f;
+    if (total_load_percentage == 0) {
+      // 全部都为0 百分比为平均
+      load_percentage = 1.0f / match_template.size();
+    } else {
+      // 根据占比计算CPU与内存
+      load_percentage = static_cast<double>(client_template.second) / total_load_percentage;
+    }
+    if (load_percentage <= std::numeric_limits<double>::epsilon()) {
+      continue;
+    }
+    if (seed_mode_enabled_) {
+      load_cpu += load_percentage * client_template.first->expected_seed_cpu();
+      load_memory += load_percentage * client_template.first->expected_seed_memory_mb();
+    } else {
+      load_cpu += load_percentage * client_template.first->expected_normal_cpu();
+      load_memory += load_percentage * client_template.first->expected_normal_memory_mb();
+    }
+  }
+  // 3.平均负载
+  FWLOGDEBUG("Average load CPU: {}, Average load Memory: {}", load_cpu, load_memory);
+  // 4.计算CPU与内存的负载个数
+  if (load_cpu <= std::numeric_limits<double>::epsilon() || load_memory <= std::numeric_limits<double>::epsilon()) {
+    FWLOGERROR("Load CPU or Memory is too small, cannot calculate load count");
+    return 0.0f;
+  }
+  double cpu_load_count = cpu_capacity_ / load_cpu;
+  double memory_load_count = memory_capacity_mb_ / load_memory;
+  FWLOGDEBUG("CPU load count: {}, Memory load count: {}", cpu_load_count, memory_load_count);
+  return std::min(cpu_load_count, memory_load_count);
 }
 
 void orbit_agent_manager::agent_fatal_error() {

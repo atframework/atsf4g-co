@@ -33,6 +33,7 @@ message ExcelOrbitClientTemplate {
   uint32 room_expired_timeout = 9 [(org.xresloader.validator) = ">0"];
   bool remote_start_client = 10;
   uint32 pre_start_count = 11;
+  uint32 load_percentage = 12;
 
   repeated string launch_args = 21;
 }
