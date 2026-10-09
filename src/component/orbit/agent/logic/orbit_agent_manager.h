@@ -295,7 +295,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   uint32_t seed_startup_timeout_sec_ = 0;
   uint32_t seed_heartbeat_timeout_sec_ = 0;
   int32_t repeated_startup_failures_fatal_error_ = 0;
-  double load_limit_ = 0.0;
+  std::atomic<double> load_usage_ = 0.0;
+  std::atomic<double> load_limit_ = 0.0;
 
   // Agent 实例唯一标识，随启动参数下发给 Client
   std::string agent_instance_id_;

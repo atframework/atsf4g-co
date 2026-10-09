@@ -40,7 +40,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <csignal>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -217,10 +216,10 @@ static void on_uv_process_exit_callback(uv_process_t* handle, int64_t exit_statu
 }
 
 static uint64_t make_initial_sequence_allocator() {
-  return static_cast<uint64_t>(
-             (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
-             << 23) +
-         static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3) +
+  return static_cast<uint64_t>((atfw::util::time::time_utility::get_sys_now() -
+                                PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
+                               << 23) +
+         static_cast<uint64_t>(atfw::util::time::time_utility::get_now_usec() << 3) +
          static_cast<uint64_t>(logic_config::me()->get_local_server_id());
 }
 
@@ -459,11 +458,12 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
   {
     // 初始化负载限制值
-    load_limit_ = calculate_load_limit();
-    if (load_limit_ <= std::numeric_limits<double>::epsilon()) {
+    double load_limit = calculate_load_limit();
+    if (load_limit <= std::numeric_limits<double>::epsilon()) {
       FWLOGERROR("Calculated load limit is too small");
       return -1;
     }
+    load_limit_.store(load_limit);
   }
 
   {
@@ -905,7 +905,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   }
 
   {
-    auto* identity = find_server_identity(client_record->server_unique_id);
+    const auto* identity = find_server_identity(client_record->server_unique_id);
     if (identity == nullptr) {
       FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                  client_record->local_client_id, client_record->server_unique_id);
@@ -991,7 +991,7 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
 
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
 
-  auto* identity = find_server_identity(client_record->server_unique_id);
+  const auto* identity = find_server_identity(client_record->server_unique_id);
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_record->local_client_id, client_record->server_unique_id);
@@ -1463,7 +1463,7 @@ rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(rpc::cont
 
   auto req = rpc::make_shared_message<atfw::orbit::ATCRemoteStartClientReq>(ctx);
   auto rsp = rpc::make_shared_message<atfw::orbit::CTARemoteStartClientRsp>(ctx);
-  auto* identity = find_server_identity(record->server_unique_id);
+  const auto* identity = find_server_identity(record->server_unique_id);
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                record->client_id, record->server_unique_id);
@@ -1686,7 +1686,7 @@ void orbit_agent_manager::async_notify_client_exit(const orbit_agent_client_reco
     return;
   }
 
-  auto* server_identity_ptr = find_server_identity(record->server_unique_id);
+  const auto* server_identity_ptr = find_server_identity(record->server_unique_id);
   if (server_identity_ptr == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                record->client_id, record->server_unique_id);
@@ -1730,7 +1730,7 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_agent_manager::notify_client
   }
   client_record->notify_client_exit = true;
 
-  auto* identity = find_server_identity(client_record->server_unique_id);
+  const auto* identity = find_server_identity(client_record->server_unique_id);
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_record->client_id, client_record->server_unique_id);
@@ -1899,7 +1899,7 @@ rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ct
   client_record->pre_start = false;
   FWLOGINFO("orbit agent client {} claimed, client_id={}", client_record->local_client_id, client_record->client_id);
 
-  auto* identity = find_server_identity(client_record->server_unique_id);
+  const auto* identity = find_server_identity(client_record->server_unique_id);
   if (identity == nullptr) {
     FWLOGERROR("orbit agent notify_client_started failed for {}: server_unique_id {:#x} not found",
                client_record->local_client_id, client_record->server_unique_id);
@@ -2256,6 +2256,15 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
     load_record_.set_agent_online(agent_online_);
     dirty_load_record_ = true;
   }
+
+  double cpu_load = load_record_.agent().cpu_used() / cpu_capacity_;
+  double memory_load = load_record_.agent().memory_used_mb() / memory_capacity_mb_;
+  double load_value = std::max(cpu_load, memory_load);
+  FWLOGDEBUG("CPU load: {}, Memory load: {}, Load value: {}", cpu_load, memory_load, load_value);
+  load_value = std::min(load_value, 1.0);
+  load_value = load_limit_.load() * load_value;
+  FWLOGDEBUG("Load value after applying load limit: {}", load_value);
+  load_usage_.store(load_value);
 }
 
 void orbit_agent_manager::load_record_to_json() {
@@ -2322,22 +2331,12 @@ double orbit_agent_manager::get_load_value() {
   // 具体含义为启动的Client数量 如果单个Client超过预设的CPU或内存,取实际值
   // 如果大量的Client超过预设的CPU或内存,可能会出现负载低于最大值1.0,但是已经无法启动Client了
   // Agent预设的CPU和内存容量应该小于Pod的容量，用于应对运行时的Client负载波动,可以是可用数据的80%左右
-  // 1.计算当前的CPU与内存
-  update_etcd_load_snapshot();
-  // 2.计算比值
-  double cpu_load = load_record_.agent().cpu_used() / cpu_capacity_;
-  double memory_load = load_record_.agent().memory_used_mb() / memory_capacity_mb_;
-  double load_value = std::max(cpu_load, memory_load);
-  FWLOGDEBUG("CPU load: {}, Memory load: {}, Load value: {}", cpu_load, memory_load, load_value);
-  load_value = std::min(load_value, 1.0);
-  load_value = load_limit_ * load_value;
-  FWLOGDEBUG("Load value after applying load limit: {}", load_value);
-  return load_value;
+  return load_usage_.load();
 }
 
 double orbit_agent_manager::get_load_limit_value() {
   // 这边给出的是上限值
-  return load_limit_;
+  return load_limit_.load();
 }
 
 double orbit_agent_manager::calculate_load_limit() {
@@ -2367,7 +2366,7 @@ double orbit_agent_manager::calculate_load_limit() {
     double load_percentage = 0.0f;
     if (total_load_percentage == 0) {
       // 全部都为0 百分比为平均
-      load_percentage = 1.0f / match_template.size();
+      load_percentage = 1.0f / static_cast<double>(match_template.size());
     } else {
       // 根据占比计算CPU与内存
       load_percentage = static_cast<double>(client_template.second) / total_load_percentage;
