@@ -21,9 +21,10 @@
 
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
-#include <router/router_user_manager.h>
+#include <logic/session_manager.h>
 
 #include <router/router_friend_manager.h>
+#include <router/router_user_manager.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -121,6 +122,7 @@ class main_service_module : public atfw::atapp::module_impl {
     INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrnotifyservice);
     INIT_CALL_FN(handle::matching::register_handles_for_matchsvrnotifyservice);
     INIT_CALL_FN(handle::friend_api::register_handles_for_friendmanagementnotifyservice);
+    INIT_CALL(session_manager);
 
     // reload will be triggered before init, so reload again here
 
@@ -137,6 +139,7 @@ class main_service_module : public atfw::atapp::module_impl {
     // tick all router managers
     int ret = 0;
 
+    ret += session_manager::me()->proc();
     ret += rpc::dtmq::client_subscriber::global_tick(logic_server_get_current_tick_context());
     ret += user_chat_manager::global_tick(logic_server_get_current_tick_context());
 
@@ -145,6 +148,34 @@ class main_service_module : public atfw::atapp::module_impl {
 
   const char *name() const override { return "main_service_module"; }
 };
+
+static int app_handle_on_receive_request(atfw::atapp::app &, const atfw::atapp::app::message_sender_t &source,
+                                         const atfw::atapp::app::message_t &msg) {
+  if (0 == source.id) {
+    FWLOGERROR("receive a message from unknown source or invalid body case");
+    return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+  }
+
+  int ret = 0;
+  switch (msg.type) {
+    case static_cast<int32_t>(::atfw::component::service_type::kAtGateway): {
+      ret = cs_msg_dispatcher::me()->dispatch(source, msg);
+      break;
+    }
+
+    case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
+      ret = ss_msg_dispatcher::me()->dispatch(source, msg);
+      break;
+    }
+
+    default: {
+      FWLOGERROR("receive a message of invalid type: {}", msg.type);
+      break;
+    }
+  }
+
+  return ret;
+}
 }  // namespace
 
 int main(int argc, char *argv[]) {
@@ -169,6 +200,7 @@ int main(int argc, char *argv[]) {
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {
     return -1;
   }
+  app.set_evt_on_forward_request(app_handle_on_receive_request);
 
   app.add_module(cs_msg_dispatcher::me());
   app.add_module(ss_msg_dispatcher::me());

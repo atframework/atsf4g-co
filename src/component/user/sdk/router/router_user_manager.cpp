@@ -22,8 +22,11 @@
 #include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_utils.h>
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#include <memory>
+#include <string>
+
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(router_user_manager);
 #  else
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_user_manager);
@@ -32,42 +35,42 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_user_manager);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_user_manager);
 #endif
 
-SERVER_FRAME_API router_user_manager::router_user_manager() : base_type(PROJECT_NAMESPACE_ID::EN_ROT_USER) {}
+USER_SDK_API router_user_manager::router_user_manager() : base_type(PROJECT_NAMESPACE_ID::EN_ROT_USER) {}
 
-SERVER_FRAME_API router_user_manager::~router_user_manager() {}
+USER_SDK_API router_user_manager::~router_user_manager() {}
 
-SERVER_FRAME_API const char *router_user_manager::name() const { return "[user_cache router manager]"; }
+USER_SDK_API const char *router_user_manager::name() const { return "[user_cache router manager]"; }
 
-SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_object(rpc::context &ctx, uint64_t user_id,
-                                                                                   uint32_t zone_id,
-                                                                                   priv_data_t priv_data) {
+USER_SDK_API rpc::result_code_type router_user_manager::remove_user_object(rpc::context &ctx, uint64_t user_id,
+                                                                           uint32_t zone_id, priv_data_t priv_data) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_user_object(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_object(
-    rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
-    priv_data_t priv_data) {
+USER_SDK_API rpc::result_code_type router_user_manager::remove_user_object(rpc::context &ctx, uint64_t user_id,
+                                                                           uint32_t zone_id,
+                                                                           std::shared_ptr<router_object_base> cache,
+                                                                           priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_object(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_cache(rpc::context &ctx, uint64_t user_id,
-                                                                                  uint32_t zone_id,
-                                                                                  priv_data_t priv_data) {
+USER_SDK_API rpc::result_code_type router_user_manager::remove_user_cache(rpc::context &ctx, uint64_t user_id,
+                                                                          uint32_t zone_id, priv_data_t priv_data) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_user_cache(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_cache(
-    rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
-    priv_data_t priv_data) {
+USER_SDK_API rpc::result_code_type router_user_manager::remove_user_cache(rpc::context &ctx, uint64_t user_id,
+                                                                          uint32_t zone_id,
+                                                                          std::shared_ptr<router_object_base> cache,
+                                                                          priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_cache(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_API void router_user_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
+USER_SDK_API void router_user_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
 
-SERVER_FRAME_API router_user_cache::object_ptr_t router_user_manager::create_user_object(
-    uint64_t user_id, uint32_t zone_id, const std::string &openid) {
+USER_SDK_API router_user_cache::object_ptr_t router_user_manager::create_user_object(uint64_t user_id, uint32_t zone_id,
+                                                                                     const std::string &openid) {
   router_user_cache::object_ptr_t ret;
   if (create_fn_) {
     ret = create_fn_(user_id, zone_id, openid);
@@ -80,8 +83,8 @@ SERVER_FRAME_API router_user_cache::object_ptr_t router_user_manager::create_use
   return ret;
 }
 
-rpc::result_code_type router_user_manager::on_evt_remove_object(rpc::context &ctx, const key_t &key,
-                                                                  const ptr_t &cache, priv_data_t priv_data) {
+rpc::result_code_type router_user_manager::on_evt_remove_object(rpc::context &ctx, const key_t &key, const ptr_t &cache,
+                                                                priv_data_t priv_data) {
   user_cache::ptr_t obj = cache->get_object();
   // 释放本地数据, 下线相关Session
   session::ptr_t s = obj->get_session();
@@ -98,7 +101,7 @@ rpc::result_code_type router_user_manager::on_evt_remove_object(rpc::context &ct
 }
 
 rpc::result_code_type router_user_manager::on_evt_object_removed(rpc::context &ctx, const key_t &key,
-                                                                   const ptr_t &cache, priv_data_t priv_data) {
+                                                                 const ptr_t &cache, priv_data_t priv_data) {
   user_cache::ptr_t obj = cache->get_object();
   // 释放本地数据, 下线相关Session
   session::ptr_t s = obj->get_session();
@@ -114,9 +117,9 @@ rpc::result_code_type router_user_manager::on_evt_object_removed(rpc::context &c
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_object_removed(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_manager::pull_online_server(rpc::context &, const key_t &,
-                                                                                 uint64_t &router_svr_id,
-                                                                                 uint64_t &router_svr_ver) {
+USER_SDK_API rpc::result_code_type router_user_manager::pull_online_server(rpc::context &, const key_t &,
+                                                                           uint64_t &router_svr_id,
+                                                                           uint64_t &router_svr_ver) {
   router_svr_id = 0;
   router_svr_ver = 0;
 

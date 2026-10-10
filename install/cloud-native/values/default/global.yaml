@@ -148,7 +148,6 @@ persistence:
         storage: 5Gi
         accessMode: ReadWriteOnce
 
-enable_session_manager: false
 enable_excel_config: false
 
 gm:

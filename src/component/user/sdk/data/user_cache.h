@@ -21,13 +21,14 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <deque>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "dispatcher/task_type_traits.h"
+#include "logic/task_lock.h"
 #include "rpc/rpc_common_types.h"
-
-#include <logic/task_lock.h>
 
 namespace rpc {
 class context;
@@ -82,14 +83,14 @@ class user_cache;
 
 class ATFW_UTIL_SYMBOL_VISIBLE initialization_task_lock_guard {
  public:
-  SERVER_FRAME_API ~initialization_task_lock_guard();
-  SERVER_FRAME_API initialization_task_lock_guard(std::shared_ptr<user_cache> user_inst,
-                                                  task_type_trait::id_type task_id) noexcept;
+  USER_SDK_API ~initialization_task_lock_guard();
+  USER_SDK_API initialization_task_lock_guard(std::shared_ptr<user_cache> user_inst,
+                                              task_type_trait::id_type task_id) noexcept;
 
-  SERVER_FRAME_API initialization_task_lock_guard(initialization_task_lock_guard &&) noexcept;
-  SERVER_FRAME_API initialization_task_lock_guard &operator=(initialization_task_lock_guard &&) noexcept;
+  USER_SDK_API initialization_task_lock_guard(initialization_task_lock_guard &&) noexcept;
+  USER_SDK_API initialization_task_lock_guard &operator=(initialization_task_lock_guard &&) noexcept;
 
-  SERVER_FRAME_API bool has_value() const noexcept;
+  USER_SDK_API bool has_value() const noexcept;
 
  private:
   initialization_task_lock_guard(const initialization_task_lock_guard &) = delete;
@@ -108,55 +109,55 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
   struct ATFW_UTIL_SYMBOL_VISIBLE fake_constructor {};
 
  public:
-  SERVER_FRAME_API explicit user_cache(fake_constructor &);
-  SERVER_FRAME_API virtual ~user_cache();
+  USER_SDK_API explicit user_cache(fake_constructor &);
+  USER_SDK_API virtual ~user_cache();
 
-  SERVER_FRAME_API virtual bool can_be_writable() const;
+  USER_SDK_API virtual bool can_be_writable() const;
 
-  SERVER_FRAME_API virtual bool is_writable() const;
+  USER_SDK_API virtual bool is_writable() const;
 
   // 初始化，默认数据
-  SERVER_FRAME_API virtual void init(uint64_t user_id, uint32_t zone_id, const std::string &openid);
+  USER_SDK_API virtual void init(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
-  SERVER_FRAME_API static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
+  USER_SDK_API static ptr_t create(uint64_t user_id, uint32_t zone_id, const std::string &openid);
 
   // 创建默认角色数据
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type create_init(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API virtual rpc::result_code_type create_init(rpc::context &ctx);
 
   // 登入读取用户数据
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API virtual rpc::result_code_type login_init(rpc::context &ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API virtual rpc::result_code_type login_init(rpc::context &ctx);
 
   // 是否脏（有数据变更）
-  SERVER_FRAME_API virtual bool is_dirty() const;
+  USER_SDK_API virtual bool is_dirty() const;
 
   // 清理脏（有数据变更）数据标记
-  SERVER_FRAME_API virtual void clear_dirty();
+  USER_SDK_API virtual void clear_dirty();
 
   // 刷新功能限制次数
-  SERVER_FRAME_API virtual void refresh_feature_limit(rpc::context &ctx);
+  USER_SDK_API virtual void refresh_feature_limit(rpc::context &ctx);
 
   // GM操作
-  SERVER_FRAME_API virtual bool gm_init();
+  USER_SDK_API virtual bool gm_init();
 
   // 是否GM操作
-  SERVER_FRAME_API virtual bool is_gm() const;
+  USER_SDK_API virtual bool is_gm() const;
 
   // 登入事件
-  SERVER_FRAME_API virtual void on_login(rpc::context &ctx);
+  USER_SDK_API virtual void on_login(rpc::context &ctx);
 
   // 登出事件
-  SERVER_FRAME_API virtual void on_logout(rpc::context &ctx);
+  USER_SDK_API virtual void on_logout(rpc::context &ctx);
 
   // 完成保存事件
-  SERVER_FRAME_API virtual void on_saved(rpc::context &ctx);
+  USER_SDK_API virtual void on_saved(rpc::context &ctx);
 
   // 更新session事件
-  SERVER_FRAME_API virtual void on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
-                                                  const std::shared_ptr<session> &to);
+  USER_SDK_API virtual void on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
+                                              const std::shared_ptr<session> &to);
 
   // 从table数据初始化
-  SERVER_FRAME_API virtual void init_from_table_data(rpc::context &ctx,
-                                                     const PROJECT_NAMESPACE_ID::table_user &stTableuser_cache);
+  USER_SDK_API virtual void init_from_table_data(rpc::context &ctx,
+                                                 const PROJECT_NAMESPACE_ID::table_user &stTableuser_cache);
 
   /**
    * @brief 转储数据
@@ -164,7 +165,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  SERVER_FRAME_API virtual int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user_inst, bool always);
+  USER_SDK_API virtual int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user_inst, bool always);
 
   ATFW_UTIL_FORCEINLINE void dump_user_key(PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const noexcept {
     user_key.set_zone_id(zone_id_);
@@ -174,34 +175,34 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
   /**
    * @brief 下发同步消息
    */
-  SERVER_FRAME_API virtual void send_all_syn_msg(rpc::context &ctx);
+  USER_SDK_API virtual void send_all_syn_msg(rpc::context &ctx);
 
   /**
    * @brief 等待登出前需要结算完的任务
    */
-  SERVER_FRAME_API virtual rpc::result_code_type await_before_logout_tasks(rpc::context &ctx);
+  USER_SDK_API virtual rpc::result_code_type await_before_logout_tasks(rpc::context &ctx);
 
-  SERVER_FRAME_API virtual int32_t client_rpc_filter(rpc::context &ctx, task_action_cs_req_base &cs_task_action,
-                                                     const atframework::DispatcherOptions *dispatcher_options);
+  USER_SDK_API virtual int32_t client_rpc_filter(rpc::context &ctx, task_action_cs_req_base &cs_task_action,
+                                                 const atframework::DispatcherOptions *dispatcher_options);
 
   /**
    * @brief 监视关联的Session
    * @param session_ptr 关联的Session
    */
-  SERVER_FRAME_API void set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr);
+  USER_SDK_API void set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr);
 
   /**
    * @brief 获取关联的Session
    * @return 关联的Session
    */
-  SERVER_FRAME_API std::shared_ptr<session> get_session();
+  USER_SDK_API std::shared_ptr<session> get_session();
 
-  SERVER_FRAME_API bool has_session() const;
+  USER_SDK_API bool has_session() const;
 
   ATFW_UTIL_FORCEINLINE const std::string &get_open_id() const { return openid_id_; }
   ATFW_UTIL_FORCEINLINE uint64_t get_user_id() const { return user_id_; }
-  ATFW_UTIL_FORCEINLINE unsigned long long get_user_id_llu() const {
-    return static_cast<unsigned long long>(get_user_id());
+  ATFW_UTIL_FORCEINLINE unsigned long long get_user_id_llu() const {  // NOLINT: runtime/int
+    return static_cast<unsigned long long>(get_user_id());            // NOLINT: runtime/int
   }
 
   ATFW_UTIL_FORCEINLINE bool is(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const noexcept {
@@ -219,7 +220,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::table_login_lock &get_login_lock() const { return login_lock_; }
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::table_login_lock &get_login_lock() { return login_lock_; }
-  SERVER_FRAME_API void load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg, uint64_t ver);
+  USER_SDK_API void load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg, uint64_t ver);
 
   ATFW_UTIL_FORCEINLINE uint64_t get_login_lock_cas_version() const { return login_lock_version_; }
   ATFW_UTIL_FORCEINLINE uint64_t &get_login_lock_cas_version() { return login_lock_version_; }
@@ -251,11 +252,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
 
   ATFW_UTIL_FORCEINLINE bool has_create_init() const { return create_init_; }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type wait_task_lock(rpc::context &ctx);
-  SERVER_FRAME_API void task_lock_init_task(uint64_t task_id);
-  SERVER_FRAME_API void task_lock_remove_task(uint64_t task_id);
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type wait_task_lock(rpc::context &ctx);
+  USER_SDK_API void task_lock_init_task(uint64_t task_id);
+  USER_SDK_API void task_lock_remove_task(uint64_t task_id);
 
-  SERVER_FRAME_API bool is_new_user() const;
+  USER_SDK_API bool is_new_user() const;
 
   ATFW_UTIL_FORCEINLINE uint64_t get_data_version() const { return data_version_; }
 
@@ -263,12 +264,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
     return protocol_frequency_limit_;
   }
 
-  SERVER_FRAME_API uint64_t alloc_server_sequence();
+  USER_SDK_API uint64_t alloc_server_sequence();
 
-  SERVER_FRAME_API void set_quick_save() const;
+  USER_SDK_API void set_quick_save() const;
 
-  SERVER_FRAME_API bool has_initialization_task_id() const noexcept;
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
+  USER_SDK_API bool has_initialization_task_id() const noexcept;
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
 
  private:
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &mutable_user_data() { return user_data_.ref(); }

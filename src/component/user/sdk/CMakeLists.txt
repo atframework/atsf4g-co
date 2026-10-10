@@ -1,0 +1,23 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
+file(GLOB_RECURSE SERVICE_SOURCES *.cpp *.cc *.c *.cxx)
+file(GLOB_RECURSE SERVICE_HEADERS *.h *.hpp)
+
+project_component_declare_sdk(
+  "user-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  OUTPUT_TARGET_NAME
+  PROJECT_COMPONENT_USER_SDK
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}"
+  DLLEXPORT_DECL
+  USER_SDK_API
+  SHARED_LIBRARY_DECL
+  USER_SDK_DLL
+  NATIVE_CODE_DECL
+  USER_SDK_NATIVE
+  HEADERS
+  ${SERVICE_HEADERS}
+  SOURCES
+  ${SERVICE_SOURCES})

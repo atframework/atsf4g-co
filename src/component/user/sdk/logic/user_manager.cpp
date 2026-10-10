@@ -22,12 +22,14 @@
 
 #include <router/router_manager_set.h>
 #include <router/router_user_manager.h>
+
 #include <memory>
+#include <string>
 
 #include "logic/session_manager.h"
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(user_manager);
 #  else
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(user_manager);
@@ -36,12 +38,12 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(user_manager);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(user_manager);
 #endif
 
-SERVER_FRAME_API user_manager::user_manager() {}
+USER_SDK_API user_manager::user_manager() {}
 
-SERVER_FRAME_API user_manager::~user_manager() {}
+USER_SDK_API user_manager::~user_manager() {}
 
-SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, user_manager::user_ptr_t u,
-                                                            bool force_kickoff) {
+USER_SDK_API rpc::result_code_type user_manager::remove(rpc::context &ctx, user_manager::user_ptr_t u,
+                                                        bool force_kickoff) {
   if (!u) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
   }
@@ -50,8 +52,8 @@ SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, u
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                            bool force_kickoff, user_cache *check_user) {
+USER_SDK_API rpc::result_code_type user_manager::remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                        bool force_kickoff, user_cache *check_user) {
   if (0 == user_id) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -88,7 +90,7 @@ SERVER_FRAME_API rpc::result_code_type user_manager::remove(rpc::context &ctx, u
   }
 }
 
-SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, user_ptr_t u, bool force_kickoff) {
+USER_SDK_API void user_manager::async_remove(rpc::context &ctx, user_ptr_t u, bool force_kickoff) {
   if (!u) {
     return;
   }
@@ -97,8 +99,8 @@ SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, user_ptr_t u
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                 bool force_kickoff, user_cache *check_user) {
+USER_SDK_API void user_manager::async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff,
+                                             user_cache *check_user) {
   auto invoke_result = rpc::async_invoke(
       ctx, "user_manager.async_remove",
       [user_id, zone_id, force_kickoff, check_user](rpc::context &child_ctx) -> rpc::result_code_type {
@@ -113,8 +115,8 @@ SERVER_FRAME_API void user_manager::async_remove(rpc::context &ctx, uint64_t use
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API rpc::result_code_type user_manager::save(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                          const user_cache *check_user) {
+USER_SDK_API rpc::result_code_type user_manager::save(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                      const user_cache *check_user) {
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), zone_id, user_id);
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
@@ -141,7 +143,7 @@ SERVER_FRAME_API rpc::result_code_type user_manager::save(rpc::context &ctx, uin
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API bool user_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff) {
+USER_SDK_API bool user_manager::add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff) {
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), zone_id, user_id);
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
@@ -157,8 +159,8 @@ SERVER_FRAME_API bool user_manager::add_save_schedule(uint64_t user_id, uint32_t
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API rpc::result_code_type user_manager::load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
-                                                          user_manager::user_ptr_t &output, bool force) {
+USER_SDK_API rpc::result_code_type user_manager::load(rpc::context &ctx, uint64_t user_id, uint32_t zone_id,
+                                                      user_manager::user_ptr_t &output, bool force) {
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), zone_id, user_id);
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
@@ -178,9 +180,9 @@ SERVER_FRAME_API rpc::result_code_type user_manager::load(rpc::context &ctx, uin
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API size_t user_manager::size() const { return router_user_manager::me()->size(); }
+USER_SDK_API size_t user_manager::size() const { return router_user_manager::me()->size(); }
 
-SERVER_FRAME_API rpc::result_code_type user_manager::create(
+USER_SDK_API rpc::result_code_type user_manager::create(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> &login_lock_tb, uint64_t login_lock_ver,
     user_manager::user_ptr_t &output) {
@@ -274,7 +276,7 @@ SERVER_FRAME_API rpc::result_code_type user_manager::create(
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API user_manager::user_ptr_t user_manager::find(uint64_t user_id, uint32_t zone_id) const {
+USER_SDK_API user_manager::user_ptr_t user_manager::find(uint64_t user_id, uint32_t zone_id) const {
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), zone_id, user_id);
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
@@ -285,11 +287,11 @@ SERVER_FRAME_API user_manager::user_ptr_t user_manager::find(uint64_t user_id, u
   return nullptr;
 }
 
-SERVER_FRAME_API user_manager::user_ptr_t user_manager::find(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const {
+USER_SDK_API user_manager::user_ptr_t user_manager::find(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const {
   return find(user_key.user_id(), user_key.zone_id());
 }
 
-SERVER_FRAME_API bool user_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {
+USER_SDK_API bool user_manager::has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept {
   PROJECT_NAMESPACE_ID::DUserIDKey user_key;
   user_key.set_user_id(user_id);
   user_key.set_zone_id(zone_id);

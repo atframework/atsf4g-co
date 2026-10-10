@@ -51,11 +51,9 @@
 #include <router/action/task_action_auto_save_objects.h>
 #include <router/router_manager_set.h>
 
-#include <dispatcher/cs_msg_dispatcher.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
-#include <logic/session_manager.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -168,11 +166,6 @@ static int app_default_handle_on_receive_request(atfw::atapp::app &, const atfw:
 
   int ret = 0;
   switch (msg.type) {
-    case static_cast<int32_t>(::atfw::component::service_type::kAtGateway): {
-      ret = cs_msg_dispatcher::me()->dispatch(source, msg);
-      break;
-    }
-
     case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
       ret = ss_msg_dispatcher::me()->dispatch(source, msg);
       break;
@@ -456,9 +449,6 @@ SERVER_FRAME_API int logic_server_common_module::init() {
   if (shared_component_.task_manager()) {
     INIT_CALL(task_manager);
   }
-  if (shared_component_.session_manager()) {
-    INIT_CALL(session_manager);
-  }
   if (shared_component_.router_manager_set()) {
     INIT_CALL(router_manager_set);
   }
@@ -478,23 +468,10 @@ SERVER_FRAME_API int logic_server_common_module::init() {
   }
 
   // 注册控制依赖模块的退出挂起
-  // 设置依赖，阻止数据库和ss通信模块在chat_channel_manager前退出
-  auto suspend_stop_callback = []() -> bool {
-    logic_server_common_module *self = logic_server_last_common_module();
-    if (nullptr == self) {
-      return false;
-    }
-
-    if (self->is_enabled() && self->is_actived()) {
-      return true;
-    }
-
-    return false;
-  };
+  // 设置依赖，阻止数据库和ss通信模块在 logic_server_common 前退出
   auto suspend_timeout = protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
       get_app()->get_origin_configure().timer().stop_timeout());
   ss_msg_dispatcher::me()->suspend_stop(suspend_timeout, suspend_stop_callback);
-  cs_msg_dispatcher::me()->suspend_stop(suspend_timeout, suspend_stop_callback);
   db_msg_dispatcher::me()->suspend_stop(suspend_timeout, suspend_stop_callback);
   return ret;
 }
@@ -627,9 +604,6 @@ SERVER_FRAME_API int logic_server_common_module::tick() {
     ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(),
                                     1000 * atfw::util::time::time_utility::get_now_usec());
   }
-  if (shared_component_.session_manager()) {
-    ret += session_manager::me()->proc();
-  }
   if (shared_component_.router_manager_set()) {
     ret += router_manager_set::me()->tick();
   }
@@ -722,6 +696,19 @@ SERVER_FRAME_API atfw::atapp::etcd_cluster *logic_server_common_module::get_etcd
   }
 
   return &service_discovery_module->get_raw_etcd_ctx();
+}
+
+SERVER_FRAME_API bool logic_server_common_module::suspend_stop_callback() {
+  logic_server_common_module *self = logic_server_last_common_module();
+  if (nullptr == self) {
+    return false;
+  }
+
+  if (self->is_enabled() && self->is_runtime_active()) {
+    return true;
+  }
+
+  return false;
 }
 
 SERVER_FRAME_API std::shared_ptr<::atfw::atapp::service_discovery_module>

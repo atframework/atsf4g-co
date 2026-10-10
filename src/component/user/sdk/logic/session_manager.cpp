@@ -25,8 +25,8 @@
 #include "logic/user_manager.h"
 #include "logic/session_manager.h"
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(session_manager);
 #  else
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(session_manager);
@@ -35,14 +35,14 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(session_manager);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(session_manager);
 #endif
 
-SERVER_FRAME_API session_manager::session_manager() : last_proc_timepoint_(util::time::time_utility::get_now()) {}
+USER_SDK_API session_manager::session_manager() : last_proc_timepoint_(util::time::time_utility::get_now()) {}
 
-SERVER_FRAME_API session_manager::~session_manager() {}
+USER_SDK_API session_manager::~session_manager() {}
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-SERVER_FRAME_API int session_manager::init() { return 0; }
+USER_SDK_API int session_manager::init() { return 0; }
 
-SERVER_FRAME_API int session_manager::proc() {
+USER_SDK_API int session_manager::proc() {
   // 写入时间可配,实时在线统计
   time_t proc_interval = logic_config::me()->get_logic_cfg().session().tick_sec().seconds();
 
@@ -56,13 +56,13 @@ SERVER_FRAME_API int session_manager::proc() {
   if (cur_time > last_proc_timepoint_) {
     last_proc_timepoint_ = cur_time;
     FWLOGINFO("online number: {} clients on {} atgateway", all_sessions_.size(), session_counter_.size());
-    // TODO send online stats
+    // TODO(any) send online stats
   }
 
   return 0;
 }
 
-SERVER_FRAME_API const session_manager::sess_ptr_t session_manager::find(const session::key_t &key) const {
+USER_SDK_API const session_manager::sess_ptr_t session_manager::find(const session::key_t &key) const {
   session_index_t::const_iterator iter = all_sessions_.find(key);
   if (all_sessions_.end() == iter) {
     return sess_ptr_t();
@@ -71,7 +71,7 @@ SERVER_FRAME_API const session_manager::sess_ptr_t session_manager::find(const s
   return iter->second;
 }
 
-SERVER_FRAME_API session_manager::sess_ptr_t session_manager::find(const session::key_t &key) {
+USER_SDK_API session_manager::sess_ptr_t session_manager::find(const session::key_t &key) {
   session_index_t::iterator iter = all_sessions_.find(key);
   if (all_sessions_.end() == iter) {
     return sess_ptr_t();
@@ -80,7 +80,7 @@ SERVER_FRAME_API session_manager::sess_ptr_t session_manager::find(const session
   return iter->second;
 }
 
-SERVER_FRAME_API session_manager::sess_ptr_t session_manager::create(const session::key_t &key) {
+USER_SDK_API session_manager::sess_ptr_t session_manager::create(const session::key_t &key) {
   if (find(key)) {
     FWLOGERROR("session registered, failed, bus id: {:#x}, session id: {}\n", key.node_id, key.session_id);
 
@@ -110,12 +110,12 @@ SERVER_FRAME_API session_manager::sess_ptr_t session_manager::create(const sessi
   return sess;
 }
 
-SERVER_FRAME_API void session_manager::remove(rpc::context &ctx, const session::key_t &key, int reason,
+USER_SDK_API void session_manager::remove(rpc::context &ctx, const session::key_t &key, int reason,
                                               atfw::util::nostd::string_view message) {
   remove(ctx, find(key), reason, message);
 }
 
-SERVER_FRAME_API void session_manager::remove(rpc::context & /*ctx*/, sess_ptr_t sess, int reason,
+USER_SDK_API void session_manager::remove(rpc::context & /*ctx*/, sess_ptr_t sess, int reason,
                                               atfw::util::nostd::string_view message) {
   if (!sess) {
     return;
@@ -167,7 +167,7 @@ SERVER_FRAME_API void session_manager::remove(rpc::context & /*ctx*/, sess_ptr_t
     if (!check_session || check_session == sess) {
       rpc::context ctx{rpc::context::create_without_task()};
       u->set_session(ctx, nullptr);
-      // TODO 统计日志
+      // TODO(any) 统计日志
       // 如果是踢下线，则需要强制保存并移除GameUser对象
       auto remove_user_task =
           rpc::async_invoke(ctx, "session_manager.remove", [u, reason](rpc::context &subctx) -> rpc::result_code_type {
@@ -183,7 +183,7 @@ SERVER_FRAME_API void session_manager::remove(rpc::context & /*ctx*/, sess_ptr_t
   }
 }
 
-SERVER_FRAME_API void session_manager::remove_all(rpc::context &ctx, int32_t reason,
+USER_SDK_API void session_manager::remove_all(rpc::context &ctx, int32_t reason,
                                                   atfw::util::nostd::string_view message) {
   for (session_index_t::iterator iter = all_sessions_.begin(); iter != all_sessions_.end(); ++iter) {
     if (iter->second) {
@@ -223,9 +223,9 @@ SERVER_FRAME_API void session_manager::remove_all(rpc::context &ctx, int32_t rea
   }
 }
 
-SERVER_FRAME_API size_t session_manager::size() const { return all_sessions_.size(); }
+USER_SDK_API size_t session_manager::size() const { return all_sessions_.size(); }
 
-SERVER_FRAME_API int32_t session_manager::broadcast_msg_to_client(const atframework::CSMsg &msg) {
+USER_SDK_API int32_t session_manager::broadcast_msg_to_client(const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   auto tls_buffer =
       atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);

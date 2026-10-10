@@ -144,6 +144,8 @@ class logic_server_common_module : public atfw::atapp::module_impl {
 
   SERVER_FRAME_API atfw::atapp::etcd_cluster* get_etcd_cluster();
 
+  static SERVER_FRAME_API bool suspend_stop_callback();
+
   SERVER_FRAME_API std::shared_ptr<::atfw::atapp::service_discovery_module> get_service_discovery_module();
 
   /**

@@ -35,7 +35,7 @@
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_common_types.h"
 
-SERVER_FRAME_API initialization_task_lock_guard::~initialization_task_lock_guard() {
+USER_SDK_API initialization_task_lock_guard::~initialization_task_lock_guard() {
   if (!guard_) {
     return;
   }
@@ -43,7 +43,7 @@ SERVER_FRAME_API initialization_task_lock_guard::~initialization_task_lock_guard
   guard_->initialization_task_id_ = 0;
 }
 
-SERVER_FRAME_API initialization_task_lock_guard::initialization_task_lock_guard(
+USER_SDK_API initialization_task_lock_guard::initialization_task_lock_guard(
     std::shared_ptr<user_cache> user_inst, task_type_trait::id_type task_id) noexcept
     : guard_(user_inst) {
   if (!guard_) {
@@ -58,13 +58,13 @@ SERVER_FRAME_API initialization_task_lock_guard::initialization_task_lock_guard(
   guard_->initialization_task_id_ = task_id;
 }
 
-SERVER_FRAME_API initialization_task_lock_guard::initialization_task_lock_guard(
+USER_SDK_API initialization_task_lock_guard::initialization_task_lock_guard(
     initialization_task_lock_guard &&other) noexcept
     : guard_(std::move(other.guard_)) {
   other.guard_.reset();
 }
 
-SERVER_FRAME_API initialization_task_lock_guard &initialization_task_lock_guard::operator=(
+USER_SDK_API initialization_task_lock_guard &initialization_task_lock_guard::operator=(
     initialization_task_lock_guard &&other) noexcept {
   guard_.swap(other.guard_);
   other.guard_.reset();
@@ -72,9 +72,9 @@ SERVER_FRAME_API initialization_task_lock_guard &initialization_task_lock_guard:
   return *this;
 }
 
-SERVER_FRAME_API bool initialization_task_lock_guard::has_value() const noexcept { return !!guard_; }
+USER_SDK_API bool initialization_task_lock_guard::has_value() const noexcept { return !!guard_; }
 
-SERVER_FRAME_API user_cache::user_cache(fake_constructor &)
+USER_SDK_API user_cache::user_cache(fake_constructor &)
     : user_id_(0),
       zone_id_(0),
       login_lock_version_(0),
@@ -89,18 +89,18 @@ SERVER_FRAME_API user_cache::user_cache(fake_constructor &)
       static_cast<uint64_t>(util::time::time_utility::get_now_usec() / 1000);
 }
 
-SERVER_FRAME_API user_cache::~user_cache() {
+USER_SDK_API user_cache::~user_cache() {
   FWLOGDEBUG("{} destroyed {}", *this, reinterpret_cast<const void *>(this));
 }
 
-SERVER_FRAME_API bool user_cache::can_be_writable() const {
+USER_SDK_API bool user_cache::can_be_writable() const {
   // user cache always can not be writable
   return false;
 }
 
-SERVER_FRAME_API bool user_cache::is_writable() const { return false; }
+USER_SDK_API bool user_cache::is_writable() const { return false; }
 
-SERVER_FRAME_API void user_cache::init(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
+USER_SDK_API void user_cache::init(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   user_id_ = user_id;
   zone_id_ = zone_id;
   openid_id_ = openid;
@@ -114,7 +114,7 @@ SERVER_FRAME_API void user_cache::init(uint64_t user_id, uint32_t zone_id, const
   // ptr_t self = shared_from_this();
 }
 
-SERVER_FRAME_API user_cache::ptr_t user_cache::create(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
+USER_SDK_API user_cache::ptr_t user_cache::create(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   fake_constructor ctorp;
   ptr_t ret = atfw::memory::stl::make_shared<user_cache>(ctorp);
   if (ret) {
@@ -124,16 +124,16 @@ SERVER_FRAME_API user_cache::ptr_t user_cache::create(uint64_t user_id, uint32_t
   return ret;
 }
 
-SERVER_FRAME_API rpc::result_code_type user_cache::create_init(rpc::context &) {
+USER_SDK_API rpc::result_code_type user_cache::create_init(rpc::context &) {
   data_version_ = 0;
   create_init_ = true;
 
   RPC_RETURN_CODE(0);
 }
 
-SERVER_FRAME_API rpc::result_code_type user_cache::login_init(rpc::context &) { RPC_RETURN_CODE(0); }
+USER_SDK_API rpc::result_code_type user_cache::login_init(rpc::context &) { RPC_RETURN_CODE(0); }
 
-SERVER_FRAME_API bool user_cache::is_dirty() const {
+USER_SDK_API bool user_cache::is_dirty() const {
   //! === manager implement === 检查是否有脏数据
   bool ret = false;
   ret = ret || account_info_.is_dirty();
@@ -144,7 +144,7 @@ SERVER_FRAME_API bool user_cache::is_dirty() const {
   return ret;
 }
 
-SERVER_FRAME_API void user_cache::clear_dirty() {
+USER_SDK_API void user_cache::clear_dirty() {
   //! === manager implement === 清理脏数据标记
   account_info_.clear_dirty();
   user_data_.clear_dirty();
@@ -153,17 +153,17 @@ SERVER_FRAME_API void user_cache::clear_dirty() {
   user_option_private_data_.clear_dirty();
 }
 
-SERVER_FRAME_API void user_cache::refresh_feature_limit(rpc::context &) {
+USER_SDK_API void user_cache::refresh_feature_limit(rpc::context &) {
   // refresh daily limit
 }
 
-SERVER_FRAME_API bool user_cache::gm_init() { return true; }
+USER_SDK_API bool user_cache::gm_init() { return true; }
 
-SERVER_FRAME_API bool user_cache::is_gm() const {
+USER_SDK_API bool user_cache::is_gm() const {
   return get_account_info().version_type() == PROJECT_NAMESPACE_ID::EN_VERSION_GM;
 }
 
-SERVER_FRAME_API void user_cache::on_login(rpc::context &) {
+USER_SDK_API void user_cache::on_login(rpc::context &) {
   // 更新 login_info_ 数据
   if (is_new_user()) {
     // 新用户，设置注册时间
@@ -174,18 +174,18 @@ SERVER_FRAME_API void user_cache::on_login(rpc::context &) {
   login_info_.ref().set_stat_login_success_times(login_info_.ref().stat_login_success_times() + 1);
 }
 
-SERVER_FRAME_API void user_cache::on_logout(rpc::context &) {
+USER_SDK_API void user_cache::on_logout(rpc::context &) {
   login_info_.ref().set_business_logout_time(static_cast<uint32_t>(util::time::time_utility::get_sys_now()));
 }
 
-SERVER_FRAME_API void user_cache::on_saved(rpc::context &) {}
+USER_SDK_API void user_cache::on_saved(rpc::context &) {}
 
-SERVER_FRAME_API void user_cache::on_update_session(rpc::context &, const std::shared_ptr<session> &,
+USER_SDK_API void user_cache::on_update_session(rpc::context &, const std::shared_ptr<session> &,
                                                     const std::shared_ptr<session> &) {}
 
-SERVER_FRAME_API bool user_cache::is_new_user() const { return login_info_.ref().business_login_time() == 0; }
+USER_SDK_API bool user_cache::is_new_user() const { return login_info_.ref().business_login_time() == 0; }
 
-SERVER_FRAME_API void user_cache::init_from_table_data(rpc::context &,
+USER_SDK_API void user_cache::init_from_table_data(rpc::context &,
                                                        const PROJECT_NAMESPACE_ID::table_user &tb_user) {
   create_init_ = tb_user.create_init();
   const PROJECT_NAMESPACE_ID::table_user *src_tb = &tb_user;
@@ -215,7 +215,7 @@ SERVER_FRAME_API void user_cache::init_from_table_data(rpc::context &,
   data_version_ = tb_user.data_version();
 }
 
-SERVER_FRAME_API int user_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::table_user &user_inst, bool always) {
+USER_SDK_API int user_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::table_user &user_inst, bool always) {
   user_inst.set_open_id(get_open_id());
   user_inst.set_user_id(get_user_id());
   user_inst.set_zone_id(get_zone_id());
@@ -246,17 +246,17 @@ SERVER_FRAME_API int user_cache::dump(rpc::context &, PROJECT_NAMESPACE_ID::tabl
   return 0;
 }
 
-SERVER_FRAME_API void user_cache::send_all_syn_msg(rpc::context &) {}
+USER_SDK_API void user_cache::send_all_syn_msg(rpc::context &) {}
 
-SERVER_FRAME_API rpc::result_code_type user_cache::await_before_logout_tasks(rpc::context &) { RPC_RETURN_CODE(0); }
+USER_SDK_API rpc::result_code_type user_cache::await_before_logout_tasks(rpc::context &) { RPC_RETURN_CODE(0); }
 
-SERVER_FRAME_API int32_t user_cache::client_rpc_filter(rpc::context & /*ctx*/,
+USER_SDK_API int32_t user_cache::client_rpc_filter(rpc::context & /*ctx*/,
                                                        task_action_cs_req_base & /*cs_task_action*/,
                                                        const atframework::DispatcherOptions * /*dispatcher_options*/) {
   return 0;
 }
 
-SERVER_FRAME_API void user_cache::set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr) {
+USER_SDK_API void user_cache::set_session(rpc::context &ctx, std::shared_ptr<session> session_ptr) {
   std::shared_ptr<session> old_sess = session_.lock();
   if (old_sess == session_ptr) {
     return;
@@ -266,22 +266,22 @@ SERVER_FRAME_API void user_cache::set_session(rpc::context &ctx, std::shared_ptr
   on_update_session(ctx, old_sess, session_ptr);
 }
 
-SERVER_FRAME_API std::shared_ptr<session> user_cache::get_session() { return session_.lock(); }
+USER_SDK_API std::shared_ptr<session> user_cache::get_session() { return session_.lock(); }
 
-SERVER_FRAME_API bool user_cache::has_session() const { return false == session_.expired(); }
+USER_SDK_API bool user_cache::has_session() const { return false == session_.expired(); }
 
-SERVER_FRAME_API void user_cache::load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg, uint64_t ver) {
+USER_SDK_API void user_cache::load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg, uint64_t ver) {
   login_lock_.Swap(&lg);
   login_lock_version_ = ver;
 }
 
-SERVER_FRAME_API uint64_t user_cache::alloc_server_sequence() {
+USER_SDK_API uint64_t user_cache::alloc_server_sequence() {
   uint64_t ret = ++server_sequence_;
   user_data_.ref().set_session_sequence(ret);
   return ret;
 }
 
-SERVER_FRAME_API void user_cache::set_quick_save() const {
+USER_SDK_API void user_cache::set_quick_save() const {
   router_manager_base *mgr = router_manager_set::me()->get_manager(PROJECT_NAMESPACE_ID::EN_ROT_USER);
   if (nullptr == mgr) {
     return;
@@ -296,9 +296,9 @@ SERVER_FRAME_API void user_cache::set_quick_save() const {
   router_manager_set::me()->mark_fast_save(mgr, obj);
 }
 
-SERVER_FRAME_API bool user_cache::has_initialization_task_id() const noexcept { return 0 != initialization_task_id_; }
+USER_SDK_API bool user_cache::has_initialization_task_id() const noexcept { return 0 != initialization_task_id_; }
 
-SERVER_FRAME_API rpc::result_code_type user_cache::await_initialization_task(rpc::context &ctx) {
+USER_SDK_API rpc::result_code_type user_cache::await_initialization_task(rpc::context &ctx) {
   task_type_trait::task_type t = task_manager::me()->get_task(initialization_task_id_);
   if (task_type_trait::empty(t)) {
     initialization_task_id_ = 0;
@@ -317,18 +317,18 @@ SERVER_FRAME_API rpc::result_code_type user_cache::await_initialization_task(rpc
   RPC_RETURN_CODE(ret);
 }
 
-SERVER_FRAME_API rpc::result_code_type user_cache::wait_task_lock(rpc::context &ctx) {
+USER_SDK_API rpc::result_code_type user_cache::wait_task_lock(rpc::context &ctx) {
   if (task_lock_) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(task_lock_->wait_task(ctx)));
   }
   RPC_RETURN_CODE(0);
 }
-SERVER_FRAME_API void user_cache::task_lock_init_task(uint64_t task_id) {
+USER_SDK_API void user_cache::task_lock_init_task(uint64_t task_id) {
   if (task_lock_) {
     task_lock_->init_task(task_id);
   }
 }
-SERVER_FRAME_API void user_cache::task_lock_remove_task(uint64_t task_id) {
+USER_SDK_API void user_cache::task_lock_remove_task(uint64_t task_id) {
   if (task_lock_) {
     task_lock_->remove_task(task_id);
   }

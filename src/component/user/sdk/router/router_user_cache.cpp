@@ -20,25 +20,25 @@
 
 #include "router/router_user_manager.h"
 
-SERVER_FRAME_API router_user_private_type::router_user_private_type() : login_lock_tb(nullptr), login_lock_cas_ver(0) {}
-SERVER_FRAME_API router_user_private_type::router_user_private_type(
+USER_SDK_API router_user_private_type::router_user_private_type() : login_lock_tb(nullptr), login_lock_cas_ver(0) {}
+USER_SDK_API router_user_private_type::router_user_private_type(
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb_t, uint64_t login_lock_cas_ver_t,
     const std::string &openid_t)
     : login_lock_tb(login_lock_tb_t), login_lock_cas_ver(login_lock_cas_ver_t), openid(openid_t) {}
-SERVER_FRAME_API router_user_private_type::~router_user_private_type() {}
+USER_SDK_API router_user_private_type::~router_user_private_type() {}
 
-SERVER_FRAME_API router_user_cache::router_user_cache(rpc::context &, uint64_t user_id, uint32_t zone_id,
+USER_SDK_API router_user_cache::router_user_cache(rpc::context &, uint64_t user_id, uint32_t zone_id,
                                                       const std::string &openid)
     : base_type(router_user_manager::me()->create_user_object(user_id, zone_id, openid),
                 key_t(router_user_manager::me()->get_type_id(), zone_id, user_id)) {}
 
 // 这个时候openid无效，后面需要再init一次
-SERVER_FRAME_API router_user_cache::router_user_cache(rpc::context &, const key_t &key)
+USER_SDK_API router_user_cache::router_user_cache(rpc::context &, const key_t &key)
     : base_type(router_user_manager::me()->create_user_object(key.object_id, key.zone_id, ""), key) {}
 
-SERVER_FRAME_API const char *router_user_cache::name() const { return "[user  router cache]"; }
+USER_SDK_API const char *router_user_cache::name() const { return "[user  router cache]"; }
 
-SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx, void *priv_data) {
+USER_SDK_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx, void *priv_data) {
   if (nullptr == priv_data) {
     router_user_private_type local_priv_data;
     return pull_cache(ctx, local_priv_data);
@@ -47,7 +47,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
   return pull_cache(ctx, *reinterpret_cast<router_user_private_type *>(priv_data));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx,
+USER_SDK_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx,
                                                                      router_user_private_type &priv_data) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_table_ptr{ctx};
   if (nullptr != priv_data.login_lock_tb) {
@@ -98,7 +98,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx, void *priv_data) {
+USER_SDK_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx, void *priv_data) {
   if (nullptr == priv_data) {
     router_user_private_type local_priv_data;
     return pull_object(ctx, local_priv_data);
@@ -107,7 +107,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   return pull_object(ctx, *reinterpret_cast<router_user_private_type *>(priv_data));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx,
+USER_SDK_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx,
                                                                       router_user_private_type &priv_data) {
   if (priv_data.login_lock_tb == nullptr) {
     FWLOGERROR("pull_object for {}:{}:{} failed, priv_data.login_lock_tb is nullptr", get_key().type_id,
@@ -211,7 +211,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
+USER_SDK_API rpc::result_code_type router_user_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
   // 保存数据
   user_cache::ptr_t obj = object();
   if (!obj || !obj->can_be_writable()) {

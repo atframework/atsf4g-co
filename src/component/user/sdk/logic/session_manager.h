@@ -25,8 +25,8 @@ class session_manager {
   using session_index_t = std::unordered_map<session::key_t, sess_ptr_t, session::compare_callback>;
   using session_counter_t = std::map<uint64_t, size_t>;
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(session_manager)
 #  else
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(session_manager)
@@ -36,30 +36,30 @@ class session_manager {
 #endif
 
  private:
-  SERVER_FRAME_API session_manager();
+  USER_SDK_API session_manager();
 
  public:
-  SERVER_FRAME_API ~session_manager();
+  USER_SDK_API ~session_manager();
 
-  SERVER_FRAME_API int init();
+  USER_SDK_API int init();
 
-  SERVER_FRAME_API int proc();
+  USER_SDK_API int proc();
 
-  SERVER_FRAME_API const sess_ptr_t find(const session::key_t& key) const;
-  SERVER_FRAME_API sess_ptr_t find(const session::key_t& key);
+  USER_SDK_API const sess_ptr_t find(const session::key_t& key) const;
+  USER_SDK_API sess_ptr_t find(const session::key_t& key);
 
-  SERVER_FRAME_API sess_ptr_t create(const session::key_t& key);
+  USER_SDK_API sess_ptr_t create(const session::key_t& key);
 
-  SERVER_FRAME_API void remove(rpc::context& ctx, const session::key_t& key, int reason = 0,
+  USER_SDK_API void remove(rpc::context& ctx, const session::key_t& key, int reason = 0,
                                atfw::util::nostd::string_view message = "");
-  SERVER_FRAME_API void remove(rpc::context& ctx, sess_ptr_t sess, int reason = 0,
+  USER_SDK_API void remove(rpc::context& ctx, sess_ptr_t sess, int reason = 0,
                                atfw::util::nostd::string_view message = "");
 
-  SERVER_FRAME_API void remove_all(rpc::context& ctx, int32_t reason, atfw::util::nostd::string_view message = "");
+  USER_SDK_API void remove_all(rpc::context& ctx, int32_t reason, atfw::util::nostd::string_view message = "");
 
-  SERVER_FRAME_API size_t size() const;
+  USER_SDK_API size_t size() const;
 
-  SERVER_FRAME_API int32_t broadcast_msg_to_client(const atframework::CSMsg& msg);
+  USER_SDK_API int32_t broadcast_msg_to_client(const atframework::CSMsg& msg);
 
  private:
   session_counter_t session_counter_;

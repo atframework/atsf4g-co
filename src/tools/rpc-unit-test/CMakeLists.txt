@@ -69,7 +69,7 @@ endif()
 # exports the frame include directory.
 target_link_libraries(
   ${PROJECT_NAME}-rpc-unit-test
-  PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK} ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}
+  PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK} ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME} "components::user-sdk"
   PRIVATE atframework::test::library)
 
 set_target_properties(

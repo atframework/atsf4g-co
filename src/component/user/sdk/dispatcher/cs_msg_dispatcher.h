@@ -32,8 +32,8 @@ class cs_msg_dispatcher : public dispatcher_implement {
   using msg_raw_t = dispatcher_implement::msg_raw_t;
   using msg_type_t = dispatcher_implement::msg_type_t;
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(cs_msg_dispatcher)
 #  else
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(cs_msg_dispatcher)
@@ -43,42 +43,42 @@ class cs_msg_dispatcher : public dispatcher_implement {
 #endif
 
  private:
-  SERVER_FRAME_API cs_msg_dispatcher();
+  USER_SDK_API cs_msg_dispatcher();
 
  public:
-  SERVER_FRAME_API virtual ~cs_msg_dispatcher();
+  USER_SDK_API virtual ~cs_msg_dispatcher();
 
-  SERVER_FRAME_API int32_t init() override;
+  USER_SDK_API int32_t init() override;
 
-  SERVER_FRAME_API const char *name() const override;
+  USER_SDK_API const char *name() const override;
 
   /**
    * @brief 启动关闭命令
    * @note 如果有延时关闭，在本模块关闭返回0前会定期反复调用，直到某次返回值<=0为止
    * @return 0正常关闭，>0需要延时关闭，<0错误码
    */
-  SERVER_FRAME_API int stop() override;
+  USER_SDK_API int stop() override;
 
   /**
    * @brief 获取任务信息
    * @param raw_msg 消息抽象结构
    * @return 相关的任务id
    */
-  SERVER_FRAME_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
+  USER_SDK_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
 
   /**
    * @brief 获取消息的RPC名字
    * @param raw_msg 消息抽象结构
    * @return 消息的RPC名字,如果不是RPC消息，返回空字符串
    */
-  SERVER_FRAME_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
+  USER_SDK_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
 
   /**
    * @brief on create task failed
    * @param start_data start data
    * @param error_code error code
    */
-  SERVER_FRAME_API void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) override;
+  USER_SDK_API void on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) override;
 
   /**
    * deal with cs message data
@@ -87,7 +87,7 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t dispatch(const atfw::atapp::app::message_sender_t &source,
+  USER_SDK_API int32_t dispatch(const atfw::atapp::app::message_sender_t &source,
                                     const atfw::atapp::app::message_t &msg);
 
   /**
@@ -98,7 +98,7 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param message kickoff message
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
+  USER_SDK_API int32_t send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
                                         atfw::util::nostd::string_view message);
 
   /**
@@ -109,7 +109,7 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param target_service_name target service name
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t send_set_router(uint64_t node_id, uint64_t session_id, uint64_t target_service_id,
+  USER_SDK_API int32_t send_set_router(uint64_t node_id, uint64_t session_id, uint64_t target_service_id,
                                            atfw::util::nostd::string_view target_service_name);
 
   /**
@@ -120,7 +120,7 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t send_data(uint64_t node_id, uint64_t session_id, const void *buffer, size_t len);
+  USER_SDK_API int32_t send_data(uint64_t node_id, uint64_t session_id, const void *buffer, size_t len);
 
   /**
    * broadcast data to atgateway
@@ -129,7 +129,7 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const void *buffer, size_t len);
+  USER_SDK_API int32_t broadcast_data(uint64_t node_id, const void *buffer, size_t len);
 
   /**
    * broadcast data to multiple clients
@@ -139,7 +139,7 @@ class cs_msg_dispatcher : public dispatcher_implement {
    * @param len data length
    * @return 0 or error code
    */
-  SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
+  USER_SDK_API int32_t broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
                                           const void *buffer, size_t len);
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
@@ -163,8 +163,8 @@ class cs_msg_dispatcher : public dispatcher_implement {
   using unit_test_gateway_send_hook_t =
       std::function<bool(const unit_test_gateway_send_request &, int32_t &result_code)>;
 
-  SERVER_FRAME_API static void set_gateway_send_hook_for_unit_test(unit_test_gateway_send_hook_t hook);
-  SERVER_FRAME_API static const unit_test_gateway_send_hook_t &get_gateway_send_hook_for_unit_test() noexcept;
+  USER_SDK_API static void set_gateway_send_hook_for_unit_test(unit_test_gateway_send_hook_t hook);
+  USER_SDK_API static const unit_test_gateway_send_hook_t &get_gateway_send_hook_for_unit_test() noexcept;
 #endif
 
  private:

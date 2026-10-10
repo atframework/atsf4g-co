@@ -267,6 +267,13 @@ struct runtime::impl_data {
   std::shared_ptr<mock_connector> connector;
 };
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+static void unit_test_reset_dispatcher_registrations() {
+  server_frame_unit_test_reset_dispatcher_registrations();
+  cs_msg_dispatcher::me()->reset_registrations_for_unit_test();
+}
+#endif
+
 bool runtime_options::has_feature(feature input) const noexcept {
   return std::find(features.begin(), features.end(), input) != features.end();
 }
@@ -363,7 +370,7 @@ int runtime::start(const runtime_options &options) {
       impl_->app.reset();
     }
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
-    server_frame_unit_test_reset_dispatcher_registrations();
+    unit_test_reset_dispatcher_registrations();
     server_frame_unit_test_run_case_cleanups();
 #endif
     impl_->state = runtime_state::constructed;
@@ -458,7 +465,7 @@ int runtime::start(const runtime_options &options) {
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   // Defensive: a previous fixture may have aborted without stop() and left registered handles in the
   // process-lifetime dispatcher singletons.
-  server_frame_unit_test_reset_dispatcher_registrations();
+  unit_test_reset_dispatcher_registrations();
   // The same abort can leave process-lifetime component state behind; component cleanups are idempotent, so
   // run them here too to give this fixture a clean slate.
   server_frame_unit_test_run_case_cleanups();
@@ -597,7 +604,7 @@ int runtime::stop() noexcept {
   }
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
-  server_frame_unit_test_reset_dispatcher_registrations();
+  unit_test_reset_dispatcher_registrations();
   // 运行各组件注册的跨用例清理：此处 app 已销毁、任务已全部 kill，是清理进程级单例的安全时机。
   server_frame_unit_test_run_case_cleanups();
 #endif

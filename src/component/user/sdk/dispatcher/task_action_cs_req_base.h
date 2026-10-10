@@ -54,20 +54,20 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
   using base_type::operator();
 
  public:
-  SERVER_FRAME_API explicit task_action_cs_req_base(dispatcher_start_data_type &&start_param);
-  SERVER_FRAME_API virtual ~task_action_cs_req_base();
+  USER_SDK_API explicit task_action_cs_req_base(dispatcher_start_data_type &&start_param);
+  USER_SDK_API virtual ~task_action_cs_req_base();
 
-  SERVER_FRAME_API result_type hook_run() override;
+  USER_SDK_API result_type hook_run() override;
 
-  SERVER_FRAME_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
-  SERVER_FRAME_API const char *get_type_name() const override;
+  USER_SDK_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;
+  USER_SDK_API const char *get_type_name() const override;
 
-  SERVER_FRAME_API static void add_prepare_handle(rpc::result_code_type (*fn)(rpc::context &,
+  USER_SDK_API static void add_prepare_handle(rpc::result_code_type (*fn)(rpc::context &,
                                                                               task_action_cs_req_base &));
 
-  SERVER_FRAME_API rpc::telemetry::trace_start_option get_trace_option() const noexcept override;
+  USER_SDK_API rpc::telemetry::trace_start_option get_trace_option() const noexcept override;
 
-  SERVER_FRAME_API virtual bool is_stream_rpc() const noexcept;
+  USER_SDK_API virtual bool is_stream_rpc() const noexcept;
 
   virtual bool unpack_request() noexcept = 0;
 
@@ -75,20 +75,20 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
 
   virtual atfw::util::nostd::string_view get_response_type_url() const noexcept = 0;
 
-  SERVER_FRAME_API uint64_t get_gateway_node_id() const noexcept;
+  USER_SDK_API uint64_t get_gateway_node_id() const noexcept;
 
-  SERVER_FRAME_API const std::string &get_gateway_node_name() const noexcept;
+  USER_SDK_API const std::string &get_gateway_node_name() const noexcept;
 
-  SERVER_FRAME_API uint64_t get_gateway_session_id() const noexcept;
+  USER_SDK_API uint64_t get_gateway_session_id() const noexcept;
 
-  SERVER_FRAME_API std::shared_ptr<session> get_session() const;
+  USER_SDK_API std::shared_ptr<session> get_session() const;
 
-  SERVER_FRAME_API msg_ref_type add_response_message();
+  USER_SDK_API msg_ref_type add_response_message();
 
-  SERVER_FRAME_API std::list<message_type *> &get_rsp_list();
-  SERVER_FRAME_API const std::list<message_type *> &get_rsp_list() const;
+  USER_SDK_API std::list<message_type *> &get_rsp_list();
+  USER_SDK_API const std::list<message_type *> &get_rsp_list() const;
 
-  SERVER_FRAME_API std::shared_ptr<user_cache> get_user_cache() const;
+  USER_SDK_API std::shared_ptr<user_cache> get_user_cache() const;
 
   template <typename TUSER>
   ATFW_UTIL_FORCEINLINE std::shared_ptr<TUSER> get_user() const {
@@ -99,10 +99,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
   const gateway_info_t &get_gateway_info() const noexcept;
 
  protected:
-  SERVER_FRAME_API void write_actor_log_head();
-  SERVER_FRAME_API void send_response() override;
-  SERVER_FRAME_API void send_response(bool sync_dirty);
-  SERVER_FRAME_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
+  USER_SDK_API void write_actor_log_head();
+  USER_SDK_API void send_response() override;
+  USER_SDK_API void send_response(bool sync_dirty);
+  USER_SDK_API void write_actor_log_body(const google::protobuf::Message &msg, const atframework::CSMsgHead &head,
                                              bool is_input);
 
   ATFW_UTIL_FORCEINLINE bool has_response_message() const noexcept { return !response_messages_.empty(); }

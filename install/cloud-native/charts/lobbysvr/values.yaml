@@ -63,4 +63,3 @@ lobbysvr:
     friend_sns_cache_timeout: 1h
 
 enable_excel_config: true
-enable_session_manager: true

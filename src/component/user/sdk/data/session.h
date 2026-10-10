@@ -48,19 +48,19 @@ class session {
     uint64_t node_id;
     uint64_t session_id;
 
-    SERVER_FRAME_API key_t();
-    SERVER_FRAME_API key_t(uint64_t node_id, gsl::string_view node_name, uint64_t session_id);
-    SERVER_FRAME_API ~key_t();
+    USER_SDK_API key_t();
+    USER_SDK_API key_t(uint64_t node_id, gsl::string_view node_name, uint64_t session_id);
+    USER_SDK_API ~key_t();
 
-    SERVER_FRAME_API bool operator==(const key_t &r) const noexcept;
+    USER_SDK_API bool operator==(const key_t &r) const noexcept;
 #if defined(__cpp_impl_three_way_comparison)
-    SERVER_FRAME_API std::strong_ordering operator<=>(const key_t &r) const noexcept;
+    USER_SDK_API std::strong_ordering operator<=>(const key_t &r) const noexcept;
 #else
-    SERVER_FRAME_API bool operator!=(const key_t &r) const noexcept;
-    SERVER_FRAME_API bool operator<(const key_t &r) const noexcept;
-    SERVER_FRAME_API bool operator<=(const key_t &r) const noexcept;
-    SERVER_FRAME_API bool operator>(const key_t &r) const noexcept;
-    SERVER_FRAME_API bool operator>=(const key_t &r) const noexcept;
+    USER_SDK_API bool operator!=(const key_t &r) const noexcept;
+    USER_SDK_API bool operator<(const key_t &r) const noexcept;
+    USER_SDK_API bool operator<=(const key_t &r) const noexcept;
+    USER_SDK_API bool operator>(const key_t &r) const noexcept;
+    USER_SDK_API bool operator>=(const key_t &r) const noexcept;
 #endif
   };
 
@@ -75,11 +75,11 @@ class session {
 
   class flag_guard_t {
    public:
-    SERVER_FRAME_API flag_guard_t() noexcept;
-    SERVER_FRAME_API ~flag_guard_t();
+    USER_SDK_API flag_guard_t() noexcept;
+    USER_SDK_API ~flag_guard_t();
 
-    SERVER_FRAME_API void setup(session &owner, flag_t::type f) noexcept;
-    SERVER_FRAME_API void reset() noexcept;
+    USER_SDK_API void setup(session &owner, flag_t::type f) noexcept;
+    USER_SDK_API void reset() noexcept;
     ATFW_UTIL_FORCEINLINE operator bool() const noexcept { return !!owner_ && !!flag_; }
 
     UTIL_DESIGN_PATTERN_NOCOPYABLE(flag_guard_t)
@@ -91,8 +91,8 @@ class session {
   };
 
  public:
-  SERVER_FRAME_API session() noexcept;
-  SERVER_FRAME_API ~session();
+  USER_SDK_API session() noexcept;
+  USER_SDK_API ~session();
 
   ATFW_UTIL_FORCEINLINE void set_key(const key_t &key) noexcept { id_ = key; }
   ATFW_UTIL_FORCEINLINE const key_t &get_key() const noexcept { return id_; }
@@ -121,48 +121,48 @@ class session {
     }
   }
 
-  SERVER_FRAME_API bool is_closing() const noexcept;
-  SERVER_FRAME_API bool is_closed() const noexcept;
-  SERVER_FRAME_API bool is_valid() const noexcept;
+  USER_SDK_API bool is_closing() const noexcept;
+  USER_SDK_API bool is_closed() const noexcept;
+  USER_SDK_API bool is_valid() const noexcept;
 
   /**
    * @brief 监视关联的user
    * @param 关联的user
    */
-  SERVER_FRAME_API void set_user(const std::shared_ptr<user_cache> &u) noexcept;
+  USER_SDK_API void set_user(const std::shared_ptr<user_cache> &u) noexcept;
 
   /**
    * @brief 获取关联的session
    * @return 关联的session
    */
-  SERVER_FRAME_API std::shared_ptr<user_cache> get_user() const noexcept;
+  USER_SDK_API std::shared_ptr<user_cache> get_user() const noexcept;
 
-  SERVER_FRAME_API void login_init(const atframework::CSMsg &login_task_msg);
-  SERVER_FRAME_API bool login_protect(time_t timestamp) const;
+  USER_SDK_API void login_init(const atframework::CSMsg &login_task_msg);
+  USER_SDK_API bool login_protect(time_t timestamp) const;
 
   // 下行post包
-  SERVER_FRAME_API int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg);
-  SERVER_FRAME_API int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, uint64_t server_sequence);
+  USER_SDK_API int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg);
+  USER_SDK_API int32_t send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg, uint64_t server_sequence);
 
-  SERVER_FRAME_API int32_t send_msg_to_client(const void *msg_data, size_t msg_size);
+  USER_SDK_API int32_t send_msg_to_client(const void *msg_data, size_t msg_size);
 
-  SERVER_FRAME_API static int32_t broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg);
+  USER_SDK_API static int32_t broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg);
 
-  SERVER_FRAME_API static int32_t broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size);
+  USER_SDK_API static int32_t broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size);
 
   struct compare_callback {
-    SERVER_FRAME_API bool operator()(const key_t &l, const key_t &r) const noexcept;
-    SERVER_FRAME_API size_t operator()(const key_t &hash_obj) const noexcept;
+    USER_SDK_API bool operator()(const key_t &l, const key_t &r) const noexcept;
+    USER_SDK_API size_t operator()(const key_t &hash_obj) const noexcept;
   };
 
-  SERVER_FRAME_API int32_t send_kickoff(int32_t reason, atfw::util::nostd::string_view message);
+  USER_SDK_API int32_t send_kickoff(int32_t reason, atfw::util::nostd::string_view message);
 
-  SERVER_FRAME_API void write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,
+  USER_SDK_API void write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,
                                              bool is_input);
-  SERVER_FRAME_API void write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
+  USER_SDK_API void write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
                                              const atframework::CSMsgHead &head, bool is_input);
 
-  SERVER_FRAME_API void alloc_session_sequence(atframework::CSMsg &msg);
+  USER_SDK_API void alloc_session_sequence(atframework::CSMsg &msg);
 
   ATFW_UTIL_FORCEINLINE uint64_t get_last_session_sequence() const { return session_sequence_; }
 

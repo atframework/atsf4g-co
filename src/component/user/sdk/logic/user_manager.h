@@ -34,8 +34,8 @@ class user_manager {
  public:
   using user_ptr_t = std::shared_ptr<user_cache>;
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(user_manager)
 #  else
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(user_manager)
@@ -45,8 +45,8 @@ class user_manager {
 #endif
 
  private:
-  SERVER_FRAME_API user_manager();
-  SERVER_FRAME_API ~user_manager();
+  USER_SDK_API user_manager();
+  USER_SDK_API ~user_manager();
 
  public:
   /**
@@ -54,7 +54,7 @@ class user_manager {
    * @param user_inst user指针
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove(rpc::context &ctx, user_ptr_t user_inst,
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type remove(rpc::context &ctx, user_ptr_t user_inst,
                                                                              bool force_kickoff = false);
 
   /**
@@ -63,7 +63,7 @@ class user_manager {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
                                                                              uint32_t zone_id,
                                                                              bool force_kickoff = false,
                                                                              user_cache *check_user = nullptr);
@@ -74,7 +74,7 @@ class user_manager {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  SERVER_FRAME_API void async_remove(rpc::context &ctx, user_ptr_t user_inst, bool force_kickoff = false);
+  USER_SDK_API void async_remove(rpc::context &ctx, user_ptr_t user_inst, bool force_kickoff = false);
 
   /**
    * @brief 启动异步任务移除用户
@@ -82,14 +82,14 @@ class user_manager {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  SERVER_FRAME_API void async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff = false,
+  USER_SDK_API void async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff = false,
                                      user_cache *check_user = nullptr);
 
   /**
    * @brief 保存用户数据
    * @param user_id user_id
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
                                                                            uint32_t zone_id,
                                                                            const user_cache *check_user = nullptr);
 
@@ -99,7 +99,7 @@ class user_manager {
    * @param zone_id zone_id
    * @param kickoff kickoff true表示要下线，路由系统降执行降级操作
    */
-  SERVER_FRAME_API bool add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff = false);
+  USER_SDK_API bool add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff = false);
 
   /**
    * @brief 加载指定用户数据。
@@ -109,13 +109,13 @@ class user_manager {
    * @param user_id
    * @return null 或者 user指针
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
                                                                            uint32_t zone_id, user_ptr_t &output,
                                                                            bool force = false);
 
-  SERVER_FRAME_API size_t size() const;
+  USER_SDK_API size_t size() const;
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type create(
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type create(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
       rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> &login_lock_tb, uint64_t login_lock_ver,
       user_ptr_t &output);
@@ -130,9 +130,9 @@ class user_manager {
     RPC_RETURN_CODE(ret);
   }
 
-  SERVER_FRAME_API user_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
+  USER_SDK_API user_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
 
-  SERVER_FRAME_API user_ptr_t find(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const;
+  USER_SDK_API user_ptr_t find(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const;
 
   template <typename TUSER>
   ATFW_UTIL_SYMBOL_VISIBLE std::shared_ptr<TUSER> find_as(uint64_t user_id, uint32_t zone_id) const {
@@ -144,7 +144,7 @@ class user_manager {
     return std::static_pointer_cast<TUSER>(find(user_key));
   }
 
-  SERVER_FRAME_API bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;
+  USER_SDK_API bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;
 
  private:
   std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> create_user_lock_;

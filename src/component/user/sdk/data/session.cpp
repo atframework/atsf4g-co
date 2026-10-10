@@ -50,15 +50,15 @@ static uint64_t _session_hash_combine(XXH64_hash_t l, XXH64_hash_t r) noexcept {
 
 }  // namespace
 
-SERVER_FRAME_API session::key_t::key_t() : node_id(0), session_id(0) {}
+USER_SDK_API session::key_t::key_t() : node_id(0), session_id(0) {}
 
-SERVER_FRAME_API session::key_t::key_t(uint64_t input_node_id, gsl::string_view input_node_name,
+USER_SDK_API session::key_t::key_t(uint64_t input_node_id, gsl::string_view input_node_name,
                                        uint64_t input_session_id)
     : node_name(input_node_name), node_id(input_node_id), session_id(input_session_id) {}
 
-SERVER_FRAME_API session::key_t::~key_t() {}
+USER_SDK_API session::key_t::~key_t() {}
 
-SERVER_FRAME_API bool session::key_t::operator==(const key_t &r) const noexcept {
+USER_SDK_API bool session::key_t::operator==(const key_t &r) const noexcept {
   if (node_id != 0 || r.node_id != 0) {
     return node_id == r.node_id && session_id == r.session_id;
   }
@@ -66,7 +66,7 @@ SERVER_FRAME_API bool session::key_t::operator==(const key_t &r) const noexcept 
 }
 
 #if defined(__cpp_impl_three_way_comparison)
-SERVER_FRAME_API std::strong_ordering session::key_t::operator<=>(const key_t &r) const noexcept {
+USER_SDK_API std::strong_ordering session::key_t::operator<=>(const key_t &r) const noexcept {
   if (session_id != r.session_id) {
     return session_id <=> r.session_id;
   }
@@ -78,9 +78,9 @@ SERVER_FRAME_API std::strong_ordering session::key_t::operator<=>(const key_t &r
   return node_name <=> r.node_name;
 }
 #else
-SERVER_FRAME_API bool session::key_t::operator!=(const key_t &r) const noexcept { return !((*this) == r); }
+USER_SDK_API bool session::key_t::operator!=(const key_t &r) const noexcept { return !((*this) == r); }
 
-SERVER_FRAME_API bool session::key_t::operator<(const key_t &r) const noexcept {
+USER_SDK_API bool session::key_t::operator<(const key_t &r) const noexcept {
   if (session_id != r.session_id) {
     return session_id < r.session_id;
   }
@@ -92,9 +92,9 @@ SERVER_FRAME_API bool session::key_t::operator<(const key_t &r) const noexcept {
   return node_name < r.node_name;
 }
 
-SERVER_FRAME_API bool session::key_t::operator<=(const key_t &r) const noexcept { return (*this) < r || (*this) == r; }
+USER_SDK_API bool session::key_t::operator<=(const key_t &r) const noexcept { return (*this) < r || (*this) == r; }
 
-SERVER_FRAME_API bool session::key_t::operator>(const key_t &r) const noexcept {
+USER_SDK_API bool session::key_t::operator>(const key_t &r) const noexcept {
   if (session_id != r.session_id) {
     return session_id > r.session_id;
   }
@@ -106,15 +106,15 @@ SERVER_FRAME_API bool session::key_t::operator>(const key_t &r) const noexcept {
   return node_name > r.node_name;
 }
 
-SERVER_FRAME_API bool session::key_t::operator>=(const key_t &r) const noexcept { return (*this) > r || (*this) == r; }
+USER_SDK_API bool session::key_t::operator>=(const key_t &r) const noexcept { return (*this) > r || (*this) == r; }
 #endif
 
-SERVER_FRAME_API session::flag_guard_t::flag_guard_t() noexcept
+USER_SDK_API session::flag_guard_t::flag_guard_t() noexcept
     : flag_(flag_t::EN_SESSION_FLAG_NONE), owner_(nullptr) {}
 
-SERVER_FRAME_API session::flag_guard_t::~flag_guard_t() { reset(); }
+USER_SDK_API session::flag_guard_t::~flag_guard_t() { reset(); }
 
-SERVER_FRAME_API void session::flag_guard_t::setup(session &owner, flag_t::type f) noexcept {
+USER_SDK_API void session::flag_guard_t::setup(session &owner, flag_t::type f) noexcept {
   if (flag_t::EN_SESSION_FLAG_NONE == f) {
     return;
   }
@@ -135,7 +135,7 @@ SERVER_FRAME_API void session::flag_guard_t::setup(session &owner, flag_t::type 
   owner_->set_flag(flag_, true);
 }
 
-SERVER_FRAME_API void session::flag_guard_t::reset() noexcept {
+USER_SDK_API void session::flag_guard_t::reset() noexcept {
   if (owner_ != nullptr && flag_t::EN_SESSION_FLAG_NONE != flag_) {
     owner_->set_flag(flag_, false);
   }
@@ -144,7 +144,7 @@ SERVER_FRAME_API void session::flag_guard_t::reset() noexcept {
   flag_ = flag_t::EN_SESSION_FLAG_NONE;
 }
 
-SERVER_FRAME_API session::session() noexcept
+USER_SDK_API session::session() noexcept
     : flags_(0),
       login_task_id_(0),
       session_sequence_(0),
@@ -156,7 +156,7 @@ SERVER_FRAME_API session::session() noexcept
   id_.session_id = 0;
 }
 
-SERVER_FRAME_API session::~session() {
+USER_SDK_API session::~session() {
   FWLOGDEBUG("session [{:#x}, {}] destroyed", id_.node_id, id_.session_id);
 
   if (actor_log_writter_) {
@@ -178,16 +178,16 @@ SERVER_FRAME_API session::~session() {
   }
 }
 
-SERVER_FRAME_API bool session::is_closing() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSING); }
+USER_SDK_API bool session::is_closing() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSING); }
 
-SERVER_FRAME_API bool session::is_closed() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSED); }
+USER_SDK_API bool session::is_closed() const noexcept { return check_flag(flag_t::EN_SESSION_FLAG_CLOSED); }
 
-SERVER_FRAME_API bool session::is_valid() const noexcept {
+USER_SDK_API bool session::is_valid() const noexcept {
   return 0 == (flags_ & (flag_t::EN_SESSION_FLAG_CLOSING | flag_t::EN_SESSION_FLAG_CLOSED |
                          flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED));
 }
 
-SERVER_FRAME_API void session::set_user(const std::shared_ptr<user_cache> &u) noexcept {
+USER_SDK_API void session::set_user(const std::shared_ptr<user_cache> &u) noexcept {
   user_ = u;
 
   if (u) {
@@ -200,9 +200,9 @@ SERVER_FRAME_API void session::set_user(const std::shared_ptr<user_cache> &u) no
   }
 }
 
-SERVER_FRAME_API std::shared_ptr<user_cache> session::get_user() const noexcept { return user_.lock(); }
+USER_SDK_API std::shared_ptr<user_cache> session::get_user() const noexcept { return user_.lock(); }
 
-SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) {
+USER_SDK_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) {
   if (0 == msg.head().server_sequence()) {
     std::shared_ptr<user_cache> user_inst = get_user();
     if (user_inst) {
@@ -212,7 +212,7 @@ SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframew
   return send_msg_to_client(ctx, msg, msg.head().server_sequence());
 }
 
-SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg,
+USER_SDK_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg,
                                                      uint64_t server_sequence) {
   if (!msg.has_head() || msg.head().timestamp() == 0) {
     msg.mutable_head()->set_timestamp(::util::time::time_utility::get_now());
@@ -247,12 +247,12 @@ SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframew
   return send_msg_to_client(buf_start, msg_buf_len);
 }
 
-SERVER_FRAME_API int32_t session::send_msg_to_client(const void *msg_data, size_t msg_size) {
+USER_SDK_API int32_t session::send_msg_to_client(const void *msg_data, size_t msg_size) {
   // send data using dispatcher
   return cs_msg_dispatcher::me()->send_data(get_key().node_id, get_key().session_id, msg_data, msg_size);
 }
 
-SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg) {
+USER_SDK_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const atframework::CSMsg &msg) {
   size_t msg_buf_len = msg.ByteSizeLong();
   auto tls_buffuer =
       atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
@@ -276,16 +276,16 @@ SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, cons
   return broadcast_msg_to_client(node_id, buf_start, msg_buf_len);
 }
 
-SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size) {
+USER_SDK_API int32_t session::broadcast_msg_to_client(uint64_t node_id, const void *msg_data, size_t msg_size) {
   // broadcast data using dispatcher
   return cs_msg_dispatcher::me()->broadcast_data(node_id, msg_data, msg_size);
 }
 
-SERVER_FRAME_API bool session::compare_callback::operator()(const key_t &l, const key_t &r) const noexcept {
+USER_SDK_API bool session::compare_callback::operator()(const key_t &l, const key_t &r) const noexcept {
   return l < r;
 }
 
-SERVER_FRAME_API size_t session::compare_callback::operator()(const key_t &hash_obj) const noexcept {
+USER_SDK_API size_t session::compare_callback::operator()(const key_t &hash_obj) const noexcept {
   // std::hash also use fnv1 hash algorithm, but fnv1a sometime has better random
   if (hash_obj.node_id != 0) {
     return static_cast<size_t>(
@@ -302,7 +302,7 @@ SERVER_FRAME_API size_t session::compare_callback::operator()(const key_t &hash_
   return static_cast<size_t>(XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber));
 }
 
-SERVER_FRAME_API int32_t session::send_kickoff(int32_t reason, atfw::util::nostd::string_view message) {
+USER_SDK_API int32_t session::send_kickoff(int32_t reason, atfw::util::nostd::string_view message) {
   if (check_flag(flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED)) {
     return 0;
   }
@@ -310,7 +310,7 @@ SERVER_FRAME_API int32_t session::send_kickoff(int32_t reason, atfw::util::nostd
   return cs_msg_dispatcher::me()->send_kickoff(get_key().node_id, get_key().session_id, reason, message);
 }
 
-SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,
+USER_SDK_API void session::write_actor_log_head(rpc::context &ctx, const atframework::CSMsg &msg, size_t byte_size,
                                                     bool is_input) {
   if (!actor_log_writter_ && !actor_log_otel_) {
     return;
@@ -373,7 +373,7 @@ SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atf
   }
 }
 
-SERVER_FRAME_API void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
+USER_SDK_API void session::write_actor_log_body(rpc::context &ctx, const google::protobuf::Message &msg,
                                                     const atframework::CSMsgHead &head, bool is_input) {
   if (!actor_log_writter_ && !actor_log_otel_) {
     return;
@@ -448,7 +448,7 @@ SERVER_FRAME_API void session::write_actor_log_body(rpc::context &ctx, const goo
   }
 }
 
-SERVER_FRAME_API void session::alloc_session_sequence(atframework::CSMsg &msg) {
+USER_SDK_API void session::alloc_session_sequence(atframework::CSMsg &msg) {
   do {
     // has already alloc sequence, do nothing
     if (msg.head().session_sequence() != 0) {
@@ -514,12 +514,12 @@ void session::create_actor_log_writter() {
   }
 }
 
-SERVER_FRAME_API void session::login_init(const atframework::CSMsg &login_task_msg) {
+USER_SDK_API void session::login_init(const atframework::CSMsg &login_task_msg) {
   login_task_head_timestamp_ = login_task_msg.head().timestamp();
   login_server_time_ = util::time::time_utility::get_now();
 }
 
-SERVER_FRAME_API bool session::login_protect(time_t timestamp) const {
+USER_SDK_API bool session::login_protect(time_t timestamp) const {
   if (login_server_time_ + util::time::time_utility::MINITE_SECONDS < util::time::time_utility::get_now()) {
     // 保护时间过了
     return false;

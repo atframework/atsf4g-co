@@ -15,6 +15,7 @@
 
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
+#include <logic/session_manager.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -31,9 +32,10 @@
 #include <service_discovery_index/discovery_index.h>
 
 #include <memory>
+#include <string>
 
+#include "app/authsvr_helper.h"
 #include "app/handle_cs_rpc_authsvrclientservice.atfw.gen.h"
-#include "authsvr_helper.h"
 
 namespace {
 class main_service_module;
@@ -58,11 +60,18 @@ class main_service_module : public atfw::atapp::module_impl {
 
     // register handles
     INIT_CALL_FN(handle::authsvrclientservice::register_handles_for_authsvrclientservice);
+    INIT_CALL(session_manager);
 
     discovery_index_ = atfw::component::service_discovery_index::create(get_app()->get_service_discovery_module());
     discovery_index_->initialize();
 
     return 0;
+  }
+
+  int tick() override {
+    int ret = 0;
+    ret += session_manager::me()->proc();
+    return ret;
   }
 
   int reload() override {
@@ -88,6 +97,34 @@ class main_service_module : public atfw::atapp::module_impl {
  private:
   atfw::component::service_discovery_index::ptr_t discovery_index_;
 };
+
+static int app_handle_on_receive_request(atfw::atapp::app &, const atfw::atapp::app::message_sender_t &source,
+                                         const atfw::atapp::app::message_t &msg) {
+  if (0 == source.id) {
+    FWLOGERROR("receive a message from unknown source or invalid body case");
+    return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+  }
+
+  int ret = 0;
+  switch (msg.type) {
+    case static_cast<int32_t>(::atfw::component::service_type::kAtGateway): {
+      ret = cs_msg_dispatcher::me()->dispatch(source, msg);
+      break;
+    }
+
+    case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
+      ret = ss_msg_dispatcher::me()->dispatch(source, msg);
+      break;
+    }
+
+    default: {
+      FWLOGERROR("receive a message of invalid type: {}", msg.type);
+      break;
+    }
+  }
+
+  return ret;
+}
 }  // namespace
 
 atfw::component::service_discovery_index::ptr_t authsvr_get_service_discovery_index() noexcept {
@@ -120,6 +157,7 @@ int main(int argc, char *argv[]) {
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {
     return -1;
   }
+  app.set_evt_on_forward_request(app_handle_on_receive_request);
 
   app.add_module(cs_msg_dispatcher::me());
   app.add_module(ss_msg_dispatcher::me());

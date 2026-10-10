@@ -82,6 +82,7 @@ project_service_declare_instance(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS
+  "user-sdk"
   "rank-logic-sdk"
   "dtmq-proxy-sdk"
   "ItemAlgorithmSDK"

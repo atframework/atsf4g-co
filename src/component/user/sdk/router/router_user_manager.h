@@ -30,8 +30,8 @@ class router_user_manager : public router_manager<router_user_cache, user_cache,
 
   using create_object_fn_t = std::function<router_user_cache::object_ptr_t(uint64_t, uint32_t, const std::string &)>;
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_user_manager)
 #  else
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_user_manager)
@@ -41,37 +41,37 @@ class router_user_manager : public router_manager<router_user_cache, user_cache,
 #endif
 
  private:
-  SERVER_FRAME_API router_user_manager();
+  USER_SDK_API router_user_manager();
 
  public:
-  SERVER_FRAME_API ~router_user_manager();
+  USER_SDK_API ~router_user_manager();
 
-  SERVER_FRAME_API const char *name() const override;
+  USER_SDK_API const char *name() const override;
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_object(rpc::context &ctx,
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type remove_user_object(rpc::context &ctx,
                                                                                            uint64_t user_id,
                                                                                            uint32_t zone_id,
                                                                                            priv_data_t priv_data);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type remove_user_object(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
       priv_data_t priv_data);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_cache(rpc::context &ctx,
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type remove_user_cache(rpc::context &ctx,
                                                                                           uint64_t user_id,
                                                                                           uint32_t zone_id,
                                                                                           priv_data_t priv_data);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_cache(
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type remove_user_cache(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
       priv_data_t priv_data);
 
-  SERVER_FRAME_API void set_create_object_fn(create_object_fn_t fn);
+  USER_SDK_API void set_create_object_fn(create_object_fn_t fn);
 
-  SERVER_FRAME_API router_user_cache::object_ptr_t create_user_object(uint64_t user_id, uint32_t zone_id,
+  USER_SDK_API router_user_cache::object_ptr_t create_user_object(uint64_t user_id, uint32_t zone_id,
                                                                           const std::string &openid);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_online_server(
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type pull_online_server(
       rpc::context &ctx, const key_t &key, uint64_t &router_svr_id, uint64_t &router_svr_ver) override;
 
  private:

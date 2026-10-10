@@ -30,6 +30,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <string>
 
 namespace task_action_cs_req_base_inner {
 static std::recursive_mutex &get_handle_lock() {
@@ -47,7 +48,7 @@ struct task_action_cs_req_base::gateway_info_t {
 std::list<rpc::result_code_type (*)(rpc::context &, task_action_cs_req_base &)>
     task_action_cs_req_base::prepare_handles_;
 
-SERVER_FRAME_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&start_param)
+USER_SDK_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_start_data_type &&start_param)
     : base_type(start_param), has_sync_dirty_(false), recursive_sync_dirty_(false) {
   // 必须先设置共享的arena
   if (nullptr != start_param.context) {
@@ -73,9 +74,9 @@ SERVER_FRAME_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_sta
   }
 }
 
-SERVER_FRAME_API task_action_cs_req_base::~task_action_cs_req_base() {}
+USER_SDK_API task_action_cs_req_base::~task_action_cs_req_base() {}
 
-SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
+USER_SDK_API task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
   std::shared_ptr<user_cache> user_cache = get_user_cache();
   /**
   do {
@@ -238,14 +239,14 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
   TASK_ACTION_RETURN_CODE(ret);
 }
 
-SERVER_FRAME_API std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() const {
+USER_SDK_API std::shared_ptr<dispatcher_implement> task_action_cs_req_base::get_dispatcher() const {
   return std::static_pointer_cast<dispatcher_implement>(cs_msg_dispatcher::me());
 }
 
-SERVER_FRAME_API const char *task_action_cs_req_base::get_type_name() const { return "client"; }
+USER_SDK_API const char *task_action_cs_req_base::get_type_name() const { return "client"; }
 
-SERVER_FRAME_API void task_action_cs_req_base::add_prepare_handle(
-    rpc::result_code_type (*fn)(rpc::context &, task_action_cs_req_base &)) {
+USER_SDK_API void task_action_cs_req_base::add_prepare_handle(rpc::result_code_type (*fn)(rpc::context &,
+                                                                                          task_action_cs_req_base &)) {
   if (fn == nullptr) {
     return;
   }
@@ -254,7 +255,7 @@ SERVER_FRAME_API void task_action_cs_req_base::add_prepare_handle(
   prepare_handles_.push_back(fn);
 }
 
-SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
+USER_SDK_API rpc::telemetry::trace_start_option task_action_cs_req_base::get_trace_option() const noexcept {
   rpc::telemetry::trace_start_option ret = task_action_base::get_trace_option();
 
   const auto &req_msg = get_request();
@@ -265,23 +266,23 @@ SERVER_FRAME_API rpc::telemetry::trace_start_option task_action_cs_req_base::get
   return ret;
 }
 
-SERVER_FRAME_API bool task_action_cs_req_base::is_stream_rpc() const noexcept {
+USER_SDK_API bool task_action_cs_req_base::is_stream_rpc() const noexcept {
   return get_request().head().has_rpc_stream();
 }
 
-SERVER_FRAME_API uint64_t task_action_cs_req_base::get_gateway_node_id() const noexcept {
+USER_SDK_API uint64_t task_action_cs_req_base::get_gateway_node_id() const noexcept {
   return get_gateway_info().node_id;
 }
 
-SERVER_FRAME_API const std::string &task_action_cs_req_base::get_gateway_node_name() const noexcept {
+USER_SDK_API const std::string &task_action_cs_req_base::get_gateway_node_name() const noexcept {
   return get_gateway_info().node_name;
 }
 
-SERVER_FRAME_API uint64_t task_action_cs_req_base::get_gateway_session_id() const noexcept {
+USER_SDK_API uint64_t task_action_cs_req_base::get_gateway_session_id() const noexcept {
   return get_gateway_info().session_id;
 }
 
-SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {
+USER_SDK_API session::ptr_t task_action_cs_req_base::get_session() const {
   if (session_inst_) {
     return session_inst_;
   }
@@ -291,7 +292,7 @@ SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {
   return session_inst_;
 }
 
-SERVER_FRAME_API std::shared_ptr<user_cache> task_action_cs_req_base::get_user_cache() const {
+USER_SDK_API std::shared_ptr<user_cache> task_action_cs_req_base::get_user_cache() const {
   std::shared_ptr<session> sess = get_session();
   if (!sess) {
     return nullptr;
@@ -300,7 +301,7 @@ SERVER_FRAME_API std::shared_ptr<user_cache> task_action_cs_req_base::get_user_c
   return sess->get_user();
 }
 
-SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_message() {
+USER_SDK_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_message() {
   message_type *msg = get_shared_context().create<message_type>();
   if (nullptr == msg) {
     static message_type empty_msg;
@@ -340,12 +341,11 @@ SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::
   return *msg;
 }
 
-SERVER_FRAME_API std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() {
+USER_SDK_API std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() {
   return response_messages_;
 }
 
-SERVER_FRAME_API const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list()
-    const {
+USER_SDK_API const std::list<task_action_cs_req_base::message_type *> &task_action_cs_req_base::get_rsp_list() const {
   return response_messages_;
 }
 
@@ -391,7 +391,7 @@ const task_action_cs_req_base::gateway_info_t &task_action_cs_req_base::get_gate
   return *gateway_info_t_;
 }
 
-SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_head() {
+USER_SDK_API void task_action_cs_req_base::write_actor_log_head() {
   std::shared_ptr<session> sess = get_session();
   if (sess) {
     google::protobuf::Empty empty;
@@ -399,7 +399,7 @@ SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_head() {
   }
 }
 
-SERVER_FRAME_API void task_action_cs_req_base::send_response() {
+USER_SDK_API void task_action_cs_req_base::send_response() {
   if (!has_sync_dirty_) {
     send_response(true);
     return;
@@ -442,7 +442,7 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response() {
   response_messages_.clear();
 }
 
-SERVER_FRAME_API void task_action_cs_req_base::send_response(bool sync_dirty) {
+USER_SDK_API void task_action_cs_req_base::send_response(bool sync_dirty) {
   if (recursive_sync_dirty_) {
     return;
   }
@@ -476,8 +476,8 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response(bool sync_dirty) {
   send_response();
 }
 
-SERVER_FRAME_API void task_action_cs_req_base::write_actor_log_body(const google::protobuf::Message &msg,
-                                                                    const atframework::CSMsgHead &head, bool is_input) {
+USER_SDK_API void task_action_cs_req_base::write_actor_log_body(const google::protobuf::Message &msg,
+                                                                const atframework::CSMsgHead &head, bool is_input) {
   auto sess = get_session();
   if (sess) {
     sess->write_actor_log_body(get_shared_context(), msg, head, is_input);

@@ -3,6 +3,8 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/component-functions.cmake")
 
+add_subdirectory(user)
+
 # ============ protocol-first server components ============
 add_subdirectory(orbit)
 

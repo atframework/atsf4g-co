@@ -1,12 +1,14 @@
+// Copyright 2025 atframework
+
 #pragma once
 
 #include <config/server_frame_build_feature.h>
 
+#include <rpc/rpc_common_types.h>
+
 #include <stdint.h>
 #include <memory>
 #include <unordered_set>
-
-#include <rpc/rpc_common_types.h>
 
 namespace rpc {
 class context;
@@ -17,10 +19,10 @@ class user_cache;
 class task_lock : public std::enable_shared_from_this<task_lock> {
  public:
   ATFW_UTIL_FORCEINLINE task_lock() : user_id_(0) {}
-  SERVER_FRAME_API void init(uint64_t user_id);
-  SERVER_FRAME_API void init_task(uint64_t id);
-  SERVER_FRAME_API void remove_task(uint64_t id);
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type wait_task(rpc::context &ctx);
+  USER_SDK_API void init(uint64_t user_id);
+  USER_SDK_API void init_task(uint64_t id);
+  USER_SDK_API void remove_task(uint64_t id);
+  ATFW_EXPLICIT_NODISCARD_ATTR USER_SDK_API rpc::result_code_type wait_task(rpc::context &ctx);
 
  private:
   std::unordered_set<uint64_t> id_;
@@ -29,8 +31,8 @@ class task_lock : public std::enable_shared_from_this<task_lock> {
 
 class task_lock_guard {
  public:
-  SERVER_FRAME_API task_lock_guard(std::shared_ptr<user_cache> user_inst, uint64_t task_id);
-  SERVER_FRAME_API ~task_lock_guard();
+  USER_SDK_API task_lock_guard(std::shared_ptr<user_cache> user_inst, uint64_t task_id);
+  USER_SDK_API ~task_lock_guard();
 
  private:
   std::weak_ptr<user_cache> ptr_;

@@ -2,6 +2,8 @@
 // Created by owent on 2016/10/6.
 //
 
+#include "logic/action/task_action_user_logout.h"
+
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -17,7 +19,7 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include "task_action_user_logout.h"
+#include <utility>
 
 task_action_user_logout::task_action_user_logout(ctor_param_t&& param)
     : task_action_no_req_base(param), ctor_param_(std::move(param)) {}

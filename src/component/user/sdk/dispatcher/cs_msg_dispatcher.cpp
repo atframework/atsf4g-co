@@ -28,16 +28,20 @@
 
 #include <config/logic_config.h>
 #include <logic/action/task_action_user_logout.h>
+#include <logic/logic_server_setup.h>
 #include <logic/session_manager.h>
 
 #include <rpc/rpc_context.h>
 
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "dispatcher/task_manager.h"
 
-#if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
-#  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
+#if defined(USER_SDK_DLL) && USER_SDK_DLL
+#  if defined(USER_SDK_NATIVE) && USER_SDK_NATIVE
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(cs_msg_dispatcher);
 #  else
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(cs_msg_dispatcher);
@@ -54,28 +58,32 @@ cs_msg_dispatcher::unit_test_gateway_send_hook_t &mutable_cs_gateway_send_hook_f
 }
 }  // namespace
 
-SERVER_FRAME_API void cs_msg_dispatcher::set_gateway_send_hook_for_unit_test(unit_test_gateway_send_hook_t hook) {
+USER_SDK_API void cs_msg_dispatcher::set_gateway_send_hook_for_unit_test(unit_test_gateway_send_hook_t hook) {
   mutable_cs_gateway_send_hook_for_unit_test() = std::move(hook);
 }
 
-SERVER_FRAME_API const cs_msg_dispatcher::unit_test_gateway_send_hook_t &
+USER_SDK_API const cs_msg_dispatcher::unit_test_gateway_send_hook_t &
 cs_msg_dispatcher::get_gateway_send_hook_for_unit_test() noexcept {
   return mutable_cs_gateway_send_hook_for_unit_test();
 }
 #endif
 
-SERVER_FRAME_API cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
+USER_SDK_API cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
 
-SERVER_FRAME_API cs_msg_dispatcher::~cs_msg_dispatcher() {}
+USER_SDK_API cs_msg_dispatcher::~cs_msg_dispatcher() {}
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::init() {
+USER_SDK_API int32_t cs_msg_dispatcher::init() {
   is_closing_ = false;
+  // 设置依赖，阻止模块在 logic_server_common 前退出
+  auto suspend_timeout = protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+      get_app()->get_origin_configure().timer().stop_timeout());
+  suspend_stop(suspend_timeout, &logic_server_common_module::suspend_stop_callback);
   return 0;
 }
 
-SERVER_FRAME_API const char *cs_msg_dispatcher::name() const { return "cs_msg_dispatcher"; }
+USER_SDK_API const char *cs_msg_dispatcher::name() const { return "cs_msg_dispatcher"; }
 
-SERVER_FRAME_API int cs_msg_dispatcher::stop() {
+USER_SDK_API int cs_msg_dispatcher::stop() {
   if (is_closing_) {
     return dispatcher_implement::stop();
   }
@@ -87,12 +95,12 @@ SERVER_FRAME_API int cs_msg_dispatcher::stop() {
   return dispatcher_implement::stop();
 }
 
-SERVER_FRAME_API uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &) {
+USER_SDK_API uint64_t cs_msg_dispatcher::pick_msg_task_id(msg_raw_t &) {
   // cs msg not allow resume task
   return 0;
 }
 
-SERVER_FRAME_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
+USER_SDK_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
   atframework::CSMsg *real_msg = get_protobuf_msg<atframework::CSMsg>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
@@ -119,8 +127,7 @@ SERVER_FRAME_API const std::string &cs_msg_dispatcher::pick_rpc_name(msg_raw_t &
   return get_empty_string();
 }
 
-SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data,
-                                                               int32_t error_code) {
+USER_SDK_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_data_type &start_data, int32_t error_code) {
   const std::string &rpc_name = pick_rpc_name(start_data.message);
   if (rpc_name.empty()) {
     return;
@@ -204,8 +211,8 @@ SERVER_FRAME_API void cs_msg_dispatcher::on_create_task_failed(dispatcher_start_
   }
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::message_sender_t &source,
-                                                     const atfw::atapp::app::message_t &msg) {
+USER_SDK_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::message_sender_t &source,
+                                                 const atfw::atapp::app::message_t &msg) {
   if (static_cast<int32_t>(::atfw::component::service_type::kAtGateway) != msg.type) {
     FWLOGERROR("message type {} invalid", msg.type);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -479,8 +486,8 @@ int32_t cs_msg_dispatcher::send_serialized_to_gateway(uint64_t node_id, int32_t 
   return ret;
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
-                                                         atfw::util::nostd::string_view message) {
+USER_SDK_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
+                                                     atfw::util::nostd::string_view message) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
@@ -504,9 +511,9 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint6
   return send_serialized_to_gateway(node_id, 0, session_id, nullptr, packed_buffer);
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::send_set_router(uint64_t node_id, uint64_t session_id,
-                                                            uint64_t target_service_id,
-                                                            atfw::util::nostd::string_view target_service_name) {
+USER_SDK_API int32_t cs_msg_dispatcher::send_set_router(uint64_t node_id, uint64_t session_id,
+                                                        uint64_t target_service_id,
+                                                        atfw::util::nostd::string_view target_service_name) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
@@ -529,8 +536,8 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_set_router(uint64_t node_id, ui
   return send_serialized_to_gateway(node_id, 0, session_id, nullptr, packed_buffer);
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t session_id, const void *buffer,
-                                                      size_t len) {
+USER_SDK_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t session_id, const void *buffer,
+                                                  size_t len) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
@@ -552,12 +559,12 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t
                                     session_id, nullptr, packed_buffer);
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, const void *buffer, size_t len) {
+USER_SDK_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, const void *buffer, size_t len) {
   return send_data(node_id, 0, buffer, len);
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
-                                                           const void *buffer, size_t len) {
+USER_SDK_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
+                                                       const void *buffer, size_t len) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("not in a atapp");
