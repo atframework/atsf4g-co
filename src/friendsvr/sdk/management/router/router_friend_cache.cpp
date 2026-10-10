@@ -10,8 +10,6 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include <logic/session_manager.h>
-
 #include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_utils.h>
 

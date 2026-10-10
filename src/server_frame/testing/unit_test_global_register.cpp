@@ -5,6 +5,8 @@
 #include <atomic>
 #include <list>
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+
 namespace {
 struct ATFW_UTIL_SYMBOL_LOCAL server_frame_unit_test_setup_action_data {
   std::atomic<bool> already_run{false};
@@ -45,3 +47,5 @@ SERVER_FRAME_API size_t server_frame_unit_test_get_setup_action_count() {
 SERVER_FRAME_API bool server_frame_unit_test_is_setup_action_already_run() {
   return get_server_frame_unit_test_setup_action_data().already_run.load();
 }
+
+#endif

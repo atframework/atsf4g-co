@@ -62,7 +62,10 @@
 #include <cstring>
 #include <ctime>
 #include <iostream>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <utility>
 
 #include "logic/action/task_action_reload_remote_server_configure.h"
 #include "logic/handle_ss_rpc_logiccommonservice.atfw.gen.h"
@@ -87,7 +90,7 @@ static std::shared_ptr<logic_server_common_module::stats_data_t> &get_global_las
 
 namespace {
 static int show_server_time(util::cli::callback_param params) {
-  struct tm tt{};
+  struct tm tt {};
   time_t now = atfw::util::time::time_utility::get_now();
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[64] = {0};

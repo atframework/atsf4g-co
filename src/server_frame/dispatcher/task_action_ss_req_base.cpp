@@ -7,7 +7,6 @@
 #include <std/explicit_declare.h>
 
 #include <log/log_wrapper.h>
-#include <logic/user_manager.h>
 #include <time/time_utility.h>
 
 #include <utility/protobuf_mini_dumper.h>

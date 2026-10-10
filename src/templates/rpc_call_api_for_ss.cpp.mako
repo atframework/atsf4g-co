@@ -54,7 +54,6 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <router/router_manager_set.h>
 #include <router/router_manager_base.h>
-#include <router/router_user_manager.h>
 #include <router/router_object_base.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -354,10 +353,6 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %   endif
 %   if rpc_is_router_api:
 %     if not rpc_is_user_rpc:
-  if (type_id == router_user_manager::me()->get_type_id()) {
-    req_msg.mutable_head()->set_user_user_id(object_id);
-    req_msg.mutable_head()->set_user_zone_id(zone_id);
-  }
   if (__child_trace_span) {
     __child_trace_span->SetAttribute("router_object.type_id", type_id);
     __child_trace_span->SetAttribute("router_object.zone_id", zone_id);
