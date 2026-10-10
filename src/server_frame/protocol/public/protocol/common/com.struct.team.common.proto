@@ -8,9 +8,6 @@ option cc_enable_arenas = true;
 
 package atframework.team;
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
-
 import "protocol/extension/v3/xresloader.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
