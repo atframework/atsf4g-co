@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "logic/matching/matching_logic.h"
 #include "logic/matching/matching_room.h"
 #include "logic/matching/matching_unit.h"
 
@@ -59,6 +60,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   struct joinable_room_result {
     matching_room::ptr_t room;
     PROJECT_NAMESPACE_ID::DMatchingUnitJoinEvaluation evaluation;
+    matching_logic::waiting_join_result waiting_evaluation;
   };
 
   // 桶内候选按创建时间排序，相同时间再按 ID 保持确定性。
@@ -90,11 +92,13 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   int32_t cancel_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCancelReq& request,
                           PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
   // Unit 心跳：查询权威快照、刷新本 Lobby 玩家路由、推进业务 ACK 并触发缺失 WAL 重放。
+  // 撮合和超时清理由 tick 调度，心跳不推进房间状态。
   int32_t check_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCheckReq& request,
                          PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response, uint64_t source_server_id = 0);
   // 接收成员的战斗确认；拒绝时整 Unit 退出，剩余 Unit 回到撮合。
   int32_t confirm_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingConfirmReq& request,
                            PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
+  // 完成初始入场并登记等待室；已排队 Unit 由后续 tick 补入。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_room_ready(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq& request,
       PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp& response, uint64_t source_server_id);
@@ -137,10 +141,30 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   // 在相同粗桶中优先查找能补齐已有 faction 的房间，并返回同次检查产生的 assignments。
   joinable_room_result find_joinable_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
                                           const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now) const;
+  // 等待室先于普通撮合处理新 Unit 和已排队的 Unit/faction。
+  joinable_room_result find_waiting_room(const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
+                                         const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now) const;
+  size_t fill_waiting_rooms(rpc::context& ctx, int64_t now, size_t max_migrations);
+  // 同步提交本次评估使用的活动 Unit；调用方已从 source 取得成员，中途不得修改来源 Room。
+  bool move_to_waiting_room(rpc::context& ctx, const matching_room::ptr_t& source, const matching_room::ptr_t& target,
+                            const std::vector<matching_unit::ptr_t>& units,
+                            const matching_logic::waiting_join_result& evaluation, int64_t now);
+  int32_t confirm_waiting_unit(rpc::context& ctx, const matching_room::ptr_t& room, const matching_unit::ptr_t& unit,
+                               const PROJECT_NAMESPACE_ID::SSMatchingConfirmReq& request,
+                               PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response, int64_t now);
+  void start_waiting_unit(rpc::context& ctx, const matching_room::ptr_t& room, const matching_unit::ptr_t& unit,
+                          int64_t now);
+  void remove_waiting_unit(rpc::context& ctx, const matching_room::ptr_t& room, const matching_unit::ptr_t& unit,
+                           PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status, int32_t result, int64_t now);
+  void reject_waiting_unit(rpc::context& ctx, const matching_room::ptr_t& room, const matching_unit::ptr_t& unit,
+                           bool timed_out, int64_t now);
+  void requeue_waiting_unit(rpc::context& ctx, const matching_room::ptr_t& room, const matching_unit::ptr_t& unit,
+                            int64_t now);
+  void advance_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
+  void close_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
   // 固定目标房间，按稳定顺序从同一粗桶内更新的 donor 连续拉取迁移原子，返回实际迁移数。
   size_t rebalance_room(rpc::context& ctx, const matching_room::ptr_t& target_room, int64_t now,
-                        size_t max_migration_count,
-                        const PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation* known_target_ready = nullptr);
+                        size_t max_migration_count);
   // 原子迁移一个或多个 Unit；多个 Unit 只用于保持满员 faction 的成员关系。
   bool move_units(rpc::context& ctx, const matching_room::ptr_t& source_room, const matching_room::ptr_t& target_room,
                   const std::vector<uint64_t>& unit_ids, int64_t now);
@@ -188,6 +212,8 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   std::unordered_map<user_key, uint64_t, user_key_hash> user_to_unit_;
   // 四维粗桶以及桶内的老房间优先队列。
   std::map<bucket_key, std::set<queue_entry>> searching_rooms_by_bucket_;
+  // 仅索引仍允许等待室接纳的房间，不计入普通搜索人数。
+  std::map<bucket_key, std::set<queue_entry>> waiting_rooms_by_bucket_;
   // 按房间保存已计入的人数，移除时不依赖可能已改变的房间人数；重复索引/移除均幂等。
   std::unordered_map<std::string, int32_t> searching_room_user_counts_;
   int32_t total_matching_user_count_ = 0;

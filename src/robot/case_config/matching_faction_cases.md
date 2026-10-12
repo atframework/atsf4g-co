@@ -3,6 +3,10 @@
 这组用例驱动真实 Lobby → Matchsvr → Orbit 流程。运行前须生成并加载匹配配置、创建角色并启动相关服务。
 每次使用没有队伍、匹配或对局状态的完整新账号区间；不要把重复次数设为大于 1。
 
+当前自动配置检查只覆盖实际存在且要求所有玩家 `matching_wait_success` 的两个 `solo_1v1` 文件。
+下表中的三个历史 3v3 / mixed 文件不在当前 checkout，不能直接执行；team / room-teammates 旧示例也不属于本轮自动验收。
+等待室验收使用 [matching_waiting_cases.md](matching_waiting_cases.md) 中的独立规则和用例。
+
 ## 配置规则
 
 匹配不再读取成局模板。每个 Unit 都属于一个 faction：

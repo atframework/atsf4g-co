@@ -13,6 +13,7 @@
 // clang-format on
 
 #include <google/protobuf/any.pb.h>
+#include <google/protobuf/util/message_differencer.h>
 #include <protocol/common/com.struct.dtmq.common.pb.h>
 #include <protocol/common/com.struct.item.common.pb.h>
 #include <protocol/extension/atframework.pb.h>
@@ -43,6 +44,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -1058,17 +1060,18 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
   const size_t dirty_baseline = find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size();
 
   // A dirty item marked outside any CS task (the dtmq dispatch path) has no CS epilogue to flush it.
-  // The item container manager registers its dirty handle through the real add flow: create_init resets the container
-  // guid allocator, so the first allocate_container_guid hands out the container guid for the test container, and
-  // adding a coin-type item fires on_item_changed. The container runs in no-position (virtual inventory) mode because
-  // non-occupying item types may only be placed there; they need no excel rows, which keeps the case independent
-  // of the (empty) item tables in the test bindir. The container is held by the test body because the manager only
-  // keeps a weak reference per container guid.
+  // create_init also grants configured initial items. Keep their dirty entries pending and verify them alongside
+  // the test item by container and entry ID; the same item type can exist in both containers with different counts.
+  // The real add flow registers the dirty handle. The test holds its virtual container because the manager only
+  // keeps a weak reference per container GUID.
   atfw::util::memory::strong_rc_ptr<user_virtual_inventory_container> test_inventory_container;
+  using dirty_item_key_t = std::pair<int64_t, uint64_t>;
+  std::map<dirty_item_key_t, PROJECT_NAMESPACE_ID::DItemInstance> expected_dirty_items;
   CASE_EXPECT_TRUE(run_sync_task(
-      test, "chat.mark_dirty_item", [&user3, &test_inventory_container](rpc::context &ctx) -> rpc::result_code_type {
+      test, "chat.mark_dirty_item",
+      [&user3, &test_inventory_container, &expected_dirty_items](rpc::context &ctx) -> rpc::result_code_type {
         auto &item_mgr = user3.user_inst->get_user_item_container_manager();
-        item_mgr.create_init(ctx);
+        RPC_AWAIT_IGNORE_VOID(item_mgr.create_init(ctx));
         const int64_t container_guid = item_mgr.allocate_container_guid();
 
         test_inventory_container =
@@ -1086,7 +1089,41 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
         if (PROJECT_NAMESPACE_ID::EN_SUCCESS != checked.get_error_code()) {
           RPC_RETURN_CODE(checked.get_error_code());
         }
-        RPC_RETURN_CODE(item_mgr.add(checked).error_code);
+        const int32_t add_result = item_mgr.add(checked).error_code;
+        if (PROJECT_NAMESPACE_ID::EN_SUCCESS != add_result) {
+          RPC_RETURN_CODE(add_result);
+        }
+
+        // Read expected instances through the container API, independently of dirty-message serialization.
+        const auto capture_container = [&expected_dirty_items](const item_algorithm::ItemContainer &container) {
+          return container.foreach_instance(
+              [&container, &expected_dirty_items](const PROJECT_NAMESPACE_ID::DItemInstance &instance) {
+                const auto entry = container.find_entry(instance.item_basic());
+                CASE_EXPECT_TRUE(!!entry);
+                if (!entry) {
+                  return false;
+                }
+                const auto key = std::make_pair(container.get_container_guid(), entry->entry_id());
+                const bool inserted = expected_dirty_items.emplace(key, instance).second;
+                CASE_EXPECT_TRUE(inserted);
+                return inserted;
+              });
+        };
+        const auto &inventory = item_mgr.get_inventory();
+        for (size_t page = 0; page < inventory.page_count(); ++page) {
+          const auto container = inventory.get_container_by_page(page);
+          CASE_EXPECT_TRUE(!!container);
+          if (!container || !capture_container(*container)) {
+            RPC_RETURN_CODE(-1);
+          }
+        }
+        const auto initial_virtual_container = item_mgr.get_virtual_inventory().get_virtual_container();
+        CASE_EXPECT_TRUE(!!initial_virtual_container);
+        if (!initial_virtual_container || !capture_container(*initial_virtual_container) ||
+            !capture_container(*test_inventory_container)) {
+          RPC_RETURN_CODE(-1);
+        }
+        RPC_RETURN_CODE(0);
       }));
   pump_rounds(test, 2);
   CASE_EXPECT_EQ(dirty_baseline, find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size());
@@ -1117,15 +1154,28 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
       PROJECT_NAMESPACE_ID::SCUserDirtyChgSync dirty_body;
       CASE_EXPECT_TRUE(dirty_body.ParseFromString(dirty_cs_msg.body_bin()));
       bool found_dirty_item = false;
+      std::set<dirty_item_key_t> delivered_items;
       for (const auto &chg : dirty_body.dirty_item_chgs()) {
+        CASE_EXPECT_EQ(0, chg.removed_entry_ids_size());
         for (const auto &entry : chg.update_entries()) {
-          if (1001 == entry.instance().item_basic().type_id()) {
+          const auto key = std::make_pair(chg.container_guid(), entry.entry_id());
+          CASE_EXPECT_TRUE(delivered_items.insert(key).second);
+          const auto expected = expected_dirty_items.find(key);
+          CASE_EXPECT_TRUE(expected != expected_dirty_items.end());
+          if (expected != expected_dirty_items.end()) {
+            CASE_EXPECT_TRUE(google::protobuf::util::MessageDifferencer::Equals(expected->second, entry.instance()));
+          }
+          CASE_EXPECT_EQ(chg.container_guid(), entry.instance().item_basic().position().container_guid());
+          if (test_inventory_container && chg.container_guid() == test_inventory_container->get_container_guid()) {
+            CASE_EXPECT_FALSE(found_dirty_item);
             found_dirty_item = true;
+            CASE_EXPECT_EQ(1001, entry.instance().item_basic().type_id());
             CASE_EXPECT_EQ(7, static_cast<int>(entry.instance().item_basic().count()));
           }
         }
       }
       CASE_EXPECT_TRUE(found_dirty_item);
+      CASE_EXPECT_EQ(expected_dirty_items.size(), delivered_items.size());
     }
   }
 

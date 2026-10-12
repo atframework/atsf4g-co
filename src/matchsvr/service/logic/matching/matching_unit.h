@@ -10,7 +10,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "logic/matching/matching_wal_handle.h"
@@ -31,6 +30,25 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
     int64_t acknowledge_event_id = 0;
   };
 
+  struct subscriber_route_result {
+    bool valid = false;
+    subscriber_route value;
+    bool has_value() const noexcept { return valid; }
+    const subscriber_route* operator->() const noexcept { return &value; }
+  };
+
+  // 创建流程中的临时订阅计划；路由已校验，只能用于准备它的 Unit。
+  class subscriber_initialization {
+   public:
+    subscriber_initialization() = default;
+
+   private:
+    friend class matching_unit;
+
+    const matching_unit* owner_ = nullptr;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute> routes_;
+  };
+
   explicit matching_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& data);
 
   uint64_t get_unit_id() const noexcept { return data_.unit_id(); }
@@ -48,15 +66,23 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
 
   // 从当前 Room 复制业务视图；迁房前后视图相同则不会产生外部事件。
   bool refresh_view_from_room(const matching_room& room);
+  void begin_confirmation(int64_t expire_time) noexcept;
+  bool confirm_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool accepted) noexcept;
+  bool are_all_users_confirmed() const noexcept;
+  void mark_initializing() noexcept;
+  void resume_searching(int64_t expire_time) noexcept;
   void mark_terminal(PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status, int32_t result, int64_t now);
   void set_terminal_time(int64_t value) noexcept { terminal_time_ = value; }
 
   // 创建时至少提供一个 Unit 成员路由；其余成员在首次心跳时注册自己的路由。
+  bool prepare_subscribers(
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes,
+      subscriber_initialization& output) const;
+  // 初始化会同步发送当前视图；准备计划不会创建订阅或发送消息。
+  bool initialize_subscribers(rpc::context& ctx, const subscriber_initialization& prepared);
   bool initialize_subscribers(
       rpc::context& ctx,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes);
-  bool validate_subscriber_routes(
-      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes) const;
   bool subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
                  int64_t acknowledge_event_id);
   // Unit 成员首次心跳创建订阅；后续心跳更新路由、业务 ACK 和活跃时间，并触发缺失 WAL 的重放。
@@ -64,7 +90,7 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
                  const PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat& heartbeat_data);
   // Unit 是匹配原子；任一成员订阅超过阈值未续约时，整个 Unit 失效。
   bool is_heartbeat_expired(int64_t expire_before) const;
-  std::optional<subscriber_route> get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+  subscriber_route_result get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
 
   // 只发布 Unit 语义事件。事件中始终携带发布时的完整 Unit 视图。
   void publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnMatchingUnitEventType event_type);
@@ -73,6 +99,9 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
   friend class matching_room;
 
   bool has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
+  // 调用者已检查 publisher、成员、路由和 ACK 范围。
+  bool subscribe_validated(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
+                           int64_t acknowledge_event_id);
 
   PROJECT_NAMESPACE_ID::DMatchingUnit data_;
   PROJECT_NAMESPACE_ID::DMatchingUnitView view_;

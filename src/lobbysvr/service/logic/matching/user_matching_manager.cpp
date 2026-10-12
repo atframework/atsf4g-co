@@ -134,7 +134,7 @@ user_matching_manager::~user_matching_manager() = default;
 
 void user_matching_manager::create_init(rpc::context&) {
   data_.Clear();
-  processing_event_id_ = 0;
+  pending_acknowledge_event_id_ = 0;
   last_reported_acknowledge_event_id_ = 0;
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
@@ -219,7 +219,7 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
                 return l.start_timepoint() < r.start_timepoint();
               });
   }
-  processing_event_id_ = 0;
+  pending_acknowledge_event_id_ = 0;
   last_reported_acknowledge_event_id_ = 0;
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
@@ -507,9 +507,17 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
                protobuf_mini_dumper_get_error_msg(snapshot.result()));
     RPC_RETURN_CODE(snapshot.result());
   }
-  if (unit_id == get_current_unit_id()) {
-    last_reported_acknowledge_event_id_ = std::max(last_reported_acknowledge_event_id_, acknowledge_event_id);
+  if (acknowledge_event_id > last_reported_acknowledge_event_id_ ||
+      snapshot.snapshot().last_event_id() > get_last_event_id()) {
+    FCTXLOGDEBUG(ctx,
+                 "matching heartbeat accepted, zone_id={}, user_id={}, unit_id={}, matching_id={}, status={}, "
+                 "event_id={}, reported_acknowledge_event_id={}->{}, result={}",
+                 owner_->get_zone_id(), owner_->get_user_id(), unit_id, snapshot.matching_id(),
+                 static_cast<int>(snapshot.snapshot().status()), snapshot.snapshot().last_event_id(),
+                 last_reported_acknowledge_event_id_,
+                 std::max(last_reported_acknowledge_event_id_, acknowledge_event_id), snapshot.result());
   }
+  last_reported_acknowledge_event_id_ = std::max(last_reported_acknowledge_event_id_, acknowledge_event_id);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -570,6 +578,8 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingConfirmReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
   const uint64_t unit_id = get_current_unit_id();
+  const int64_t last_event_id = get_last_event_id();
+  const int64_t pending_acknowledge_event_id = pending_acknowledge_event_id_;
   FWLOGDEBUG("{} confirm matching, request_unit_id={}, current_unit_id={}, confirmed={}", *owner_, request.unit_id(),
              unit_id, request.confirmed());
   if (request.unit_id() == 0 || request.unit_id() != unit_id) {
@@ -578,8 +588,20 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
                request.unit_id(), unit_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
+  if (data_.view().status() != PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING ||
+      last_event_id <= 0) {
+    dump_client_view(*response.mutable_view());
+    FCTXLOGDEBUG(ctx,
+                 "matching confirm ignored, reason=not_current_confirmation, zone_id={}, user_id={}, unit_id={}, "
+                 "status={}, event_id={}, acknowledge_event_id={}, result={}",
+                 owner_->get_zone_id(), owner_->get_user_id(), unit_id, static_cast<int>(data_.view().status()),
+                 last_event_id, get_acknowledge_event_id(),
+                 static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);
+  }
   rpc_request->set_unit_id(unit_id);
   rpc_request->set_confirmed(request.confirmed());
+  rpc_request->set_last_event_id(last_event_id);
   fill_user_key(*rpc_request->mutable_operator_user());
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   rpc_request->set_acknowledge_event_id(get_acknowledge_event_id());
@@ -597,7 +619,17 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   }
   int32_t result =
       RPC_AWAIT_CODE_RESULT(rpc::matching::confirm_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
-  if (unit_id != get_current_unit_id()) {
+  if (unit_id != get_current_unit_id() || pending_acknowledge_event_id != pending_acknowledge_event_id_ ||
+      data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING ||
+      (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING &&
+       last_event_id != get_last_event_id())) {
+    FCTXLOGDEBUG(ctx,
+                 "matching confirm response ignored, reason=confirmation_changed, zone_id={}, user_id={}, "
+                 "unit_id={}->{}, matching_id={}, status={}, event_id={}->{}, "
+                 "pending_acknowledge_event_id={}->{}, result={}",
+                 owner_->get_zone_id(), owner_->get_user_id(), unit_id, get_current_unit_id(),
+                 rpc_response->matching_id(), static_cast<int>(data_.view().status()), last_event_id,
+                 get_last_event_id(), pending_acknowledge_event_id, pending_acknowledge_event_id_, result);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (result < 0) {
@@ -632,8 +664,7 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
                  *owner_, local_unit_id, sync.unit_id(), static_cast<int>(data_.view().status()));
     return result;
   }
-  if (source_matchsvr_id != 0 && data_.matchsvr_server_id() != 0 && data_.matchsvr_server_id() != source_matchsvr_id &&
-      local_unit_id == sync.unit_id()) {
+  if (source_matchsvr_id != 0 && data_.matchsvr_server_id() != 0 && data_.matchsvr_server_id() != source_matchsvr_id) {
     FWLOGERROR(
         "{} ignore matching sync from unexpected Matchsvr, unit_id={}, expected_matchsvr_id={:#x}, "
         "source_matchsvr_id={:#x}",
@@ -650,14 +681,22 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
       "acknowledge_event_id={}",
       *owner_, sync.unit_id(), sync.event_logs_size(), get_last_event_id(), data_.acknowledge_event_id());
   update_view(ctx, sync.unit_view());
-  bool has_pending_event = processing_event_id_ != 0;
+  bool has_pending_event = pending_acknowledge_event_id_ != 0;
   // WAL 增量已压缩或重新订阅时只会收到当前完整视图。此时不重放 Lobby 缓存，而是从 Matchsvr
   // 当前状态恢复尚未完成的副作用，并在成功后一次推进到快照游标。
-  if (sync.event_logs().empty() && data_.acknowledge_event_id() < get_last_event_id() && processing_event_id_ == 0) {
+  if (sync.event_logs().empty() && data_.acknowledge_event_id() < get_last_event_id() &&
+      pending_acknowledge_event_id_ == 0) {
     if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING) {
-      processing_event_id_ = get_last_event_id();
-      result.confirm_event_id = processing_event_id_;
       has_pending_event = true;
+      if (get_last_event_id() > 0) {
+        pending_acknowledge_event_id_ = get_last_event_id();
+        result.confirm_event_id = pending_acknowledge_event_id_;
+        FCTXLOGDEBUG(ctx,
+                     "matching confirm scheduled, reason=snapshot_recovery, zone_id={}, user_id={}, unit_id={}, "
+                     "event_id={}, acknowledge_event_id={}",
+                     owner_->get_zone_id(), owner_->get_user_id(), local_unit_id, result.confirm_event_id,
+                     get_acknowledge_event_id());
+      }
     } else {
       bool snapshot_effect_succeeded = true;
       if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED &&
@@ -667,15 +706,32 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
                                     PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
       if (snapshot_effect_succeeded) {
+        FCTXLOGDEBUG(ctx,
+                     "matching ACK advanced, reason=snapshot_applied, zone_id={}, user_id={}, unit_id={}, status={}, "
+                     "acknowledge_event_id={}->{}, result={}",
+                     owner_->get_zone_id(), owner_->get_user_id(), local_unit_id,
+                     static_cast<int>(data_.view().status()), get_acknowledge_event_id(), get_last_event_id(),
+                     data_.view().result());
         data_.set_acknowledge_event_id(get_last_event_id());
         dirty_ = true;
       } else {
+        FCTXLOGDEBUG(ctx,
+                     "matching snapshot pending, reason=orbit_join_failed, zone_id={}, user_id={}, unit_id={}, "
+                     "status={}, event_id={}, acknowledge_event_id={}",
+                     owner_->get_zone_id(), owner_->get_user_id(), local_unit_id,
+                     static_cast<int>(data_.view().status()), get_last_event_id(), get_acknowledge_event_id());
         has_pending_event = true;
       }
     }
   }
   for (const auto& event_log : sync.event_logs()) {
     if (event_log.event_id() <= data_.acknowledge_event_id()) {
+      FCTXLOGDEBUG(
+          ctx,
+          "matching WAL ignored, reason=already_acknowledged, zone_id={}, user_id={}, unit_id={}, event_id={}, "
+          "event_type={}, acknowledge_event_id={}",
+          owner_->get_zone_id(), owner_->get_user_id(), local_unit_id, event_log.event_id(),
+          static_cast<int>(event_log.event_type()), get_acknowledge_event_id());
       continue;
     }
     if (event_log.event_id() != data_.acknowledge_event_id() + 1 ||
@@ -688,16 +744,27 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
       has_pending_event = true;
       break;
     }
-    if (processing_event_id_ != 0) {
+    if (pending_acknowledge_event_id_ != 0) {
+      FCTXLOGDEBUG(ctx,
+                   "matching WAL paused, reason=confirmation_pending, zone_id={}, user_id={}, unit_id={}, event_id={}, "
+                   "pending_acknowledge_event_id={}, acknowledge_event_id={}",
+                   owner_->get_zone_id(), owner_->get_user_id(), local_unit_id, event_log.event_id(),
+                   pending_acknowledge_event_id_, get_acknowledge_event_id());
       has_pending_event = true;
       break;
     }
 
     if (event_log.event_type() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED &&
-        data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING) {
-      processing_event_id_ = event_log.event_id();
+        data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING &&
+        event_log.event_id() == get_last_event_id()) {
+      pending_acknowledge_event_id_ = event_log.event_id();
       result.confirm_event_id = event_log.event_id();
       has_pending_event = true;
+      FCTXLOGDEBUG(ctx,
+                   "matching confirm scheduled, reason=confirm_required_event, zone_id={}, user_id={}, unit_id={}, "
+                   "event_id={}, acknowledge_event_id={}",
+                   owner_->get_zone_id(), owner_->get_user_id(), local_unit_id, result.confirm_event_id,
+                   get_acknowledge_event_id());
       break;
     }
 
@@ -713,6 +780,12 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
       }
     }
 
+    FCTXLOGDEBUG(ctx,
+                 "matching ACK advanced, reason=wal_applied, zone_id={}, user_id={}, unit_id={}, event_type={}, "
+                 "event_status={}, current_status={}, acknowledge_event_id={}->{}, result={}",
+                 owner_->get_zone_id(), owner_->get_user_id(), local_unit_id, static_cast<int>(event_log.event_type()),
+                 static_cast<int>(event_log.view().status()), static_cast<int>(data_.view().status()),
+                 get_acknowledge_event_id(), event_log.event_id(), event_log.view().result());
     data_.set_acknowledge_event_id(event_log.event_id());
     dirty_ = true;
   }
@@ -728,26 +801,36 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
   return result;
 }
 
-bool user_matching_manager::finish_matching_event(rpc::context& /*ctx*/, uint64_t unit_id, int64_t event_id,
-                                                  bool success) {
-  if (unit_id != get_current_unit_id() || event_id <= 0 || processing_event_id_ != event_id) {
-    FWLOGERROR(
-        "{} ignore mismatched matching event completion, unit_id={}, current_unit_id={}, event_id={}, "
-        "processing_event_id={}, success={}",
-        *owner_, unit_id, get_current_unit_id(), event_id, processing_event_id_, success);
+bool user_matching_manager::finish_matching_event(rpc::context& ctx, uint64_t unit_id, int64_t event_id, bool success) {
+  if (unit_id != get_current_unit_id() || event_id <= 0 || pending_acknowledge_event_id_ != event_id) {
+    FCTXLOGERROR(ctx,
+                 "{} ignore mismatched matching event completion, unit_id={}, current_unit_id={}, event_id={}, "
+                 "pending_acknowledge_event_id={}, success={}",
+                 *owner_, unit_id, get_current_unit_id(), event_id, pending_acknowledge_event_id_, success);
     return false;
   }
-  processing_event_id_ = 0;
+  pending_acknowledge_event_id_ = 0;
   if (!success) {
+    FCTXLOGDEBUG(
+        ctx,
+        "matching confirmation pending, reason=side_effect_failed, zone_id={}, user_id={}, unit_id={}, event_id={}, "
+        "status={}, acknowledge_event_id={}",
+        owner_->get_zone_id(), owner_->get_user_id(), unit_id, event_id, static_cast<int>(data_.view().status()),
+        get_acknowledge_event_id());
     return false;
   }
   if (event_id <= data_.acknowledge_event_id() || event_id > get_last_event_id()) {
-    FWLOGERROR(
-        "{} reject invalid matching event completion, unit_id={}, event_id={}, acknowledge_event_id={}, "
-        "view_event_id={}",
-        *owner_, unit_id, event_id, data_.acknowledge_event_id(), get_last_event_id());
+    FCTXLOGERROR(ctx,
+                 "{} reject invalid matching event completion, unit_id={}, event_id={}, acknowledge_event_id={}, "
+                 "view_event_id={}",
+                 *owner_, unit_id, event_id, data_.acknowledge_event_id(), get_last_event_id());
     return false;
   }
+  FCTXLOGDEBUG(ctx,
+               "matching ACK advanced, reason=confirmation_finished, zone_id={}, user_id={}, unit_id={}, status={}, "
+               "acknowledge_event_id={}->{}, result={}",
+               owner_->get_zone_id(), owner_->get_user_id(), unit_id, static_cast<int>(data_.view().status()),
+               get_acknowledge_event_id(), event_id, data_.view().result());
   data_.set_acknowledge_event_id(event_id);
   return true;
 }
@@ -766,10 +849,48 @@ uint64_t user_matching_manager::get_current_matchsvr_server_id() const { return 
 
 void user_matching_manager::update_view(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingUnitView& view) {
   if (view.unit().unit_id() == 0 || view.unit().unit_id() != get_current_unit_id()) {
+    FCTXLOGDEBUG(
+        ctx,
+        "matching view ignored, reason=unexpected_unit, zone_id={}, user_id={}, unit_id={}, current_unit_id={}, "
+        "event_id={}, current_event_id={}",
+        owner_->get_zone_id(), owner_->get_user_id(), view.unit().unit_id(), get_current_unit_id(),
+        view.last_event_id(), get_last_event_id());
     return;
   }
   if (view.last_event_id() < get_last_event_id()) {
+    FCTXLOGDEBUG(ctx,
+                 "matching view ignored, reason=older_event, zone_id={}, user_id={}, unit_id={}, event_id={}, "
+                 "current_event_id={}, acknowledge_event_id={}",
+                 owner_->get_zone_id(), owner_->get_user_id(), get_current_unit_id(), view.last_event_id(),
+                 get_last_event_id(), get_acknowledge_event_id());
     return;
+  }
+  if (view.status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING ||
+      (view.status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING &&
+       view.last_event_id() != pending_acknowledge_event_id_)) {
+    // 回到搜索或开始新确认后，旧确认不能继续提交 ACK；正常创建战斗和完成时仍保留原 ACK 位置。
+    if (pending_acknowledge_event_id_ != 0) {
+      FCTXLOGDEBUG(
+          ctx,
+          "matching pending ACK cleared, reason=search_or_new_confirmation, zone_id={}, user_id={}, unit_id={}, "
+          "status={}->{}, event_id={}, pending_acknowledge_event_id={}, acknowledge_event_id={}",
+          owner_->get_zone_id(), owner_->get_user_id(), get_current_unit_id(), static_cast<int>(data_.view().status()),
+          static_cast<int>(view.status()), view.last_event_id(), pending_acknowledge_event_id_,
+          get_acknowledge_event_id());
+    }
+    pending_acknowledge_event_id_ = 0;
+  }
+  if (data_.view().status() != view.status() || data_.view().result() != view.result() ||
+      data_.view().faction_id() != view.faction_id()) {
+    FCTXLOGINFO(
+        ctx,
+        "matching view changed, reason=accepted_unit_view, zone_id={}, user_id={}, unit_id={}, matchsvr_id={:#x}, "
+        "status={}->{}, faction_id={}->{}, event_id={}->{}, acknowledge_event_id={}, result={}->{}, "
+        "expire_time={}, confirm_expire_time={}",
+        owner_->get_zone_id(), owner_->get_user_id(), get_current_unit_id(), get_current_matchsvr_server_id(),
+        static_cast<int>(data_.view().status()), static_cast<int>(view.status()), data_.view().faction_id(),
+        view.faction_id(), get_last_event_id(), view.last_event_id(), get_acknowledge_event_id(), data_.view().result(),
+        view.result(), view.expire_time(), view.confirm_expire_time());
   }
   if (!atfw::atapp::protobuf_equal(data_.view(), view)) {
     protobuf_copy_message(*data_.mutable_view(), view);
@@ -790,7 +911,7 @@ void user_matching_manager::update_view(rpc::context& ctx, const PROJECT_NAMESPA
 }
 
 bool user_matching_manager::has_pending_matching_event() const {
-  return processing_event_id_ != 0 || get_acknowledge_event_id() < get_last_event_id();
+  return pending_acknowledge_event_id_ != 0 || get_acknowledge_event_id() < get_last_event_id();
 }
 
 bool user_matching_manager::prepare_matching_unit(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
@@ -812,14 +933,30 @@ bool user_matching_manager::prepare_matching_unit(rpc::context& ctx, uint64_t un
   data_.set_matchsvr_server_id(matchsvr_id);
   data_.mutable_view()->mutable_unit()->set_unit_id(unit_id);
   data_.mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+  FCTXLOGINFO(ctx,
+              "matching Unit bound, reason=prepare_unit, zone_id={}, user_id={}, unit_id={}, matchsvr_id={:#x}, "
+              "status={}, event_id={}, acknowledge_event_id={}, result={}",
+              owner_->get_zone_id(), owner_->get_user_id(), unit_id, matchsvr_id,
+              static_cast<int>(data_.view().status()), get_last_event_id(), get_acknowledge_event_id(),
+              data_.view().result());
   return true;
 }
 
 void user_matching_manager::reset_matching_unit() {
+  if (get_current_unit_id() != 0 || get_current_matchsvr_server_id() != 0) {
+    FWLOGINFO(
+        "matching Unit cleared, reason=reset_unit, zone_id={}, user_id={}, unit_id={}, matchsvr_id={:#x}, "
+        "status={}->{}, "
+        "event_id={}, acknowledge_event_id={}, pending_acknowledge_event_id={}, result={}",
+        owner_->get_zone_id(), owner_->get_user_id(), get_current_unit_id(), get_current_matchsvr_server_id(),
+        static_cast<int>(data_.view().status()),
+        static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_INVALID), get_last_event_id(),
+        get_acknowledge_event_id(), pending_acknowledge_event_id_, data_.view().result());
+  }
   data_.clear_view();
   data_.clear_matchsvr_server_id();
   data_.clear_acknowledge_event_id();
-  processing_event_id_ = 0;
+  pending_acknowledge_event_id_ = 0;
   last_reported_acknowledge_event_id_ = 0;
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
@@ -838,6 +975,12 @@ void user_matching_manager::set_matching_state(rpc::context& ctx, bool matching)
     return;
   }
 
+  FCTXLOGINFO(ctx,
+              "matching activity changed, reason=set_matching_state, zone_id={}, user_id={}, unit_id={}, "
+              "matchsvr_id={:#x}, matching={}->{}, status={}, event_id={}, acknowledge_event_id={}, result={}",
+              owner_->get_zone_id(), owner_->get_user_id(), get_current_unit_id(), get_current_matchsvr_server_id(),
+              is_matching_, matching, static_cast<int>(data_.view().status()), get_last_event_id(),
+              get_acknowledge_event_id(), data_.view().result());
   is_matching_ = matching;
   if (matching) {
     team_logic_.start_matching_finish(ctx);
@@ -1128,9 +1271,6 @@ void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
 }
 
 void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
-  if (unit_id == 0 || unit_id != get_current_unit_id()) {
-    return;
-  }
   const int64_t heartbeat_interval = get_heartbeat_interval();
   const time_t now = atfw::util::time::time_utility::get_now();
   if (last_heartbeat_time_ > 0 && now < last_heartbeat_time_ + heartbeat_interval) {

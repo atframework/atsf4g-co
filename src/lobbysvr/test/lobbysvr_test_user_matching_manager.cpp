@@ -32,6 +32,7 @@
 #include "frame/test_macros.h"
 #include "lobbysvr_test_runtime_helper.h"    // NOLINT: build/include_subdir
 #include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
+#include "logic/character/user_character_manager.h"
 #include "logic/logic_server_setup.h"
 #include "logic/matching/user_matching_manager.h"
 #include "logic/orbit/user_orbit_manager.h"
@@ -485,6 +486,7 @@ CASE_TEST(lobbysvr_user_matching, advances_business_cursor_only_after_confirm_su
   auto* event = sync.add_event_logs();
   event->set_event_id(2);
   event->set_event_type(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED);
+  *event->mutable_view() = sync.unit_view();
 
   auto first = manager.acknowledge_matching_sync(ctx, sync, kSourceMatchsvrId);
   CASE_EXPECT_TRUE(first.accepted);
@@ -533,7 +535,7 @@ CASE_TEST(lobbysvr_user_matching, treats_obsolete_confirm_event_as_completed_aft
   auto* local_data = table.mutable_matching_data();
   local_data->set_acknowledge_event_id(1);
   local_data->mutable_view()->set_last_event_id(1);
-  local_data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+  local_data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
   local_data->mutable_view()->mutable_unit()->set_unit_id(1006);
 
   auto& manager = user_inst->get_user_matching_manager();
@@ -547,9 +549,13 @@ CASE_TEST(lobbysvr_user_matching, treats_obsolete_confirm_event_as_completed_aft
   auto* confirm_event = sync.add_event_logs();
   confirm_event->set_event_id(2);
   confirm_event->set_event_type(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED);
+  *confirm_event->mutable_view() = sync.unit_view();
+  confirm_event->mutable_view()->set_last_event_id(2);
+  confirm_event->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
   auto* changed_event = sync.add_event_logs();
   changed_event->set_event_id(3);
   changed_event->set_event_type(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_VIEW_CHANGED);
+  *changed_event->mutable_view() = sync.unit_view();
 
   auto result = manager.acknowledge_matching_sync(ctx, sync);
   CASE_EXPECT_TRUE(result.accepted);
@@ -1019,4 +1025,304 @@ CASE_TEST(lobbysvr_user_matching, new_subscription_cannot_discard_unfinished_bus
   PROJECT_NAMESPACE_ID::table_user persisted;
   CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
   CASE_EXPECT_EQ(7, persisted.matching_data().acknowledge_event_id());
+}
+
+CASE_TEST(lobbysvr_user_matching, ignores_confirm_completion_from_previous_event_of_same_unit) {
+  auto user_inst = user::create(10021, 1, "matching-confirm-event-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    return;
+  }
+  rpc::context ctx{rpc::context::create_without_task()};
+  PROJECT_NAMESPACE_ID::table_user table;
+  auto* data = table.mutable_matching_data();
+  data->set_acknowledge_event_id(1);
+  data->mutable_view()->mutable_unit()->set_unit_id(1021);
+  data->mutable_view()->set_last_event_id(1);
+  data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+  auto& manager = user_inst->get_user_matching_manager();
+  manager.init_from_table_data(ctx, table);
+
+  PROJECT_NAMESPACE_ID::SSMatchingEventSync first;
+  first.set_unit_id(1021);
+  *first.mutable_unit_view() = data->view();
+  first.mutable_unit_view()->set_last_event_id(2);
+  first.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+  auto* old_confirm = first.add_event_logs();
+  old_confirm->set_event_id(2);
+  old_confirm->set_event_type(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED);
+  *old_confirm->mutable_view() = first.unit_view();
+  CASE_EXPECT_EQ(2, manager.acknowledge_matching_sync(ctx, first).confirm_event_id);
+
+  PROJECT_NAMESPACE_ID::SSMatchingEventSync next = first;
+  next.mutable_unit_view()->set_last_event_id(4);
+  auto* searching = next.add_event_logs();
+  searching->set_event_id(3);
+  searching->set_event_type(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_VIEW_CHANGED);
+  *searching->mutable_view() = first.unit_view();
+  searching->mutable_view()->set_last_event_id(3);
+  searching->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+  auto* new_confirm = next.add_event_logs();
+  new_confirm->set_event_id(4);
+  new_confirm->set_event_type(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED);
+  *new_confirm->mutable_view() = next.unit_view();
+  const auto result = manager.acknowledge_matching_sync(ctx, next);
+  CASE_EXPECT_TRUE(result.accepted);
+  CASE_EXPECT_EQ(3, result.acknowledge_event_id);
+  CASE_EXPECT_EQ(4, result.confirm_event_id);
+  CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1021, 2, true));
+  CASE_EXPECT_TRUE(manager.finish_matching_event(ctx, 1021, 4, true));
+  PROJECT_NAMESPACE_ID::table_user persisted;
+  manager.dump(ctx, persisted);
+  CASE_EXPECT_EQ(4, persisted.matching_data().acknowledge_event_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 persisted.matching_data().view().status());
+  CASE_EXPECT_EQ(0, manager.acknowledge_matching_sync(ctx, next).confirm_event_id);
+}
+
+CASE_TEST(lobbysvr_user_matching, snapshot_replaces_pending_confirmation) {
+  auto user_inst = user::create(10022, 1, "matching-confirm-snapshot-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    return;
+  }
+  rpc::context ctx{rpc::context::create_without_task()};
+  PROJECT_NAMESPACE_ID::table_user table;
+  auto* data = table.mutable_matching_data();
+  data->set_acknowledge_event_id(1);
+  data->mutable_view()->mutable_unit()->set_unit_id(1022);
+  data->mutable_view()->set_last_event_id(1);
+  data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+  auto& manager = user_inst->get_user_matching_manager();
+  manager.init_from_table_data(ctx, table);
+
+  PROJECT_NAMESPACE_ID::SSMatchingEventSync snapshot;
+  snapshot.set_unit_id(1022);
+  *snapshot.mutable_unit_view() = data->view();
+  snapshot.mutable_unit_view()->set_last_event_id(2);
+  snapshot.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+  CASE_EXPECT_EQ(2, manager.acknowledge_matching_sync(ctx, snapshot).confirm_event_id);
+  snapshot.mutable_unit_view()->set_last_event_id(5);
+  CASE_EXPECT_EQ(5, manager.acknowledge_matching_sync(ctx, snapshot).confirm_event_id);
+  CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1022, 2, true));
+  CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1022, 5, false));
+  CASE_EXPECT_EQ(5, manager.acknowledge_matching_sync(ctx, snapshot).confirm_event_id);
+  CASE_EXPECT_TRUE(manager.finish_matching_event(ctx, 1022, 5, true));
+  PROJECT_NAMESPACE_ID::table_user persisted;
+  manager.dump(ctx, persisted);
+  CASE_EXPECT_EQ(5, persisted.matching_data().acknowledge_event_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 persisted.matching_data().view().status());
+}
+
+CASE_TEST(lobbysvr_user_matching, confirm_rpc_preserves_ack_when_completed_snapshot_arrives_first) {
+  constexpr uint64_t kMatchsvrId = 0x1E0036;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("matching-confirm-event-matchsvr")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_name("matchsvr")
+      .add_label("hpa_scaling_ready", "1");
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  auto user_inst = user::create(10023, 1, "matching-confirm-event-rpc-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  rpc::unit_test::ss_mock_rule_options rule_options;
+  rule_options.match_node_id = kMatchsvrId;
+  auto rule = rpc::matching::mock::confirm_matching(
+      [user_inst](rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingConfirmReq& request,
+                  PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        CASE_EXPECT_EQ(1023, request.unit_id());
+        CASE_EXPECT_TRUE(request.confirmed());
+        CASE_EXPECT_EQ(10023, request.operator_user().user_id());
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync snapshot;
+        snapshot.set_unit_id(1023);
+        *snapshot.mutable_unit_view() = manager.get_view();
+        CASE_EXPECT_EQ(2, request.last_event_id());
+        CASE_EXPECT_EQ(1, request.acknowledge_event_id());
+        CASE_EXPECT_EQ(2, manager.get_last_event_id());
+        // 创建战斗和完成通知先于确认 RPC 回包到达，仍须保留确认事件 2 的待提交 ACK。
+        snapshot.mutable_unit_view()->set_last_event_id(3);
+        snapshot.mutable_unit_view()->set_status(
+            PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE);
+        auto sync_result = manager.acknowledge_matching_sync(ctx, snapshot);
+        CASE_EXPECT_TRUE(sync_result.has_pending_event);
+        CASE_EXPECT_EQ(0, sync_result.confirm_event_id);
+        CASE_EXPECT_EQ(1, sync_result.acknowledge_event_id);
+        *response.mutable_snapshot() = snapshot.unit_view();
+        snapshot.mutable_unit_view()->set_last_event_id(4);
+        snapshot.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED);
+        snapshot.mutable_unit_view()->mutable_orbit_room_key()->set_client_id("confirm-completed-orbit-room");
+        sync_result = manager.acknowledge_matching_sync(ctx, snapshot);
+        CASE_EXPECT_TRUE(sync_result.has_pending_event);
+        CASE_EXPECT_EQ(0, sync_result.confirm_event_id);
+        CASE_EXPECT_EQ(1, sync_result.acknowledge_event_id);
+        response.set_result(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+        RPC_RETURN_CODE(0);
+      },
+      rule_options);
+  CASE_EXPECT_TRUE(!!rule);
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.confirm_event_rpc", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* characters = table.mutable_character_data()->mutable_characters();
+        characters->set_last_login_character_guid(20023);
+        characters->add_characters()->mutable_basic_data()->set_guid(20023);
+        user_inst->get_user_character_manager().init_from_table_data(ctx, table);
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(1);
+        data->mutable_view()->mutable_unit()->set_unit_id(1023);
+        auto* first_user = data->mutable_view()->mutable_unit()->add_users();
+        first_user->mutable_user_key()->set_user_id(10023);
+        first_user->mutable_user_key()->set_zone_id(1);
+        first_user->set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+        auto* second_user = data->mutable_view()->mutable_unit()->add_users();
+        second_user->mutable_user_key()->set_user_id(10024);
+        second_user->mutable_user_key()->set_zone_id(1);
+        second_user->set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+        data->mutable_view()->set_last_event_id(1);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        auto& manager = user_inst->get_user_matching_manager();
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync snapshot;
+        snapshot.set_unit_id(1023);
+        *snapshot.mutable_unit_view() = data->view();
+        snapshot.mutable_unit_view()->set_last_event_id(2);
+        snapshot.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+        CASE_EXPECT_EQ(2, manager.acknowledge_matching_sync(ctx, snapshot).confirm_event_id);
+        PROJECT_NAMESPACE_ID::CSMatchingConfirmReq request;
+        PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp response;
+        request.set_unit_id(1023);
+        request.set_confirmed(true);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(manager.confirm_matching(ctx, request, response)));
+        CASE_EXPECT_EQ(4, manager.get_last_event_id());
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, manager.get_view().status());
+        CASE_EXPECT_EQ("confirm-completed-orbit-room", manager.get_view().orbit_room_key().client_id());
+        CASE_EXPECT_TRUE(manager.finish_matching_event(ctx, 1023, 2, true));
+        PROJECT_NAMESPACE_ID::table_user persisted;
+        CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+        CASE_EXPECT_EQ(2, persisted.matching_data().acknowledge_event_id());
+        CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1023, 2, true));
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::matching::packer::get_full_name_of_confirm_matching()));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(lobbysvr_user_matching, old_confirm_rpc_cannot_ack_new_confirmation_after_rematching) {
+  constexpr uint64_t kMatchsvrId = 0x1E0037;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("matching-confirm-replacement-matchsvr")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_name("matchsvr")
+      .add_label("hpa_scaling_ready", "1");
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  auto user_inst = user::create(10025, 1, "matching-confirm-replacement-rpc-user");
+  CASE_EXPECT_TRUE(!!user_inst);
+  if (!user_inst) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  rpc::unit_test::ss_mock_rule_options rule_options;
+  rule_options.match_node_id = kMatchsvrId;
+  auto rule = rpc::matching::mock::confirm_matching(
+      [user_inst](rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingConfirmReq& request,
+                  PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        auto& manager = user_inst->get_user_matching_manager();
+        CASE_EXPECT_EQ(1025, request.unit_id());
+        CASE_EXPECT_EQ(2, request.last_event_id());
+        CASE_EXPECT_EQ(1, request.acknowledge_event_id());
+        *response.mutable_snapshot() = manager.get_view();
+        response.set_result(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+        // 本玩家确认已被接收，但同 faction 的另一个 Unit 拒绝，导致当前 Unit 重新撮合。
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync snapshot;
+        snapshot.set_unit_id(1025);
+        *snapshot.mutable_unit_view() = manager.get_view();
+        snapshot.mutable_unit_view()->set_last_event_id(3);
+        snapshot.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        auto sync_result = manager.acknowledge_matching_sync(ctx, snapshot);
+        CASE_EXPECT_FALSE(sync_result.has_pending_event);
+        CASE_EXPECT_EQ(3, sync_result.acknowledge_event_id);
+        CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1025, 2, true));
+        snapshot.mutable_unit_view()->set_last_event_id(4);
+        snapshot.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+        sync_result = manager.acknowledge_matching_sync(ctx, snapshot);
+        CASE_EXPECT_TRUE(sync_result.has_pending_event);
+        CASE_EXPECT_EQ(4, sync_result.confirm_event_id);
+        snapshot.mutable_unit_view()->set_last_event_id(5);
+        snapshot.mutable_unit_view()->set_status(
+            PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE);
+        sync_result = manager.acknowledge_matching_sync(ctx, snapshot);
+        CASE_EXPECT_TRUE(sync_result.has_pending_event);
+        CASE_EXPECT_EQ(0, sync_result.confirm_event_id);
+        CASE_EXPECT_EQ(3, sync_result.acknowledge_event_id);
+        RPC_RETURN_CODE(0);
+      },
+      rule_options);
+  CASE_EXPECT_TRUE(!!rule);
+  CASE_EXPECT_TRUE(lobbysvr_test::run_sync_task(
+      test, "matching.confirm_replacement_rpc", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* characters = table.mutable_character_data()->mutable_characters();
+        characters->set_last_login_character_guid(20025);
+        characters->add_characters()->mutable_basic_data()->set_guid(20025);
+        user_inst->get_user_character_manager().init_from_table_data(ctx, table);
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(1);
+        data->mutable_view()->mutable_unit()->set_unit_id(1025);
+        auto* member = data->mutable_view()->mutable_unit()->add_users();
+        member->mutable_user_key()->set_user_id(10025);
+        member->mutable_user_key()->set_zone_id(1);
+        member->set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+        data->mutable_view()->set_last_event_id(1);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+        auto& manager = user_inst->get_user_matching_manager();
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync snapshot;
+        snapshot.set_unit_id(1025);
+        *snapshot.mutable_unit_view() = data->view();
+        snapshot.mutable_unit_view()->set_last_event_id(2);
+        snapshot.mutable_unit_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+        CASE_EXPECT_EQ(2, manager.acknowledge_matching_sync(ctx, snapshot).confirm_event_id);
+        PROJECT_NAMESPACE_ID::CSMatchingConfirmReq request;
+        PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp response;
+        request.set_unit_id(1025);
+        request.set_confirmed(true);
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING,
+                       RPC_AWAIT_CODE_RESULT(manager.confirm_matching(ctx, request, response)));
+        CASE_EXPECT_EQ(5, manager.get_last_event_id());
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE,
+                       manager.get_view().status());
+        CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1025, 2, true));
+        PROJECT_NAMESPACE_ID::table_user persisted;
+        CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+        CASE_EXPECT_EQ(3, persisted.matching_data().acknowledge_event_id());
+        CASE_EXPECT_TRUE(manager.finish_matching_event(ctx, 1025, 4, true));
+        CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+        CASE_EXPECT_EQ(4, persisted.matching_data().acknowledge_event_id());
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::matching::packer::get_full_name_of_confirm_matching()));
+  CASE_EXPECT_EQ(0, test.stop());
 }

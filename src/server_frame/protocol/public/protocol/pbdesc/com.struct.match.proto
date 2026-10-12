@@ -23,6 +23,7 @@ enum EnMatchingRoomStatus {
   EN_MATCHING_ROOM_STATUS_TIMEOUT = 5;
   EN_MATCHING_ROOM_STATUS_FAILED = 6;
   EN_MATCHING_ROOM_STATUS_CONFIRMING = 7;
+  EN_MATCHING_ROOM_STATUS_WAITING = 8;
 }
 
 // 玩家可见的 Unit 生命周期。Room 状态只描述一次内部撮合尝试，不再作为订阅协议。
@@ -173,6 +174,7 @@ message DMatchingUnitView {
   DMatchingUnit unit = 3;
   int32 result = 4;
   int64 expire_time = 5;
+  // 最新 Unit WAL 事件 ID；CONFIRMING 期间即当前 CONFIRM_REQUIRED 的事件 ID。
   int64 last_event_id = 6;
   int64 confirm_expire_time = 7;
   DOrbitRoomKey orbit_room_key = 8;

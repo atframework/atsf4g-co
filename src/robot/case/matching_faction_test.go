@@ -39,9 +39,8 @@ func TestMatchingFactionCaseConfigs(t *testing.T) {
 		registered[name] = true
 	}
 	for _, filename := range []string{
-		"matching_balanced_solo_3v3.conf",
-		"matching_priority_solo_3v3.conf",
-		"matching_priority_mixed_2v3.conf",
+		"matching_balanced_solo_1v1.conf",
+		"matching_priority_solo_1v1.conf",
 	} {
 		t.Run(filename, func(t *testing.T) {
 			content, err := os.ReadFile(filepath.Join("..", "case_config", filename))

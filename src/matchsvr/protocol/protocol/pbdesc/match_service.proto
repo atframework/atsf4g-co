@@ -60,6 +60,8 @@ message SSMatchingConfirmReq {
   int64 acknowledge_event_id = 5;
   string user_open_id = 6;                       // 用户的 openid_id，lobbysvr 需要在确认战斗时传入
   DOrbitUserInitDataDetail orbit_init_data = 7;  // 保底的战斗房间初始化数据，确保玩家会进入到局内
+  // 发出请求时确认态 UnitView 的 last_event_id，即所回复的 CONFIRM_REQUIRED 事件；与已消费 ACK 分开。
+  int64 last_event_id = 8;
 }
 
 message SSMatchingSnapshot {

@@ -73,7 +73,7 @@ func SaveMatchingView(user user_data.User, view *public_protocol_pbdesc.DMatchin
 		user.SetExtralData("UnitId", view.GetUnitId())
 	}
 	user.SetExtralData("MatchingStatus", view.GetStatus())
-	// user.SetExtralData("MatchingFactionId", view.GetFactionId())
+	user.SetExtralData("MatchingFactionId", view.GetFactionId())
 	user.Log("matching view: status=%s unit_id=%d", view.GetStatus().String(), view.GetUnitId())
 }
 

@@ -11,8 +11,8 @@
 
 #include <data/user_key_hash_helper.h>
 #include <cstdint>
+#include <map>
 #include <memory>
-#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -30,6 +30,17 @@ class matching_room {
   using ptr_t = std::shared_ptr<matching_room>;
   using unit_ptr_t = std::shared_ptr<matching_unit>;
   using unit_map_t = std::unordered_map<uint64_t, unit_ptr_t>;
+  using admitted_unit_map_t = std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>;
+
+  struct waiting_faction {
+    uint32_t user_capacity = 0;
+    size_t successful_user_count = 0;
+    size_t reserved_user_count = 0;
+    bool fill_enabled = false;
+    bool confirming_creation = false;
+    std::vector<uint64_t> unit_ids;
+  };
+  using waiting_faction_map_t = std::map<int32_t, waiting_faction>;
 
   struct faction_statistics {
     std::unordered_map<size_t, size_t> faction_count_by_capacity;
@@ -93,7 +104,7 @@ class matching_room {
   const PROJECT_NAMESPACE_ID::DOrbitRoomKey& get_orbit_room_key() const noexcept { return orbit_room_key_; }
   int64_t get_orbit_expired_timepoint() const noexcept { return orbit_expired_timepoint_; }
 
-  // 统计房间内的真实玩家数量。
+  // 返回已成功入场和仍在预留中的玩家名额总数。
   size_t get_user_count() const noexcept { return user_count_; }
   // 返回按 Unit 人数索引的 Unit 数量。
   const std::vector<size_t>& get_unit_size_counts() const noexcept { return unit_size_counts_; }
@@ -101,7 +112,7 @@ class matching_room {
   bool has_unit(uint64_t unit_id) const noexcept;
   // 查找房间内的 Unit；不存在时返回 nullptr。
   unit_ptr_t find_unit(uint64_t unit_id) const noexcept;
-  // 判断玩家是否仍在本房间。
+  // 判断玩家是否仍在本房间的匹配流程中；已成功入场不占用当前匹配。
   bool has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
 
   // 原子加入一个不可拆分 unit；重复 unit 或玩家返回 false。
@@ -123,6 +134,24 @@ class matching_room {
   // 进入创建战斗前按稳定 membership 顺序一次性生成最终 faction_id；重复调用保持原映射。
   bool finalize_faction_ids();
   int32_t get_unit_faction_id(uint64_t unit_id) const noexcept;
+  // 初始 user_init 成功后转为等待室，完成 Unit 只留下规则数据，不保留订阅对象。
+  bool open_waiting_room(int64_t now, int64_t end_timepoint);
+  int64_t get_waiting_end_timepoint() const noexcept { return waiting_end_timepoint_; }
+  size_t get_successful_user_count() const noexcept { return successful_user_count_; }
+  size_t get_reserved_user_count() const noexcept { return user_count_ - successful_user_count_; }
+  bool is_waiting_open(int64_t now) const noexcept;
+  const waiting_faction_map_t& get_waiting_factions() const noexcept { return waiting_factions_; }
+  const admitted_unit_map_t& get_admitted_units() const noexcept { return admitted_units_; }
+  // 新 faction 的 faction_id 传 0，由 Room 分配且不复用；已有 faction 保持原 ID 和容量。
+  bool add_waiting_units(const std::vector<unit_ptr_t>& units, int32_t faction_id, uint32_t faction_capacity,
+                         bool creates_faction, int64_t now, int64_t confirm_expire_time);
+  std::vector<uint64_t> get_waiting_confirmation_cohort(uint64_t unit_id) const;
+  // 全部成员确认成功后返回本次成员并解冻新 faction；失败返回空集合，后续补入确认各自独立。
+  std::vector<uint64_t> release_waiting_confirmation_cohort(uint64_t unit_id);
+  bool remove_waiting_unit(uint64_t unit_id);
+  bool complete_waiting_unit(uint64_t unit_id, int64_t now);
+  // 未完成 Unit 已由 manager 结束后才能回收等待室。
+  void mark_waiting_closed(int64_t now);
   // 有新 unit 加入时延长房间级搜索截止时间，避免迁入老房间后立即超时。
   void extend_expire_time(int64_t value) noexcept;
   // 标记正在请求 battlesvr，之后不再接受新 unit。
@@ -148,9 +177,12 @@ class matching_room {
 
  private:
   // 校验 faction 分配覆盖关系并一次性计算房间缓存的 faction 统计信息。
-  static std::optional<faction_statistics> calculate_faction_statistics(
+  static bool calculate_faction_statistics(
       const unit_map_t& units,
-      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments);
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments,
+      faction_statistics& result);
+  void refresh_waiting_faction_assignments();
+  void erase_orbit_user_init_details(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
   // 按最小 Unit ID 稳定排列已校验且非空的 faction assignment。
   static bool faction_assignment_precedes(const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* left,
                                           const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* right) noexcept;
@@ -183,6 +215,12 @@ class matching_room {
   // 仅在确认完成、准备创建战斗时固化；匹配阶段不维护最终 faction_id。
   std::unordered_map<uint64_t, int32_t> finalized_unit_faction_ids_;
   bool faction_ids_finalized_;
+
+  waiting_faction_map_t waiting_factions_;
+  admitted_unit_map_t admitted_units_;
+  size_t successful_user_count_ = 0;
+  int32_t next_waiting_faction_id_ = 1001;
+  int64_t waiting_end_timepoint_ = 0;
 
   // 创建时间，同时作为老房间优先的排序时间。
   int64_t created_time_;

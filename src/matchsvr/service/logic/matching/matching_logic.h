@@ -59,6 +59,14 @@ class matching_logic {
     faction_join_progress progress;
   };
 
+  struct waiting_join_result {
+    bool can_join = false;
+    int32_t result = 0;
+    int32_t faction_id = 0;
+    uint32_t faction_capacity = 0;
+    bool creates_faction = false;
+  };
+
   static constexpr const int64_t kDefaultSearchTimeout = 120;
   static constexpr const int64_t kDefaultConfirmTimeout = 15;
   static constexpr const int64_t kTerminalRetention = 60;
@@ -105,6 +113,9 @@ class matching_logic {
   // 所有 faction 满员后，按当前规则检查最小总人数和最小阵营数。
   static PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation check_room_ready(const matching_room& room, int64_t now,
                                                                              int32_t global_matching_users_count);
+  // complete_faction_capacity 为 0 时接纳单 Unit；非 0 时完整 faction 只作为整体新增。
+  static waiting_join_result check_waiting_units_can_join(const matching_room& room, const unit_view& incoming_units,
+                                                          uint32_t complete_faction_capacity, int64_t now);
 
  private:
   using user_key_set = std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t>;

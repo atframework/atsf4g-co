@@ -86,6 +86,11 @@
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingRule</scheme>
       <scheme name="OutputFile" desc="输出文件名">Both/matching_rule.bytes</scheme>
     </item>
+    <item name="等待室加人规则" cat="matching" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|等待室加人规则|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingWaitingRoomRule</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/matching_waiting_room_rule.bytes</scheme>
+    </item>
     <item name="匹配参数合并规则" cat="matching" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|匹配参数合并规则|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingParameterMergeRuleTemplate</scheme>

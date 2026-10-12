@@ -30,7 +30,7 @@ func MatchingLevelSelectCase(action *robot_case.TaskActionCase, holder *user_dat
 	if err != nil {
 		return err
 	}
-	region := "cn"
+	region := "default"
 	if len(args) > 1 {
 		region = args[1]
 	}

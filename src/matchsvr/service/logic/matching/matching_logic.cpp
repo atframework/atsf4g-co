@@ -19,6 +19,7 @@
 #include <limits>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -528,8 +529,7 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
   }
 
   const auto& assignments = room.get_faction_assignments();
-  if (!assignments.empty() &&
-      (pool->max_faction_cout_limit() <= 0 || assignments.size() > pool->max_faction_cout_limit())) {
+  if (!assignments.empty() && assignments.size() > pool->max_faction_cout_limit()) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
   }
   const bool unit_can_fill_faction =
@@ -610,7 +610,7 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
   }
 
   if (pool->faction_user_max_size() <= 0 || faction_capacity > static_cast<uint32_t>(pool->faction_user_max_size()) ||
-      pool->max_faction_cout_limit() <= 0 || room.get_faction_assignments().size() >= pool->max_faction_cout_limit()) {
+      room.get_faction_assignments().size() >= pool->max_faction_cout_limit()) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
   }
   if (pool->max_user_cout_limit() > 0 &&
@@ -702,5 +702,146 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
       return result;
     }
   }
+  return result;
+}
+
+matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join(const matching_room& room,
+                                                                                 const unit_view& incoming_units,
+                                                                                 uint32_t complete_faction_capacity,
+                                                                                 int64_t now) {
+  waiting_join_result result;
+  result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND;
+  if (!room.is_waiting_open(now) || incoming_units.empty() ||
+      (complete_faction_capacity == 0 && incoming_units.size() != 1)) {
+    return result;
+  }
+  auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
+  auto rule = excel::get_matching_waiting_room_rule(room.get_scope().matching_pool_id());
+  if (!pool || !rule) {
+    return result;
+  }
+
+  if (rule->region_limits_size() > 0 && std::find(rule->region_limits().begin(), rule->region_limits().end(),
+                                                  room.get_scope().region()) == rule->region_limits().end()) {
+    return result;
+  }
+
+  size_t incoming_user_count = 0;
+  std::unordered_set<uint64_t> incoming_unit_ids;
+  user_key_set incoming_user_keys;
+  bool fill_enabled = true;
+  for (const auto* incoming : incoming_units) {
+    if (incoming == nullptr) {
+      result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+      return result;
+    }
+    // 检测人数
+    const int32_t validation = validate_unit(pool->id(), *incoming);
+    if (validation != 0) {
+      result.result = validation;
+      return result;
+    }
+    // unit是否已经存在
+    if (room.has_unit(incoming->unit_id()) ||
+        room.get_admitted_units().find(incoming->unit_id()) != room.get_admitted_units().end() ||
+        !incoming_unit_ids.emplace(incoming->unit_id()).second) {
+      result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT;
+      return result;
+    }
+    // 检测关卡是否匹配
+    if (std::find(incoming->acceptable_level_ids().begin(), incoming->acceptable_level_ids().end(),
+                  room.get_selected_level_id()) == incoming->acceptable_level_ids().end()) {
+      result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_SAME_LEVEL;
+      return result;
+    }
+    // 检测用户是否已经存在
+    for (const auto& user : incoming->users()) {
+      if (room.has_user(user.user_key()) || !incoming_user_keys.emplace(user.user_key()).second) {
+        result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT;
+        return result;
+      }
+    }
+    incoming_user_count += static_cast<size_t>(incoming->users_size());
+    fill_enabled =
+        fill_enabled && incoming->faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
+  }
+  if (pool->max_user_cout_limit() <= 0 || pool->max_faction_cout_limit() <= 0 ||
+      room.get_user_count() + incoming_user_count > static_cast<size_t>(pool->max_user_cout_limit())) {
+    result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
+    return result;
+  }
+  const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
+  const size_t incoming_capacity =
+      complete_faction_capacity > 0 ? complete_faction_capacity : (fill_enabled ? fill_capacity : incoming_user_count);
+
+  if (fill_capacity == 0 || incoming_capacity == 0 || incoming_capacity > fill_capacity ||
+      incoming_user_count > incoming_capacity ||
+      (complete_faction_capacity > 0 && incoming_user_count != incoming_capacity) ||
+      (!fill_enabled && incoming_units.size() != 1)) {
+    return result;
+  }
+
+  switch (rule->faction_add_rule()) {
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_NONE:
+      break;
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_ADD_RULE_SAME_AS_TEAM:
+      if (incoming_capacity != get_max_faction_capacity(room.get_faction_assignments())) {
+        return result;
+      }
+      break;
+    default:
+      return result;
+  }
+
+  unit_view existing_units;
+  existing_units.reserve(room.get_units().size() + room.get_admitted_units().size());
+  for (const auto& value : room.get_units()) {
+    if (!value.second) {
+      return result;
+    }
+    existing_units.emplace_back(&value.second->get_data());
+  }
+  for (const auto& value : room.get_admitted_units()) {
+    existing_units.emplace_back(&value.second);
+  }
+  for (const auto* incoming : incoming_units) {
+    for (const auto* existing : existing_units) {
+      if (units_are_banned(*existing, *incoming)) {
+        return result;
+      }
+      for (const auto& item : rule->rules()) {
+        if (!matches_rule_item(item, existing->parameter(), incoming->parameter())) {
+          return result;
+        }
+      }
+    }
+    // 多 Unit 原子也必须彼此满足等待室规则，不能借普通规则的预先成队绕过检查。
+    existing_units.emplace_back(incoming);
+  }
+  if (complete_faction_capacity == 0 && fill_enabled && pool->is_waiting_room_faction_can_joined()) {
+    size_t remaining_after_join = std::numeric_limits<size_t>::max();
+    for (const auto& value : room.get_waiting_factions()) {
+      const auto& faction = value.second;
+      const size_t occupied = faction.successful_user_count + faction.reserved_user_count;
+      if (faction.confirming_creation || !faction.fill_enabled || faction.user_capacity != incoming_capacity ||
+          occupied + incoming_user_count > faction.user_capacity) {
+        continue;
+      }
+      const size_t remaining = faction.user_capacity - occupied - incoming_user_count;
+      if (remaining < remaining_after_join) {
+        result.faction_id = value.first;
+        remaining_after_join = remaining;
+      }
+    }
+  }
+  result.creates_faction = result.faction_id == 0;
+  if (result.creates_faction &&
+      room.get_waiting_factions().size() >= static_cast<size_t>(pool->max_faction_cout_limit())) {
+    result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
+    return result;
+  }
+  result.faction_capacity = static_cast<uint32_t>(incoming_capacity);
+  result.can_join = true;
+  result.result = 0;
   return result;
 }
