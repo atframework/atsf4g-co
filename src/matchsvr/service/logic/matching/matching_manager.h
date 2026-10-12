@@ -156,6 +156,9 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   void unindex_room(const matching_room& room);
   // 释放房间中所有 unit 的活动索引。
   void unindex_all_units(const matching_room& room);
+  // 首次进入终态时注销房间和 Unit 的活动索引；保留对象只用于查询和事件补发。
+  void mark_room_terminal(matching_room& room, PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status, int64_t now,
+                          int32_t result = 0);
   // 若规则已满足，向 orbitsvr 发起创建房间请求。
   void start_battle(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
   // 保留固定容量 faction 并按当前规则判断成局，用于创建、迁房、查询和定时推进。

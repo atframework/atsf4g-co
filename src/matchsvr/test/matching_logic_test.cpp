@@ -5,11 +5,13 @@
 #include <protocol/config/com.struct.level.config.pb.h>
 #include <protocol/config/com.struct.matching.config.pb.h>
 #include <protocol/config/pb_header_v3.pb.h>
+#include <protocol/pbdesc/svr.protocol.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_resource.h>
+#include <atframework/testing/mock_ss.h>
 #include <atframework/testing/raw_transport.h>
 #include <atframework/testing/runtime.h>
 
@@ -18,6 +20,9 @@
 #include <logic/matching/matching_room.h>
 #include <logic/matching/matching_unit.h>
 
+#include <config/extern_service_types.h>
+#include <logic/logic_server_setup.h>
+#include <rpc/orbit/orbitsvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
 
 #include <time/time_utility.h>
@@ -476,9 +481,12 @@ void set_single_faction(matching_room& room, uint64_t unit_id, uint32_t capacity
   CASE_EXPECT_TRUE(room.set_faction_assignments(assignments));
 }
 
-bool start_runtime(atframework::testing::runtime& runtime) {
+bool start_runtime(atframework::testing::runtime& runtime, bool enable_ss = false) {
   atframework::testing::runtime_options options;
   options.features = {atframework::testing::feature::resource};
+  if (enable_ss) {
+    options.features.emplace_back(atframework::testing::feature::ss);
+  }
   options.working_directory = MATCHSVR_TEST_WORKING_DIRECTORY;
   options.setup_callback = [](atframework::testing::runtime& rt) {
     seed_matching_tables(rt.resource());
@@ -564,6 +572,63 @@ PROJECT_NAMESPACE_ID::SSMatchingCheckReq make_heartbeat_request(uint64_t unit_id
   protobuf_copy_message(*heartbeat_user->mutable_user_key(), user_key);
   heartbeat_user->set_acknowledge_event_id(acknowledge_event_id);
   return result;
+}
+
+// 终态结果仍可查询，但旧房间的保留和回收都不能解除下一轮匹配的占用。
+static void verify_terminal_recycle_preserves_new_matching(
+    atframework::testing::runtime& runtime, rpc::context& ctx,
+    const PROJECT_NAMESPACE_ID::SSMatchingCreateReq& original,
+    PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus terminal_status) {
+  auto manager = matching_manager::me();
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto old_heartbeat = make_heartbeat_request(original.unit().unit_id(), original.operator_user());
+  CASE_EXPECT_EQ(0, manager->check_matching(ctx, old_heartbeat, snapshot));
+  CASE_EXPECT_EQ(terminal_status, snapshot.snapshot().status());
+  const int64_t terminal_event_id = snapshot.snapshot().last_event_id();
+  old_heartbeat.mutable_heartbeat_data()->set_acknowledge_event_id(terminal_event_id);
+
+  auto next = original;
+  next.mutable_unit()->set_unit_id(original.unit().unit_id() + 1000);
+  const int32_t create_result = manager->create_matching(ctx, next, snapshot);
+  CASE_EXPECT_EQ(0, create_result);
+  if (create_result != 0) {
+    return;
+  }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, snapshot.snapshot().status());
+  const std::string next_matching_id = snapshot.matching_id();
+  const int64_t next_event_id = snapshot.snapshot().last_event_id();
+  auto next_heartbeat = make_heartbeat_request(next.unit().unit_id(), next.operator_user(), next_event_id);
+  auto duplicate = next;
+  duplicate.mutable_unit()->set_unit_id(next.unit().unit_id() + 1);
+  duplicate.mutable_scope()->set_battle_version("2.0");
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING,
+                 manager->create_matching(ctx, duplicate, snapshot));
+
+  const auto initial_offset = atfw::util::time::time_utility::get_global_now_offset();
+  const int64_t retention = matching_logic::get_terminal_retention_seconds();
+  for (int64_t elapsed = 1; elapsed <= retention + 1; ++elapsed) {
+    atfw::util::time::time_utility::set_global_now_offset(initial_offset + std::chrono::seconds{elapsed});
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, next_heartbeat, snapshot));
+    CASE_EXPECT_EQ(next_matching_id, snapshot.matching_id());
+    CASE_EXPECT_EQ(next_event_id, snapshot.snapshot().last_event_id());
+    const size_t sends_before_tick = runtime.transport().outbound_count();
+    CASE_EXPECT_EQ(elapsed == retention ? 1 : 0, manager->tick());
+    CASE_EXPECT_EQ(sends_before_tick, runtime.transport().outbound_count());
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING,
+                   manager->create_matching(ctx, duplicate, snapshot));
+    if (elapsed < retention) {
+      CASE_EXPECT_EQ(0, manager->check_matching(ctx, old_heartbeat, snapshot));
+      CASE_EXPECT_EQ(terminal_status, snapshot.snapshot().status());
+      CASE_EXPECT_EQ(terminal_event_id, snapshot.snapshot().last_event_id());
+    } else {
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND,
+                     manager->check_matching(ctx, old_heartbeat, snapshot));
+    }
+  }
+  CASE_EXPECT_EQ(1, manager->get_room_count());
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(0, manager->tick());
+  atfw::util::time::time_utility::set_global_now_offset(initial_offset);
 }
 }  // namespace
 
@@ -3275,5 +3340,172 @@ CASE_TEST(matchsvr_matching_manager, releases_units_when_orbitsvr_is_unavailable
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, second_request, retry_response));
 
   manager->clear();
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, failed_room_recycle_preserves_new_matching) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  rpc::context ctx{rpc::context::create_without_task()};
+  const auto first = make_create_request(9011, 92001, 10);
+  const auto second = make_create_request(9012, 92002, 10);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, first, snapshot));
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, second, snapshot));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, snapshot.snapshot().status());
+  PROJECT_NAMESPACE_ID::SSMatchingConfirmReq confirm;
+  confirm.set_confirmed(true);
+  for (const auto& request : {first, second}) {
+    confirm.set_unit_id(request.unit().unit_id());
+    protobuf_copy_message(*confirm.mutable_operator_user(), request.operator_user());
+    CASE_EXPECT_EQ(0, manager->confirm_matching(ctx, confirm, snapshot));
+  }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED, snapshot.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, snapshot.snapshot().result());
+  verify_terminal_recycle_preserves_new_matching(runtime, ctx, first,
+                                                 PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED);
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, finished_room_releases_users_before_recycle) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime, true)) {
+    return;
+  }
+  constexpr uint64_t kOrbitServerId = 0x180011;
+  atfw::testing::mock_node orbit_node;
+  orbit_node.set_id(kOrbitServerId)
+      .set_name("terminal-cleanup-orbit")
+      .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kOrbitSvr))
+      .set_type_name("orbitsvr")
+      .set_zone_id(1);
+  auto orbit = runtime.discovery().add_node(orbit_node);
+  CASE_EXPECT_TRUE(!!orbit);
+  constexpr uint64_t kLobbyServerId = 0x160001;
+  atfw::testing::mock_node lobby_node;
+  lobby_node.set_id(kLobbyServerId)
+      .set_name("terminal-cleanup-lobby")
+      .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kLobbySvr))
+      .set_type_name("lobbysvr")
+      .set_zone_id(1);
+  auto lobby = runtime.discovery().add_node(lobby_node);
+  CASE_EXPECT_TRUE(!!lobby);
+  auto* module = logic_server_last_common_module();
+  CASE_EXPECT_TRUE(nullptr != module);
+  if (!orbit || !lobby || module == nullptr) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  module->reload();
+  auto create_rule =
+      rpc::orbit::mock::create_room([](rpc::context&, const PROJECT_NAMESPACE_ID::SSOrbitCreateRoomReq&,
+                                       PROJECT_NAMESPACE_ID::SSOrbitCreateRoomRsp& response) -> rpc::result_code_type {
+        response.set_result_code(0);
+        RPC_RETURN_CODE(0);
+      });
+  auto init_rule =
+      rpc::orbit::mock::init_user([](rpc::context&, const PROJECT_NAMESPACE_ID::SSOrbitUserInitReq& request,
+                                     PROJECT_NAMESPACE_ID::SSOrbitUserInitRsp& response) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(2, request.user_list_size());
+        CASE_EXPECT_TRUE(request.is_last_one());
+        response.set_result_code(0);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!create_rule);
+  CASE_EXPECT_TRUE(!!init_rule);
+  if (!create_rule || !init_rule) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+  runtime.ss().expect(rpc::orbit::packer::get_full_name_of_create_room()).times(1).to_node(kOrbitServerId);
+  runtime.ss().expect(rpc::orbit::packer::get_full_name_of_init_user()).times(1).to_node(kOrbitServerId);
+
+  auto manager = matching_manager::me();
+  rpc::context ctx{rpc::context::create_without_task()};
+  const auto first = make_create_request(9021, 93001, 10);
+  const auto second = make_create_request(9022, 93002, 10);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, first, snapshot));
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, second, snapshot));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, snapshot.snapshot().status());
+  const std::string matching_id = snapshot.matching_id();
+  PROJECT_NAMESPACE_ID::SSMatchingConfirmReq confirm;
+  confirm.set_confirmed(true);
+  for (const auto& request : {first, second}) {
+    confirm.set_unit_id(request.unit().unit_id());
+    protobuf_copy_message(*confirm.mutable_operator_user(), request.operator_user());
+    CASE_EXPECT_EQ(0, manager->confirm_matching(ctx, confirm, snapshot));
+  }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE, snapshot.snapshot().status());
+  PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq ready;
+  ready.set_matching_id(matching_id);
+  ready.set_start_success(true);
+  ready.set_expired_timepoint(atfw::util::time::time_utility::get_now() + 300);
+  PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp response;
+  auto invoke_ready = [&]() {
+    auto task = runtime.run_task(
+        "matching.terminal_cleanup_ready", std::chrono::seconds{2},
+        [manager, ready, &response](rpc::context& task_ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(manager->orbit_room_ready(task_ctx, ready, response, kOrbitServerId)));
+        });
+    CASE_EXPECT_FALSE(task.empty());
+    if (task.empty()) {
+      return false;
+    }
+    const auto result = runtime.wait(task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_FALSE(result.hard_timed_out);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_EQ(0, response.result());
+    return result.task_exited && !result.hard_timed_out && result.result_code == 0 && response.result() == 0;
+  };
+  const size_t sends_before_ready = runtime.transport().outbound_count();
+  const bool finished = invoke_ready();
+  CASE_EXPECT_TRUE(finished);
+  if (finished) {
+    size_t terminal_notifications = 0;
+    for (size_t index = sends_before_ready; index < runtime.transport().outbound_count(); ++index) {
+      const auto* record = runtime.transport().outbound_at(index);
+      if (record == nullptr || record->target_node_id != kLobbyServerId) {
+        continue;
+      }
+      ++terminal_notifications;
+      CASE_EXPECT_EQ(0, record->immediate_error);
+      atfw::SSMsg envelope;
+      const bool parsed_envelope =
+          envelope.ParseFromArray(record->payload.data(), static_cast<int>(record->payload.size()));
+      CASE_EXPECT_TRUE(parsed_envelope);
+      if (!parsed_envelope) {
+        continue;
+      }
+      PROJECT_NAMESPACE_ID::SSMatchingEventSync event;
+      CASE_EXPECT_TRUE(event.ParseFromString(envelope.body_bin()));
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, event.unit_view().status());
+      CASE_EXPECT_EQ(1, event.user_keys_size());
+      CASE_EXPECT_EQ(1, event.event_logs_size());
+      if (event.event_logs_size() == 1) {
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_BATTLE_READY,
+                       event.event_logs(0).event_type());
+      }
+    }
+    CASE_EXPECT_EQ(2, terminal_notifications);
+    const auto heartbeat = make_heartbeat_request(first.unit().unit_id(), first.operator_user());
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, heartbeat, snapshot));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, snapshot.snapshot().status());
+    const int64_t terminal_event_id = snapshot.snapshot().last_event_id();
+    const size_t sends_before_duplicate = runtime.transport().outbound_count_to(kLobbyServerId);
+    CASE_EXPECT_TRUE(invoke_ready());
+    ready.set_start_success(false);
+    CASE_EXPECT_TRUE(invoke_ready());
+    CASE_EXPECT_EQ(sends_before_duplicate, runtime.transport().outbound_count_to(kLobbyServerId));
+    CASE_EXPECT_EQ(0, manager->check_matching(ctx, heartbeat, snapshot));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, snapshot.snapshot().status());
+    CASE_EXPECT_EQ(terminal_event_id, snapshot.snapshot().last_event_id());
+    verify_terminal_recycle_preserves_new_matching(runtime, ctx, first,
+                                                   PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED);
+  }
   CASE_EXPECT_EQ(0, runtime.stop());
 }

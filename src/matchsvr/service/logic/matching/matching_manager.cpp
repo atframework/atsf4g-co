@@ -124,9 +124,7 @@ int32_t matching_manager::tick() {
                      "expire_time={}, now={}",
                      room->get_matching_id(), room->get_units().size(), room->get_user_count(),
                      room->get_created_time(), room->get_expire_time(), now);
-        unindex_room(*room);
-        unindex_all_units(*room);
-        room->mark_timeout(now);
+        mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT, now);
         PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
         event_log.set_timeout(now);
         publish_room_event(ctx, room, std::move(event_log));
@@ -166,7 +164,6 @@ int32_t matching_manager::tick() {
           ctx, "recycle matching room, matching_id={}, status={}, units={}, users={}, terminal_time={}, now={}",
           matching_id, static_cast<int>(room_iter->second->get_status()), room_iter->second->get_units().size(),
           room_iter->second->get_user_count(), room_iter->second->get_terminal_time(), now);
-      unindex_all_units(*room_iter->second);
     }
     rooms_.erase(matching_id);
   }
@@ -408,8 +405,8 @@ int32_t matching_manager::cancel_matching(rpc::context& ctx, const PROJECT_NAMES
   }
   unindex_unit(remove_event.remove_unit().unit());
   if (room->get_units().empty()) {
-    unindex_room(*room);
-    room->mark_cancelled(atfw::util::time::time_utility::get_now());
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED,
+                       atfw::util::time::time_utility::get_now());
     publish_room_event(ctx, room, std::move(remove_event));
     PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
     event_log.set_cancel(atfw::util::time::time_utility::get_now());
@@ -547,7 +544,7 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
     room->remove_unit(request.unit_id());
     unindex_unit(remove_event.remove_unit().unit());
     if (room->get_units().empty()) {
-      room->mark_cancelled(now);
+      mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED, now);
     } else {
       room->resume_matching(now + matching_logic::get_search_timeout_seconds(room->get_scope().matching_pool_id()));
       index_room(room);
@@ -605,8 +602,8 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE &&
         !room->is_orbit_ready_processing()) {
       const int32_t result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_START_FAILED;
-      unindex_all_units(*room);
-      room->mark_failed(result, atfw::util::time::time_utility::get_now());
+      mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED,
+                         atfw::util::time::time_utility::get_now(), result);
       PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
       event_log.set_failed(result);
       publish_room_event(ctx, room, std::move(event_log));
@@ -701,8 +698,8 @@ rpc::result_code_type matching_manager::orbit_room_ready(
 
   if (result != 0) {
     if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
-      unindex_all_units(*room);
-      room->mark_failed(result, atfw::util::time::time_utility::get_now());
+      mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED,
+                         atfw::util::time::time_utility::get_now(), result);
       PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
       event_log.set_failed(result);
       publish_room_event(ctx, room, std::move(event_log));
@@ -723,7 +720,8 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  room->mark_finished(atfw::util::time::time_utility::get_now());
+  mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED,
+                     atfw::util::time::time_utility::get_now());
   room->set_orbit_expired_timepoint(request.expired_timepoint());
   PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
   auto matched_event = event_log.mutable_matched();
@@ -1164,8 +1162,7 @@ bool matching_manager::move_units(rpc::context& ctx, const matching_room::ptr_t&
     publish_room_event(ctx, target_room, matching_logic::make_add_unit_event(moved_unit->get_data()));
   }
   if (source_room->get_units().empty()) {
-    unindex_room(*source_room);
-    source_room->mark_cancelled(now);
+    mark_room_terminal(*source_room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED, now);
     PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
     event_log.set_cancel(now);
     publish_room_event(ctx, source_room, std::move(event_log));
@@ -1236,6 +1233,38 @@ void matching_manager::unindex_all_units(const matching_room& room) {
   }
 }
 
+void matching_manager::mark_room_terminal(matching_room& room, PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status,
+                                          int64_t now, int32_t result) {
+  switch (room.get_status()) {
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING:
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING:
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE:
+      break;
+    default:
+      return;
+  }
+
+  switch (status) {
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED:
+      room.mark_finished(now);
+      break;
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED:
+      room.mark_failed(result, now);
+      break;
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT:
+      room.mark_timeout(now);
+      break;
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED:
+      room.mark_cancelled(now);
+      break;
+    default:
+      return;
+  }
+
+  unindex_room(room);
+  unindex_all_units(room);
+}
+
 void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now) {
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING) {
     return;
@@ -1243,8 +1272,8 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
   unindex_room(*room);
   const uint64_t orbit_server_id = matching_logic::get_orbitsvr_server_id(room->get_matching_id());
   if (orbit_server_id == 0) {
-    unindex_all_units(*room);
-    room->mark_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, now);
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, now,
+                       PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
     PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
     event_log.set_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
     publish_room_event(ctx, room, std::move(event_log));
@@ -1253,8 +1282,8 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
   }
 
   if (!room->finalize_faction_ids()) {
-    unindex_all_units(*room);
-    room->mark_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, now);
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, now,
+                       PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
     PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
     event_log.set_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
     publish_room_event(ctx, room, std::move(event_log));
@@ -1304,8 +1333,8 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
         if (business_result != 0 &&
             room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
           // 失败直接解散房间
-          unindex_all_units(*room);
-          room->mark_failed(business_result, atfw::util::time::time_utility::get_now());
+          mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED,
+                             atfw::util::time::time_utility::get_now(), business_result);
           PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
           event_log.set_failed(business_result);
           publish_room_event(child_ctx, room, std::move(event_log));
@@ -1319,8 +1348,7 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
       });
 
   if (invoke_result.is_error()) {
-    unindex_all_units(*room);
-    room->mark_failed(*invoke_result.get_error(), now);
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, now, *invoke_result.get_error());
     PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
     event_log.set_failed(*invoke_result.get_error());
     publish_room_event(ctx, room, std::move(event_log));
@@ -1386,7 +1414,7 @@ void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_
     unindex_unit(remove_events.back().remove_unit().unit());
   }
   if (room->get_units().empty()) {
-    room->mark_timeout(now);
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT, now);
   } else {
     room->resume_matching(now + matching_logic::get_search_timeout_seconds(room->get_scope().matching_pool_id()));
     index_room(room);
@@ -1422,8 +1450,7 @@ void matching_manager::handle_unit_heartbeat_timeout(rpc::context& ctx, const ma
   unindex_unit(remove_event.remove_unit().unit());
   const bool room_empty = room->get_units().empty();
   if (room_empty) {
-    unindex_room(*room);
-    room->mark_timeout(now);
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT, now);
   } else {
     refresh_searching_room_user_count(*room);
   }
@@ -1444,9 +1471,8 @@ void matching_manager::handle_battle_create_timeout(rpc::context& ctx, const mat
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
     return;
   }
-  unindex_room(*room);
-  unindex_all_units(*room);
-  room->mark_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, now);
+  mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, now,
+                     PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
   PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
   event_log.set_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
   publish_room_event(ctx, room, std::move(event_log));
