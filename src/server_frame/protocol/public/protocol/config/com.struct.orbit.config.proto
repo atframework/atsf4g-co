@@ -34,6 +34,6 @@ message ExcelOrbitClientTemplate {
   bool remote_start_client = 10;
   uint32 pre_start_count = 11;
   uint32 load_percentage = 12;
-
+  uint32 end_join_sec = 13 [(org.xresloader.validator) = ">0"];
   repeated string launch_args = 21;
 }

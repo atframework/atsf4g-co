@@ -95,6 +95,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   int64_t expired_timepoint_ = 0;
   int64_t join_end_timepoint_ = 0;
   int64_t loading_timeout_ = 0;
+  uint32_t end_join_sec_config_ = 0;
 
   PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_FINISH;
   bool client_end_ = false;

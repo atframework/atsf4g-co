@@ -45,12 +45,6 @@
 #include <unordered_set>
 #include <utility>
 
-namespace {
-static const PROJECT_NAMESPACE_ID::config::orbitsvr_cfg& get_orbitsvr_cfg() noexcept {
-  return logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::orbitsvr_cfg>();
-}
-}  // namespace
-
 orbit_room::orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
                        const PROJECT_NAMESPACE_ID::DOrbitRoomInitData& room_data)
     : room_key_(room_key), room_data_(room_data) {
@@ -153,6 +147,7 @@ int32_t orbit_room::create(rpc::context& ctx, uint64_t match_server_id) {
   match_server_id_ = match_server_id;
   // Loading 超时
   loading_timeout_ = create_timepoint_ + row->startup_timeout_sec() + 10;  // 容忍时间
+  end_join_sec_config_ = row->end_join_sec();
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED);
 
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
@@ -208,7 +203,7 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
   client_address_ = client_addr;
   loading_timeout_ = 0;
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING);
-  join_end_timepoint_ = util::time::time_utility::get_now() + get_orbitsvr_cfg().room_user_init_timeout_sec();
+  join_end_timepoint_ = util::time::time_utility::get_now() + end_join_sec_config_;
 
   PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
   event_log.set_orbit_room_status(room_status_);
