@@ -16,9 +16,11 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/rank.h"
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/sharding.h"
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/common.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/utility/rank_util.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/rank.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/sharding.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/sharding.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/utility/rank_util.cpp")
 
 target_link_libraries(${PROJECT_COMPONENT_RANK_BOARD_SVR_SDK} PUBLIC components::rank-board-svr-protocol)
 
