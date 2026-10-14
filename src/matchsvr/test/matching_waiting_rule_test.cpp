@@ -76,8 +76,8 @@ class waiting_rule_fixture {
       test.resource().set_file("matching_rule_group.bytes", waiting_table_bytes(group, version));
       PROJECT_NAMESPACE_ID::config::ExcelMatchingRule ordinary;
       ordinary.set_id(100);
-      ordinary.set_min_user_cout_limit(2);
-      ordinary.set_min_faction_count_limit(1);
+      ordinary.set_min_user_cout_limit(minimum_initial_users);
+      ordinary.set_min_faction_count_limit(minimum_initial_factions);
       ordinary.add_region_limits("cn");
       auto* rank = ordinary.add_rules();
       rank->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
@@ -111,6 +111,8 @@ class waiting_rule_fixture {
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingPool pool;
   PROJECT_NAMESPACE_ID::config::ExcelMatchingWaitingRoomRule rule;
+  int32_t minimum_initial_users = 2;
+  int32_t minimum_initial_factions = 1;
   atframework::testing::runtime runtime;
 };
 
@@ -195,6 +197,100 @@ static void accept_unit(const matching_unit::ptr_t& unit) {
   }
 }
 }  // namespace
+
+CASE_TEST(matchsvr_waiting_rule, incomplete_factions_wait_for_full_membership_by_default) {
+  waiting_rule_fixture fixture;
+  fixture.minimum_initial_users = 1;
+  if (!fixture.start()) {
+    return;
+  }
+  CASE_EXPECT_FALSE(excel::get_ExcelMatchingPool_by_id(1)->allow_incomplete_factions());
+  auto room = ordinary_room(waiting_unit(1, 1001));
+  if (!room) {
+    return;
+  }
+  const auto ready = matching_logic::check_room_ready(*room, 100, 1);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_FALSE(ready.ready());
+  CASE_EXPECT_EQ(2, room->get_faction_assignments().Get(0).user_capacity());
+  CASE_EXPECT_EQ(1, room->get_faction_assignments().Get(0).assigned_user_count());
+}
+
+CASE_TEST(matchsvr_waiting_rule, incomplete_initial_faction_preserves_capacity_for_waiting_fill) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_allow_incomplete_factions(true);
+  fixture.minimum_initial_users = 1;
+  if (!fixture.start()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(excel::get_ExcelMatchingPool_by_id(1)->allow_incomplete_factions());
+  auto room = ordinary_room(waiting_unit(1, 1001));
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  const int32_t initial_faction_id = room->get_unit_faction_id(1);
+  CASE_EXPECT_GT(initial_faction_id, 0);
+  CASE_EXPECT_EQ(1, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().at(initial_faction_id).user_capacity);
+  CASE_EXPECT_EQ(1, room->get_successful_user_count());
+  auto candidate = std::make_shared<matching_unit>(waiting_unit(2, 2001));
+  if (!add_waiting(*room, {candidate})) {
+    return;
+  }
+  CASE_EXPECT_EQ(initial_faction_id, room->get_unit_faction_id(2));
+  accept_unit(candidate);
+  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(2) == std::vector<uint64_t>{2}));
+  candidate->mark_initializing();
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 102));
+  CASE_EXPECT_EQ(2, room->get_successful_user_count());
+  CASE_EXPECT_EQ(0, room->get_reserved_user_count());
+  CASE_EXPECT_EQ(1, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().at(initial_faction_id).user_capacity);
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().at(initial_faction_id).successful_user_count);
+  CASE_EXPECT_EQ(initial_faction_id, candidate->get_view().faction_id());
+}
+
+CASE_TEST(matchsvr_waiting_rule, incomplete_faction_option_keeps_minimum_user_threshold) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_allow_incomplete_factions(true);
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001));
+  if (!room) {
+    return;
+  }
+  const auto ready = matching_logic::check_room_ready(*room, 100, 1);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_FALSE(ready.ready());
+}
+
+CASE_TEST(matchsvr_waiting_rule, incomplete_faction_option_keeps_minimum_faction_threshold) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_allow_incomplete_factions(true);
+  fixture.minimum_initial_users = 1;
+  fixture.minimum_initial_factions = 2;
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001, 2));
+  if (!room) {
+    return;
+  }
+  const auto ready = matching_logic::check_room_ready(*room, 100, 2);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_FALSE(ready.ready());
+  const auto candidate = waiting_unit(2, 2001);
+  const auto joined = matching_logic::check_unit_can_join(*room, candidate, 100, 3);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  if (!joined.evaluation.can_join()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(room->add_unit(std::make_shared<matching_unit>(candidate)));
+  CASE_EXPECT_TRUE(room->set_faction_assignments(joined.evaluation.faction_assignments()));
+  CASE_EXPECT_EQ(2, room->get_faction_assignments().size());
+  CASE_EXPECT_TRUE(matching_logic::check_room_ready(*room, 100, 3).ready());
+}
 
 CASE_TEST(matchsvr_waiting_rule, absolute_room_deadline_rejects_new_and_pending_units) {
   waiting_rule_fixture fixture;

@@ -64,7 +64,7 @@ message ExcelMatchingPool {
   int32 max_faction_cout_limit = 3;
   // 单个不可拆分 Unit 的最大玩家数。
   int32 unit_max_size = 4;
-  // 单个 faction 的最大玩家数；允许撮合队友的 faction 固定以此作为容量，并须补满。
+  // 单个 faction 的最大玩家数；允许撮合队友的 faction 固定以此作为容量。
   int32 faction_user_max_size = 5;
   repeated int32 rule_group_ids = 6 [(org.xresloader.field_separator) = ","];
   int32 search_timeout_seconds = 7;
@@ -74,6 +74,8 @@ message ExcelMatchingPool {
   int32 waiting_room_rule_id = 10;
   bool is_has_waiting_room = 11;
   bool is_waiting_room_faction_can_joined = 12;
+  // 达到撮合规则的最低玩家数和最低 faction 数后，允许已有 faction 未满员时开局。
+  bool allow_incomplete_factions = 13;
 }
 
 // 根据全服匹配人数选择一个规则组，再按房间等待时间选择组内规则。

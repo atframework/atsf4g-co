@@ -690,6 +690,7 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
     assigned_users += assignment.assigned_user_count();
     all_factions_full = all_factions_full && assignment.assigned_user_count() == assignment.user_capacity();
   }
+  const bool faction_ready = all_factions_full || pool->allow_incomplete_factions();
   if (assigned_users != total_users) {
     return result;
   }
@@ -706,7 +707,7 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
         rule->min_user_cout_limit() <= 0 || total_users >= static_cast<size_t>(rule->min_user_cout_limit());
     const bool enough_factions =
         rule->min_faction_count_limit() <= 0 || assignments.size() >= rule->min_faction_count_limit();
-    if (all_factions_full && enough_users && enough_factions) {
+    if (faction_ready && enough_users && enough_factions) {
       result.set_ready(true);
       return result;
     }

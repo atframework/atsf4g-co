@@ -698,10 +698,11 @@ class waiting_test_fixture {
     atfw::util::time::time_utility::set_global_now_offset(original_offset_);
   }
 
-  bool start(bool allow_existing_faction_fill = true) {
+  bool start(bool allow_existing_faction_fill = true, bool allow_incomplete_factions = false) {
     atframework::testing::runtime_options options;
     options.features = {atframework::testing::feature::resource, atframework::testing::feature::ss};
-    options.setup_callback = [allow_existing_faction_fill](atframework::testing::runtime& test) {
+    options.setup_callback = [allow_existing_faction_fill,
+                              allow_incomplete_factions](atframework::testing::runtime& test) {
       seed_matching_tables(test.resource());
       PROJECT_NAMESPACE_ID::config::ExcelMatchingPool pool;
       pool.set_id(1);
@@ -716,11 +717,12 @@ class waiting_test_fixture {
       pool.set_is_has_waiting_room(true);
       pool.set_is_waiting_room_faction_can_joined(allow_existing_faction_fill);
       pool.set_waiting_room_rule_id(9100);
+      pool.set_allow_incomplete_factions(allow_incomplete_factions);
       test.resource().set_file("matching_pool.bytes", make_table_bytes(pool));
       PROJECT_NAMESPACE_ID::config::ExcelMatchingRule normal_rule;
       normal_rule.set_id(100);
-      normal_rule.set_min_user_cout_limit(4);
-      normal_rule.set_min_faction_count_limit(2);
+      normal_rule.set_min_user_cout_limit(allow_incomplete_factions ? 1 : 4);
+      normal_rule.set_min_faction_count_limit(allow_incomplete_factions ? 1 : 2);
       normal_rule.add_region_limits("cn");
       auto* normal_rank = normal_rule.add_rules();
       normal_rank->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
@@ -735,8 +737,9 @@ class waiting_test_fixture {
       waiting_rank->add_values(20);
       test.resource().set_file("matching_waiting_room_rule.bytes", make_table_bytes(waiting_rule));
       // config_manager 跨 runtime 保留已加载分组；真实配置变更必须同时改变版本。
-      test.resource().set_version(allow_existing_faction_fill ? "matchsvr-waiting-fill-enabled-v1"
-                                                              : "matchsvr-waiting-fill-disabled-v1");
+      test.resource().set_version(allow_incomplete_factions     ? "matchsvr-waiting-incomplete-faction-v1"
+                                  : allow_existing_faction_fill ? "matchsvr-waiting-fill-enabled-v1"
+                                                                : "matchsvr-waiting-fill-disabled-v1");
       return 0;
     };
     const int32_t started = runtime.start(options);
@@ -939,6 +942,68 @@ class waiting_test_fixture {
 };
 constexpr uint64_t waiting_test_fixture::kOrbitServerId;
 }  // namespace
+
+CASE_TEST(matchsvr_waiting_room, incomplete_initial_faction_starts_and_fills_in_same_orbit_room) {
+  waiting_test_fixture fixture;
+  if (!fixture.start(true, true)) {
+    return;
+  }
+  const auto first = fixture.request(9301, 21101);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto manager = matching_manager::me();
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, first, snapshot));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, snapshot.snapshot().status());
+  if (snapshot.snapshot().status() != PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING) {
+    fixture.stop();
+    return;
+  }
+  fixture.matching_id = snapshot.matching_id();
+  fixture.confirm(first, true);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE,
+                 fixture.check(first).snapshot().status());
+  if (!fixture.ready()) {
+    return;
+  }
+  const auto initial = fixture.check(first);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, initial.snapshot().status());
+  const int32_t faction_id = initial.snapshot().faction_id();
+  CASE_EXPECT_GT(faction_id, 0);
+  CASE_EXPECT_EQ(1, fixture.control->initializations.size());
+  if (fixture.control->initializations.size() != 1) {
+    fixture.stop();
+    return;
+  }
+  const auto& initial_request = fixture.control->initializations.front();
+  CASE_EXPECT_EQ(1, initial_request.user_list_size());
+  if (initial_request.user_list_size() == 1) {
+    CASE_EXPECT_EQ(first.operator_user().SerializeAsString(),
+                   initial_request.user_list(0).common().user_key().user_key().SerializeAsString());
+    CASE_EXPECT_EQ(faction_id, initial_request.user_list(0).common().faction_id());
+  }
+  const auto newcomer = fixture.request(9302, 21201);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, newcomer, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, snapshot.snapshot().status());
+  CASE_EXPECT_EQ(faction_id, snapshot.snapshot().faction_id());
+  fixture.confirm(newcomer, true);
+  CASE_EXPECT_TRUE(fixture.wait_for_status(newcomer, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED));
+  CASE_EXPECT_EQ(faction_id, fixture.check(newcomer).snapshot().faction_id());
+  CASE_EXPECT_EQ(2, fixture.control->initializations.size());
+  if (fixture.control->initializations.size() == 2) {
+    const auto& added_request = fixture.control->initializations.back();
+    CASE_EXPECT_EQ(fixture.control->initializations.front().room_key().SerializeAsString(),
+                   added_request.room_key().SerializeAsString());
+    CASE_EXPECT_EQ(1, added_request.user_list_size());
+    if (added_request.user_list_size() == 1) {
+      CASE_EXPECT_EQ(newcomer.operator_user().SerializeAsString(),
+                     added_request.user_list(0).common().user_key().user_key().SerializeAsString());
+      CASE_EXPECT_EQ(faction_id, added_request.user_list(0).common().faction_id());
+    }
+  }
+  CASE_EXPECT_EQ(initial.snapshot().SerializeAsString(), fixture.check(first).snapshot().SerializeAsString());
+  CASE_EXPECT_EQ(1, manager->get_room_count());
+  fixture.stop();
+}
 
 CASE_TEST(matchsvr_waiting_room, opens_after_initial_user_init_and_prioritizes_waiting_rule) {
   waiting_test_fixture fixture;
