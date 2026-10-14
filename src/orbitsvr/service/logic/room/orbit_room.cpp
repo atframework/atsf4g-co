@@ -279,6 +279,42 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
   }
 
   if (init_to_client_finish_count_ == user_data_index_.size()) {
+    // 房间内当前玩家已全部注册完成。如果房间仍可加入玩家、加入窗口未到期且还没收到最后一批玩家
+    // （init_user_finish_ 为 false），则补发一次只置位 init_finish 的 user_init，
+    if (!init_user_finish_ && !init_finish_notified_ &&
+        PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING == room_status_ && join_end_timepoint_ != 0 &&
+        util::time::time_utility::get_now() > join_end_timepoint_) {
+      init_finish_notified_ = true;
+      FWLOGINFO("orbit_room {} user size {} send init_finish only, join_end_timepoint: {}", get_client_id(),
+                user_data_index_.size(), join_end_timepoint_);
+      auto room_ptr = shared_from_this();
+      auto invoke_result = rpc::async_invoke(
+          ctx, "orbit_room.user_init_finish_only", [room_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+            auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::OrbitClientUserInitReq>(child_ctx);
+            auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::OrbitClientUserInitRsp>(child_ctx);
+            req->set_init_finish(true);
+            int32_t ret = RPC_AWAIT_CODE_RESULT(
+                rpc::orbit_client_rpc::user_init(child_ctx, room_ptr->get_client_id(), *req, *rsp));
+            if (ret == 0) {
+              ret = rsp->ret_code();
+            }
+            if (ret != 0) {
+              FWLOGERROR("orbit_room {} user_init with init_finish only failed, ret: {}", room_ptr->get_client_id(),
+                         ret);
+              // 发送失败则允许下一轮tick重新补发
+              room_ptr->init_finish_notified_ = false;
+            }
+            RPC_RETURN_CODE(ret);
+          });
+      if (invoke_result.is_error()) {
+        FWLOGERROR("orbit_room {} invoke user_init_finish_only failed, result: {}", get_client_id(),
+                   *invoke_result.get_error());
+        init_finish_notified_ = false;
+      } else if (!task_type_trait::empty(*invoke_result.get_success()) &&
+                 !task_type_trait::is_exiting(*invoke_result.get_success())) {
+        init_to_client_task_ = std::move(*invoke_result.get_success());
+      }
+    }
     return 0;
   }
 

@@ -100,6 +100,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_FINISH;
   bool client_end_ = false;
   bool init_user_finish_ = false;
+  bool init_finish_notified_ = false;  // 是否已补发过仅置位 init_finish 的 user_init
   bool need_retry_settlement_ = false;
   size_t init_to_client_finish_count_ = 0;
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t, user_key_equal_t>
