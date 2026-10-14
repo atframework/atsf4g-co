@@ -261,6 +261,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
     if (nullptr != ret) {
       ret->set_callbacks(&proto_callbacks_);
       ret->set_write_header_offset(sizeof(uv_write_t));
+      ret->set_logger(gw_mgr_.get_session_logger());
     }
 
     return std::unique_ptr<::atframework::gateway::libatgw_protocol_api>(ret);
@@ -298,27 +299,33 @@ class gateway_module : public ::atfw::atapp::module_impl {
     ::atframework::gateway::session *sess = reinterpret_cast<::atframework::gateway::session *>(stream->data);
     assert(sess);
     if (nullptr == sess) {
+      FWLOGWARNING("{} receive a message but session is nullptr", reinterpret_cast<void *>(stream));
       return;
     }
 
     // 如果正处于关闭阶段，忽略所有数据
     if (sess->check_flag(::atframework::gateway::session::flag_t::kClosing)) {
+      FWLOGDEBUG("{} receive a message with {} bytes while closing, ignored", *sess, nread);
       return;
     }
 
     if (nullptr == sess->get_manager()) {
+      FWLOGWARNING("{} receive a message with {} bytes while not in a manager. Maybe removed.", *sess, nread);
       return;
     }
     ::atframework::gateway::session_manager *mgr = sess->get_manager();
 
     // if no more data or EAGAIN or break by signal, just ignore
     if (0 == nread || UV_EAGAIN == nread || UV_EAI_AGAIN == nread || UV_EINTR == nread) {
+      FWLOGDEBUG("{} receive a busy error, code: {}({})", *sess, nread, uv_strerror(static_cast<int>(nread)));
       return;
     }
 
     // if network error or reset by peer, move session into reconnect queue
     if (nread < 0) {
       // notify to close fd
+      FWLOGDEBUG("{} will close fd due to receive a error, code: {}({})", *sess, nread,
+                 uv_strerror(static_cast<int>(nread)));
       mgr->close(sess->get_id(), static_cast<int>(::atframework::gateway::close_reason_t::kReset),
                  static_cast<int32_t>(nread), "network reset", true);
       return;
@@ -397,7 +404,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
       ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
       if (0 != ret) {
         sess->set_flag(::atframework::gateway::session::flag_t::kWritingFd, false);
-        FWLOGERROR("send data to proto {} failed, res: {}", reinterpret_cast<const void *>(proto), ret);
+        FWLOGERROR("{}(proto {}) send data to fd failed, res: {}", *sess, reinterpret_cast<const void *>(proto), ret);
+      } else {
+        FWLOGDEBUG("{}(proto {}) send data to fd succeed", *sess, reinterpret_cast<const void *>(proto));
       }
     } while (false);
 
@@ -538,9 +547,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
       // if network EOF or network error, do not close session, but wait for reconnect
       bool enable_reconnect = reason <= static_cast<int>(::atframework::gateway::close_reason_t::kReconnectBound);
       if (enable_reconnect) {
-        FWLOGINFO("{} closed", *sess_holder);
+        FWLOGINFO("{} closed, reason: {},{},{}", *sess_holder, reason, sub_reason, message);
       } else {
-        FWLOGINFO("{} closed disable reconnect", *sess_holder);
+        FWLOGINFO("{} closed disable reconnect, reason: {},{},{}", *sess_holder, reason, sub_reason, message);
       }
       if (nullptr != sess_holder->get_manager()) {
         if (sess_holder->get_manager()->close(sess_holder->get_id(), reason, sub_reason, message, enable_reconnect) <
@@ -552,9 +561,10 @@ class gateway_module : public ::atfw::atapp::module_impl {
       }
     } else {
       if (sess_holder->check_flag(::atframework::gateway::session::flag_t::kReconnected)) {
-        FWLOGINFO("{} reconnected and release old connection", *sess_holder);
+        FWLOGINFO("{} reconnected and release old connection, reason: {},{},{}", *sess_holder, reason, sub_reason,
+                  message);
       } else {
-        FWLOGINFO("{} closed", *sess_holder);
+        FWLOGINFO("{} closed, reason: {},{},{}", *sess_holder, reason, sub_reason, message);
       }
     }
 
@@ -597,9 +607,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
         reinterpret_cast<::atframework::gateway::session *>(proto->get_private_data());
     if (0 == status) {
       if (nullptr == sess) {
-        FWLOGDEBUG("session NONE handshake update success\n{}", proto->get_info());
+        FWLOGINFO("session NONE handshake update success\n{}", proto->get_info());
       } else {
-        FWLOGDEBUG("{} handshake update success\n{}", *sess, proto->get_info());
+        FWLOGINFO("{} handshake update success\n{}", *sess, proto->get_info());
       }
     } else {
       if (nullptr == sess) {

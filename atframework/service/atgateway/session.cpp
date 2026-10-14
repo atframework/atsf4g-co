@@ -431,10 +431,12 @@ int session::force_close_fd() {
 int session::send_to_client(gsl::span<const unsigned char> data) {
   // send to proto_
   if (check_flag(flag_t::kClosing)) {
+    FWLOGDEBUG("{} ignore send {} bytes data to client because session is closing", *this, data.size());
     return static_cast<int>(error_code_t::kClosing);
   }
 
   if (!check_flag(flag_t::kHasFd)) {
+    FWLOGDEBUG("{} ignore send {} bytes data to client because session has lost fd", *this, data.size());
     return static_cast<int>(error_code_t::kClosing);
   }
 

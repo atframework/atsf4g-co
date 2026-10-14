@@ -15,6 +15,9 @@
 
 #include <gsl/select-gsl.h>
 
+#include <atgateway/protocol/v2/libatgw_protocol_sdk.h>
+
+#include <algorithm>
 #include <chrono>
 #include <list>
 #include <memory>
@@ -74,6 +77,27 @@ int session_manager::init(::atfw::atapp::app *app_inst, create_proto_fn_t fn) {
     }
 
     discovery_index_->initialize();
+  }
+
+  if (!session_logger_) {
+    session_logger_ = atfw::util::log::log_wrapper::create_user_logger();
+    const auto *default_logger = WLOG_GETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT);
+    session_logger_->init(default_logger->get_level());
+    session_logger_->set_option(
+        atfw::util::log::log_wrapper::options_t::OPT_AUTO_UPDATE_TIME,
+        default_logger->get_option(atfw::util::log::log_wrapper::options_t::OPT_AUTO_UPDATE_TIME));
+    session_logger_->set_prefix_format(default_logger->get_prefix_format());
+    auto stacktrace_level = default_logger->get_stacktrace_level();
+    session_logger_->set_stacktrace_level(stacktrace_level.first, stacktrace_level.second);
+    session_logger_->clear_sinks();
+    session_logger_->add_sink(
+        [](const atfw::util::log::log_wrapper::caller_info_t &caller, atfw::util::nostd::string_view content) {
+          auto *redir_logger = WLOG_GETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT);
+          if (redir_logger != nullptr) {
+            redir_logger->write_log(caller, content.data(), content.size());
+          }
+        },
+        atfw::util::log::log_wrapper::level_t::kDebug, atfw::util::log::log_wrapper::level_t::kFatal);
   }
   return 0;
 }
@@ -418,7 +442,8 @@ int session_manager::close(session::id_t sess_id, int32_t reason, int32_t sub_re
       return 0;
     }
 
-    FWLOGINFO("{} close reconnect cache", *session_ptr);
+    FWLOGINFO("{} close reconnect cache, close reason: {}, sub reason: {}, message: {}", *session_ptr, reason,
+              sub_reason, message);
     session_ptr->set_flag(session::flag_t::kWaitReconnect, false);
     session_ptr->close(reason, sub_reason, message);
     return 0;
@@ -472,6 +497,17 @@ void session_manager::reload() {
 
   if (discovery_index_) {
     discovery_index_->reload();
+  }
+
+  if (session_logger_) {
+    const auto *default_logger = WLOG_GETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT);
+    session_logger_->init(default_logger->get_level());
+    session_logger_->set_option(
+        atfw::util::log::log_wrapper::options_t::OPT_AUTO_UPDATE_TIME,
+        default_logger->get_option(atfw::util::log::log_wrapper::options_t::OPT_AUTO_UPDATE_TIME));
+    session_logger_->set_prefix_format(default_logger->get_prefix_format());
+    auto stacktrace_level = default_logger->get_stacktrace_level();
+    session_logger_->set_stacktrace_level(stacktrace_level.first, stacktrace_level.second);
   }
 }
 
@@ -870,8 +906,13 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // setup send buffer size
-  sess->get_protocol_handle()->set_receive_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
-  sess->get_protocol_handle()->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
+  uint64_t post_message_size_limit =
+      mgr->conf_.crypto.max_post_message_size + atfw::gateway::libatgw_protocol_sdk::get_max_untrusted_message_size();
+
+  sess->get_protocol_handle()->set_receive_buffer_limit(
+      (std::max)(post_message_size_limit, mgr->conf_.origin_conf.client().recv_buffer_size()), 0);
+  sess->get_protocol_handle()->set_send_buffer_limit(
+      (std::max)(post_message_size_limit, mgr->conf_.origin_conf.client().send_buffer_size()), 0);
 
   // create proto object and session object
   int res = sess->accept_tcp(server);
@@ -945,8 +986,13 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // setup send buffer size
-  proto->set_receive_buffer_limit(mgr->conf_.origin_conf.client().recv_buffer_size(), 0);
-  proto->set_send_buffer_limit(mgr->conf_.origin_conf.client().send_buffer_size(), 0);
+  uint64_t post_message_size_limit =
+      mgr->conf_.crypto.max_post_message_size + atfw::gateway::libatgw_protocol_sdk::get_max_untrusted_message_size();
+
+  proto->set_receive_buffer_limit(
+      (std::max)(post_message_size_limit, mgr->conf_.origin_conf.client().recv_buffer_size()), 0);
+  proto->set_send_buffer_limit((std::max)(post_message_size_limit, mgr->conf_.origin_conf.client().send_buffer_size()),
+                               0);
 
   int res = sess->accept_pipe(server);
   if (0 != res) {

@@ -46,7 +46,7 @@ const constexpr uint64_t kPostExtraCostSize = 32 * 1024;
 
 // Maximum message size for untrusted connections (before handshake completion).
 // Handshake packets should not exceed this size.
-const constexpr uint64_t kMaxUntrustedMessageSize = 4096;
+const constexpr uint64_t kMaxUntrustedMessageSize = 8192;
 
 const constexpr uint64_t kDefaultMaxPostMessageSize = 2 * 1024 * 1024;
 const constexpr uint64_t kDefaultCompressionThresholdSize = 1024;
@@ -1113,6 +1113,10 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::alloc_receive_buffer(size_t /*su
 LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<const unsigned char> buffer, int &errcode) {
   if (check_flag(flag_t::kClosing)) {
     errcode = static_cast<int>(::atfw::gateway::error_code_t::kClosing);
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore read because session is closing", session_id_,
+                     reinterpret_cast<const void *>(this));
+    }
     return;
   }
 
@@ -1140,12 +1144,16 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
       uint64_t max_post_message_size = crypto_session_->get_max_post_message_size();
       if (msg_len > max_post_message_size + kPostExtraCostSize) {
         is_free = true;
+        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(::atfw::gateway::error_code_t::kInvalidSize),
+                                 "Exceed max post message size");
         break;
       }
 
       // Enforce strict size limit for untrusted connections (before handshake completion)
       if (!check_flag(flag_t::kHandshakeDone) && msg_len > kMaxUntrustedMessageSize) {
         is_free = true;
+        ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(::atfw::gateway::error_code_t::kInvalidSize),
+                                 "Exceed max handshake untrusted message size");
         break;
       }
 
@@ -1157,6 +1165,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
 
         if (check_hash != expect_hash) {
           errcode = static_cast<int>(::atfw::gateway::error_code_t::kBadData);
+          ATFRAME_GATEWAY_ON_ERROR(errcode, "Bad data: hash mismatch");
         }
 
         dispatch_data(
@@ -1176,6 +1185,9 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
           is_free = true;
           buff_start += msg_header_len;
           buff_left_len -= msg_header_len;
+
+          ATFRAME_GATEWAY_ON_ERROR(static_cast<int>(::atfw::gateway::error_code_t::kInvalidSize),
+                                   "Exceed read buffer limit");
           break;
         }
       }
@@ -1200,6 +1212,8 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
       errcode = static_cast<int>(::atfw::gateway::error_code_t::kInvalidSize);
       is_free = true;
       read_buffers_.pop_front(0, true);
+
+      ATFRAME_GATEWAY_ON_ERROR(errcode, "Exceed max handshake untrusted message size");
     } else {
       uint32_t check_hash = atfw::util::hash::murmur_hash3_x86_32(reinterpret_cast<char *>(data) + msg_header_len,
                                                                   static_cast<int>(msg_len), 0);
@@ -1208,6 +1222,7 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::read(int /*ssz*/, gsl::span<cons
 
       if (check_hash != expect_hash) {
         errcode = static_cast<int>(::atfw::gateway::error_code_t::kBadData);
+        ATFRAME_GATEWAY_ON_ERROR(errcode, "Bad data: hash mismatch");
       }
 
       dispatch_data(gsl::span<const unsigned char>{reinterpret_cast<unsigned char *>(data) + msg_header_len, msg_len},
@@ -1305,7 +1320,8 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::dispatch_data(gsl::span<const un
               this, gsl::span<const unsigned char>{decoded_out.data(), static_cast<size_t>(msg_body->length())});
         }
       } else {
-        close(static_cast<int32_t>(::atfw::gateway::close_reason_t::kInvalidData), false, 0, "");
+        ATFRAME_GATEWAY_ON_ERROR(res, "Decode post data failed");
+        close(res, false, 0, "");
       }
       break;
     }
@@ -1429,6 +1445,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake(
 
   // handshake failed => close connection
   if (ret < 0) {
+    ATFRAME_GATEWAY_ON_ERROR(ret, "Handshake failed");
+
     close_handshake(ret);
     close(static_cast<int>(::atfw::gateway::close_reason_t::kHandshake), false, 0, "");
   }
@@ -1951,7 +1969,8 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::setup_handshake(std::shared_ptr<c
 
 LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::close_handshake(int status) {
   if (logger_) {
-    FWINSTLOGDEBUG(*logger_, "close_handshake - status: {}", status);
+    FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} close_handshake - status: {}", session_id_,
+                   reinterpret_cast<const void *>(this), status);
   }
 
   handshake_done(status);
@@ -2233,6 +2252,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atfw::gateway::v2::cl
   int res = encode_post(data, out, compression_type, compression_origin_size, crypto_iv, crypto_aad,
                         compression_heap_buffer, crypto_heap_buffer);
   if (0 != res) {
+    ATFRAME_GATEWAY_ON_ERROR(res, "Encode post data failed");
     return res;
   }
 
@@ -2264,10 +2284,18 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(gsl::span<const unsigne
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_ping() {
   if (check_flag(flag_t::kClosing)) {
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore send ping because is closing", session_id_,
+                     reinterpret_cast<const void *>(this));
+    }
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
 
   if (nullptr == callbacks_ || !callbacks_->write_fn) {
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore send ping because is missing write callback",
+                     session_id_, reinterpret_cast<const void *>(this));
+    }
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
 
@@ -2290,10 +2318,18 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_ping() {
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_pong(int64_t tp) {
   if (check_flag(flag_t::kClosing)) {
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore send pong because is closing", session_id_,
+                     reinterpret_cast<const void *>(this));
+    }
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
 
   if (nullptr == callbacks_ || !callbacks_->write_fn) {
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore send pong because is missing write callback",
+                     session_id_, reinterpret_cast<const void *>(this));
+    }
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
 
@@ -2313,10 +2349,18 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_pong(int64_t tp) {
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int32_t reason, int32_t sub_reason,
                                                             atfw::util::nostd::string_view message) {
   if (check_flag(flag_t::kClosing)) {
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore send kickoff because is closing", session_id_,
+                     reinterpret_cast<const void *>(this));
+    }
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
 
   if (nullptr == callbacks_ || !callbacks_->write_fn) {
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ignore send kickoff because missing write callback",
+                     session_id_, reinterpret_cast<const void *>(this));
+    }
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
 
@@ -2335,6 +2379,11 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int32_t reason, int3
                                       ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_body, cs_body_kickoff),
                                       kickoff_body.Union()),
                  client_messageIdentifier());
+
+  if (logger_) {
+    FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} send kickoff", session_id_,
+                   reinterpret_cast<const void *>(this));
+  }
   return write_message(builder);
 }
 
@@ -2385,14 +2434,16 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::tick() noexcept {
 
   if (shared_conf_->conf_.client_mode && now > ping_.last_ping + shared_conf_->conf_.ping_interval) {
     if (logger_) {
-      FWINSTLOGDEBUG(*logger_, "Ping interval exceeded, sending ping");
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} ping interval exceeded, sending ping", session_id_,
+                     reinterpret_cast<const void *>(this));
     }
     send_ping();
   }
 
   if (shared_conf_->conf_.client_mode && now > ping_.last_handshake + shared_conf_->conf_.key_refresh_interval) {
     if (logger_) {
-      FWINSTLOGINFO(*logger_, "Key refresh interval exceeded, refreshing session key");
+      FWINSTLOGINFO(*logger_, "libatgw_protocol_sdk {}@{} key refresh interval exceeded, refreshing session key",
+                    session_id_, reinterpret_cast<const void *>(this));
     }
     handshake_update();
   }
@@ -2496,6 +2547,10 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
 
     set_flag(flag_t::kWriting, true);
     last_write_ptr_ = writing_block->raw_data();
+    if (logger_) {
+      FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} try to write {} bytes", session_id_,
+                     reinterpret_cast<const void *>(this), writing_block->raw_size());
+    }
     ret = write_fn(this,
                    gsl::span<unsigned char>{reinterpret_cast<unsigned char *>(writing_block->raw_data()),
                                             writing_block->raw_size()},
@@ -2516,6 +2571,10 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
     set_flag(flag_t::kClosed, true);
 
     if (nullptr != callbacks_ && callbacks_->close_fn) {
+      if (logger_) {
+        FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} start to do closing", session_id_,
+                       reinterpret_cast<const void *>(this));
+      }
       return callbacks_->close_fn(this, close_reason_, close_sub_reason_, close_message_);
     }
   }
@@ -2639,6 +2698,11 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::close(int32_t reason, bool is_sen
     set_flag(flag_t::kClosed, true);
 
     if (nullptr != callbacks_ && callbacks_->close_fn) {
+      if (logger_) {
+        FWINSTLOGDEBUG(*logger_, "libatgw_protocol_sdk {}@{} start to do closing", session_id_,
+                       reinterpret_cast<const void *>(this));
+      }
+
       return callbacks_->close_fn(this, close_reason_, sub_reason, message);
     }
   }

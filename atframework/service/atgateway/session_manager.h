@@ -16,6 +16,7 @@
 
 #include <atframe/atapp.h>
 #include <gsl/select-gsl.h>
+#include <log/log_wrapper.h>
 
 #include <memory/lru_map.h>
 
@@ -96,6 +97,8 @@ class session_manager {
   inline on_create_session_fn_t get_on_create_session() const { return on_create_session_fn_; }
   inline void set_on_create_session(on_create_session_fn_t fn) { on_create_session_fn_ = std::move(fn); }
 
+  inline const atfw::util::log::log_wrapper::ptr_t &get_session_logger() const noexcept { return session_logger_; }
+
   int reconnect(session &new_sess, session::id_t old_sess_id);
 
   int active_session(session::ptr_t sess);
@@ -138,6 +141,8 @@ class session_manager {
   time_t last_tick_time_;
 
   component::service_discovery_index::ptr_t discovery_index_;
+
+  atfw::util::log::log_wrapper::ptr_t session_logger_;
 
   void *private_data_;
 };
