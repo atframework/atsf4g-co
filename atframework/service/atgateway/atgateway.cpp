@@ -404,7 +404,6 @@ class gateway_module : public ::atfw::atapp::module_impl {
       ret = uv_write(req, sess->get_uv_stream(), bufs, 1, proto_inner_callback_on_written_fn);
       if (0 != ret) {
         sess->set_flag(::atframework::gateway::session::flag_t::kWritingFd, false);
-        FWLOGERROR("{}(proto {}) send data to fd failed, res: {}", *sess, reinterpret_cast<const void *>(proto), ret);
       } else {
         FWLOGDEBUG("{}(proto {}) send data to fd succeed", *sess, reinterpret_cast<const void *>(proto));
       }
@@ -621,14 +620,15 @@ class gateway_module : public ::atfw::atapp::module_impl {
     return 0;
   }
 
-  static int proto_inner_callback_on_error(::atframework::gateway::libatgw_protocol_api *, const char *filename,
+  static int proto_inner_callback_on_error(::atframework::gateway::libatgw_protocol_api *proto, const char *filename,
                                            uint32_t line, int errcode, const char *errmsg) {
     if (atfw::util::log::log_wrapper::check_level(WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT),
                                                   atfw::util::log::log_level::kError)) {
       WDTLOGGETCAT(atfw::util::log::log_wrapper::categorize_t::DEFAULT)
           ->format_log(atfw::util::log::log_wrapper::caller_info_t(atfw::util::log::log_level::kError, "Error",
                                                                    filename, line, "anonymous"),
-                       "error code: {}, message: {}", errcode, errmsg);
+                       "session {}(proto {}) error code: {}, message: {}", proto ? proto->get_session_id() : 0,
+                       reinterpret_cast<const void *>(proto), errcode, errmsg);
     }
     return 0;
   }

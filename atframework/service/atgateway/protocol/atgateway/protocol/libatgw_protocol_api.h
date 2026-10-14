@@ -81,6 +81,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * SPECIFY: callback when write any data. the last boolean return false means async write, you must call
    * write_done(status) when the writing finished. so any engine use it can determine how to send data to peer.
+   * Transient I/O errors (e.g. EAGAIN/EINTR) and partial writes must be retried by the transport.
+   * While pending, return 0 and set the last boolean to false; the buffer stays valid until write_done().
    * PARAMETER:
    *   0: proto object
    *   1: buffer to write, the first write_header_offset_ bytes are headspace and are not the real data need to send to
@@ -242,6 +244,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE libatgw_protocol_api {
   /**
    * @biref call this to notify protocol object last write is finished.
    * @param status written status
+   * @note Report completion of the entire buffer: 0 for success or a negative terminal error.
+   * Retry transient I/O errors in the transport, retaining the buffer and any partial-write offset.
    * @return 0 or error code
    */
   LIBATGW_PROTOCOL_API virtual int write_done(int status);

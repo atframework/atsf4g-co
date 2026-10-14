@@ -236,6 +236,8 @@ class libatgw_protocol_sdk : public libatgw_protocol_api {
                                              std::vector<unsigned char> &heap_buffer);
 
    private:
+    friend class libatgw_protocol_sdk;
+
     int derive_key_from_shared_secret(const std::vector<unsigned char> &shared_secret, bool need_confirm);
 
     std::shared_ptr<crypto_session_internal_data_t> internal_data_;
