@@ -415,12 +415,22 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   std::stringstream segs_debug_info;
 
   std::vector<const ::google::protobuf::FieldDescriptor *> fds;
-  const google::protobuf::Reflection *reflect = store->GetReflection();
-  if (nullptr == reflect) {
-    FWLOGERROR("pack message {} failed, get reflection failed", store->GetDescriptor()->full_name());
+  const google::protobuf::Descriptor *descriptor = store->GetDescriptor();
+  if (nullptr == descriptor) {
+    FWLOGERROR("pack message {} failed, get descriptor failed", store->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
   }
-  reflect->ListFields(*store, &fds);
+  fds.reserve(descriptor->field_count());
+  int field_count = descriptor->field_count();
+  // 2. 循环遍历每一个 FieldDescriptor
+  for (int i = 0; i < field_count; ++i) {
+    // 通过索引获取 FieldDescriptor
+    const google::protobuf::FieldDescriptor *field_desc = descriptor->field(i);
+    if (nullptr == field_desc) {
+      continue;
+    }
+    fds.push_back(field_desc);
+  }
 
   RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_set, {
     __ut_req.store = store.get();
@@ -527,12 +537,22 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
   std::stringstream segs_debug_info;
 
   std::vector<const ::google::protobuf::FieldDescriptor *> fds;
-  const google::protobuf::Reflection *reflect = store->GetReflection();
-  if (nullptr == reflect) {
-    FWLOGERROR("pack message {} failed, get reflection failed", store->GetDescriptor()->full_name());
+  const google::protobuf::Descriptor *descriptor = store->GetDescriptor();
+  if (nullptr == descriptor) {
+    FWLOGERROR("pack message {} failed, get descriptor failed", store->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
   }
-  reflect->ListFields(*store, &fds);
+  fds.reserve(descriptor->field_count());
+  int field_count = descriptor->field_count();
+  // 2. 循环遍历每一个 FieldDescriptor
+  for (int i = 0; i < field_count; ++i) {
+    // 通过索引获取 FieldDescriptor
+    const google::protobuf::FieldDescriptor *field_desc = descriptor->field(i);
+    if (nullptr == field_desc) {
+      continue;
+    }
+    fds.push_back(field_desc);
+  }
 
   version = 0;
   RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_insert, {
