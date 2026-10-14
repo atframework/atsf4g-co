@@ -420,7 +420,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
     FWLOGERROR("pack message {} failed, get descriptor failed", store->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
   }
-  fds.reserve(descriptor->field_count());
+  fds.reserve(static_cast<size_t>(descriptor->field_count()));
   int field_count = descriptor->field_count();
   // 2. 循环遍历每一个 FieldDescriptor
   for (int i = 0; i < field_count; ++i) {
@@ -542,7 +542,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
     FWLOGERROR("pack message {} failed, get descriptor failed", store->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
   }
-  fds.reserve(descriptor->field_count());
+  fds.reserve(static_cast<size_t>(descriptor->field_count()));
   int field_count = descriptor->field_count();
   // 2. 循环遍历每一个 FieldDescriptor
   for (int i = 0; i < field_count; ++i) {
