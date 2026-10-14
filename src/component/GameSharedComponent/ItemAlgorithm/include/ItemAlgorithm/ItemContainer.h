@@ -595,7 +595,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   std::unordered_map<uint64_t, item_entry_weak_ptr_t> entry_id_index_;
   item_group_map_type item_groups_;
   ItemLogHandler log_handler_;
-  std::string log_category_storage_;  // 承放 log_handler_.category (它是视图, 需要容器自己持有数据)
   mutable uint64_t next_entry_id_ = 1;
   mutable int64_t operate_id_ = 0;        // 操作流水号
   mutable uint32_t iteration_depth_ = 0;  // foreach_instance 嵌套深度 (>0 时禁止改容器的操作)

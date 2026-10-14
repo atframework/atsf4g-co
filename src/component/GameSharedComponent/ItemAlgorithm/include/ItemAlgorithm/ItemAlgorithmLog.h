@@ -43,7 +43,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemLogHandler {
   ///
   /// 注册时容器会把它复制到自己的存储 (见 ItemContainer::set_log_handler), 因此只需保证它在
   /// set_log_handler 调用期间有效; 容器初始化时会补成 "<category>:<容器GUID>"。
-  gsl::string_view category = "ItemAlgorithm";
+  std::string category = "ItemAlgorithm";
   /// @brief 低于该级别的日志不会格式化, 也不会回调 on_log
   ItemLogLevel min_level = ItemLogLevel::kTrace;
   /// @brief 未注册时所有日志被忽略

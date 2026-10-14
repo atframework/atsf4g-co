@@ -33,6 +33,7 @@ class user_item_container : public ModeContainerT {
   user* get_owner() { return owner_; }
   user* get_owner() const { return const_cast<user*>(owner_); }
 
+  void setup_log(int64_t container_guid);
   /// @brief 模式 init 之后调用: 补全日志分类, 并登记到 user_item_container_manager
   void finish_init();
   /// @brief 注销登记 (容器不再使用时调用)

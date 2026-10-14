@@ -150,11 +150,7 @@ ITEM_ALGORITHM_API size_t ItemContainer::get_entry_count() const { return entry_
 // ============================================================
 
 ITEM_ALGORITHM_API void ItemContainer::set_log_handler(const ItemLogHandler& handler) {
-  // category 是视图, 复制到容器自己的存储后再让日志处理器指过去
-  log_category_storage_.assign(handler.category.data(), handler.category.size());
-
   log_handler_ = handler;
-  log_handler_.category = log_category_storage_;
 }
 
 ITEM_ALGORITHM_API const ItemLogHandler& ItemContainer::get_log_handler() const { return log_handler_; }

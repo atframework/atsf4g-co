@@ -19,6 +19,7 @@ template <typename ModeContainerT, typename DerivedT>
 user_item_container<ModeContainerT, DerivedT>::user_item_container(user* owner, const std::string& log_category_prefix)
     : owner_(owner), log_category_prefix_(log_category_prefix) {
   item_algorithm::ItemLogHandler handler;
+  handler.category = log_category_prefix_;
   // SDK 直接给出框架日志级别与调用点, 这里只负责转给本服务的日志分类
   handler.on_log = [this](const item_algorithm::ItemLogRecord& record) {
     using log_wrapper_t = ::ATFRAMEWORK_UTILS_NAMESPACE_ID::log::log_wrapper;
@@ -36,23 +37,21 @@ template <typename ModeContainerT, typename DerivedT>
 user_item_container<ModeContainerT, DerivedT>::~user_item_container() {}
 
 template <typename ModeContainerT, typename DerivedT>
+void user_item_container<ModeContainerT, DerivedT>::setup_log(int64_t container_guid) {
+  item_algorithm::ItemLogHandler handler = this->get_log_handler();
+  if (log_category_prefix_.empty()) {
+    log_category_prefix_ = handler.category;
+  }
+  handler.category = atfw::util::string::format("{}:{}", log_category_prefix_, container_guid);
+  this->set_log_handler(handler);
+}
+
+template <typename ModeContainerT, typename DerivedT>
 void user_item_container<ModeContainerT, DerivedT>::finish_init() {
   if (registered_) {
     return;
   }
   registered_ = true;
-
-  item_algorithm::ItemLogHandler handler = this->get_log_handler();
-  if (log_category_prefix_.empty()) {
-    // category 是视图, 拷成 std::string 自己持有
-    log_category_prefix_.assign(handler.category.data(), handler.category.size());
-  }
-
-  // 视图不能指向临时量: 先落到局部 string, 在本函数内一直有效,
-  // set_log_handler 会把它复制到容器自己的存储
-  std::string category = log_category_prefix_ + ":" + std::to_string(this->get_container_guid());
-  handler.category = category;
-  this->set_log_handler(handler);
 
   // 容器由 SDK 基类 (ItemContainer) 的共享引用持有, 这里把基类指针登记到管理器:
   // 组按 position.container_guid 路由时用它选容器。
@@ -156,6 +155,7 @@ void user_item_finite_container::init(int32_t row_size, int32_t column_size,
     FWLOGERROR("user_item_finite_container::init called twice, container_guid: {}", container_guid);
     return;
   }
+  this->setup_log(container_guid);
   this->mode_container_type::init(row_size, column_size, position_type, container_guid);
   this->finish_init();
 }
@@ -170,6 +170,7 @@ void user_item_infinite_container::init(PROJECT_NAMESPACE_ID::DItemGridPosition:
     FWLOGERROR("user_item_infinite_container::init called twice, container_guid: {}", container_guid);
     return;
   }
+  this->setup_log(container_guid);
   this->mode_container_type::init(position_type, container_guid);
   this->finish_init();
 }
@@ -184,6 +185,7 @@ void user_item_no_position_container::init(PROJECT_NAMESPACE_ID::DItemGridPositi
     FWLOGERROR("user_item_no_position_container::init called twice, container_guid: {}", container_guid);
     return;
   }
+  this->setup_log(container_guid);
   this->mode_container_type::init(position_type, container_guid);
   this->finish_init();
 }
