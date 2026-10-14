@@ -160,6 +160,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void merge_team_matching_parameter(
       rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>& input,
       PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
+  void init_level_select_data();
 
  public:
   static void on_gm_cmd_start_matching(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,

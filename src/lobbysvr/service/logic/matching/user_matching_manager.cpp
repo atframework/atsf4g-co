@@ -20,6 +20,7 @@
 #include <logic/team/user_team_battle_library_function.h>
 #include <logic/user/task_action_user_gm_cmd_nomsg.h>
 
+#include <config/excel_config_const_index.h>
 #include <config/logic_config.h>
 
 #include <rpc/db/uuid.h>
@@ -140,6 +141,7 @@ void user_matching_manager::create_init(rpc::context&) {
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
   is_matching_ = false;
+  init_level_select_data();
 }
 
 rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
@@ -1321,4 +1323,15 @@ int64_t user_matching_manager::get_heartbeat_interval() const {
     heartbeat_interval = 2;
   }
   return heartbeat_interval;
+}
+
+void user_matching_manager::init_level_select_data() {
+  // 初始化玩家初次进入默认选择的关卡
+  auto default_match_level = excel::get_const_config().default_match_level();
+  auto default_match_region = excel::get_const_config().default_match_region();
+  auto default_match_battle_version = excel::get_const_config().default_match_battle_version();
+
+  data_.mutable_level_data()->set_battle_version(default_match_battle_version);
+  data_.mutable_level_data()->mutable_level_select()->set_region(default_match_region);
+  data_.mutable_level_data()->mutable_level_select()->add_level_ids(default_match_level);
 }

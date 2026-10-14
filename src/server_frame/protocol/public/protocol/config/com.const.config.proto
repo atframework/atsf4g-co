@@ -60,4 +60,7 @@ message ExcelConstConfig {
   int32 friend_total_inviter_limit = 313;
   int32 user_recent_limit = 314;
   repeated DItemScopeOffset creat_init_item = 315;
+  int32 default_match_level = 320;
+  string default_match_region = 321;
+  string default_match_battle_version = 322;
 }

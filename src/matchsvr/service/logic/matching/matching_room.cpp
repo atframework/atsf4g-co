@@ -2,6 +2,7 @@
 
 #include "logic/matching/matching_room.h"
 
+#include "logic/matching/matching_logic.h"
 #include "logic/matching/matching_unit.h"
 #include "logic/matching/matching_utility.h"
 
@@ -23,7 +24,6 @@
 #include <vector>
 
 namespace {
-constexpr int32_t kFirstBattleFactionId = 1001;
 
 static void log_room_status_change(const matching_room& room, PROJECT_NAMESPACE_ID::EnMatchingRoomStatus from,
                                    const char* reason, int64_t previous_battle_expire_time = 0) {
@@ -394,7 +394,7 @@ bool matching_room::finalize_faction_ids() {
 
   std::unordered_map<uint64_t, int32_t> finalized_ids;
   finalized_ids.reserve(units_.size());
-  int32_t faction_id = kFirstBattleFactionId;
+  int32_t faction_id = matching_logic::get_start_faction_id();
   for (const auto* assignment : ordered_factions) {
     for (uint64_t unit_id : assignment->unit_ids()) {
       if (!finalized_ids.emplace(unit_id, faction_id).second) {

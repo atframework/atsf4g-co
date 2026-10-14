@@ -83,6 +83,7 @@ class matching_logic {
   static int64_t get_unit_heartbeat_timeout_seconds();
   static size_t get_max_rebalance_migrations_per_target();
   static size_t get_max_rebalance_migrations_per_tick();
+  static int32_t get_start_faction_id();
 
   // 构造 Unit 加入房间的 WAL 事件。
   static PROJECT_NAMESPACE_ID::DMatchingEventLog make_add_unit_event(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);

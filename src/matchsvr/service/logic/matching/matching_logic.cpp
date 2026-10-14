@@ -114,6 +114,15 @@ size_t matching_logic::get_max_rebalance_migrations_per_tick() {
   return default_max_migrations_per_tick;
 }
 
+int32_t matching_logic::get_start_faction_id() {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  int32_t start_faction_id = server_cfg.start_faction_id();
+  if (start_faction_id <= 0) {
+    start_faction_id = 1;
+  }
+  return start_faction_id;
+}
+
 PROJECT_NAMESPACE_ID::DMatchingEventLog matching_logic::make_add_unit_event(
     const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
   PROJECT_NAMESPACE_ID::DMatchingEventLog result;

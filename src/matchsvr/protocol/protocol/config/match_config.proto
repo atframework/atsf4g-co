@@ -22,4 +22,5 @@ message matchsvr_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
   uint64 max_rebalance_migrations_per_tick = 106
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
+  int32 start_faction_id = 107 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1" min_value: "1" }];
 }
