@@ -35,9 +35,9 @@
 
 #include <cassert>
 #include <functional>
-#include <utility>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "config/server_frame_build_feature.h"
 
@@ -277,13 +277,13 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
   }
 
   if (0 != get_user_id()) {
-    FCTXLOGERROR(get_shared_context(), "task {} [{}] for user {}:{} ret code ({}){}, rsp code ({}){}\n", name(),
-                 get_task_id(), get_zone_id(), get_user_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
-                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
+    FCTXLOGWARNING(get_shared_context(), "task {} [{}] for user {}:{} ret code ({}){}, rsp code ({}){}\n", name(),
+                   get_task_id(), get_zone_id(), get_user_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
+                   protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
   } else {
-    FCTXLOGERROR(get_shared_context(), "task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
-                 protobuf_mini_dumper_get_error_msg(result_), result_,
-                 protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
+    FCTXLOGWARNING(get_shared_context(), "task {} [{}] ret code ({}){}, rsp code ({}){}\n", name(), get_task_id(),
+                   protobuf_mini_dumper_get_error_msg(result_), result_,
+                   protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
   }
 
   // 响应OnTimeout

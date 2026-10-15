@@ -488,8 +488,8 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
   auto runtime_unit = find_unit(request.unit_id());
   if (!runtime_unit) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
-    FCTXLOGERROR(ctx, "matching heartbeat failed to find Unit, unit_id={}, result={}", request.unit_id(),
-                 response.result());
+    FCTXLOGINFO(ctx, "matching heartbeat failed to find Unit, unit_id={}, result={}", request.unit_id(),
+                response.result());
     return response.result();
   }
   if (!request.has_heartbeat_data() ||
