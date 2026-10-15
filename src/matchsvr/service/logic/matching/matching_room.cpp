@@ -158,6 +158,15 @@ bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) c
       }
     }
   }
+
+  for (const auto& unit : admitted_units_) {
+    for (const auto& user : unit.second.users()) {
+      if (matching_utility::same_user(user.user_key(), user_key)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
