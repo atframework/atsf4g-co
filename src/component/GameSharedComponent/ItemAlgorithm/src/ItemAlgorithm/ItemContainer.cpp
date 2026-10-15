@@ -73,6 +73,7 @@ ITEM_ALGORITHM_API void ItemContainer::clear() {
     notify_entry_count_changed(entry, old_count, 0, context);
     ++removed_count;
   }
+  all_entries.clear();
 
   // 快照里的条目应已逐条摘除, 基类里不应再有数据。
   // 仍有残留说明 entries 与分组的对应关系被破坏 (例如遍历期间改写了 type_id), 记 ERROR 便于定位。
@@ -149,9 +150,7 @@ ITEM_ALGORITHM_API size_t ItemContainer::get_entry_count() const { return entry_
 // 日志接口
 // ============================================================
 
-ITEM_ALGORITHM_API void ItemContainer::set_log_handler(const ItemLogHandler& handler) {
-  log_handler_ = handler;
-}
+ITEM_ALGORITHM_API void ItemContainer::set_log_handler(const ItemLogHandler& handler) { log_handler_ = handler; }
 
 ITEM_ALGORITHM_API const ItemLogHandler& ItemContainer::get_log_handler() const { return log_handler_; }
 
@@ -276,7 +275,7 @@ ITEM_ALGORITHM_API item_entry_ptr_t ItemContainer::find_entry(const PROJECT_NAME
 }
 
 ITEM_ALGORITHM_API bool ItemContainer::is_same_grid_position(const PROJECT_NAMESPACE_ID::DItemGridPosition& lhs,
-                                                            const PROJECT_NAMESPACE_ID::DItemGridPosition& rhs) const {
+                                                             const PROJECT_NAMESPACE_ID::DItemGridPosition& rhs) const {
   return extract_position(lhs) == extract_position(rhs);
 }
 
