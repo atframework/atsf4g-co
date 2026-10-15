@@ -195,6 +195,7 @@ int session::init_reconnect(session &sess) {
   set_flag(flag_t::kRegistered, sess.check_flag(flag_t::kRegistered));
 
   sess.set_flag(flag_t::kReconnected, true);
+  sess.set_flag(flag_t::kRegistered, false);
   sess.set_flag(session::flag_t::kWaitReconnect, false);
 
   FWLOGWARNING("{} reconnect inited", *this);
@@ -318,11 +319,14 @@ int session::on_write_done(int status) {
     int ret = proto_->write_done(status);
 
     // if about to closing and all data transferred, shutdown the socket
-    if (check_flag(flag_t::kShouldShutdownFd) && !check_flag(flag_t::kShutdownFd) &&
+    if (check_flag(flag_t::kHasFd) && check_flag(flag_t::kShouldShutdownFd) && !check_flag(flag_t::kShutdownFd) &&
+        !check_flag(flag_t::kClosingFd) &&
         proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
       FWLOGINFO("{} start to shutdown system fd", *this);
       set_flag(flag_t::kShutdownFd, true);
-      uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
+      if (uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown) < 0) {
+        force_close_fd();
+      }
     }
 
     return ret;
@@ -354,10 +358,12 @@ int session::close_with_manager(int32_t reason, int32_t sub_reason, atfw::util::
 }
 
 int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::string_view message) {
-  if (check_flag(flag_t::kShouldShutdownFd) || check_flag(flag_t::kShutdownFd)) {
+  if (check_flag(flag_t::kShouldShutdownFd) || check_flag(flag_t::kShutdownFd) || check_flag(flag_t::kClosingFd)) {
     return 0;
   }
 
+  // Protocol close can synchronously reenter this session through its close callback.
+  set_flag(flag_t::kShouldShutdownFd, true);
   set_close_reason(reason, sub_reason, message);
   if (proto_ && !proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosing)) {
     proto_->close(reason, sub_reason, message);
@@ -376,12 +382,13 @@ int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::
     owner_ = nullptr;
 
     // if writing, wait all data written an then shutdown it
-    set_flag(flag_t::kShouldShutdownFd, true);
     if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
       FWLOGINFO("{} start to shutdown system fd", *this);
 
       set_flag(flag_t::kShutdownFd, true);
-      uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown);
+      if (uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown) < 0) {
+        force_close_fd();
+      }
     }
 
     FWLOGWARNING("{} shutdown fd with reason: {}, {}, {}", *this, reason, sub_reason, message);
@@ -403,6 +410,7 @@ int session::force_close_fd() {
   if (check_flag(flag_t::kClosingFd)) {
     return 0;
   }
+  set_flag(flag_t::kClosingFd, true);
 
   if (proto_ && !proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosing)) {
     proto_->close(close_info_.reason, close_info_.sub_reason, close_info_.message);
@@ -410,10 +418,10 @@ int session::force_close_fd() {
 
   if (check_flag(flag_t::kHasFd)) {
     FWLOGINFO("{} start to close system fd", *this);
-    set_flag(flag_t::kClosingFd, true);
     uv_close(&raw_handle_, on_evt_closed);
   } else {
     set_flag(flag_t::kShouldShutdownFd, false);
+    set_flag(flag_t::kClosingFd, false);
     // free session object
     ptr_t *holder = reinterpret_cast<ptr_t *>(shutdown_req_.data);
     shutdown_req_.data = nullptr;
@@ -548,6 +556,7 @@ void session::on_evt_closed(uv_handle_t *handle) {
 
   session *self = reinterpret_cast<session *>(handle->data);
   assert(self);
+  self->set_flag(flag_t::kHasFd, false);
   self->set_flag(flag_t::kShouldShutdownFd, false);
   self->set_flag(flag_t::kClosingFd, false);
 

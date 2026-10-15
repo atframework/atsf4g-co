@@ -388,7 +388,7 @@ int session_manager::tick() {
 
     session::ptr_t s = force_closed_sessions_.front().second->sess;
     if (s) {
-      if (!s->check_flag(session::flag_t::kRegistered) && !s->check_flag(session::flag_t::kClosing)) {
+      if (s->check_flag(session::flag_t::kHasFd) && !s->check_flag(session::flag_t::kClosingFd)) {
         FWLOGINFO("{} force close timeout", *s);
         if (!s->has_close_reason()) {
           s->set_close_reason(static_cast<int>(close_reason_t::kReset), static_cast<int>(error_code_t::kClosing),
@@ -639,63 +639,48 @@ session::ptr_t session_manager::find_session(session::id_t sess_id) {
 }
 
 int session_manager::reconnect(session &new_sess, session::id_t old_sess_id) {
-  // find old session
-  bool has_reconnect_checked = false;
-  session_map_t::iterator iter = reconnect_cache_.find(old_sess_id);
-  // replace the existed session, in case of the lost connection has not be detected
-  if (iter == reconnect_cache_.end()) {
-    iter = actived_sessions_.find(old_sess_id, false);
-    if (iter != actived_sessions_.end() && nullptr != new_sess.get_protocol_handle() &&
-        nullptr != iter->second->get_protocol_handle()) {
-      has_reconnect_checked = true;
-      if (new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
-        FWLOGDEBUG("{} try to reconnect {} and need to close old connection {}", new_sess, old_sess_id, *iter->second);
-        close(old_sess_id, static_cast<int>(close_reason_t::kLogout), 0, "logout", true);
-      } else {
-        FWLOGDEBUG("{} try to reconnect {} to old connection {}, but check_reconnect failed", new_sess, old_sess_id,
-                   *iter->second);
-      }
-    } else if (iter == actived_sessions_.end()) {
-      FWLOGDEBUG("old session {} not found", old_sess_id);
-    } else if (nullptr == iter->second->get_protocol_handle()) {
-      FWLOGERROR("old session 0x{}({}) has no protocol handle", old_sess_id,
-                 reinterpret_cast<const void *>(iter->second.get()));
-    }
-
-    iter = reconnect_cache_.find(old_sess_id);
+  // Keep the old connection alive across map removal and synchronous protocol callbacks.
+  session::ptr_t old_sess;
+  auto cached = reconnect_cache_.find(old_sess_id, false);
+  if (cached != reconnect_cache_.end()) {
+    old_sess = cached->second;
+  } else {
+    old_sess = find_session(old_sess_id);
   }
-
-  if (iter == reconnect_cache_.end() || !iter->second) {
+  if (!old_sess) {
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
-  // check if old session closed
-  if (iter->second->check_flag(session::flag_t::kHasFd)) {
-    return static_cast<int>(error_code_t::kAlreadyHasFd);
+  if (&new_sess == old_sess.get() || new_sess.check_flag(session::flag_t::kInited)) {
+    return static_cast<int>(error_code_t::kSessionAlreadyExist);
   }
 
-  // check if old session not reconnected
-  if (iter->second->check_flag(session::flag_t::kReconnected)) {
+  if (old_sess->check_flag(session::flag_t::kReconnected)) {
     FWLOGERROR("{} try to reconnect {}, but old session already reconnected", new_sess, old_sess_id);
     return static_cast<int>(error_code_t::kSessionNotFound);
   }
 
-  // run proto check
-  if (nullptr == new_sess.get_protocol_handle() || nullptr == iter->second->get_protocol_handle()) {
+  // Authentication must succeed before changing either session or its manager entries.
+  if (nullptr == new_sess.get_protocol_handle() || nullptr == old_sess->get_protocol_handle()) {
     return static_cast<int>(error_code_t::kBadProtocol);
   }
-
-  if (!has_reconnect_checked && !new_sess.get_protocol_handle()->check_reconnect(iter->second->get_protocol_handle())) {
+  if (!new_sess.get_protocol_handle()->check_reconnect(old_sess->get_protocol_handle())) {
     return static_cast<int>(error_code_t::kRefuseReconnect);
   }
 
-  // init with reconnect
-  new_sess.init_reconnect(*iter->second);
-  // close old session
-  iter->second->close(static_cast<int>(close_reason_t::kLogout), 0, "logout");
+  int result = new_sess.init_reconnect(*old_sess);
+  if (result != 0) {
+    return result;
+  }
 
-  // erase reconnect cache, this session id may reconnect again
-  reconnect_cache_.erase(iter);
+  // Retire the old ownership before closing its protocol. Its FD may still be shutting down;
+  // the replacement is activated by the handshake completion callback independently of it.
+  actived_sessions_.erase(old_sess_id);
+  reconnect_cache_.erase(old_sess_id);
+  reconnect_timeout_.erase(old_sess_id);
+  remove_session_first_idle(old_sess.get());
+  FWLOGINFO("{} replaces old connection {}", new_sess, *old_sess);
+  old_sess->close(static_cast<int>(close_reason_t::kKickoff), 0, "session reconnected");
   return 0;
 }
 
@@ -725,6 +710,7 @@ int session_manager::active_session(session::ptr_t sess) {
   }
   actived_sessions_.insert_key_value(sess->get_id(), sess);
   remove_force_closed_session(sess.get());
+  remove_session_first_idle(sess.get());
 
   // setup default router
   assign_default_router(*sess);

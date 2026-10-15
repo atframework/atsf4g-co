@@ -1,34 +1,31 @@
 // Copyright 2026 atframework
 //
-// Regression case for the accept-time session destruction crash:
-// sessions waiting for their first handshake packet all have id 0, so the
-// first-idle timer table must not be keyed by session id. Two connections
-// accepted while both are still pre-handshake must coexist; the earlier one
-// must stay alive until it is closed or times out.
+// Regression coverage for pre-handshake session lifetime, authenticated reconnects,
+// and asynchronous cleanup of replaced connections.
 
+#include <atframe/atapp.h>
+#include <time/time_utility.h>
+#include <uv.h>
+
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
-#include "frame/test_macros.h"
-
-#include <uv.h>
-
 #include "algorithm/crypto_cipher.h"
-#include <time/time_utility.h>
-
-#include <atframe/atapp.h>
-
 #include "atgateway/protocol/v2/libatgw_protocol_sdk.h"
-#include "session.h"
-#include "session_manager.h"
+#include "frame/test_macros.h"
+#include "session.h"          // NOLINT(build/include_subdir)
+#include "session_manager.h"  // NOLINT(build/include_subdir)
 
 namespace {
 
@@ -209,6 +206,394 @@ void test_write_config_file(const char *path) {
 }
 
 }  // namespace
+
+namespace {
+
+using gateway_session = ::atframework::gateway::session;
+using gateway_error = ::atframework::gateway::error_code_t;
+using gateway_close_reason = ::atframework::gateway::close_reason_t;
+
+// Real protocol authentication and TCP handles, with queued protocol writes so tests can
+// hold the old connection's kickoff in flight while the replacement completes its handshake.
+struct reconnect_connection {
+  libatgw_protocol_api::proto_callbacks_t server_callbacks;
+  libatgw_protocol_api::proto_callbacks_t client_callbacks;
+  gateway_session::ptr_t server;
+  std::unique_ptr<libatgw_protocol_sdk> client;
+  test_client_t *socket = nullptr;
+  std::deque<std::vector<unsigned char>> to_server;
+  std::deque<std::vector<unsigned char>> to_client;
+  std::vector<std::string> received_messages;
+  bool hold_server_write = false;
+  int accept_status = -1;
+  int reconnect_status = -1;
+  int server_handshake_status = -1;
+  int client_handshake_status = -1;
+  int server_close_count = 0;
+  int client_close_reason = 0;
+};
+
+static void deliver_protocol_frames(std::deque<std::vector<unsigned char>> &frames, libatgw_protocol_api &receiver) {
+  while (!frames.empty()) {
+    auto frame = std::move(frames.front());
+    frames.pop_front();
+    size_t offset = 0;
+    while (offset < frame.size()) {
+      char *buffer = nullptr;
+      size_t length = 0;
+      receiver.alloc_receive_buffer(frame.size() - offset, buffer, length);
+      CASE_EXPECT_TRUE(buffer != nullptr && length > 0);
+      if (buffer == nullptr || length == 0) {
+        return;
+      }
+      length = (std::min)(length, frame.size() - offset);
+      std::memcpy(buffer, frame.data() + offset, length);
+      int error = 0;
+      receiver.read(static_cast<int>(length), {reinterpret_cast<const unsigned char *>(buffer), length}, error);
+      offset += length;
+    }
+  }
+}
+
+struct reconnect_fixture {
+  uv_loop_t loop{};
+  uv_tcp_t listener{};
+  std::vector<std::unique_ptr<reconnect_connection>> connections;
+  ::atframework::gateway::session_manager manager;
+  std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> server_context;
+  std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> client_context;
+  uint16_t port = 0;
+
+  reconnect_fixture() {
+    ensure_openssl_init();
+    atfw::util::time::time_utility::update();
+    libatgw_protocol_sdk::crypto_conf_t config;
+    config.set_default();
+    config.supported_algorithms = {
+        ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm),
+    };
+    config.client_mode = false;
+    auto client_config = config;
+    client_config.client_mode = true;
+    server_context = libatgw_protocol_sdk::create_shared_context(config);
+    client_context = libatgw_protocol_sdk::create_shared_context(client_config);
+    CASE_EXPECT_TRUE(server_context != nullptr && client_context != nullptr);
+    manager.get_conf().origin_conf.set_echo_server(true);
+    manager.get_conf().origin_conf.mutable_client()->mutable_reconnect_timeout()->set_seconds(180);
+    manager.get_conf().origin_conf.mutable_client()->mutable_shutdown_timeout()->set_seconds(5);
+    CASE_EXPECT_EQ(0, uv_loop_init(&loop));
+    CASE_EXPECT_EQ(0, uv_tcp_init(&loop, &listener));
+    listener.data = this;
+    sockaddr_in address{};
+    CASE_EXPECT_EQ(0, uv_ip4_addr("127.0.0.1", 0, &address));
+    CASE_EXPECT_EQ(0, uv_tcp_bind(&listener, reinterpret_cast<const sockaddr *>(&address), 0));
+    CASE_EXPECT_EQ(0, uv_listen(reinterpret_cast<uv_stream_t *>(&listener), 16, [](uv_stream_t *stream, int status) {
+                     auto *self = static_cast<reconnect_fixture *>(stream->data);
+                     CASE_EXPECT_EQ(0, status);
+                     auto &connection = *self->connections.back();
+                     connection.accept_status = connection.server->accept_tcp(stream);
+                   }));
+    int address_length = sizeof(address);
+    CASE_EXPECT_EQ(0, uv_tcp_getsockname(&listener, reinterpret_cast<sockaddr *>(&address), &address_length));
+    port = ntohs(address.sin_port);
+  }
+
+  ~reconnect_fixture() {
+    for (auto &connection : connections) {
+      connection->hold_server_write = false;
+      if (connection->server->get_protocol_handle()->check_flag(libatgw_protocol_api::flag_t::kWriting)) {
+        connection->server->on_write_done(UV_ECANCELED);
+      }
+      connection->server->close(static_cast<int>(gateway_close_reason::kServerClosed), 0, "test cleanup");
+      uv_close(reinterpret_cast<uv_handle_t *>(&connection->socket->handle), test_on_client_closed);
+    }
+    manager.reset();
+    uv_close(reinterpret_cast<uv_handle_t *>(&listener), nullptr);
+    uv_run(&loop, UV_RUN_DEFAULT);
+    CASE_EXPECT_EQ(0, uv_loop_close(&loop));
+    atfw::util::time::time_utility::update();
+  }
+
+  reconnect_connection &connect() {
+    connections.emplace_back(std::make_unique<reconnect_connection>());
+    auto &connection = *connections.back();
+    connection.server_callbacks.write_fn = [&connection](libatgw_protocol_api *protocol,
+                                                         gsl::span<unsigned char> buffer, bool *done) {
+      connection.to_client.emplace_back(buffer.data() + protocol->get_write_header_offset(),
+                                        buffer.data() + buffer.size());
+      *done = !connection.hold_server_write;
+      return 0;
+    };
+    connection.client_callbacks.write_fn = [&connection](libatgw_protocol_api *protocol,
+                                                         gsl::span<unsigned char> buffer, bool *done) {
+      connection.to_server.emplace_back(buffer.data() + protocol->get_write_header_offset(),
+                                        buffer.data() + buffer.size());
+      *done = true;
+      return 0;
+    };
+    connection.server_callbacks.new_session_fn = [&connection](libatgw_protocol_api *, uint64_t &id) {
+      int result = connection.server->init_new_session();
+      id = connection.server->get_id();
+      return result;
+    };
+    connection.server_callbacks.reconnect_fn = [this, &connection](libatgw_protocol_api *, uint64_t id) {
+      connection.reconnect_status = manager.reconnect(*connection.server, id);
+      return connection.reconnect_status;
+    };
+    connection.server_callbacks.on_handshake_done_fn = [this, &connection](libatgw_protocol_api *, int status) {
+      connection.server_handshake_status = status;
+      return status == 0 ? manager.active_session(connection.server) : 0;
+    };
+    connection.client_callbacks.on_handshake_done_fn = [&connection](libatgw_protocol_api *, int status) {
+      connection.client_handshake_status = status;
+      return 0;
+    };
+    connection.server_callbacks.close_fn = [&connection](libatgw_protocol_api *, int32_t reason, int32_t sub_reason,
+                                                         atfw::util::nostd::string_view message) {
+      ++connection.server_close_count;
+      auto &server = *connection.server;
+      if (!server.check_flag(gateway_session::flag_t::kClosing)) {
+        auto *owner = server.get_manager();
+        bool allow_reconnect = reason <= static_cast<int>(gateway_close_reason::kReconnectBound);
+        if (owner == nullptr || owner->close(server.get_id(), reason, sub_reason, message, allow_reconnect) < 0) {
+          server.close(reason, sub_reason, message);
+        }
+      }
+      return 0;
+    };
+    connection.client_callbacks.close_fn = [&connection](libatgw_protocol_api *, int32_t reason, int32_t,
+                                                         atfw::util::nostd::string_view) {
+      connection.client_close_reason = reason;
+      return 0;
+    };
+    connection.server_callbacks.message_fn = [&connection](libatgw_protocol_api *,
+                                                           gsl::span<const unsigned char> data) {
+      connection.received_messages.emplace_back(reinterpret_cast<const char *>(data.data()), data.size());
+      return 0;
+    };
+    std::unique_ptr<libatgw_protocol_api> protocol = std::make_unique<libatgw_protocol_sdk>(server_context);
+    protocol->set_callbacks(&connection.server_callbacks);
+    connection.server = gateway_session::create(&manager, protocol);
+    connection.client = std::make_unique<libatgw_protocol_sdk>(client_context);
+    connection.client->set_callbacks(&connection.client_callbacks);
+    connection.socket = test_start_client(&loop, port);
+    CASE_EXPECT_TRUE(test_pump_until(&loop, [&connection] { return connection.accept_status == 0; }));
+    return connection;
+  }
+
+  static void exchange(reconnect_connection &connection) {
+    for (int iteration = 0; iteration < 16; ++iteration) {
+      deliver_protocol_frames(connection.to_server, *connection.server->get_protocol_handle());
+      if (!connection.hold_server_write) {
+        deliver_protocol_frames(connection.to_client, *connection.client);
+      }
+      if (connection.to_server.empty() && (connection.to_client.empty() || connection.hold_server_write)) {
+        return;
+      }
+    }
+    CASE_EXPECT_TRUE(connection.to_server.empty());
+    CASE_EXPECT_TRUE(connection.to_client.empty());
+  }
+
+  static bool start(reconnect_connection &connection) {
+    CASE_EXPECT_EQ(0, connection.client->start_session());
+    exchange(connection);
+    CASE_EXPECT_EQ(0, connection.server_handshake_status);
+    CASE_EXPECT_EQ(0, connection.client_handshake_status);
+    return connection.server_handshake_status == 0 && connection.client_handshake_status == 0;
+  }
+
+  static void reconnect(reconnect_connection &connection, const reconnect_connection &previous,
+                        bool corrupt_token = false) {
+    auto token = previous.client->get_session_token();
+    std::vector<unsigned char> token_copy(token.begin(), token.end());
+    CASE_EXPECT_FALSE(token_copy.empty());
+    if (token_copy.empty()) {
+      return;
+    }
+    if (corrupt_token) {
+      token_copy.front() = static_cast<unsigned char>(token_copy.front() ^ 0x80U);
+    }
+    CASE_EXPECT_EQ(
+        0, connection.client->reconnect_session(previous.server->get_id(), {token_copy.data(), token_copy.size()}));
+    exchange(connection);
+  }
+};
+
+static void check_replace_connection(bool cached, bool cache_enabled) {
+  reconnect_fixture fixture;
+  auto &previous = fixture.connect();
+  if (!reconnect_fixture::start(previous)) {
+    return;
+  }
+  const auto id = previous.server->get_id();
+  int private_value = 42;
+  previous.server->set_private_data(&private_value);
+  previous.server->set_router(0x1234, "reconnect-router");
+  previous.hold_server_write = true;
+  if (!cache_enabled) {
+    fixture.manager.get_conf().origin_conf.mutable_client()->mutable_reconnect_timeout()->set_seconds(0);
+  }
+  if (cached) {
+    CASE_EXPECT_EQ(0, fixture.manager.close(id, static_cast<int>(gateway_close_reason::kReset), 0, "lost", true));
+  }
+  auto &replacement = fixture.connect();
+  reconnect_fixture::reconnect(replacement, previous);
+  CASE_EXPECT_EQ(0, replacement.reconnect_status);
+  CASE_EXPECT_EQ(0, replacement.client_handshake_status);
+  CASE_EXPECT_EQ(replacement.server.get(), fixture.manager.find_session(id).get());
+  CASE_EXPECT_EQ(id, replacement.server->get_id());
+  CASE_EXPECT_EQ(&private_value, replacement.server->get_private_data());
+  CASE_EXPECT_EQ(static_cast<uint64_t>(0x1234), replacement.server->get_router_id());
+  CASE_EXPECT_EQ(std::string("reconnect-router"), replacement.server->get_router_name());
+  CASE_EXPECT_TRUE(replacement.server->check_flag(gateway_session::flag_t::kRegistered));
+  CASE_EXPECT_TRUE(previous.server->check_flag(gateway_session::flag_t::kReconnected));
+  CASE_EXPECT_FALSE(previous.server->check_flag(gateway_session::flag_t::kRegistered));
+  CASE_EXPECT_TRUE(previous.server->check_flag(gateway_session::flag_t::kHasFd));
+  if (replacement.reconnect_status != 0) {
+    return;
+  }
+
+  previous.hold_server_write = false;
+  reconnect_fixture::exchange(previous);
+  CASE_EXPECT_EQ(0, previous.server->on_write_done(0));
+  CASE_EXPECT_EQ(1, previous.server_close_count);
+  CASE_EXPECT_EQ(static_cast<int>(cached ? gateway_close_reason::kReset : gateway_close_reason::kKickoff),
+                 previous.client_close_reason);
+  CASE_EXPECT_TRUE(test_pump_until(
+      &fixture.loop, [&previous] { return !previous.server->check_flag(gateway_session::flag_t::kHasFd); }));
+  // Old completion and repeated cleanup must leave the replacement registered and usable.
+  CASE_EXPECT_EQ(0, previous.server->force_close_fd());
+  CASE_EXPECT_EQ(0, previous.server->close(static_cast<int>(gateway_close_reason::kLogout), 0, "late close"));
+  CASE_EXPECT_EQ(replacement.server.get(), fixture.manager.find_session(id).get());
+  const unsigned char payload[] = "message after replacement";
+  CASE_EXPECT_EQ(0, replacement.client->send_post({payload, sizeof(payload) - 1}));
+  reconnect_fixture::exchange(replacement);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), replacement.received_messages.size());
+  if (!replacement.received_messages.empty()) {
+    CASE_EXPECT_EQ(std::string("message after replacement"), replacement.received_messages.front());
+  }
+}
+
+}  // namespace
+
+CASE_TEST(atgateway_session_manager, reconnect_replaces_live_connection) { check_replace_connection(false, true); }
+
+CASE_TEST(atgateway_session_manager, reconnect_replaces_connection_with_cache_disabled) {
+  check_replace_connection(false, false);
+}
+
+CASE_TEST(atgateway_session_manager, reconnect_replaces_connection_during_shutdown) {
+  check_replace_connection(true, true);
+}
+
+CASE_TEST(atgateway_session_manager, reconnect_rejects_invalid_token_without_closing_live_connection) {
+  reconnect_fixture fixture;
+  auto &previous = fixture.connect();
+  if (!reconnect_fixture::start(previous)) {
+    return;
+  }
+  auto &replacement = fixture.connect();
+  reconnect_fixture::reconnect(replacement, previous, true);
+  CASE_EXPECT_EQ(static_cast<int>(gateway_error::kRefuseReconnect), replacement.reconnect_status);
+  CASE_EXPECT_EQ(previous.server.get(), fixture.manager.find_session(previous.server->get_id()).get());
+  CASE_EXPECT_FALSE(previous.server->check_flag(gateway_session::flag_t::kReconnected));
+  CASE_EXPECT_FALSE(previous.server->check_flag(gateway_session::flag_t::kClosing));
+  CASE_EXPECT_EQ(0, previous.server_close_count);
+  const unsigned char payload[] = "original connection remains authenticated";
+  CASE_EXPECT_EQ(0, previous.client->send_post({payload, sizeof(payload) - 1}));
+  reconnect_fixture::exchange(previous);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), previous.received_messages.size());
+}
+
+CASE_TEST(atgateway_session_manager, reconnect_force_closes_stalled_old_connection) {
+  reconnect_fixture fixture;
+  auto &previous = fixture.connect();
+  if (!reconnect_fixture::start(previous)) {
+    return;
+  }
+  previous.hold_server_write = true;
+  auto &replacement = fixture.connect();
+  reconnect_fixture::reconnect(replacement, previous);
+  CASE_EXPECT_EQ(0, replacement.reconnect_status);
+  if (replacement.reconnect_status != 0) {
+    return;
+  }
+  auto deadline = atfw::util::time::time_utility::now() + std::chrono::seconds(6);
+  atfw::util::time::time_utility::update(&deadline);
+  CASE_EXPECT_EQ(0, fixture.manager.tick());
+  CASE_EXPECT_TRUE(uv_is_closing(reinterpret_cast<uv_handle_t *>(previous.server->get_uv_stream())) != 0);
+  CASE_EXPECT_TRUE(test_pump_until(
+      &fixture.loop, [&previous] { return !previous.server->check_flag(gateway_session::flag_t::kHasFd); }));
+  CASE_EXPECT_EQ(UV_ECANCELED, previous.server->on_write_done(UV_ECANCELED));
+  CASE_EXPECT_EQ(replacement.server.get(), fixture.manager.find_session(previous.server->get_id()).get());
+}
+
+CASE_TEST(atgateway_session_manager, reconnect_preserves_cached_session_after_invalid_token) {
+  reconnect_fixture fixture;
+  auto &previous = fixture.connect();
+  if (!reconnect_fixture::start(previous)) {
+    return;
+  }
+  const auto id = previous.server->get_id();
+  CASE_EXPECT_EQ(0, fixture.manager.close(id, static_cast<int>(gateway_close_reason::kReset), 0, "lost", true));
+  CASE_EXPECT_TRUE(test_pump_until(
+      &fixture.loop, [&previous] { return !previous.server->check_flag(gateway_session::flag_t::kHasFd); }));
+  auto &unauthorized = fixture.connect();
+  reconnect_fixture::reconnect(unauthorized, previous, true);
+  CASE_EXPECT_EQ(static_cast<int>(gateway_error::kRefuseReconnect), unauthorized.reconnect_status);
+  CASE_EXPECT_TRUE(previous.server->check_flag(gateway_session::flag_t::kWaitReconnect));
+  CASE_EXPECT_FALSE(previous.server->check_flag(gateway_session::flag_t::kReconnected));
+  auto &replacement = fixture.connect();
+  reconnect_fixture::reconnect(replacement, previous);
+  CASE_EXPECT_EQ(0, replacement.reconnect_status);
+  CASE_EXPECT_EQ(0, replacement.client_handshake_status);
+  CASE_EXPECT_EQ(replacement.server.get(), fixture.manager.find_session(id).get());
+}
+
+CASE_TEST(atgateway_session_manager, reconnect_twice_ignores_old_connection_completions) {
+  reconnect_fixture fixture;
+  auto &original = fixture.connect();
+  if (!reconnect_fixture::start(original)) {
+    return;
+  }
+  const auto id = original.server->get_id();
+  original.hold_server_write = true;
+  CASE_EXPECT_EQ(0, fixture.manager.close(id, static_cast<int>(gateway_close_reason::kReset), 0, "lost", true));
+  auto &first = fixture.connect();
+  reconnect_fixture::reconnect(first, original);
+  CASE_EXPECT_EQ(0, first.reconnect_status);
+  if (first.reconnect_status != 0) {
+    return;
+  }
+  first.hold_server_write = true;
+  auto &latest = fixture.connect();
+  reconnect_fixture::reconnect(latest, first);
+  CASE_EXPECT_EQ(0, latest.reconnect_status);
+  CASE_EXPECT_EQ(0, latest.client_handshake_status);
+  if (latest.reconnect_status != 0) {
+    return;
+  }
+  for (auto *previous : {&first, &original}) {
+    previous->hold_server_write = false;
+    reconnect_fixture::exchange(*previous);
+    CASE_EXPECT_EQ(0, previous->server->on_write_done(0));
+    CASE_EXPECT_TRUE(test_pump_until(
+        &fixture.loop, [previous] { return !previous->server->check_flag(gateway_session::flag_t::kHasFd); }));
+    CASE_EXPECT_EQ(latest.server.get(), fixture.manager.find_session(id).get());
+  }
+  // The original cached connection's expiry must not disturb the current owner.
+  auto deadline = atfw::util::time::time_utility::now() + std::chrono::seconds(181);
+  atfw::util::time::time_utility::update(&deadline);
+  CASE_EXPECT_EQ(0, fixture.manager.tick());
+  CASE_EXPECT_EQ(latest.server.get(), fixture.manager.find_session(id).get());
+  CASE_EXPECT_TRUE(latest.server->check_flag(gateway_session::flag_t::kRegistered));
+  CASE_EXPECT_FALSE(latest.server->check_flag(gateway_session::flag_t::kClosing));
+  const unsigned char payload[] = "latest connection after repeated reconnect";
+  CASE_EXPECT_EQ(0, latest.client->send_post({payload, sizeof(payload) - 1}));
+  reconnect_fixture::exchange(latest);
+  CASE_EXPECT_EQ(static_cast<size_t>(1), latest.received_messages.size());
+}
 
 CASE_TEST(atgateway_session_manager, first_idle_accept_overlap) {
   ensure_openssl_init();
