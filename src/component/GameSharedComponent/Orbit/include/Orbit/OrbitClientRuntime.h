@@ -231,6 +231,7 @@ class OrbitClientRuntime {
   bool app_callbacks_installed_;
   uint64_t agent_bus_id_;
   uint64_t sequence_allocator_;
+  // 最近一次心跳发送（尝试）时间点，发送失败也推进，避免每个 tick 都重试
   time_t last_heartbeat_timepoint_;
   // 最近一次心跳响应的时间点，未被认领时用于判断 Agent 是否已经失联
   time_t last_heartbeat_rsp_timepoint_;

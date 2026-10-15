@@ -895,13 +895,16 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
         on_heartbeat_response(result, response);
       },
       request_options);
+  // 无论发送成败都推进下一次心跳的时间点：发送失败时若不推进，
+  // io_tick 会在每个 tick 里重复尝试，导致密集重试
+  last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   if (send_result < 0) {
     ORBIT_LOG(OrbitClientLogLevel::kError,
-              LOG_WRAPPER_FWAPI_FORMAT("failed to send client_heartbeat request, code={}", send_result));
+              LOG_WRAPPER_FWAPI_FORMAT("failed to send client_heartbeat request, code={}, next attempt after {} second",
+                                       send_result, options_.heartbeat_interval_second));
     return send_result;
   }
 
-  last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
