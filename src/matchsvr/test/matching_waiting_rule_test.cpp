@@ -292,6 +292,141 @@ CASE_TEST(matchsvr_waiting_rule, incomplete_faction_option_keeps_minimum_faction
   CASE_EXPECT_TRUE(matching_logic::check_room_ready(*room, 100, 3).ready());
 }
 
+CASE_TEST(matchsvr_waiting_rule, balanced_policy_creates_factions_then_balances_successful_and_reserved_users) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED);
+  fixture.pool.set_faction_user_max_size(4);
+  fixture.pool.set_max_user_cout_limit(12);
+  fixture.pool.set_allow_incomplete_factions(true);
+  fixture.minimum_initial_users = 1;
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001));
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  const int32_t initial_faction = room->get_unit_faction_id(1);
+  auto second = std::make_shared<matching_unit>(waiting_unit(2, 2001));
+  if (!add_waiting(*room, {second})) {
+    return;
+  }
+  const int32_t second_faction = room->get_unit_faction_id(2);
+  CASE_EXPECT_GT(second_faction, initial_faction);
+  if (second_faction <= initial_faction) {
+    return;
+  }
+  accept_unit(second);
+  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(2) == std::vector<uint64_t>{2}));
+  second->mark_initializing();
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 102));
+  auto third = std::make_shared<matching_unit>(waiting_unit(3, 3001));
+  if (!add_waiting(*room, {third})) {
+    return;
+  }
+  const int32_t third_faction = room->get_unit_faction_id(3);
+  CASE_EXPECT_GT(third_faction, second_faction);
+  if (third_faction <= second_faction) {
+    return;
+  }
+  accept_unit(third);
+  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(3) == std::vector<uint64_t>{3}));
+  third->mark_initializing();
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(3, 102));
+  auto pair = std::make_shared<matching_unit>(waiting_unit(4, 4001, 2));
+  if (!add_waiting(*room, {pair})) {
+    return;
+  }
+  // 同人数时按固定 ID 决定落点；后续选择必须计入这两人的预留。
+  CASE_EXPECT_EQ(initial_faction, room->get_unit_faction_id(4));
+  auto fifth = std::make_shared<matching_unit>(waiting_unit(5, 5001));
+  if (!add_waiting(*room, {fifth})) {
+    return;
+  }
+  CASE_EXPECT_EQ(second_faction, room->get_unit_faction_id(5));
+  auto sixth = std::make_shared<matching_unit>(waiting_unit(6, 6001));
+  if (!add_waiting(*room, {sixth})) {
+    return;
+  }
+  CASE_EXPECT_EQ(third_faction, room->get_unit_faction_id(6));
+  CASE_EXPECT_EQ(3, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(3, room->get_successful_user_count());
+  CASE_EXPECT_EQ(4, room->get_reserved_user_count());
+  CASE_EXPECT_EQ(initial_faction, room->get_unit_faction_id(1));
+  CASE_EXPECT_EQ(second_faction, room->get_unit_faction_id(2));
+  CASE_EXPECT_EQ(third_faction, room->get_unit_faction_id(3));
+  for (const auto& entry : room->get_waiting_factions()) {
+    CASE_EXPECT_EQ(4, entry.second.user_capacity);
+  }
+}
+
+CASE_TEST(matchsvr_waiting_rule, priority_policy_fills_existing_faction_before_creating_another) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_faction_user_max_size(4);
+  fixture.pool.set_max_user_cout_limit(12);
+  fixture.pool.set_allow_incomplete_factions(true);
+  fixture.minimum_initial_users = 1;
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001, 2));
+  if (!room) {
+    return;
+  }
+  // 取消或配置切换可以留下多个未满 faction；保留成员，只比较本次加入的落点。
+  CASE_EXPECT_TRUE(room->add_unit(std::make_shared<matching_unit>(waiting_unit(2, 2001))));
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> assignments;
+  auto* first_assignment = assignments.Add();
+  first_assignment->set_user_capacity(4);
+  first_assignment->set_assigned_user_count(2);
+  first_assignment->add_unit_ids(1);
+  auto* second_assignment = assignments.Add();
+  second_assignment->set_user_capacity(4);
+  second_assignment->set_assigned_user_count(1);
+  second_assignment->add_unit_ids(2);
+  CASE_EXPECT_TRUE(room->set_faction_assignments(assignments));
+  if (!open_waiting(*room)) {
+    return;
+  }
+  const int32_t first_faction = room->get_unit_faction_id(1);
+  const int32_t second_faction = room->get_unit_faction_id(2);
+  const auto candidate = waiting_unit(3, 3001, 2);
+  const auto evaluated = matching_logic::check_waiting_units_can_join(*room, {&candidate}, 0, 101);
+  CASE_EXPECT_TRUE(evaluated.can_join);
+  CASE_EXPECT_FALSE(evaluated.creates_faction);
+  CASE_EXPECT_EQ(first_faction, evaluated.faction_id);
+  CASE_EXPECT_EQ(4, evaluated.faction_capacity);
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(second_faction, room->get_unit_faction_id(2));
+  CASE_EXPECT_EQ(0, room->get_reserved_user_count());
+}
+
+CASE_TEST(matchsvr_waiting_rule, balanced_policy_does_not_override_disabled_existing_faction_fill) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED);
+  fixture.pool.set_max_faction_cout_limit(2);
+  fixture.pool.set_allow_incomplete_factions(true);
+  fixture.pool.set_is_waiting_room_faction_can_joined(false);
+  fixture.minimum_initial_users = 1;
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001));
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  auto second = std::make_shared<matching_unit>(waiting_unit(2, 2001));
+  if (!add_waiting(*room, {second})) {
+    return;
+  }
+  CASE_EXPECT_NE(room->get_unit_faction_id(1), room->get_unit_faction_id(2));
+  const auto third = waiting_unit(3, 3001);
+  const auto evaluated = matching_logic::check_waiting_units_can_join(*room, {&third}, 0, 101);
+  CASE_EXPECT_FALSE(evaluated.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, evaluated.result);
+  CASE_EXPECT_EQ(2, room->get_user_count());
+}
+
 CASE_TEST(matchsvr_waiting_rule, absolute_room_deadline_rejects_new_and_pending_units) {
   waiting_rule_fixture fixture;
   if (!fixture.start()) {

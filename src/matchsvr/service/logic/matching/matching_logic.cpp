@@ -828,25 +828,54 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
     // 多 Unit 原子也必须彼此满足等待室规则，不能借普通规则的预先成队绕过检查。
     existing_units.emplace_back(incoming);
   }
-  if (complete_faction_capacity == 0 && fill_enabled && pool->is_waiting_room_faction_can_joined()) {
-    size_t remaining_after_join = std::numeric_limits<size_t>::max();
-    for (const auto& value : room.get_waiting_factions()) {
+  const auto& waiting_factions = room.get_waiting_factions();
+  const bool can_create_faction = waiting_factions.size() < static_cast<size_t>(pool->max_faction_cout_limit());
+  const bool balanced = pool->faction_fill_policy() == PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED;
+  if (complete_faction_capacity == 0 && fill_enabled && pool->is_waiting_room_faction_can_joined() &&
+      (!balanced || !can_create_faction)) {
+    size_t minimum_user_count = std::numeric_limits<size_t>::max();
+    size_t second_minimum_user_count = minimum_user_count;
+    size_t maximum_user_count = 0;
+    if (balanced) {
+      for (const auto& value : waiting_factions) {
+        const size_t occupied = value.second.successful_user_count + value.second.reserved_user_count;
+        if (occupied < minimum_user_count) {
+          second_minimum_user_count = minimum_user_count;
+          minimum_user_count = occupied;
+        } else if (occupied < second_minimum_user_count) {
+          second_minimum_user_count = occupied;
+        }
+        maximum_user_count = std::max(maximum_user_count, occupied);
+      }
+    }
+    placement_candidate best_placement;
+    int position = 0;
+    for (const auto& value : waiting_factions) {
+      placement_candidate candidate;
+      candidate.position = position++;
       const auto& faction = value.second;
       const size_t occupied = faction.successful_user_count + faction.reserved_user_count;
       if (faction.confirming_creation || !faction.fill_enabled || faction.user_capacity != incoming_capacity ||
           occupied + incoming_user_count > faction.user_capacity) {
         continue;
       }
-      const size_t remaining = faction.user_capacity - occupied - incoming_user_count;
-      if (remaining < remaining_after_join) {
+      const size_t joined_count = occupied + incoming_user_count;
+      candidate.remaining_after_join = faction.user_capacity - joined_count;
+      candidate.completes_faction = candidate.remaining_after_join == 0;
+      if (balanced) {
+        const size_t other_minimum = occupied == minimum_user_count ? second_minimum_user_count : minimum_user_count;
+        candidate.user_count_spread_after_join =
+            std::max(maximum_user_count, joined_count) - std::min(other_minimum, joined_count);
+      }
+      if (!best_placement.is_valid() || (balanced ? candidate.is_better_for_balance_than(best_placement)
+                                                  : candidate.is_better_for_priority_than(best_placement))) {
+        best_placement = candidate;
         result.faction_id = value.first;
-        remaining_after_join = remaining;
       }
     }
   }
   result.creates_faction = result.faction_id == 0;
-  if (result.creates_faction &&
-      room.get_waiting_factions().size() >= static_cast<size_t>(pool->max_faction_cout_limit())) {
+  if (result.creates_faction && !can_create_faction) {
     result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
     return result;
   }
