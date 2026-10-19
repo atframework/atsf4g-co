@@ -235,7 +235,7 @@ class OrbitClientRuntime {
   time_t last_heartbeat_timepoint_;
   // 最近一次心跳响应的时间点，未被认领时用于判断 Agent 是否已经失联
   time_t last_heartbeat_rsp_timepoint_;
-  // 是否已收到 start_client（预启动进程被认领）
+  // 是否已收到 start_client
   bool start_client_received_;
   // 心跳响应里的 Agent 实例标识与拉起时不一致
   bool agent_instance_id_mismatch_;

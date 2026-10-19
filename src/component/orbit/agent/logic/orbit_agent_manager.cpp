@@ -931,6 +931,13 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     }
     response.set_error_code(rsp->error_code());
   }
+
+  // 统一流程：普通启动在 Client 上报 Ready 后同样下发 start_client，
+  // Client 无需区分预启动，只要进程真正可用就一定会收到 on_start_client
+  if (!client_record->start_client_sent) {
+    client_record->start_client_sent = true;
+    schedule_send_start_client(client_record);
+  }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -1871,13 +1878,31 @@ void orbit_agent_manager::schedule_start_claimed_client(const orbit_agent_client
   }
 }
 
-rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ctx,
-                                                                orbit_agent_client_record_ptr client_record) {
+void orbit_agent_manager::schedule_send_start_client(const orbit_agent_client_record_ptr& client_record) {
+  if (!client_record) {
+    return;
+  }
+
+  auto invoke_result = rpc::async_invoke(
+      logic_server_get_current_tick_context(), "orbit_agent_manager.send_start_client",
+      [client_record](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->send_start_client(sub_ctx, client_record)));
+      });
+  if (!invoke_result.is_success()) {
+    FWLOGERROR("orbit agent failed to schedule send_start_client for {}, res: {}({})",
+               client_record->local_client_id, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
+}
+
+rpc::result_code_type orbit_agent_manager::send_start_client(rpc::context& ctx,
+                                                             orbit_agent_client_record_ptr client_record) {
   if (!client_record) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  // 下发真实 client_id；Client 不会重发 client_start，成功后由 Agent 通知 Controller
+  // 下发真实 client_id；Client 收到后才回调 on_start_client。
+  // 普通启动与预启动认领都走这里，Client 无需区分是否预启动
   auto req = rpc::make_shared_message<atfw::orbit::ATDStartClientReq>(ctx);
   auto rsp = rpc::make_shared_message<atfw::orbit::DTAStartClientRsp>(ctx);
   req->mutable_client_id()->set_client_id(client_record->client_id);
@@ -1895,8 +1920,25 @@ rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ct
     RPC_RETURN_CODE(rpc_result);
   }
 
-  // start_client_sent 在认领时已置位，这里只需清掉预启动标记
+  client_record->start_client_sent = true;
+  // 认领时已清掉预启动标记，这里兜底清一次，普通启动记录本身就是 false
   client_record->pre_start = false;
+  FWLOGINFO("orbit agent start_client sent for client {}, client_id={}", client_record->local_client_id,
+            client_record->client_id);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ctx,
+                                                               orbit_agent_client_record_ptr client_record) {
+  if (!client_record) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  int32_t send_result = RPC_AWAIT_CODE_RESULT(send_start_client(ctx, client_record));
+  if (send_result < 0) {
+    RPC_RETURN_CODE(send_result);
+  }
+
   FWLOGINFO("orbit agent client {} claimed, client_id={}", client_record->local_client_id, client_record->client_id);
 
   const auto* identity = find_server_identity(client_record->server_unique_id);
