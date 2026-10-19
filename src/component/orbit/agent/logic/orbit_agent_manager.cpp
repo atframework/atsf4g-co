@@ -904,6 +904,13 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  // 统一流程：普通启动在 Client 上报 Ready 后同样下发 start_client，
+  // Client 无需区分预启动，只要进程真正可用就一定会收到 on_start_client
+  if (!client_record->start_client_sent) {
+    client_record->start_client_sent = true;
+    schedule_send_start_client(client_record);
+  }
+
   {
     const auto* identity = find_server_identity(client_record->server_unique_id);
     if (identity == nullptr) {
@@ -932,12 +939,6 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     response.set_error_code(rsp->error_code());
   }
 
-  // 统一流程：普通启动在 Client 上报 Ready 后同样下发 start_client，
-  // Client 无需区分预启动，只要进程真正可用就一定会收到 on_start_client
-  if (!client_record->start_client_sent) {
-    client_record->start_client_sent = true;
-    schedule_send_start_client(client_record);
-  }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -1889,9 +1890,8 @@ void orbit_agent_manager::schedule_send_start_client(const orbit_agent_client_re
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->send_start_client(sub_ctx, client_record)));
       });
   if (!invoke_result.is_success()) {
-    FWLOGERROR("orbit agent failed to schedule send_start_client for {}, res: {}({})",
-               client_record->local_client_id, *invoke_result.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FWLOGERROR("orbit agent failed to schedule send_start_client for {}, res: {}({})", client_record->local_client_id,
+               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
 }
 
@@ -1929,7 +1929,7 @@ rpc::result_code_type orbit_agent_manager::send_start_client(rpc::context& ctx,
 }
 
 rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ctx,
-                                                               orbit_agent_client_record_ptr client_record) {
+                                                                orbit_agent_client_record_ptr client_record) {
   if (!client_record) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
