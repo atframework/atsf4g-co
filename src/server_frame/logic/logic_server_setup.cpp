@@ -91,7 +91,7 @@ static std::shared_ptr<logic_server_common_module::stats_data_t> &get_global_las
 
 namespace {
 static int show_server_time(util::cli::callback_param params) {
-  struct tm tt {};
+  struct tm tt{};
   time_t now = atfw::util::time::time_utility::get_now();
   UTIL_STRFUNC_LOCALTIME_S(&now, &tt);
   char str[64] = {0};
@@ -168,6 +168,7 @@ static int app_default_handle_on_receive_request(atfw::atapp::app &, const atfw:
   }
 
   int ret = 0;
+  // NOLINTNEXTLINE(readability-trivial-switch)
   switch (msg.type) {
     case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
       ret = ss_msg_dispatcher::me()->dispatch(source, msg);
@@ -229,7 +230,7 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
   // LogSink(task_manager 里注册，用于转发到 FWINSTLOG/WDTLOG) 也不会生效，并且每条日志都会带
   // "All log messages before absl::InitializeLog() is called..." 前缀。这里尽早初始化，且
   // absl 不允许重复调用，用函数局部 static 保证只执行一次。
-  static const bool absl_log_initialized = []() {
+  static const bool absl_log_initialized = [] {
     absl::InitializeLog();
     return true;
   }();
