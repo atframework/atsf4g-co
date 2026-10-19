@@ -361,3 +361,18 @@ message DTeamMemberAction {
     DTeamMemberRemoveData remove_member = 6;
   }
 }
+
+// 队伍管理用的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员。
+// 成员运行时数据(心跳/路由/ack)按 GAP-01 决策保留在公共成员快照中，不引入成员级私有数据
+message DTeamRoomPrivateData {
+  // 队伍是否已经完成过创建；成员清空后仍保持为 true，防止旧 team_id 被重新接管。
+  bool team_created = 10;
+
+  // 上次压缩完成时的sequence和时间点
+  int64 last_compact_sequence = 11;
+  google.protobuf.Timestamp last_compact_timepoint = 12;
+
+  // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  repeated DTeamAnyDataWithKey private_team_data = 15;
+}
