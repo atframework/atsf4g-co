@@ -171,8 +171,9 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
                                     logic_config::me()->get_local_server_name());
   res = rpc::setup_rpc_stream_header(
-      *req_msg.mutable_head()->mutable_rpc_stream(), "orbit.ServerToControllerService",
-      "orbit.ServerToControllerService/send_to_client",
+      *req_msg.mutable_head()->mutable_rpc_stream(),
+      atframework::orbit::ServerToControllerService::descriptor()->full_name(),
+      rpc::servertocontrollerservice::packer::get_full_name_of_send_to_client(),
       {atfw::util::nostd::data(atfw::orbit::STCSendToClientReq::descriptor()->full_name()),
        atfw::util::nostd::size(atfw::orbit::STCSendToClientReq::descriptor()->full_name())});
   if (res < 0) {
@@ -187,13 +188,15 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
   rpc::telemetry::tracer __tracer;
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "orbit.ServerToControllerService/send_to_client"}};
+      {opentelemetry::semconv::rpc::kRpcMethod,
+       rpc::servertocontrollerservice::packer::get_full_name_of_send_to_client()}};
   rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
-                        "orbit.ServerToControllerService/send_to_client", __trace_attributes);
+                        rpc::servertocontrollerservice::packer::get_full_name_of_send_to_client(), __trace_attributes);
 
   res = ss_msg_dispatcher::me()->send_to_proc(controller_server_id, req_msg);
   if (res < 0) {
-    FWLOGERROR("rpc {} call failed, res: {}({})", "orbit.ServerToControllerService/send_to_client", res,
+    FWLOGERROR("rpc {} call failed, res: {}({})",
+               rpc::servertocontrollerservice::packer::get_full_name_of_send_to_client(), res,
                protobuf_mini_dumper_get_error_msg(res));
   }
 
