@@ -8,6 +8,8 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
+import "google/protobuf/duration.proto";
+
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/common/com.struct.item.common.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
@@ -51,6 +53,9 @@ message SCLoginRsp {
   bool is_new_user = 3;          // 是否是新用户
   int32 version_type = 4;        // 版本类型 @EnVersionType
   uint32 zone_id = 5;            // 大区ID
+
+  // CS RPC 超时时间
+  google.protobuf.Duration cs_rpc_timeout = 11;
 }
 
 message SCUserProfileSyn {

@@ -243,6 +243,8 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
   rpc_response_type& rsp_body = get_response_body();
   rsp_body.set_heartbeat_interval(logic_config::me()->get_logic_cfg().heartbeat().interval().seconds());
   rsp_body.set_is_new_user(is_new_user_);
+  protobuf_copy_message(*rsp_body.mutable_cs_rpc_timeout(),
+                        logic_config::me()->get_logic_cfg().task().csmsg().timeout());
 
   std::shared_ptr<session> s = get_session();
   if (s) {
