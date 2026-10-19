@@ -5,7 +5,9 @@
 # Default behavior:
 #   * Deploy base directory : <script-dir>/publish
 #   * Output directory      : <script-dir>
-#   * Output file           : svr-<yyyyMMdd_HHmmss>.tar.zst
+#   * Output files          : <project>-<yyyyMMdd_HHmmss>.package.tar.zst
+#                             <project>-<yyyyMMdd_HHmmss>.debug.tar.zst
+#                             <project>-<yyyyMMdd_HHmmss>.otel_bin.tar.zst
 #   * Before packing, refresh the chart dependencies by running
 #     <deploy>/tools/script/update_dependency.sh (helm dependency update per chart).
 #   * Before packing, split debug symbols: every shared library (.so) under
@@ -13,8 +15,11 @@
 #     into a sibling ".dbg" file with objcopy (same steps as the
 #     project_tool_split_target_debug_sybmol CMake helper) and is stripped, so the
 #     archive does not carry debug info.
-#   * Excluded from archive : every directory named "log" (including otelcol/log),
-#                             and every "*.a" / "*.dbg" file.
+#   * Excluded from the main package : every directory named "log" (including
+#     otelcol/log), every "*.a" / "*.dbg" file, and the otel runtime binaries
+#     bin/flatc* plus the whole otelcol directory, which go into the separate
+#     otel_bin package instead (relative paths inside both archives match the
+#     deploy tree, so either one can be extracted at the deploy root).
 #     go-task and helm are not part of the deploy tree (they live in <build>/tools),
 #     so they do not appear in the archive and need no exclusion.
 #
@@ -79,6 +84,7 @@ mkdir -p "${OUTPUT_DIR}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 OUTPUT_PACKAGE_FILE="${OUTPUT_DIR}/@PROJECT_NAME@-${TIMESTAMP}.package.tar.zst"
 OUTPUT_DEBUG_FILE="${OUTPUT_DIR}/@PROJECT_NAME@-${TIMESTAMP}.debug.tar.zst"
+OUTPUT_OTEL_BIN_FILE="${OUTPUT_DIR}/@PROJECT_NAME@-${TIMESTAMP}.otel_bin.tar.zst"
 
 # Locate objcopy: GNU objcopy first, then llvm-objcopy (same probing order as the
 # project_tool_split_target_debug_sybmol CMake helper).
@@ -133,6 +139,9 @@ split_lib_debug_symbols() {
 split_lib_debug_symbols "${DEPLOY_DIR}"
 
 # A matched directory (named "log") is not descended into, so its whole tree is skipped.
+# The otel runtime binaries are packed into the separate otel_bin package, so they are
+# kept out of the main one. Members are always generated from "." ("./bin/..."), so the
+# "./" prefix anchors the patterns to the deploy root only.
 EXCLUDES=(
     --exclude='log'
     --exclude='*/log'
@@ -140,9 +149,12 @@ EXCLUDES=(
     --exclude='*/log/*'
     --exclude='*.a'
     --exclude='*.dbg'
+    --exclude='./bin/flatc*'
+    --exclude='./otelcol'
+    --exclude='./otelcol/*'
 )
 
-echo "[INFO] Packing ${DEPLOY_DIR} -> ${OUTPUT_PACKAGE_FILE}/${OUTPUT_DEBUG_FILE}"
+echo "[INFO] Packing ${DEPLOY_DIR} -> ${OUTPUT_PACKAGE_FILE}/${OUTPUT_DEBUG_FILE}/${OUTPUT_OTEL_BIN_FILE}"
 cd "${DEPLOY_DIR}"
 tar "${EXCLUDES[@]}" -cvf- . | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_PACKAGE_FILE}" -
 DBG_FILES=($(find . -name "*.dbg"))
@@ -152,9 +164,33 @@ else
     rm -f "${OUTPUT_DEBUG_FILE}"
 fi
 
+# otel 运行用的二进制单独成包：bin/flatc* 与整个 otelcol 目录（主包已排除它们）。
+# 归档内保留相对路径，解压到部署根目录即可与主包合并。
+OTEL_BIN_ENTRIES=()
+if [ -d "otelcol" ]; then
+    OTEL_BIN_ENTRIES+=("otelcol")
+fi
+for OTEL_BIN_FLATC in bin/flatc*; do
+    if [ -e "${OTEL_BIN_FLATC}" ]; then
+        OTEL_BIN_ENTRIES+=("${OTEL_BIN_FLATC}")
+    fi
+done
+
+if [ "${#OTEL_BIN_ENTRIES[@]}" -gt 0 ]; then
+    echo "[INFO] Packing ${OTEL_BIN_ENTRIES[*]} -> ${OUTPUT_OTEL_BIN_FILE}"
+    tar "${EXCLUDES[@]}" -cvf- "${OTEL_BIN_ENTRIES[@]}" | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_OTEL_BIN_FILE}" -
+else
+    echo "[WARN] Skip ${OUTPUT_OTEL_BIN_FILE}: neither otelcol/ nor bin/flatc* found" >&2
+    rm -f "${OUTPUT_OTEL_BIN_FILE}"
+fi
+
 echo "[INFO] Done.
 - ${OUTPUT_PACKAGE_FILE}"
 
 if [[ -e "${OUTPUT_DEBUG_FILE}" ]]; then
     echo "- ${OUTPUT_DEBUG_FILE}"
+fi
+
+if [[ -e "${OUTPUT_OTEL_BIN_FILE}" ]]; then
+    echo "- ${OUTPUT_OTEL_BIN_FILE}"
 fi

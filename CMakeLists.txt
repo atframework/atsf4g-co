@@ -260,11 +260,13 @@ if(WIN32)
   set_property(TARGET "tools-windows-bat-wrappers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 endif()
 
-# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst. Before packing it refreshes
-# the chart dependencies through <publish>/tools/script/update_dependency.sh, splits debug symbols of shared libraries
-# (.so) under <publish>/lib into sibling ".dbg" files with objcopy, then excludes every "log" directory and
-# "*.a"/"*.dbg" files. The archive does not carry go-task/helm: they live in <PROJECT_BUILD_TOOLS_DIR>, not in the
-# deploy tree. Generated into the build root next to the publish tree.
+# pack_publish.sh: pack the deploy base directory (publish) into <timestamp> based .package/.debug/.otel_bin tar.zst
+# archives. Before packing it refreshes the chart dependencies through <publish>/tools/script/update_dependency.sh,
+# splits debug symbols of shared libraries (.so) under <publish>/lib into sibling ".dbg" files with objcopy, then
+# excludes every "log" directory and "*.a"/"*.dbg" files. The otel runtime binaries (<publish>/bin/flatc* and the whole
+# <publish>/otelcol directory) are excluded from the main package and packed into the separate otel_bin package. The
+# archives do not carry go-task/helm: they live in <PROJECT_BUILD_TOOLS_DIR>, not in the deploy tree. Generated into the
+# build root next to the publish tree.
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/pack_publish.sh.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh" @ONLY)
 
