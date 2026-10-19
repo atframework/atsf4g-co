@@ -22,6 +22,9 @@
 // clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+#  include <absl/log/initialize.h>
+#endif
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -221,6 +224,18 @@ static int app_default_handle_on_disconnected(atfw::atapp::app &, atbus::endpoin
 
 SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
                                                const logic_server_common_module_configure &conf) {
+#if GOOGLE_PROTOBUF_VERSION >= 4022000
+  // protobuf 的日志由 absl log 输出。absl 在 InitializeLog() 之前只会写 stderr，之后注册的
+  // LogSink(task_manager 里注册，用于转发到 FWINSTLOG/WDTLOG) 也不会生效，并且每条日志都会带
+  // "All log messages before absl::InitializeLog() is called..." 前缀。这里尽早初始化，且
+  // absl 不允许重复调用，用函数局部 static 保证只执行一次。
+  static const bool absl_log_initialized = []() {
+    absl::InitializeLog();
+    return true;
+  }();
+  static_cast<void>(absl_log_initialized);
+#endif
+
 #if defined(SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE) && SERVER_FRAME_ENABLE_SANITIZER_ASAN_INTERFACE
   // @see
   // https://github.com/gcc-mirror/gcc/blob/releases/gcc-4.8.5/libsanitizer/include/sanitizer/asan_interface.h
