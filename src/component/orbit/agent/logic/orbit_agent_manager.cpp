@@ -808,6 +808,16 @@ int32_t orbit_agent_manager::agent_heartbeat(rpc::context& ctx, uint64_t control
   *heartbeat_request->mutable_agent_identity() = agent_identity_;
 
   for (const auto& client_id : iter->second) {
+    // 退出状态不发Heartbeat
+    auto client_record = find_client_by_client_id(client_id);
+    if (nullptr == client_record) {
+      FWLOGERROR("orbit agent agent_heartbeat failed: client_id {} not found in records", client_id);
+      continue;
+    }
+    if (client_record->state == atfw::orbit::EnClientState::EN_CLIENT_STATE_EXITING ||
+        client_record->state == atfw::orbit::EnClientState::EN_CLIENT_STATE_EXITED) {
+      continue;
+    }
     heartbeat_request->add_client_ids()->set_client_id(client_id);
   }
 
@@ -2364,6 +2374,7 @@ void orbit_agent_manager::delete_client(const orbit_agent_client_record_ptr& cli
     seed_client_record_ = nullptr;
   }
   client_record->process_handle_main_thread = nullptr;
+  FWLOGINFO("Deleted client: %s", client_record->client_id.c_str());
 }
 
 // 计算负载系数
