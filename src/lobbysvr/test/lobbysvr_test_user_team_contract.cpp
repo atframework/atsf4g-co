@@ -88,7 +88,7 @@ CASE_TEST(lobbysvr_user_team, shared_module_keys_follow_wire_fields_and_client_p
   CASE_EXPECT_EQ(kDerivedKey, user_team_algorithm::make_team_member_shared_data_key(member_data));
   CASE_EXPECT_FALSE(user_team_algorithm::allow_client_update_team_shared_data(team_data));
   CASE_EXPECT_FALSE(user_team_algorithm::allow_client_update_team_member_shared_data(member_data));
-  team_data.mutable_battle()->mutable_matching_start_data();
+  team_data.mutable_battle()->mutable_matching_level_select_data();
   CASE_EXPECT_EQ(kLevelKey, user_team_algorithm::make_team_shared_data_key(team_data));
   CASE_EXPECT_FALSE(user_team_algorithm::allow_client_update_team_shared_data(team_data));
 }

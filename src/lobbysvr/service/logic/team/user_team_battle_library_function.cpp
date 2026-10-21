@@ -191,7 +191,7 @@ void user_team_battle_library_function::pack_default_team_shared_data(
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
     user_inst.get_user_matching_manager().fetch_level_select_data(
-        ctx, *wrapper->mutable_battle()->mutable_matching_start_data());
+        *wrapper->mutable_battle()->mutable_matching_level_select_data());
 
     append_team_shared_data(ctx, user_inst, output, *wrapper);
   }
@@ -305,7 +305,7 @@ void user_team_battle_library_function::glue_layer_event_on_level_action_level_s
 
   auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
   team.get_owner().get_owner().get_user_matching_manager().fetch_level_select_data(
-      ctx, *team_data->add_element()->mutable_battle()->mutable_matching_start_data());
+      *team_data->add_element()->mutable_battle()->mutable_matching_level_select_data());
 
   team.async_update_team_shared_data(ctx, std::move(team_data));
 }

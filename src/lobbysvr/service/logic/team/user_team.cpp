@@ -437,18 +437,18 @@ const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& user_team_battle_library_func
   return data->battle().matching_team_view();
 }
 
-const PROJECT_NAMESPACE_ID::DMatchingStartData& user_team_battle_library_function::get_matching_start_data(
+const PROJECT_NAMESPACE_ID::DLevelSelect& user_team_battle_library_function::get_matching_level_select_data(
     const user_team& team) noexcept {
   PROJECT_NAMESPACE_ID::DTeamSharedDataModule team_shared_data;
-  team_shared_data.mutable_battle()->mutable_matching_start_data();
+  team_shared_data.mutable_battle()->mutable_matching_level_select_data();
 
   const auto* data =
       user_team_utility::get_team_shared_data(team, user_team_algorithm::make_team_shared_data_key(team_shared_data));
   if (nullptr == data) {
-    return PROJECT_NAMESPACE_ID::DMatchingStartData::default_instance();
+    return PROJECT_NAMESPACE_ID::DLevelSelect::default_instance();
   }
 
-  return data->battle().matching_start_data();
+  return data->battle().matching_level_select_data();
 }
 
 bool user_team_battle_library_function::is_ready(const user_team_member_cache& team) noexcept {

@@ -54,6 +54,18 @@ bool is_matching_not_found(int32_t result) {
          result == PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_NOT_FOUND;
 }
 
+namespace {
+static bool init_user_matching_manager_handle() {
+  user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+                                 PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserLevelSelectFieldNumber),
+                             [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
+                               auto& level_select_mgr = user_inst.get_user_matching_manager();
+                               level_select_mgr.fetch_level_select_data(*rsp.mutable_user_level_select());
+                             });
+  return true;
+}
+}  // namespace
+
 using matching_parameter_type = PROJECT_NAMESPACE_ID::DMatchingParameter;
 using matching_rule_type = PROJECT_NAMESPACE_ID::config::EnMatchingRuleType;
 
@@ -129,6 +141,7 @@ bool merge_numeric_matching_parameter(
 
 user_matching_manager::user_matching_manager(user& owner) : owner_(&owner), team_logic_(owner), dirty_(false) {
   ATFW_EXPLICIT_UNUSED_ATTR static bool init_gm_handle = init_user_matching_manager_gm_handle();
+  ATFW_EXPLICIT_UNUSED_ATTR static bool init_handle = init_user_matching_manager_handle();
 }
 
 user_matching_manager::~user_matching_manager() = default;
@@ -311,9 +324,8 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   set_matching_state(ctx, true);
-  int32_t ret = RPC_AWAIT_CODE_RESULT(start_matching_inner_(ctx, data_.level_data().level_select(),
-                                                            data_.level_data().battle_version(),
-                                                            data_.level_data().faction_fill_policy()));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(
+      start_matching_inner_(ctx, data_.level_data().level_select(), data_.level_data().battle_version()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
     if (ret != PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING) {
       set_matching_state(ctx, false);
@@ -338,8 +350,7 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
       ctx, "user_matching_manager.heartbeat", [owner](rpc::context& child_ctx) -> rpc::result_code_type {
         auto& manager = owner->get_user_matching_manager();
         int32_t result = RPC_AWAIT_CODE_RESULT(manager.start_matching_inner_(
-            child_ctx, manager.data_.level_data().level_select(), manager.data_.level_data().battle_version(),
-            manager.data_.level_data().faction_fill_policy()));
+            child_ctx, manager.data_.level_data().level_select(), manager.data_.level_data().battle_version()));
         if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS &&
             result != PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING) {
           manager.set_matching_state(child_ctx, false);
@@ -354,8 +365,7 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
 }
 
 rpc::result_code_type user_matching_manager::start_matching_inner_(
-    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select, const std::string& battle_version,
-    PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy) {
+    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select, const std::string& battle_version) {
   // 队伍回调可能重入。已经登记 Unit 的创建流程不能重复创建或清空。
   if (get_current_unit_id() != 0 && (!is_matching_finish(data_.view().status()) || has_pending_matching_event())) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
@@ -384,7 +394,7 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   for (int32_t level_id : acceptable_level_ids) {
     rpc_request->mutable_unit()->add_acceptable_level_ids(level_id);
   }
-  rpc_request->mutable_unit()->set_faction_fill_policy(faction_fill_policy);
+  rpc_request->mutable_unit()->set_faction_fill_policy(level_select.faction_fill_policy());
 
   fill_user_key(*rpc_request->mutable_operator_user());
   // 后续接组队
@@ -799,7 +809,7 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
       "confirm_event_id={}",
       *owner_, get_current_unit_id(), static_cast<int>(data_.view().status()), get_last_event_id(),
       result.acknowledge_event_id, result.confirm_event_id);
-  on_client_view_changed(ctx);
+  on_match_data_dirty(ctx);
   return result;
 }
 
@@ -994,6 +1004,7 @@ void user_matching_manager::set_matching_state(rpc::context& ctx, bool matching)
 void user_matching_manager::dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const {
   output.Clear();
   dump_client_view(*output.mutable_client_view());
+  fetch_level_select_data(*output.mutable_user_level_select());
 }
 
 void user_matching_manager::dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const {
@@ -1093,7 +1104,7 @@ uint64_t user_matching_manager::get_current_unit_id() const { return data_.view(
 
 int64_t user_matching_manager::get_acknowledge_event_id() const { return data_.acknowledge_event_id(); }
 
-void user_matching_manager::on_client_view_changed(rpc::context& ctx) {
+void user_matching_manager::on_match_data_dirty(rpc::context& ctx) {
   dirty_ = true;
   owner_->insert_dirty_handle_if_not_exists(
       reinterpret_cast<uintptr_t>(this), "user.user_matching_manager.dirty", [](gsl::string_view, user&) {
@@ -1144,19 +1155,17 @@ void user_matching_manager::on_gm_cmd_start_matching(
   auto invoke_result = rpc::async_invoke(
       *ctx, "user_matching_manager.gm_start_matching",
       [user_ptr, rsp, level_id, region](rpc::context& child_ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::DMatchingStartData data;
-        data.set_battle_version("gm_test");
-        auto* level_select = data.mutable_level_select();
+        PROJECT_NAMESPACE_ID::DLevelSelect level_select;
         auto cfg = excel::get_ExcelLevel_by_level_id(level_id);
         if (!cfg) {
           FWLOGERROR("{} gm_start_matching failed to find level cfg, level_id={}", *user_ptr, level_id);
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LEVEL_CFG_NOT_FOUND);
         }
-        level_select->add_level_ids(level_id);
-        level_select->set_region(region);
-        data.set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
+        level_select.add_level_ids(level_id);
+        level_select.set_region(region);
+        level_select.set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
 
-        user_ptr->get_user_matching_manager().set_level_select_data(child_ctx, data);
+        user_ptr->get_user_matching_manager().set_level_select_data(child_ctx, level_select);
 
         int32_t ret = RPC_AWAIT_CODE_RESULT(user_ptr->get_user_matching_manager().start_matching(child_ctx));
         if (ret != 0) {
@@ -1305,15 +1314,14 @@ void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, 
   }
 }
 
-void user_matching_manager::set_level_select_data(rpc::context& ctx,
-                                                  const PROJECT_NAMESPACE_ID::DMatchingStartData& output) {
-  protobuf_copy_message(*data_.mutable_level_data(), output);
+void user_matching_manager::set_level_select_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& output) {
+  protobuf_copy_message(*data_.mutable_level_data()->mutable_level_select(), output);
   team_logic_.level_select_notify(ctx);
+  on_match_data_dirty(ctx);
 }
 
-void user_matching_manager::fetch_level_select_data(rpc::context& /*ctx*/,
-                                                    PROJECT_NAMESPACE_ID::DMatchingStartData& output) const {
-  protobuf_copy_message(output, data_.level_data());
+void user_matching_manager::fetch_level_select_data(PROJECT_NAMESPACE_ID::DLevelSelect& output) const {
+  protobuf_copy_message(output, data_.level_data().level_select());
 }
 
 int64_t user_matching_manager::get_heartbeat_interval() const {
@@ -1334,4 +1342,6 @@ void user_matching_manager::init_level_select_data() {
   data_.mutable_level_data()->set_battle_version(default_match_battle_version);
   data_.mutable_level_data()->mutable_level_select()->set_region(default_match_region);
   data_.mutable_level_data()->mutable_level_select()->add_level_ids(default_match_level);
+  data_.mutable_level_data()->mutable_level_select()->set_faction_fill_policy(
+      PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE);
 }

@@ -71,6 +71,7 @@ message DUserItemDirtyChg {
 
 message DMatchingClientViewDirtyChg {
   DMatchingClientView client_view = 1;
+  DLevelSelect user_level_select = 2;  // 用户关卡选择数据
 }
 
 // 脏数据同步包
@@ -99,6 +100,7 @@ message CSUserGetInfoReq {
   bool need_user_virtual_inventory = 5;  // 标记为true 回包才有会有用户虚拟仓库数据
 
   // 业务数据开始
+  bool need_user_level_select = 34;         // 标记为true 回包才有会有用户关卡选择数据
 }
 
 // 用户数据返回
@@ -111,6 +113,7 @@ message SCUserGetInfoRsp {
   DUserVirtualInventoryData user_virtual_inventory = 6;  // 用户虚拟仓库数据
 
   // 业务数据开始
+  DLevelSelect user_level_select = 34;               // 用户关卡选择数据
 }
 
 message CSUserGMCommandReq {

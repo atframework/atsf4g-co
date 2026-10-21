@@ -49,7 +49,7 @@ message SCMatchingLogSync {
 }
 
 message CSMatchingLevelSelectReq {
-  DMatchingStartData data = 1;
+  DLevelSelect data = 1;
 }
 
 message SCMatchingLevelSelectRsp {}

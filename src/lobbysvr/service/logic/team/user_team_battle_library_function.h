@@ -48,7 +48,7 @@ class user_team_battle_library_function {
 
   static bool is_matching(const user_team& team) noexcept;
   static const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& get_matching_team_sync_view(const user_team& team) noexcept;
-  static const PROJECT_NAMESPACE_ID::DMatchingStartData& get_matching_start_data(const user_team& team) noexcept;
+  static const PROJECT_NAMESPACE_ID::DLevelSelect& get_matching_level_select_data(const user_team& team) noexcept;
 
   static void pack_default_member_shared_data(
       rpc::context& ctx, user& user_inst, PROJECT_NAMESPACE_ID::EnTeamType type,

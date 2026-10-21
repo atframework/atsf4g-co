@@ -572,7 +572,8 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
     // configure 保持默认空值(由 room 补齐默认操作角色下限)
     CASE_EXPECT_TRUE(!req.has_configure());
     // 初始 shared data: 队伍 battle.matching=false + 空的 battle.matching_team_view + 空的
-    // battle.matching_start_data(只打 key 表示模块有效); 成员 battle.ready=false + 空的 battle.matching_parameter
+    // battle.matching_level_select_data(只打 key 表示模块有效); 成员 battle.ready=false + 空的
+    // battle.matching_parameter
     CASE_EXPECT_EQ(3, req.shared_team_data_size());
     if (req.shared_team_data_size() > 0) {
       const auto& team_data = req.shared_team_data(0);
@@ -599,8 +600,8 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
       PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
       CASE_EXPECT_TRUE(team_data.value().data().UnpackTo(&module));
       CASE_EXPECT_TRUE(module.has_battle());
-      CASE_EXPECT_TRUE(module.battle().has_matching_start_data());
-      CASE_EXPECT_EQ(0, static_cast<int>(module.battle().matching_start_data().ByteSizeLong()));
+      CASE_EXPECT_TRUE(module.battle().has_matching_level_select_data());
+      CASE_EXPECT_EQ(0, static_cast<int>(module.battle().matching_level_select_data().ByteSizeLong()));
       CASE_EXPECT_EQ(user_team_algorithm::make_team_shared_data_key(module), team_data.key());
     }
     CASE_EXPECT_EQ(2, req.shared_member_data_size());

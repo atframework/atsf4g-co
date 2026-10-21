@@ -222,9 +222,9 @@ inline int64_t team_matching_team_view_data_key() {
   return user_team_algorithm::make_team_shared_data_key(module);
 }
 
-inline int64_t team_matching_start_data_key() {
+inline int64_t team_matching_level_select_data_key() {
   PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
-  module.mutable_battle()->mutable_matching_start_data();
+  module.mutable_battle()->mutable_matching_level_select_data();
   return user_team_algorithm::make_team_shared_data_key(module);
 }
 
@@ -271,15 +271,15 @@ inline void expect_packed_team_matching_team_view_entry(const atfw::team::DTeamA
   }
 }
 
-inline void expect_packed_team_matching_start_data_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
-  CASE_EXPECT_EQ(team_matching_start_data_key(), entry.key());
+inline void expect_packed_team_matching_level_select_data_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(team_matching_level_select_data_key(), entry.key());
   CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
   PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
   CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
   CASE_EXPECT_TRUE(unpacked.has_battle());
   if (unpacked.has_battle()) {
-    CASE_EXPECT_TRUE(unpacked.battle().has_matching_start_data());
-    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_start_data().ByteSizeLong()));
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_level_select_data());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_level_select_data().ByteSizeLong()));
   }
 }
 

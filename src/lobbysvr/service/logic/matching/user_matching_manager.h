@@ -93,8 +93,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
 
  private:
   rpc::result_code_type start_matching_inner_(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
-                                              const std::string& battle_version,
-                                              PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy);
+                                              const std::string& battle_version);
 
   //  重登时尝试回复匹配状态
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type recover_matching(rpc::context& ctx);
@@ -124,7 +123,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 当前 lobbysvr 已完成业务副作用的 matchsvr WAL 游标，用于断点重放。
   int64_t get_acknowledge_event_id() const;
 
-  void on_client_view_changed(rpc::context& ctx);
+  void on_match_data_dirty(rpc::context& ctx);
 
   void fill_matching_parameter(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
 
@@ -146,9 +145,9 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 使用缓存的匹配参数发起匹配请求
   void callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason = 0);
 
-  void set_level_select_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingStartData& output);
+  void set_level_select_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& output);
 
-  void fetch_level_select_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingStartData& output) const;
+  void fetch_level_select_data(PROJECT_NAMESPACE_ID::DLevelSelect& output) const;
 
   void try_send_heartbeat(rpc::context& ctx);
 

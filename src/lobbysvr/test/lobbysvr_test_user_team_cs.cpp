@@ -86,14 +86,14 @@ bool post_team_cs_request(atfw::testing::runtime& test, const atfw::testing::moc
 using team_test::expect_packed_member_matching_parameter_entry;
 using team_test::expect_packed_member_ready_entry;
 using team_test::expect_packed_team_matching_entry;
-using team_test::expect_packed_team_matching_start_data_entry;
+using team_test::expect_packed_team_matching_level_select_data_entry;
 using team_test::expect_packed_team_matching_team_view_entry;
 using team_test::expect_send_message_envelope;
 using team_test::join_team_with_snapshot;
 using team_test::member_matching_parameter_data_key;
 using team_test::member_ready_data_key;
 using team_test::team_matching_data_key;
-using team_test::team_matching_start_data_key;
+using team_test::team_matching_level_select_data_key;
 using team_test::team_matching_team_view_data_key;
 
 // Count remove_pending_invitation dirty entries of one team in one dirty view (removal payload is DTeamKey only).
@@ -274,13 +274,13 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), create_req.user_router_server_id());
     // configure 保持默认空值(由 room 补齐默认操作角色下限)
     CASE_EXPECT_FALSE(create_req.has_configure());
-    // 初始队伍共享数据: battle matching=false + 空 matching_team_view + 空 matching_start_data(只打 key);
+    // 初始队伍共享数据: battle matching=false + 空 matching_team_view + 空 matching_level_select_data(只打 key);
     // 初始成员共享数据: battle ready=false + 空 matching_parameter
     CASE_EXPECT_EQ(3, create_req.shared_team_data_size());
     if (3 == create_req.shared_team_data_size()) {
       expect_packed_team_matching_entry(create_req.shared_team_data(0), false);
       expect_packed_team_matching_team_view_entry(create_req.shared_team_data(1));
-      expect_packed_team_matching_start_data_entry(create_req.shared_team_data(2));
+      expect_packed_team_matching_level_select_data_entry(create_req.shared_team_data(2));
     }
     CASE_EXPECT_EQ(2, create_req.shared_member_data_size());
     if (2 == create_req.shared_member_data_size()) {
@@ -1711,9 +1711,9 @@ CASE_TEST(lobbysvr_user_team, cs_data_03_update_team_data_normalize_autocomplete
 }
 
 // CS-MATCHING-01: matching_level_select — 队长的关卡选择经 register_level_select_function 的 glue 回调
-// 同步为队伍共享数据: 上行 send_message 的 team_update 恰好携带一条 battle.matching_start_data 打包条目
+// 同步为队伍共享数据: 上行 send_message 的 team_update 恰好携带一条 battle.matching_level_select_data 打包条目
 // (permission=MEMBER, 内容与 CS 请求 data 一致); room 广播该 action 回队伍频道后(delivery), 本地缓存
-// 按 key 合并(get_matching_start_data 可读回), 客户端恰好收到一次该 team_update 的 team_increase
+// 按 key 合并(get_matching_level_select_data 可读回), 客户端恰好收到一次该 team_update 的 team_increase
 // (Any 形式的 shared_team_data 完整下发, 无额外推送)。
 CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_data) {
   atfw::testing::runtime test;
@@ -1750,7 +1750,7 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
   // 未登录: 直接 EN_ERR_LOGIN_NOT_LOGINED 且零上行
   {
     atframework::shared::CSMatchingLevelSelectReq req;
-    req.mutable_data()->mutable_level_select()->add_level_ids(910501);
+    req.mutable_data()->add_level_ids(910501);
     CASE_EXPECT_TRUE(expect_not_logined(
         test, 9105901, rpc::lobbysvrclientservice::packer::get_full_name_of_matching_level_select(), req));
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
@@ -1764,10 +1764,9 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
       test, [&] { return 1 == static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()); }));
 
   atframework::shared::CSMatchingLevelSelectReq level_req;
-  level_req.mutable_data()->set_battle_version("cs-battle-v2026");
-  level_req.mutable_data()->mutable_level_select()->set_region("cn-north-1");
-  level_req.mutable_data()->mutable_level_select()->add_level_ids(910511);
-  level_req.mutable_data()->mutable_level_select()->add_level_ids(910512);
+  level_req.mutable_data()->set_region("cn-north-1");
+  level_req.mutable_data()->add_level_ids(910511);
+  level_req.mutable_data()->add_level_ids(910512);
   {
     atframework::CSMsg rsp_msg;
     CASE_EXPECT_TRUE(post_team_cs_request(test, client,
@@ -1776,7 +1775,7 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
     CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
   }
 
-  // payload: 上行 team_update 恰好一条 matching_start_data 条目, 解包内容与请求 data 完全一致
+  // payload: 上行 team_update 恰好一条 matching_level_select_data 条目, 解包内容与请求 data 完全一致
   CASE_EXPECT_TRUE(team_test::pump_until(
       test, [&] { return ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate) >= 1; }));
   CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate)));
@@ -1788,15 +1787,15 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
     CASE_EXPECT_EQ(1, team_update.shared_team_data_size());
     if (1 == team_update.shared_team_data_size()) {
       const auto& entry = team_update.shared_team_data(0);
-      CASE_EXPECT_EQ(team_matching_start_data_key(), entry.key());
+      CASE_EXPECT_EQ(team_matching_level_select_data_key(), entry.key());
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
       PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
       CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
       CASE_EXPECT_TRUE(unpacked.has_battle());
       if (unpacked.has_battle()) {
-        CASE_EXPECT_TRUE(unpacked.battle().has_matching_start_data());
+        CASE_EXPECT_TRUE(unpacked.battle().has_matching_level_select_data());
         CASE_EXPECT_EQ(level_req.data().SerializeAsString(),
-                       unpacked.battle().matching_start_data().SerializeAsString());
+                       unpacked.battle().matching_level_select_data().SerializeAsString());
       }
     }
   }
@@ -1806,7 +1805,7 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
   // delivery: room 把接受的 team_update 广播回队伍频道 -> 缓存按 key 合并, 客户端恰好收到一次 team_increase
   {
     PROJECT_NAMESPACE_ID::DTeamSharedDataModule broadcast_module;
-    protobuf_copy_message(*broadcast_module.mutable_battle()->mutable_matching_start_data(), level_req.data());
+    protobuf_copy_message(*broadcast_module.mutable_battle()->mutable_matching_level_select_data(), level_req.data());
     atfw::team::DTeamAction broadcast_action;
     *broadcast_action.mutable_team_update()->add_shared_team_data() = team_test::pack_team_module(broadcast_module);
     team_test::channel_event_chain team_chain;
@@ -1818,7 +1817,7 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
   if (team_ptr) {
     CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
       return level_req.data().SerializeAsString() ==
-             user_team_battle_library_function::get_matching_start_data(*team_ptr).SerializeAsString();
+             user_team_battle_library_function::get_matching_level_select_data(*team_ptr).SerializeAsString();
     }));
   }
   CASE_EXPECT_TRUE(team_test::pump_until(
@@ -1835,13 +1834,13 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
       CASE_EXPECT_EQ(1, team_update.shared_team_data_size());
       if (1 == team_update.shared_team_data_size()) {
         const auto& entry = team_update.shared_team_data(0);
-        CASE_EXPECT_EQ(team_matching_start_data_key(), entry.key());
+        CASE_EXPECT_EQ(team_matching_level_select_data_key(), entry.key());
         PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
         CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
         CASE_EXPECT_TRUE(unpacked.has_battle());
         if (unpacked.has_battle()) {
           CASE_EXPECT_EQ(level_req.data().SerializeAsString(),
-                         unpacked.battle().matching_start_data().SerializeAsString());
+                         unpacked.battle().matching_level_select_data().SerializeAsString());
         }
       }
     }
@@ -1891,9 +1890,8 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_02_non_captain_no_push) {
       test, [&] { return 1 == static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()); }));
 
   atframework::shared::CSMatchingLevelSelectReq level_req;
-  level_req.mutable_data()->set_battle_version("cs-battle-v2026");
-  level_req.mutable_data()->mutable_level_select()->set_region("cn-north-1");
-  level_req.mutable_data()->mutable_level_select()->add_level_ids(910521);
+  level_req.mutable_data()->set_region("cn-north-1");
+  level_req.mutable_data()->add_level_ids(910521);
   {
     atframework::CSMsg rsp_msg;
     CASE_EXPECT_TRUE(post_team_cs_request(test, client,
@@ -1902,13 +1900,14 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_02_non_captain_no_push) {
     CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
   }
 
-  // 非队长不推送: 零上行, 队伍缓存无 matching_start_data, 除初始快照外无新增脏数据推送
+  // 非队长不推送: 零上行, 队伍缓存无 matching_level_select_data, 除初始快照外无新增脏数据推送
   CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
   auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   CASE_EXPECT_TRUE(!!team_ptr);
   if (team_ptr) {
     CASE_EXPECT_FALSE(team_ptr->is_captain());
-    CASE_EXPECT_TRUE(user_team_battle_library_function::get_matching_start_data(*team_ptr).SerializeAsString().empty());
+    CASE_EXPECT_TRUE(
+        user_team_battle_library_function::get_matching_level_select_data(*team_ptr).SerializeAsString().empty());
   }
   CASE_EXPECT_EQ(1, static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()));
   {

@@ -263,6 +263,7 @@ message DBattleLevelParameter {
 message DLevelSelect {
   string region = 3;
   repeated int32 level_ids = 4;  // 可接受的关卡集合，必须显式提供且非空
+  EnMatchingFactionFillPolicy faction_fill_policy = 5;
 }
 
 // orbit 房间初始化时需要的数据
@@ -274,6 +275,4 @@ message DMatchingOrbitInitData {
 message DMatchingStartData {
   string battle_version = 1;
   DLevelSelect level_select = 2;
-  int32 client_ds_ping = 3;
-  EnMatchingFactionFillPolicy faction_fill_policy = 5;
 }

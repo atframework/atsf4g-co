@@ -696,12 +696,11 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
   CASE_EXPECT_TRUE(member_inst->get_user_matching_manager().is_in_matching());
   {
     rpc::context ctx{rpc::context::create_without_task()};
-    PROJECT_NAMESPACE_ID::DMatchingStartData selection;
-    member_inst->get_user_matching_manager().fetch_level_select_data(ctx, selection);
-    CASE_EXPECT_EQ("member-next-round", selection.battle_version());
-    CASE_EXPECT_EQ(1, selection.level_select().level_ids_size());
-    if (selection.level_select().level_ids_size() == 1) {
-      CASE_EXPECT_EQ(1102, selection.level_select().level_ids(0));
+    PROJECT_NAMESPACE_ID::DLevelSelect selection;
+    member_inst->get_user_matching_manager().fetch_level_select_data(selection);
+    CASE_EXPECT_EQ(1, selection.level_ids_size());
+    if (selection.level_ids_size() == 1) {
+      CASE_EXPECT_EQ(1102, selection.level_ids(0));
     }
   }
   CASE_EXPECT_EQ(kMemberUnitId, user_team_battle_library_function::get_matching_team_sync_view(*member_team).unit_id());
@@ -726,7 +725,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
 
 // MTS-07: 成员侧只读接口 — user_team_battle_library_function 的 find_member / foreach_member / is_ready /
 // get_matching_team_parameter 从成员共享数据缓存读回快照种子内容, 缺失数据回退默认值; 队伍级
-// get_matching_team_sync_view / get_matching_start_data 无缓存时回退默认实例。
+// get_matching_team_sync_view / get_matching_level_select_data 无缓存时回退默认实例。
 CASE_TEST(lobbysvr_user_team, matching_sync_07_member_read_accessors) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -820,7 +819,8 @@ CASE_TEST(lobbysvr_user_team, matching_sync_07_member_read_accessors) {
     CASE_EXPECT_EQ(1, ready_count);
     // 队伍级只读接口无缓存时回退默认实例
     CASE_EXPECT_EQ(0, user_team_battle_library_function::get_matching_team_sync_view(*team_ptr).unit_id());
-    CASE_EXPECT_TRUE(user_team_battle_library_function::get_matching_start_data(*team_ptr).SerializeAsString().empty());
+    CASE_EXPECT_TRUE(
+        user_team_battle_library_function::get_matching_level_select_data(*team_ptr).SerializeAsString().empty());
     RPC_RETURN_CODE(0);
   }));
 
