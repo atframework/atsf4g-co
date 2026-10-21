@@ -87,7 +87,7 @@ ITEM_ALGORITHM_API item_placement_reservation_ptr_t ItemFiniteGridContainer::cre
 ITEM_ALGORITHM_API bool ItemFiniteGridContainer::is_occupancy_blocked(int32_t x, int32_t y, int32_t item_row_size,
                                                                       int32_t item_col_size,
                                                                       ItemPlacementReservation& reservation) const {
-  auto* finite_reservation = dynamic_cast<ItemFiniteGridPlacementReservation*>(&reservation);
+  auto* finite_reservation = static_cast<ItemFiniteGridPlacementReservation*>(&reservation);
   if (nullptr == finite_reservation) {
     return false;
   }
@@ -106,7 +106,7 @@ ITEM_ALGORITHM_API bool ItemFiniteGridContainer::is_occupancy_blocked(int32_t x,
 
 ITEM_ALGORITHM_API void ItemFiniteGridContainer::release_reserved_position(
     int32_t x, int32_t y, int32_t item_row_size, int32_t item_col_size, ItemPlacementReservation& reservation) const {
-  auto* finite_reservation = dynamic_cast<ItemFiniteGridPlacementReservation*>(&reservation);
+  auto* finite_reservation = static_cast<ItemFiniteGridPlacementReservation*>(&reservation);
   if (nullptr == finite_reservation) {
     return;
   }
