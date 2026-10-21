@@ -52,8 +52,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   /// @brief 初始化无限格子容器
   /// @param position_type  容器对应的位置字段
   /// @param container_guid 容器唯一 ID
+  /// @param next_entry_id 条目 ID 自增游标 (持久化恢复用); 0 或省略时按 1 处理
   ITEM_ALGORITHM_API void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                               int64_t container_guid);
+                               int64_t container_guid, uint64_t next_entry_id = 1);
 
   // ---- 位置查询 ----
   /// @brief 取槽位上的条目
@@ -167,7 +168,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   /// 被调用时机: 基类 load 通过通用校验 (条目字段 / 容器归属 / 位置字段 / 类型存在 / GUID 唯一 /
   /// 数量上限) 之后调用一次。载入的是已经存在的存档数据, 不做堆叠上限检查; 槽位被占用即失败。
   ITEM_ALGORITHM_API bool on_load_one(const excel_config_group_ptr_t& config_group,
-                                      const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                                      const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
                                       const ItemOperationContext& context) override;
 
   /// @brief 应用客户端同步的"删除一条" (摘索引 + 移出分组 + 通知数量变化)

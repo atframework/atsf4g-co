@@ -14,8 +14,9 @@ ITEM_ALGORITHM_API ItemInfiniteGridContainer::ItemInfiniteGridContainer() {}
 ITEM_ALGORITHM_API ItemInfiniteGridContainer::~ItemInfiniteGridContainer() {}
 
 ITEM_ALGORITHM_API void ItemInfiniteGridContainer::init(
-    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid) {
-  init_container(container_guid);
+    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
+    uint64_t next_entry_id) {
+  init_container(container_guid, next_entry_id);
   position_type_ = position_type;
 
   // 不限制行列, 也不维护位图: 位置占用只由子类的 position_index_ 表达 (每件道具占一个位置)

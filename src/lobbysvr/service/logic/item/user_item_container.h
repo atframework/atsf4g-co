@@ -16,6 +16,16 @@ class user;
 
 namespace item_algorithm = ITEM_ALGORITHM_NAMESPACE_ID::item_algorithm;
 
+/// @brief 把容器的全部条目按 DItemInstanceEntry (含 entry_id) 导出
+///
+/// 同一份结构既落库也下发客户端:
+///   - 落库后重启按 entry_id 逐条 load, 保证多次重建后条目 ID 一致;
+///   - 客户端用同一结构喂给 ItemContainer::apply_entries 做全量初始化,
+///     与 user_dirty_chg_sync 的 dirty_item_chgs 同构。
+/// 遍历顺序即容器内部分组顺序, 不做排序; 消费方不得依赖条目顺序。
+void dump_item_entries(const item_algorithm::ItemContainer& container,
+                       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry>& out);
+
 /// 负责: 持有 owner / 注册日志处理器 / 把条目变化转发给 user_item_container_manager /
 /// 销毁时注销登记。
 /// 批量操作 (check_add / add / check_sub / sub / check_move / move / check_has) 直接用 SDK
@@ -74,7 +84,8 @@ class user_item_finite_container
   ~user_item_finite_container() override;
 
   void init(int32_t row_size, int32_t column_size,
-            PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
+            PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
+            uint64_t next_entry_id = 1);
 };
 
 /// @brief 无限格子容器 (装备槽这类: 不限行列, 每件占一个位置)
@@ -86,7 +97,8 @@ class user_item_infinite_container
   explicit user_item_infinite_container(user* owner, const std::string& log_category_prefix = "Item.UserEquipment");
   ~user_item_infinite_container() override;
 
-  void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
+  void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
+            uint64_t next_entry_id = 1);
 };
 
 /// @brief 无位置容器 (只按道具类型记录数量)
@@ -99,5 +111,6 @@ class user_item_no_position_container
   ~user_item_no_position_container() override;
 
   /// @brief 初始化无位置容器
-  void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
+  void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
+            uint64_t next_entry_id = 1);
 };

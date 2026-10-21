@@ -50,8 +50,8 @@ ITEM_ALGORITHM_API ItemPlacementReservation& ItemPlacementReservation::operator=
 
 ITEM_ALGORITHM_API void ItemFiniteGridContainer::init(
     int32_t row_size, int32_t column_size, PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-    int64_t container_guid) {
-  init_container(container_guid);
+    int64_t container_guid, uint64_t next_entry_id) {
+  init_container(container_guid, next_entry_id);
   position_type_ = position_type;
 
   row_size_ = row_size;

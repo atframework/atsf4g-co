@@ -192,9 +192,11 @@ ITEM_ALGORITHM_API ItemOperationResult ItemNoPositionContainer::on_check_has(
 // ============================================================
 
 ITEM_ALGORITHM_API bool ItemNoPositionContainer::on_load_one(const excel_config_group_ptr_t& /*config_group*/,
-                                                             const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                                                             const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
                                                              const ItemOperationContext& context) {
   // 被调用时机: 基类 load 通过 (遍历保护 / 初始化 / 字段校验 / 容器归属 / 数量上限) 之后一次。
+  const auto& item_instance = item_entry.instance();
+  const uint64_t entry_id = item_entry.entry_id();
   const auto& item_basic = item_instance.item_basic();
   int32_t type_id = item_basic.type_id();
   int64_t add_count = item_basic.count();
@@ -203,6 +205,10 @@ ITEM_ALGORITHM_API bool ItemNoPositionContainer::on_load_one(const excel_config_
   const item_group_type* group = get_group(type_id);
   if (group != nullptr && !group->empty()) {
     item_entry_ptr_t existing = *group->begin();
+    if (entry_id != 0 && entry_id != existing->entry_id()) {
+      FWINSTLOGWARNING(logger(), "load: merge ignores requested entry_id={}, keep existing entry_id={} type={}",
+                       entry_id, existing->entry_id(), type_id);
+    }
     int64_t old_count = existing->item_instance().item_basic().count();
     set_entry_count(existing, old_count + add_count);
     int64_t total_count = notify_entry_count_changed(existing, old_count, old_count + add_count, context);
@@ -212,8 +218,8 @@ ITEM_ALGORITHM_API bool ItemNoPositionContainer::on_load_one(const excel_config_
   }
 
   // 首次添加: 新建条目
-  PROJECT_NAMESPACE_ID::DItemInstance new_instance = item_instance;
-  item_entry_ptr_t entry = make_entry(std::move(new_instance));
+  PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry = item_entry;
+  item_entry_ptr_t entry = make_entry(std::move(new_entry));
   if (!insert_entry_into_group(entry)) {
     FWINSTLOGERROR(logger(), "[EntrySortKeyError] load failed to insert entry type={} count={} entry_id={}", type_id,
                    add_count, entry->entry_id());
@@ -260,15 +266,16 @@ ITEM_ALGORITHM_API void ItemNoPositionContainer::on_apply_update_one(
   }
 
   // 新增条目: 沿用同步包里的 entry_id
-  item_entry_ptr_t new_entry = make_entry(PROJECT_NAMESPACE_ID::DItemInstance(update.instance()), update.entry_id());
-  if (!insert_entry_into_group(new_entry)) {
+  PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry = update;
+  item_entry_ptr_t entry = make_entry(std::move(new_entry));
+  if (!insert_entry_into_group(entry)) {
     FWINSTLOGERROR(logger(), "[EntrySortKeyError] apply add failed to insert entry type={} count={} entry_id={}",
-                   type_id, new_count, new_entry->entry_id());
+                   type_id, new_count, entry->entry_id());
     // 条目没进分组, 不能再动数量缓存, 否则缓存与实时计数会对不上
     return;
   }
 
-  notify_entry_count_changed(new_entry, 0, new_count, context);
+  notify_entry_count_changed(entry, 0, new_count, context);
 }
 
 // ============================================================

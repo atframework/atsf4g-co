@@ -29,12 +29,14 @@ ITEM_ALGORITHM_API ItemContainer::ItemContainer()
 
 ITEM_ALGORITHM_API ItemContainer::~ItemContainer() {}
 
-ITEM_ALGORITHM_API void ItemContainer::init_container(int64_t container_guid) {
+ITEM_ALGORITHM_API void ItemContainer::init_container(int64_t container_guid, uint64_t next_entry_id) {
   init_ = true;
   container_guid_ = container_guid;
+  // 条目 ID 自增游标: 0 (旧存档 / 新建容器) 时从 1 开始; 载入条目时会按条目 ID 继续上调
+  next_entry_id_ = next_entry_id == 0 ? 1 : next_entry_id;
   clear();
 
-  FWINSTLOGDEBUG(logger(), "init container container_guid={}", container_guid_);
+  FWINSTLOGDEBUG(logger(), "init container container_guid={} next_entry_id={}", container_guid_, next_entry_id_);
 }
 
 ITEM_ALGORITHM_API void ItemContainer::clear() {
@@ -371,8 +373,14 @@ item_entry_ptr_t ItemContainer::make_entry(PROJECT_NAMESPACE_ID::DItemInstance&&
   return entry;
 }
 
-item_entry_ptr_t ItemContainer::make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance, uint64_t entry_id) {
-  auto entry = atfw::util::memory::make_strong_rc<ItemEntry>(shared_from_this(), std::move(instance), entry_id);
+item_entry_ptr_t ItemContainer::make_entry(PROJECT_NAMESPACE_ID::DItemInstanceEntry&& instance) {
+  // entry_id 为 0 表示由容器自增分配 (旧存档 / 初始模板没有条目 ID)
+  if (instance.entry_id() == 0) {
+    return make_entry(std::move(*instance.mutable_instance()));
+  }
+
+  auto entry = atfw::util::memory::make_strong_rc<ItemEntry>(
+      shared_from_this(), std::move(*instance.mutable_instance()), instance.entry_id());
   add_entry_id_index(entry);
   set_entry_sort_key(entry);
   return entry;

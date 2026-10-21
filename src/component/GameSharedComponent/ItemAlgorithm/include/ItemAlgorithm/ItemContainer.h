@@ -193,14 +193,17 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ITEM_ALGORITHM_API ItemOperationResult check_has(const excel_config_group_ptr_t& config_group,
                                                    const item_basic_readable_iterable& requests) const;
 
-  /// @brief 载入一条持久化数据 (单物品; 与 add 的区别是不校验 GUID 唯一)
+  /// @brief 载入一条条目数据 (DItemInstanceEntry 形态, 含条目 ID)
+  ///
+  /// entry_id 非 0 时沿用该 ID (持久化恢复用, 保证多次重建后条目 ID 不变);
+  /// entry_id 为 0 (旧数据 / 初始模板) 时退化为容器自增分配。
   /// @param reason 传给钩子的操作原因 (默认 kLoad; 整体替换等场景由调用方指定, 如 kReplaceLoad)
   /// @param source 调用方透传的操作来源
   /// @return false 表示本条载入失败 (调用方决定跳过还是中止)
   ITEM_ALGORITHM_API bool load(const excel_config_group_ptr_t& config_group,
-                              const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
-                              ItemOperationReason reason = ItemOperationReason::kLoad,
-                              const ItemOperationSource& source = ItemOperationSource{});
+                             const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
+                             ItemOperationReason reason = ItemOperationReason::kLoad,
+                             const ItemOperationSource& source = ItemOperationSource{});
 
   /// @brief 应用客户端同步包: 基类逐条删除 + 逐条新增/更新
   ITEM_ALGORITHM_API void apply_entries(const excel_config_group_ptr_t& config_group,
@@ -225,8 +228,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
  protected:
   ITEM_ALGORITHM_API ItemContainer();
 
-  /// @brief 初始化所有模式共用的部分 (容器 GUID + 清空)
-  ITEM_ALGORITHM_API void init_container(int64_t container_guid);
+  /// @brief 初始化所有模式共用的部分 (容器 GUID + 条目 ID 自增游标 + 清空)
+  /// @param next_entry_id 条目 ID 自增游标; 0 (旧存档 / 新建容器) 时按 1 处理
+  ITEM_ALGORITHM_API void init_container(int64_t container_guid, uint64_t next_entry_id);
 
  protected:
   // 钩子开始
@@ -450,9 +454,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ///
   /// 被调用时机: load 通过 (is_operation_allowed / 初始化 / is_item_valid / 容器归属 /
   /// check_item_position / 数量上限) 之后调用一次。
+  /// @param item_entry 本条数据, 含条目 ID; entry_id 为 0 时由容器自增分配 (make_entry 的默认行为)
   /// @return false 表示本条载入失败 (基类直接返回 false)
   ITEM_ALGORITHM_API virtual bool on_load_one(const excel_config_group_ptr_t& config_group,
-                                              const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                                              const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
                                               const ItemOperationContext& context) = 0;
 
   /// @brief 应用客户端同步的“删除一条”
@@ -570,8 +575,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 创建条目并登记 entry_id 索引
   ITEM_ALGORITHM_API item_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance);
-  /// @brief 创建条目并登记 entry_id 索引 (指定 entry_id, 用于客户端同步新增)
-  ITEM_ALGORITHM_API item_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance, uint64_t entry_id);
+  /// @brief 创建条目并登记 entry_id 索引 (指定 entry_id)
+  ITEM_ALGORITHM_API item_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstanceEntry&& instance);
 
   /// @brief 把条目放进它所属类型的排序分组
   /// @return false 表示同排序键的条目已存在, 该条目没有进分组

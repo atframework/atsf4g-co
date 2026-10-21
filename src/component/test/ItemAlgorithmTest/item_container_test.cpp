@@ -443,6 +443,15 @@ static PROJECT_NAMESPACE_ID::DItemInstance make_ungrid_item(int32_t type_id, int
   return instance;
 }
 
+/// @brief 把测试用的 DItemInstance 包成 DItemInstanceEntry (entry_id = 0 表示由容器自增分配)
+static PROJECT_NAMESPACE_ID::DItemInstanceEntry make_load_entry(const PROJECT_NAMESPACE_ID::DItemInstance& instance,
+                                                                uint64_t entry_id = 0) {
+  PROJECT_NAMESPACE_ID::DItemInstanceEntry entry;
+  entry.set_entry_id(entry_id);
+  *entry.mutable_instance() = instance;
+  return entry;
+}
+
 /// @brief 创建一个 DItemBasic (用于 Sub 请求)
 static PROJECT_NAMESPACE_ID::DItemBasic make_sub_basic(int32_t type_id, int64_t count, int32_t x = 0, int32_t y = 0,
                                                        int64_t guid = 0) {
@@ -504,8 +513,8 @@ static void register_test_log_handler(ItemContainer& grid) {
 
 /// @brief 初始化测试容器 (inventory 类型, 默认 10x10)
 static void init_test_container(TestItemFiniteGridContainer& grid, int32_t row = 10, int32_t col = 10,
-                                int64_t container_guid = 0) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, container_guid);
+                                int64_t container_guid = 0, uint64_t next_entry_id = 1) {
+  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, container_guid, next_entry_id);
   // 注册配置
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
@@ -532,6 +541,28 @@ static PROJECT_NAMESPACE_ID::DItemBasic make_equip_sub_by_guid(int64_t guid) {
   basic.set_count(1);
   basic.set_guid(guid);
   return basic;
+}
+
+/// @brief 全量快照: 收集容器内所有条目 (带 entry_id), 不排序
+///
+/// 对应服务端 dump_item_entries (lobbysvr/logic/item/user_item_container.cpp):
+/// 持久化与下发客户端共用同一份 DItemInstanceEntry 列表, 服务端重启后按它重建条目,
+/// 客户端用同一份列表做全量初始化, 因此条目 ID 必须原样带出; 顺序不参与语义。
+static void collect_container_snapshot_entries(
+    const ItemContainer& grid, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry>& out) {
+  out.Clear();
+  out.Reserve(static_cast<int>(grid.get_entry_count()));
+
+  for (const auto& group_pair : grid.get_all_groups()) {
+    for (const auto& entry : group_pair.second.entries) {
+      if (!entry) {
+        continue;
+      }
+      auto* out_entry = out.Add();
+      out_entry->set_entry_id(entry->entry_id());
+      *out_entry->mutable_instance() = entry->item_instance();
+    }
+  }
 }
 
 /// @brief 通过 foreach_instance (Dump 接口) 导出容器中所有条目
@@ -1509,19 +1540,19 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
 
     // Load 1x1 在 (0,0)
     auto item = make_grid_item(kItemTypeId_1x1, 55, 0, 0);
-    CASE_EXPECT_TRUE(load_server.load(config, item));
+    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(item)));
 
     // Load 装备 guid=2001
     auto equip = make_equip_item(2001, 1, 1);
-    CASE_EXPECT_TRUE(load_server.load(config, equip));
+    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(equip)));
 
     // 同位置同类型 (无 GUID) 的 Load 会堆叠合并, 不会失败
     auto dup = make_grid_item(kItemTypeId_1x1, 10, 0, 0);
-    CASE_EXPECT_TRUE(load_server.load(config, dup));  // 合并到 55+10=65
+    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(dup)));  // 合并到 55+10=65
 
     // 重复 Load 同 GUID 应失败
     auto equip_dup = make_equip_item(2001, 2, 2);
-    CASE_EXPECT_FALSE(load_server.load(config, equip_dup));
+    CASE_EXPECT_FALSE(load_server.load(config, make_load_entry(equip_dup)));
 
     CASE_EXPECT_EQ(load_server.get_item_count_debug(kItemTypeId_1x1), 65);  // 55+10 堆叠
     verify_item_count_consistency(load_server, kItemTypeId_1x1);
@@ -2246,7 +2277,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
       inst.mutable_item_basic()->set_count(50);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2280,7 +2311,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
         inst.mutable_item_basic()->set_count(1);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-        CASE_EXPECT_TRUE(grid.load(config, inst));
+        CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
       }
     }
 
@@ -2387,7 +2418,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
         inst.mutable_item_basic()->set_count(1);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-        CASE_EXPECT_TRUE(grid.load(config, inst));
+        CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
       }
     }
 
@@ -2415,7 +2446,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
       inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
       inst.mutable_item_basic()->set_count(1);
       *inst.mutable_item_basic()->mutable_position()->mutable_grid_position() = pos_of(s);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     // 格子现在全满，第 5 件放不下 → 放入 failed_item
@@ -2552,7 +2583,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_ignore_item) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     // 消耗 A×1 (原位), 兑换 A×2
@@ -2590,7 +2621,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_ignore_item) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     // 消耗 A×1 (原位), 兑换 A×2 → 1 个堆回原位, 1 个找新位置
@@ -2634,7 +2665,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_ignore_item) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     // 消耗 A×2 (超过持有 1) → 整体失败
@@ -2773,7 +2804,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
       inst.mutable_item_basic()->set_count(59);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     // 传入 [{A,30},{A,30}]
@@ -2838,10 +2869,10 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
     grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
 
     // (0,0) 放 GUID 装备 1001, 其余 3 格放 1x1 道具 → 满背包
-    CASE_EXPECT_TRUE(grid.load(config, make_equip_item(1001, 0, 0)));
-    CASE_EXPECT_TRUE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 1, 0)));
-    CASE_EXPECT_TRUE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 0, 1)));
-    CASE_EXPECT_TRUE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 1, 1)));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_equip_item(1001, 0, 0))));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 1, 0))));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 0, 1))));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 1, 1))));
 
     // 消耗装备 1001 (原位), 兑换新装备 2001
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics;
@@ -2886,7 +2917,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
       inst.mutable_item_basic()->set_count(50);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     // 消耗 A×50@(1,0) (整体消耗), 兑换 A×250
@@ -3181,7 +3212,7 @@ CASE_TEST(ItemContainer, find_positions_fill_container_guid) {
       inst.mutable_item_basic()->mutable_position()->set_container_guid(kContainerGuid);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     }
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -3299,7 +3330,7 @@ CASE_TEST(ItemContainer, find_positions_fit_various_sizes) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
     };
     load_occupy(2, 1);
     load_occupy(3, 1);
@@ -3430,7 +3461,7 @@ CASE_TEST(ItemContainer, no_position_ungrid_lifecycle) {
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 6);
   verify_item_count_consistency(grid, kCoinTypeId);
 
-  CASE_EXPECT_TRUE(grid.load(config, make_ungrid_item(kVirtualTypeId, 3)));
+  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_ungrid_item(kVirtualTypeId, 3))));
   CASE_EXPECT_EQ(grid.get_item_count_debug(kVirtualTypeId), 3);
   verify_item_count_consistency(grid, kVirtualTypeId);
 
@@ -3500,7 +3531,7 @@ CASE_TEST(ItemContainer, no_position_rejects_positional_items) {
   CASE_EXPECT_EQ(equipment_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   CASE_EXPECT_EQ(grid.add(equipment_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
 
-  CASE_EXPECT_FALSE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 0, 0)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 0, 0))));
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 5);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 0);
 }
@@ -3573,7 +3604,7 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   // load
   state.rejected_position_x = 3;
   state.reset_call_counts();
-  CASE_EXPECT_FALSE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 3, 0)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 3, 0))));
   CASE_EXPECT_EQ(state.check_item_position_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
 }
@@ -3662,7 +3693,7 @@ CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
 
   // load
   state.reset_call_counts();
-  CASE_EXPECT_FALSE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 3, 0)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 3, 0))));
   CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
 
@@ -3858,16 +3889,16 @@ CASE_TEST(ItemContainer, load_validates_against_container_config) {
   // 越界请求必须被拒绝, 且失败的 load 不得改动容器 (校验用的是容器自己的行列尺寸)
   auto out_of_range_item = make_grid_item(kItemTypeId_1x1, 1, 9, 9);
   set_item_container_guid(out_of_range_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, out_of_range_item));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(out_of_range_item)));
   CASE_EXPECT_TRUE(container_state_equal(before, capture_container_state(grid, tracked_types)));
 
   // 两个不同位置的道具都要落到各自的坐标上 (位置字段映射由容器自己的 position_type 决定)
   auto first_item = make_grid_item(kItemTypeId_1x1, 2, 1, 1);
   set_item_container_guid(first_item, container_guid);
-  CASE_EXPECT_TRUE(grid.load(config, first_item));
+  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(first_item)));
   auto second_item = make_grid_item(kItemTypeId_1x1, 4, 2, 2);
   set_item_container_guid(second_item, container_guid);
-  CASE_EXPECT_TRUE(grid.load(config, second_item));
+  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(second_item)));
 
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 9);  // seed 3 + 2 + 4
   CASE_EXPECT_TRUE(grid.get(make_inventory_target(1, 1).grid_position()) != nullptr);
@@ -3997,26 +4028,26 @@ CASE_TEST(ItemContainer, load_failure_has_no_side_effect) {
   // 越界
   auto out_of_range_item = make_grid_item(kItemTypeId_1x1, 1, 9, 9);
   set_item_container_guid(out_of_range_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, out_of_range_item));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(out_of_range_item)));
 
   // 锚点已被其它类型占用 (2x2 的锚点在 (2,0))
   auto occupied_item = make_grid_item(kItemTypeId_1x1, 1, 2, 0);
   set_item_container_guid(occupied_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, occupied_item));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(occupied_item)));
 
   // GUID 重复
   auto duplicate_guid_item = make_equip_item(500, 3, 3);
   set_item_container_guid(duplicate_guid_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, duplicate_guid_item));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(duplicate_guid_item)));
 
   // 容器归属不匹配 (实例容器 GUID 保持 0)
   auto foreign_item = make_grid_item(kItemTypeId_1x1, 1, 1, 1);
-  CASE_EXPECT_FALSE(grid.load(config, foreign_item));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(foreign_item)));
 
   // 未知道具类型
   auto unknown_item = make_grid_item(999999, 1, 1, 1);
   set_item_container_guid(unknown_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, unknown_item));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(unknown_item)));
 
   // 全部失败路径都不得留下任何副作用
   CASE_EXPECT_TRUE(container_state_equal(before, capture_container_state(grid, tracked_types)));
@@ -4360,7 +4391,7 @@ CASE_TEST(ItemContainer, operation_source_reaches_hooks) {
     state->last_count_context = item_algorithm::ItemOperationContext{};
     state->count_changed_calls = 0;
 
-    CASE_EXPECT_TRUE(grid.load(config, load_instance));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(load_instance)));
     CASE_EXPECT_EQ(state->count_changed_calls, 1);
     CASE_EXPECT_TRUE(state->last_count_context.reason == item_algorithm::ItemOperationReason::kLoad);
     CASE_EXPECT_EQ(state->last_count_context.source.major_type, 0);
@@ -4452,7 +4483,7 @@ CASE_TEST(ItemContainer, foreach_instance_locks_container_against_mutation) {
 
     auto load_instance = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
     set_item_container_guid(load_instance, container_guid);
-    load_rejected = !grid.load(config, load_instance);
+    load_rejected = !grid.load(config, make_load_entry(load_instance));
 
     // 嵌套遍历同样受限, 且回调返回 false 能中断
     inner_stopped = !grid.foreach_instance([&](const PROJECT_NAMESPACE_ID::DItemInstance&) { return false; });
@@ -4890,7 +4921,7 @@ CASE_TEST(ItemContainerGroup, check_has_across_containers) {
     grid_b->clear();
     auto item = make_grid_item(kItemTypeId_2x2, 1, 4, 4);
     set_item_container_guid(item, kContainerGuidB);
-    CASE_EXPECT_TRUE(grid_b->load(config, item, item_algorithm::ItemOperationReason::kReplaceLoad));
+    CASE_EXPECT_TRUE(grid_b->load(config, make_load_entry(item), item_algorithm::ItemOperationReason::kReplaceLoad));
   }
   // B 被整体换成新列表, A 不受影响
   CASE_EXPECT_EQ(0, count_instances_type(*grid_b, kItemTypeId_1x1));
@@ -5189,6 +5220,220 @@ CASE_TEST(ItemContainer, clear_then_reuse_is_consistent_for_all_modes) {
       // 本模式没有位置索引, verify_container_dump 的位置反查不适用, 这里用数量一致性替代
       verify_item_count_consistency(grid, kCoinTypeId);
       verify_item_count_consistency(grid, kVirtualTypeId);
+    }
+  }
+}
+
+// ============================================================
+// 客户端全量初始化: 快照按 DItemInstanceEntry 下发
+//
+// 客户端不生成 entry_id: 服务端把全量快照按 DItemInstanceEntry
+// (DUserInventoryData / DUserVirtualInventoryData / DCharacterItemData) 下发,
+// 客户端直接 apply_entries 建立条目, 之后的 user_dirty_chg_sync 增量沿用同一套
+// entry_id。本用例覆盖: 快照初始化 (不经过 load) → 双方一致 → 增量同步 → 仍然一致。
+// ============================================================
+
+CASE_TEST(ItemContainer, client_init_from_entry_snapshot) {
+  auto server_ptr = atfw::util::memory::make_strong_rc<ServerTestItemFiniteGridContainer>();
+  auto& server = *server_ptr;
+  init_server_container(server);
+  server.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  auto config = make_test_config_group();
+
+  // 服务端准备一份非平凡数据: 装备 (带 GUID) + 1x1 堆叠 + 2x2
+  {
+    ItemAddRequest reqs;
+    *reqs.Add() = make_equip_item(7001, 0, 0);
+    *reqs.Add() = make_grid_item(kItemTypeId_1x1, 30, 1, 0);
+    *reqs.Add() = make_grid_item(kItemTypeId_2x2, 1, 2, 0);
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(server.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  server.clear_change_cache();
+
+  // 服务端下发全量快照: 每条都带 entry_id
+  ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry> snapshot;
+  collect_container_snapshot_entries(server, snapshot);
+  CASE_EXPECT_EQ(snapshot.size(), 3);
+  CASE_EXPECT_EQ(snapshot.size(), static_cast<int>(server.get_entry_count()));
+  if (snapshot.size() != 3) {
+    return;
+  }
+  // 导出的 entry_id 与服务端容器完全一致 (导出顺序不参与语义, 逐条按 ID 校验)
+  for (const auto& snapshot_entry : snapshot) {
+    CASE_EXPECT_TRUE(server.find_entry_by_id(snapshot_entry.entry_id()) != nullptr);
+  }
+
+  // 客户端从空容器开始做全量初始化: clear + apply_entries (不走 load, 不用自己生成 entry_id)
+  auto client_ptr = atfw::util::memory::make_strong_rc<TestItemFiniteGridContainer>();
+  auto& client = *client_ptr;
+  init_test_container(client);
+  client.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  client.clear();
+  ::google::protobuf::RepeatedField<uint64_t> empty_remove_ids;
+  client.apply_entries(config, empty_remove_ids, make_item_readable_iterable(snapshot));
+
+  CASE_EXPECT_EQ(client.get_entry_count(), server.get_entry_count());
+  for (const auto& snapshot_entry : snapshot) {
+    auto found = client.find_entry_by_id(snapshot_entry.entry_id());
+    CASE_EXPECT_TRUE(found != nullptr);
+    if (found) {
+      CASE_EXPECT_EQ(found->item_instance().item_basic().type_id(), snapshot_entry.instance().item_basic().type_id());
+      CASE_EXPECT_EQ(found->item_instance().item_basic().count(), snapshot_entry.instance().item_basic().count());
+      CASE_EXPECT_EQ(found->item_instance().item_basic().guid(), snapshot_entry.instance().item_basic().guid());
+    }
+  }
+  verify_server_client_sync(server, client);
+
+  // 快照之后走增量: 服务端改数量并新增一件, 客户端只吃 dirty_item_chgs
+  {
+    ItemSubRequest sub_reqs;
+    *sub_reqs.Add() = make_sub_basic(kItemTypeId_1x1, 10, 1, 0);
+    auto sub_checked = server.check_sub(config, make_item_readable_iterable(sub_reqs));
+    CASE_EXPECT_EQ(sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(server.sub(sub_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+    ItemAddRequest add_reqs;
+    *add_reqs.Add() = make_grid_item(kItemTypeId_1x1, 7, 0, 1);
+    auto add_checked = server.check_add(config, make_item_readable_iterable(add_reqs));
+    CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(server.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(server.get_entry_count(), static_cast<size_t>(4));
+
+  sync_and_verify(server, client, config, "快照之后的增量同步");
+
+  // 增量不能在客户端产生重复条目: 快照期间的 entry_id 必须被沿用
+  CASE_EXPECT_EQ(client.get_entry_count(), server.get_entry_count());
+  verify_item_count_consistency(client, kItemTypeId_1x1);
+  verify_item_count_consistency(client, kEquipmentTypeId);
+}
+
+// ============================================================
+// 条目 ID 稳定性: entry_id 与自增游标一起落库, 多次重建结果一致
+//
+// 服务端把条目 (含 entry_id) 与容器的 next_entry_id 一起落库
+// 再用 load(entry) 按原 ID 重建。本用例覆盖:
+//   构建 → 删掉一件使游标大于最大 ID → 导出 → 按快照重建 → ID 与游标都一致
+//   → 新增条目 ID 等于持久化游标 (而不是"最大 ID + 1") → 再从新快照重建 → 仍然一致。
+// ============================================================
+
+CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
+  constexpr int64_t container_guid = 7501;
+  auto config = make_test_config_group();
+
+  auto origin_ptr = atfw::util::memory::make_strong_rc<ServerTestItemFiniteGridContainer>();
+  auto& origin = *origin_ptr;
+  init_test_container(origin, 10, 10, container_guid);
+  origin.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+
+  {
+    ItemAddRequest reqs;
+    auto equip = make_equip_item(8001, 0, 0);
+    set_item_container_guid(equip, container_guid);
+    *reqs.Add() = equip;
+    auto stack = make_grid_item(kItemTypeId_1x1, 12, 1, 0);
+    set_item_container_guid(stack, container_guid);
+    *reqs.Add() = stack;
+    auto box = make_grid_item(kItemTypeId_2x2, 1, 2, 0);
+    set_item_container_guid(box, container_guid);
+    *reqs.Add() = box;
+    auto checked = origin.check_add(config, make_item_readable_iterable(reqs));
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(origin.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+
+  // 再放一件再整体扣掉: 条目 ID 4 被移除, 但自增游标停在 5
+  {
+    ItemAddRequest add_reqs;
+    auto temp = make_grid_item(kItemTypeId_1x1, 1, 0, 1);
+    set_item_container_guid(temp, container_guid);
+    *add_reqs.Add() = temp;
+    auto checked = origin.check_add(config, make_item_readable_iterable(add_reqs));
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(origin.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  {
+    ItemSubRequest sub_reqs;
+    *sub_reqs.Add() = make_sub_basic(kItemTypeId_1x1, 1, 0, 1);
+    set_basic_container_guid(sub_reqs[0], container_guid);
+    auto checked = origin.check_sub(config, make_item_readable_iterable(sub_reqs));
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(origin.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(origin.get_entry_count(), static_cast<size_t>(3));
+
+  // 落库内容: 条目 + entry_id + next_entry_id
+  ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry> persisted;
+  collect_container_snapshot_entries(origin, persisted);
+  CASE_EXPECT_EQ(persisted.size(), 3);
+  if (persisted.size() != 3) {
+    return;
+  }
+  const uint64_t persisted_next_entry_id = origin.peek_next_entry_id();
+  uint64_t persisted_max_entry_id = 0;
+  for (const auto& entry : persisted) {
+    persisted_max_entry_id = std::max(persisted_max_entry_id, entry.entry_id());
+  }
+  // 游标必须大于最大条目 ID, 这样后面才能区分"按游标分配"与"最大 ID + 1"
+  CASE_EXPECT_EQ(persisted_next_entry_id, static_cast<uint64_t>(5));
+  CASE_EXPECT_TRUE(persisted_next_entry_id > persisted_max_entry_id);
+
+  // 第一次重建 (模拟服务端重启): 初始化时传入持久化游标, 再按持久化 ID 逐条 load
+  auto reload_ptr = atfw::util::memory::make_strong_rc<TestItemFiniteGridContainer>();
+  auto& reload = *reload_ptr;
+  init_test_container(reload, 10, 10, container_guid, persisted_next_entry_id);
+  reload.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  for (const auto& entry : persisted) {
+    CASE_EXPECT_TRUE(reload.load(config, entry));
+  }
+  CASE_EXPECT_EQ(reload.get_entry_count(), static_cast<size_t>(3));
+  CASE_EXPECT_EQ(reload.peek_next_entry_id(), persisted_next_entry_id);
+  for (const auto& entry : persisted) {
+    CASE_EXPECT_TRUE(reload.find_entry_by_id(entry.entry_id()) != nullptr);
+    CASE_EXPECT_TRUE(reload.find_entry(entry.instance().item_basic()) != nullptr);
+  }
+
+  // 新增条目必须用持久化游标, 而不是"最大 ID + 1", 也不能复用已删除的 ID
+  {
+    ItemAddRequest add_reqs;
+    auto extra = make_grid_item(kItemTypeId_1x1, 5, 0, 1);
+    set_item_container_guid(extra, container_guid);
+    *add_reqs.Add() = extra;
+    auto checked = reload.check_add(config, make_item_readable_iterable(add_reqs));
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(reload.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(reload.get_entry_count(), static_cast<size_t>(4));
+  auto added = reload.get(make_inventory_target(0, 1).grid_position());
+  CASE_EXPECT_TRUE(added != nullptr);
+  if (added) {
+    CASE_EXPECT_EQ(added->entry_id(), persisted_next_entry_id);
+    CASE_EXPECT_TRUE(added->entry_id() != persisted_max_entry_id + 1);
+  }
+
+  // 第二次重建: 从新快照再载入, ID 与游标仍与上一次完全一致
+  ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry> persisted_again;
+  collect_container_snapshot_entries(reload, persisted_again);
+  CASE_EXPECT_EQ(persisted_again.size(), 4);
+  const uint64_t persisted_next_entry_id_again = reload.peek_next_entry_id();
+
+  auto reload2_ptr = atfw::util::memory::make_strong_rc<TestItemFiniteGridContainer>();
+  auto& reload2 = *reload2_ptr;
+  init_test_container(reload2, 10, 10, container_guid, persisted_next_entry_id_again);
+  reload2.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  for (const auto& entry : persisted_again) {
+    CASE_EXPECT_TRUE(reload2.load(config, entry));
+  }
+  CASE_EXPECT_EQ(reload2.get_entry_count(), reload.get_entry_count());
+  CASE_EXPECT_EQ(reload2.peek_next_entry_id(), persisted_next_entry_id_again);
+  for (const auto& entry : persisted_again) {
+    auto found = reload2.find_entry_by_id(entry.entry_id());
+    CASE_EXPECT_TRUE(found != nullptr);
+    if (found) {
+      CASE_EXPECT_EQ(found->item_instance().item_basic().type_id(), entry.instance().item_basic().type_id());
+      CASE_EXPECT_EQ(found->item_instance().item_basic().count(), entry.instance().item_basic().count());
     }
   }
 }

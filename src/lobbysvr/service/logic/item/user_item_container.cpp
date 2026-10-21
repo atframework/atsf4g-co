@@ -12,6 +12,27 @@
 #include <utility>
 
 // ============================================================
+// 条目导出
+// ============================================================
+
+void dump_item_entries(const item_algorithm::ItemContainer& container,
+                       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry>& out) {
+  out.Clear();
+  out.Reserve(static_cast<int>(container.get_entry_count()));
+
+  for (const auto& group_pair : container.get_all_groups()) {
+    for (const auto& entry : group_pair.second.entries) {
+      if (!entry) {
+        continue;
+      }
+      auto* out_entry = out.Add();
+      out_entry->set_entry_id(entry->entry_id());
+      *out_entry->mutable_instance() = entry->item_instance();
+    }
+  }
+}
+
+// ============================================================
 // user_item_container — 业务容器公共部分
 // ============================================================
 
@@ -150,13 +171,13 @@ user_item_finite_container::~user_item_finite_container() = default;
 
 void user_item_finite_container::init(int32_t row_size, int32_t column_size,
                                       PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                                      int64_t container_guid) {
+                                      int64_t container_guid, uint64_t next_entry_id) {
   if (this->is_initialized()) {
     FWLOGERROR("user_item_finite_container::init called twice, container_guid: {}", container_guid);
     return;
   }
   this->setup_log(container_guid);
-  this->mode_container_type::init(row_size, column_size, position_type, container_guid);
+  this->mode_container_type::init(row_size, column_size, position_type, container_guid, next_entry_id);
   this->finish_init();
 }
 
@@ -165,13 +186,13 @@ user_item_infinite_container::user_item_infinite_container(user* owner, const st
 user_item_infinite_container::~user_item_infinite_container() = default;
 
 void user_item_infinite_container::init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                                        int64_t container_guid) {
+                                        int64_t container_guid, uint64_t next_entry_id) {
   if (this->is_initialized()) {
     FWLOGERROR("user_item_infinite_container::init called twice, container_guid: {}", container_guid);
     return;
   }
   this->setup_log(container_guid);
-  this->mode_container_type::init(position_type, container_guid);
+  this->mode_container_type::init(position_type, container_guid, next_entry_id);
   this->finish_init();
 }
 
@@ -180,13 +201,13 @@ user_item_no_position_container::user_item_no_position_container(user* owner, co
 user_item_no_position_container::~user_item_no_position_container() = default;
 
 void user_item_no_position_container::init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                                           int64_t container_guid) {
+                                           int64_t container_guid, uint64_t next_entry_id) {
   if (this->is_initialized()) {
     FWLOGERROR("user_item_no_position_container::init called twice, container_guid: {}", container_guid);
     return;
   }
   this->setup_log(container_guid);
-  this->mode_container_type::init(position_type, container_guid);
+  this->mode_container_type::init(position_type, container_guid, next_entry_id);
   this->finish_init();
 }
 

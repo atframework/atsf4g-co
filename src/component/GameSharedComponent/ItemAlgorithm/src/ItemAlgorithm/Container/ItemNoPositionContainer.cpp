@@ -20,8 +20,9 @@ ITEM_ALGORITHM_API ItemNoPositionContainer::ItemNoPositionContainer() {}
 ITEM_ALGORITHM_API ItemNoPositionContainer::~ItemNoPositionContainer() {}
 
 ITEM_ALGORITHM_API void ItemNoPositionContainer::init(
-    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid) {
-  init_container(container_guid);
+    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
+    uint64_t next_entry_id) {
+  init_container(container_guid, next_entry_id);
   position_type_ = position_type;
 
   // 无位置模式不落位: 道具按类型合并计数, 不维护位置索引, 也不接受 GUID

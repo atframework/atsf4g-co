@@ -106,9 +106,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
   /// @param column_size   列数 (<=0 时按 1 处理)
   /// @param position_type 容器对应的位置字段
   /// @param container_guid 容器唯一 ID
+  /// @param next_entry_id 条目 ID 自增游标 (持久化恢复用); 0 或省略时按 1 处理
   ITEM_ALGORITHM_API void init(int32_t row_size, int32_t column_size,
                                PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                               int64_t container_guid);
+                               int64_t container_guid, uint64_t next_entry_id = 1);
 
   // ---- 移动 ----
   // check_move / move 的流程 (入参自持 / 初始化检查 / 空请求 / 两阶段循环 / 结果汇总) 在基类;
@@ -260,7 +261,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
   /// 数量上限) 之后调用一次。载入的是已经存在的存档数据, 不做堆叠上限检查;
   /// 锚点被占用、矩形越界或与已占格子碰撞都返回 false。
   ITEM_ALGORITHM_API bool on_load_one(const excel_config_group_ptr_t& config_group,
-                                      const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                                      const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
                                       const ItemOperationContext& context) override;
 
   /// @brief 应用客户端同步的"删除一条" (摘索引 / 占位 / 移出分组 / 通知数量变化)

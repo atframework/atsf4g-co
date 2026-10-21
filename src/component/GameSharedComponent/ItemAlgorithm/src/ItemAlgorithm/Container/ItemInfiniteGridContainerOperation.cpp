@@ -796,9 +796,11 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
 // 这里不检查堆叠上限 (载入的是已经存在的存档数据)。
 // ============================================================
 
-ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_load_one(const excel_config_group_ptr_t& config_group,
-                                                               const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
-                                                               const ItemOperationContext& context) {
+ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_load_one(
+    const excel_config_group_ptr_t& config_group, const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
+    const ItemOperationContext& context) {
+  const auto& item_instance = item_entry.instance();
+  const uint64_t entry_id = item_entry.entry_id();
   const auto& item_basic = item_instance.item_basic();
   int32_t type_id = item_basic.type_id();
   int64_t add_count = item_basic.count();
@@ -828,6 +830,10 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_load_one(const excel_confi
                        target_pos.y, type_id, guid);
       return false;
     }
+    if (entry_id != 0 && entry_id != existing->entry_id()) {
+      FWINSTLOGWARNING(logger(), "load: merge ignores requested entry_id={}, keep existing entry_id={} type={}",
+                       entry_id, existing->entry_id(), type_id);
+    }
     int64_t old_count = existing_basic.count();
     set_entry_count(existing, old_count + add_count);
     notify_entry_count_changed(existing, old_count, old_count + add_count, context);
@@ -837,10 +843,11 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_load_one(const excel_confi
   }
 
   // 放入 (槽位路径上没有条目, 无需再判占用)
-  PROJECT_NAMESPACE_ID::DItemInstance new_instance = item_instance;
-  apply_position(*new_instance.mutable_item_basic()->mutable_position()->mutable_grid_position(), target_pos);
+  PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry = item_entry;
+  apply_position(*new_entry.mutable_instance()->mutable_item_basic()->mutable_position()->mutable_grid_position(),
+                 target_pos);
 
-  item_entry_ptr_t entry = make_entry(std::move(new_instance));
+  item_entry_ptr_t entry = make_entry(std::move(new_entry));
   if (!insert_entry_into_group(entry)) {
     FWINSTLOGERROR(logger(),
                    "[EntrySortKeyError] load failed to insert entry type={} count={} guid={} at slot ({},{}) "
@@ -941,7 +948,8 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::on_apply_update_one(
                   guid);
   } else {
     // --- 新增 entry ---
-    item_entry_ptr_t new_entry = make_entry(PROJECT_NAMESPACE_ID::DItemInstance(update.instance()), update.entry_id());
+    PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry_data = update;
+    item_entry_ptr_t new_entry = make_entry(std::move(new_entry_data));
 
     if (!insert_entry_into_group(new_entry)) {
       FWINSTLOGERROR(logger(),

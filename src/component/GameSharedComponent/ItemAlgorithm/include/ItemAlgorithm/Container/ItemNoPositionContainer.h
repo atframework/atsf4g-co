@@ -39,8 +39,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
   /// @param position_type  容器声明的位置字段 (无位置模式不做落位, 库内不再用它做字段映射,
   ///                       只保存下来供接入层通过 get_position_type() 读取)
   /// @param container_guid 容器唯一 ID
+  /// @param next_entry_id 条目 ID 自增游标 (持久化恢复用); 0 或省略时按 1 处理
   ITEM_ALGORITHM_API void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                               int64_t container_guid);
+                               int64_t container_guid, uint64_t next_entry_id = 1);
 
  protected:
   /// @brief 取本容器声明的位置字段类型
@@ -131,7 +132,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
   /// 被调用时机: 基类 load 通过 (遍历保护 / 初始化 / 字段校验 / 容器归属 / 数量上限) 之后调用一次。
   /// @return false 表示条目没能进分组 (基类直接返回 false); 合入或新建成功返回 true
   ITEM_ALGORITHM_API bool on_load_one(const excel_config_group_ptr_t& config_group,
-                                      const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                                      const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
                                       const ItemOperationContext& context) override;
 
   /// @brief 应用客户端同步的"删除一条"

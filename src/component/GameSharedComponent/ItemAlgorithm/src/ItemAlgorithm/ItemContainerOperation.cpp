@@ -468,7 +468,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainer::check_has(const excel_conf
 }
 
 ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& config_group,
-                                            const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                                            const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
                                             ItemOperationReason reason, const ItemOperationSource& source) {
   if (!is_operation_allowed("ItemContainer::load")) {
     return false;
@@ -479,6 +479,8 @@ ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& conf
     return false;
   }
 
+  const auto& item_instance = item_entry.instance();
+  const uint64_t entry_id = item_entry.entry_id();
   const auto& item_basic = item_instance.item_basic();
   int32_t type_id = item_basic.type_id();
   int64_t add_count = item_basic.count();
@@ -497,6 +499,13 @@ ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& conf
     return false;
   }
 
+  // 指定了条目 ID 时它必须还没被占用: 持久化/同步数据里出现重复 ID 属于数据损坏,
+  // 直接拒绝比覆盖已有条目安全。
+  if (entry_id != 0 && find_entry_by_id(entry_id) != nullptr) {
+    FWINSTLOGERROR(logger(), "load failed: duplicate entry_id={} type={} count={}", entry_id, type_id, add_count);
+    return false;
+  }
+
   int64_t current_total = get_item_count(type_id);
   int32_t limit_ret = on_check_item_count_limit(type_id, current_total, add_count);
   if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
@@ -507,7 +516,7 @@ ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& conf
 
   // 钩子上下文: 原因由调用方指定 (默认 kLoad), 来源由调用方传入
   const ItemOperationContext context{reason, source};
-  return on_load_one(config_group, item_instance, context);
+  return on_load_one(config_group, item_entry, context);
 }
 
 ITEM_ALGORITHM_API void ItemContainer::apply_entries(const excel_config_group_ptr_t& config_group,
