@@ -28,5 +28,5 @@ message ExcelErrorCode {
 
   int32 error_code = 1 [(org.xresloader.field_unique_tag) = "error_code"];
   EnExcelErrorCodeDisplayType display_type = 2;
-  int32 text = 3;
+  string text = 3;
 }
