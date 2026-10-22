@@ -746,22 +746,31 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
           static_cast<int>(event_log.event_type()), get_acknowledge_event_id());
       continue;
     }
-    if (event_log.event_id() != data_.acknowledge_event_id() + 1 ||
-        event_log.event_id() > sync.unit_view().last_event_id()) {
-      FWLOGERROR(
-          "{} stop matching Unit sync at non-contiguous event, unit_id={}, event_id={}, acknowledge_event_id={}, "
-          "view_event_id={}",
-          *owner_, sync.unit_id(), event_log.event_id(), data_.acknowledge_event_id(),
-          sync.unit_view().last_event_id());
+    if (event_log.event_id() > sync.unit_view().last_event_id()) {
+      FCTXLOGINFO(ctx,
+                  "{} stop matching Unit sync at event beyond view, unit_id={}, event_id={}, "
+                  "acknowledge_event_id={}, view_event_id={}",
+                  *owner_, sync.unit_id(), event_log.event_id(), data_.acknowledge_event_id(),
+                  sync.unit_view().last_event_id());
       has_pending_event = true;
       break;
     }
+    // 确认 RPC 返回前可能已收到初始化或完成事件。先等待当前确认完成，再按 ACK 检查消费顺序。
     if (pending_acknowledge_event_id_ != 0) {
       FCTXLOGDEBUG(ctx,
                    "matching WAL paused, reason=confirmation_pending, zone_id={}, user_id={}, unit_id={}, event_id={}, "
                    "pending_acknowledge_event_id={}, acknowledge_event_id={}",
                    owner_->get_zone_id(), owner_->get_user_id(), local_unit_id, event_log.event_id(),
                    pending_acknowledge_event_id_, get_acknowledge_event_id());
+      has_pending_event = true;
+      break;
+    }
+    if (event_log.event_id() != data_.acknowledge_event_id() + 1) {
+      FCTXLOGINFO(ctx,
+                  "{} stop matching Unit sync at non-contiguous event, unit_id={}, event_id={}, "
+                  "acknowledge_event_id={}, view_event_id={}",
+                  *owner_, sync.unit_id(), event_log.event_id(), data_.acknowledge_event_id(),
+                  sync.unit_view().last_event_id());
       has_pending_event = true;
       break;
     }
