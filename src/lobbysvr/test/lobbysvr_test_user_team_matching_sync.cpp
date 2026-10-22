@@ -1109,7 +1109,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_10_start_check_uplink_failure_rolls_
         retry_result = RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().start_matching(ctx));
         RPC_RETURN_CODE(0);
       }));
-  CASE_EXPECT_NE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING, retry_result);
+  CASE_EXPECT_NE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_USER_ALREADY_IN_MATCHING, retry_result);
   CASE_EXPECT_FALSE(user_inst->get_user_matching_manager().is_in_matching_start());
   team_test::pump_rounds(test, 8);
   CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
@@ -1196,7 +1196,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_10_cancel_uses_current_captain) {
             RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().cancel_matching(ctx, request, response));
         RPC_RETURN_CODE(0);
       }));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_NOT_TEAM_CAPTAIN, *member_cancel_result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_NOT_TEAM_CAPTAIN, *member_cancel_result);
   CASE_EXPECT_TRUE(captured_cancels->empty());
 
   team_test::channel_event_chain team_chain;
@@ -1207,7 +1207,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_10_cancel_uses_current_captain) {
   CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, election_action));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] { return team_ptr->is_captain(); }));
 
-  auto captain_cancel_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+  auto captain_cancel_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.mts10_captain_cancel",
       [user_inst, captain_cancel_result](rpc::context& ctx) -> rpc::result_code_type {

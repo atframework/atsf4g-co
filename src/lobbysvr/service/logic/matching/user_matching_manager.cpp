@@ -49,9 +49,9 @@ static bool init_user_matching_manager_gm_handle() {
 }
 
 bool is_matching_not_found(int32_t result) {
-  return result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND ||
-         result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND ||
-         result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND;
+  return result == PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND ||
+         result == PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_FOUND ||
+         result == PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_NOT_FOUND;
 }
 
 using matching_parameter_type = PROJECT_NAMESPACE_ID::DMatchingParameter;
@@ -159,7 +159,7 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
   int32_t result =
       RPC_AWAIT_CODE_RESULT(query_matchsvr_snapshot(ctx, unit_id, get_current_matchsvr_server_id(), *response));
   if (unit_id != get_current_unit_id()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
     if (is_matching_not_found(result)) {
@@ -292,13 +292,13 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
   if (is_in_matching() || has_pending_matching_event()) {
     FWLOGERROR("{} start matching rejected by active matching, unit_id={}, status={}", *owner_, get_current_unit_id(),
                static_cast<int>(data_.view().status()));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_USER_ALREADY_IN_MATCHING);
   }
 
   if (is_in_orbit_or_matching()) {
     FWLOGERROR("{} start matching rejected by orbit, unit_id={}, status={}", *owner_, get_current_unit_id(),
                static_cast<int>(data_.view().status()));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_USER_IN_BATTLE);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_USER_IN_BATTLE);
   }
   reset_matching_unit();
   data_.set_is_start_matching(atfw::util::time::time_utility::get_now());
@@ -315,7 +315,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
                                                             data_.level_data().battle_version(),
                                                             data_.level_data().faction_fill_policy()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-    if (ret != PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING) {
+    if (ret != PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING) {
       set_matching_state(ctx, false);
     }
     RPC_RETURN_CODE(ret);
@@ -341,7 +341,7 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
             child_ctx, manager.data_.level_data().level_select(), manager.data_.level_data().battle_version(),
             manager.data_.level_data().faction_fill_policy()));
         if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS &&
-            result != PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING) {
+            result != PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING) {
           manager.set_matching_state(child_ctx, false);
         }
         RPC_RETURN_CODE(result);
@@ -358,7 +358,7 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
     PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy) {
   // 队伍回调可能重入。已经登记 Unit 的创建流程不能重复创建或清空。
   if (get_current_unit_id() != 0 && (!is_matching_finish(data_.view().status()) || has_pending_matching_event())) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   reset_matching_unit();
   // TODO(jijunliang): 通知battle锁背包
@@ -399,7 +399,7 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   if (!operator_is_member) {
     FWLOGERROR("{} start matching failed because operator is not a Unit member, unit_id={}", *owner_,
                rpc_request->unit().unit_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
   }
 
   auto* subscriber_route = rpc_request->add_subscriber_routes();
@@ -409,16 +409,16 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   if (matchsvr_id == 0) {
     clear_matching_state(ctx);
     FWLOGERROR("{} start matching failed, no ready matchsvr, unit_id={}", *owner_, rpc_request->unit().unit_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   }
 
   const uint64_t unit_id = rpc_request->unit().unit_id();
   if (!prepare_matching_unit(ctx, unit_id, matchsvr_id)) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::create_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
   if (unit_id != get_current_unit_id()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (result < 0) {
     clear_matching_state(ctx);
@@ -447,7 +447,7 @@ rpc::result_code_type user_matching_manager::check_matching(rpc::context& ctx,
   if (!is_in_matching()) {
     dump_client_view(*response.mutable_view());
     RPC_RETURN_CODE(data_.has_view() ? static_cast<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SUCCESS)
-                                     : static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND));
+                                     : static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND));
   }
 
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
@@ -467,13 +467,13 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
     rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot) {
   if (unit_id == 0) {
     FWLOGERROR("{} check matching failed to find current Unit", *owner_);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   }
   if (unit_id != get_current_unit_id()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (get_current_matchsvr_server_id() != 0 && matchsvr_id != get_current_matchsvr_server_id()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_SERVER_NOT_FOUND);
   }
 
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>(ctx);
@@ -486,12 +486,12 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
 
   if (matchsvr_id == 0) {
     FWLOGERROR("{} check matching failed, Unit has no owning matchsvr, unit_id={}", *owner_, unit_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_SERVER_NOT_FOUND);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::matching_heart_bear(ctx, matchsvr_id, *rpc_request, snapshot));
   if (unit_id != get_current_unit_id()) {
     snapshot.Clear();
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (result < 0) {
     FWLOGERROR("{} check matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
@@ -532,7 +532,7 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
   if (team_logic_.is_in_team()) {
     if (!team_logic_.is_team_captain()) {
       FWLOGERROR("{} cancel matching rejected by non-captain team member, unit_id={}", *owner_, get_current_unit_id());
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_NOT_TEAM_CAPTAIN);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_NOT_TEAM_CAPTAIN);
     }
   }
 
@@ -542,18 +542,18 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
     dump_client_view(*response.mutable_view());
     FWLOGERROR("{} cancel matching rejected by stale Unit, request_unit_id={}, current_unit_id={}", *owner_,
                request.unit_id(), unit_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   rpc_request->set_unit_id(unit_id);
   fill_user_key(*rpc_request->mutable_operator_user());
   const uint64_t matchsvr_id = get_current_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWLOGERROR("{} cancel matching failed, Unit has no owning matchsvr, unit_id={}", *owner_, unit_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_SERVER_NOT_FOUND);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::cancel_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
   if (unit_id != get_current_unit_id()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (result < 0) {
     FWLOGERROR("{} cancel matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
@@ -588,7 +588,7 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
     dump_client_view(*response.mutable_view());
     FWLOGERROR("{} confirm matching rejected by stale Unit, request_unit_id={}, current_unit_id={}", *owner_,
                request.unit_id(), unit_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   }
   if (data_.view().status() != PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING ||
       last_event_id <= 0) {
@@ -598,8 +598,8 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
                  "status={}, event_id={}, acknowledge_event_id={}, result={}",
                  owner_->get_zone_id(), owner_->get_user_id(), unit_id, static_cast<int>(data_.view().status()),
                  last_event_id, get_acknowledge_event_id(),
-                 static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);
+                 static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT);
   }
   rpc_request->set_unit_id(unit_id);
   rpc_request->set_confirmed(request.confirmed());
@@ -612,12 +612,12 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   if (dump_result < 0) {
     FWLOGERROR("{} confirm matching failed to dump orbit init data, unit_id={}, result={}({})", *owner_, unit_id,
                dump_result, protobuf_mini_dumper_get_error_msg(dump_result));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   }
   const uint64_t matchsvr_id = get_current_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWLOGERROR("{} confirm matching failed, Unit has no owning matchsvr, unit_id={}", *owner_, unit_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_SERVER_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_SERVER_NOT_FOUND);
   }
   int32_t result =
       RPC_AWAIT_CODE_RESULT(rpc::matching::confirm_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
@@ -632,7 +632,7 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
                  owner_->get_zone_id(), owner_->get_user_id(), unit_id, get_current_unit_id(),
                  rpc_response->matching_id(), static_cast<int>(data_.view().status()), last_event_id,
                  get_last_event_id(), pending_acknowledge_event_id, pending_acknowledge_event_id_, result);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   if (result < 0) {
     FWLOGERROR("{} confirm matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
@@ -1015,13 +1015,13 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   output.Clear();
   acceptable_level_ids.clear();
   if (level_select.level_ids_size() <= 0) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+    return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
   }
 
   acceptable_level_ids.assign(level_select.level_ids().begin(), level_select.level_ids().end());
   if (acceptable_level_ids.empty() || std::any_of(acceptable_level_ids.begin(), acceptable_level_ids.end(),
                                                   [](int32_t level_id) { return level_id <= 0; })) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+    return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
   }
   std::sort(acceptable_level_ids.begin(), acceptable_level_ids.end());
   acceptable_level_ids.erase(std::unique(acceptable_level_ids.begin(), acceptable_level_ids.end()),
@@ -1034,19 +1034,19 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   for (int32_t level_id : acceptable_level_ids) {
     const auto level_cfg = excel::get_ExcelLevel_by_level_id(level_id);
     if (!level_cfg) {
-      return PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND;
+      return PROJECT_NAMESPACE_ID::EN_ERR_LEVEL_CFG_NOT_FOUND;
     }
     FWLOGDEBUG("{} fill_matching_scope, level_type={}, level_id={}, battle_version={}, level_cfg={}", *owner_,
                level_cfg->level_type(), level_id, battle_version, level_cfg ? level_cfg->DebugString() : "null");
     if ((level_type > 0 && level_type != level_cfg->level_type()) ||
         (matching_pool_id > 0 && matching_pool_id != level_cfg->matching_pool_id())) {
-      return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+      return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
     }
     level_type = level_cfg->level_type();
     matching_pool_id = level_cfg->matching_pool_id();
   }
   if (matching_pool_id <= 0 || !excel::get_ExcelMatchingPool_by_id(matching_pool_id)) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_POOL_ID_CFG_NOT_FOUND;
+    return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_POOL_ID_CFG_NOT_FOUND;
   }
 
   output.set_level_type(level_type);
@@ -1134,7 +1134,7 @@ void user_matching_manager::on_gm_cmd_start_matching(
   //  NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   level_id = params[0]->to_int32();
   if (level_id <= 0) {
-    rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND);
+    rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_LEVEL_CFG_NOT_FOUND);
     return;
   }
   //  NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -1150,7 +1150,7 @@ void user_matching_manager::on_gm_cmd_start_matching(
         auto cfg = excel::get_ExcelLevel_by_level_id(level_id);
         if (!cfg) {
           FWLOGERROR("{} gm_start_matching failed to find level cfg, level_id={}", *user_ptr, level_id);
-          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND);
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LEVEL_CFG_NOT_FOUND);
         }
         level_select->add_level_ids(level_id);
         level_select->set_region(region);

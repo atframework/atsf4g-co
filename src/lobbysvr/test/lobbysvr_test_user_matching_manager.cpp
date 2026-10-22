@@ -170,7 +170,7 @@ CASE_TEST(lobbysvr_user_matching, hands_off_missing_creating_battle_to_orbit_dur
           CASE_EXPECT_EQ(1, request.heartbeat_data().user_key().zone_id());
           CASE_EXPECT_EQ(0, request.heartbeat_data().acknowledge_event_id());
         }
-        response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND);
+        response.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_NOT_FOUND);
         RPC_RETURN_CODE(0);
       },
       rule_options);
@@ -187,7 +187,7 @@ CASE_TEST(lobbysvr_user_matching, hands_off_missing_creating_battle_to_orbit_dur
     return;
   }
 
-  auto recovery_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+  auto recovery_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   auto task =
       test.run_task("matching.hands_off_missing_creating_battle_to_orbit_during_login_recovery",
                     std::chrono::seconds{2}, [user_inst, recovery_result](rpc::context& ctx) -> rpc::result_code_type {
@@ -412,10 +412,10 @@ CASE_TEST(lobbysvr_user_matching, rejects_stale_unit_requests) {
   CASE_EXPECT_TRUE(task_result.task_exited);
   CASE_EXPECT_FALSE(task_result.hard_timed_out);
   CASE_EXPECT_EQ(0, task_result.result_code);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING, *cancel_result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING, *cancel_result);
   CASE_EXPECT_TRUE(cancel_response->has_view());
   CASE_EXPECT_EQ(1003, cancel_response->view().unit_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND, *confirm_result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND, *confirm_result);
   CASE_EXPECT_TRUE(confirm_response->has_view());
   CASE_EXPECT_EQ(1003, confirm_response->view().unit_id());
 
@@ -657,7 +657,7 @@ CASE_TEST(lobbysvr_user_matching, retains_terminal_view_and_stops_heartbeat_when
          PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
         CASE_EXPECT_EQ(1012, request.unit_id());
         CASE_EXPECT_EQ(9, request.heartbeat_data().acknowledge_event_id());
-        response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
+        response.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_FOUND);
         RPC_RETURN_CODE(0);
       },
       rule_options);
@@ -680,7 +680,7 @@ CASE_TEST(lobbysvr_user_matching, retains_terminal_view_and_stops_heartbeat_when
         data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
         manager.init_from_table_data(ctx, table);
         PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND,
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_FOUND,
                        RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1012, kMatchsvrId, response)));
         manager.try_send_heartbeat(ctx);
         PROJECT_NAMESPACE_ID::SCMatchingCheckRsp client_response;
@@ -836,7 +836,7 @@ CASE_TEST(lobbysvr_user_matching, old_heartbeat_cannot_clear_new_subscribed_unit
           next.set_subscriber_server_id(kMatchsvrId);
           manager.subscribe_matching_unit(ctx, next);
           CASE_EXPECT_EQ(2014, manager.get_view().unit().unit_id());
-          response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
+          response.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_FOUND);
         } else {
           CASE_EXPECT_EQ(2014, request.unit_id());
           CASE_EXPECT_EQ(0, request.heartbeat_data().acknowledge_event_id());
@@ -861,12 +861,12 @@ CASE_TEST(lobbysvr_user_matching, old_heartbeat_cannot_clear_new_subscribed_unit
         data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
         manager.init_from_table_data(ctx, table);
         PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING,
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING,
                        RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1014, kMatchsvrId, response)));
         CASE_EXPECT_EQ(2014, manager.get_view().unit().unit_id());
         CASE_EXPECT_TRUE(manager.is_in_matching());
         // 旧事件处理任务恢复后也不得再发一个携带新轮 ACK 的旧 Unit 心跳。
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING,
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING,
                        RPC_AWAIT_CODE_RESULT(manager.query_matchsvr_snapshot(ctx, 1014, kMatchsvrId, response)));
         RPC_RETURN_CODE(0);
       }));

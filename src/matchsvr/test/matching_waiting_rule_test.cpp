@@ -423,7 +423,7 @@ CASE_TEST(matchsvr_waiting_rule, balanced_policy_does_not_override_disabled_exis
   const auto third = waiting_unit(3, 3001);
   const auto evaluated = matching_logic::check_waiting_units_can_join(*room, {&third}, 0, 101);
   CASE_EXPECT_FALSE(evaluated.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, evaluated.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL, evaluated.result);
   CASE_EXPECT_EQ(2, room->get_user_count());
 }
 
@@ -468,7 +468,7 @@ CASE_TEST(matchsvr_waiting_rule, missing_reference_does_not_admit_units) {
   const auto candidate = waiting_unit(2, 2001);
   const auto evaluated = matching_logic::check_waiting_units_can_join(*room, {&candidate}, 0, 105);
   CASE_EXPECT_FALSE(evaluated.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, evaluated.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND, evaluated.result);
   CASE_EXPECT_EQ(0, room->get_reserved_user_count());
 }
 
@@ -501,7 +501,7 @@ CASE_TEST(matchsvr_waiting_rule, uses_independent_parameter_rules_and_fixed_leve
   candidate.set_acceptable_level_ids(0, 102);
   const auto wrong_level = matching_logic::check_waiting_units_can_join(*room, {&candidate}, 0, 101);
   CASE_EXPECT_FALSE(wrong_level.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_SAME_LEVEL, wrong_level.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_SAME_LEVEL, wrong_level.result);
   candidate.set_acceptable_level_ids(0, 101);
   protobuf_copy_message(*candidate.add_ban_users(), initial.users(0).user_key());
   CASE_EXPECT_FALSE(matching_logic::check_waiting_units_can_join(*room, {&candidate}, 0, 101).can_join);
@@ -566,7 +566,7 @@ CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_allows_
   initial.mutable_parameter()->set_rank_level(23);
   const auto incompatible = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
   CASE_EXPECT_FALSE(incompatible.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, incompatible.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND, incompatible.result);
   initial.mutable_parameter()->set_rank_level(10);
   auto returning = std::make_shared<matching_unit>(initial);
   if (!add_waiting(*room, {returning})) {
@@ -580,7 +580,7 @@ CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_allows_
   initial.set_unit_id(3);
   const auto parallel = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
   CASE_EXPECT_FALSE(parallel.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, parallel.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT, parallel.result);
   CASE_EXPECT_EQ(2, room->get_reserved_user_count());
   accept_unit(returning);
   CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(2) == std::vector<uint64_t>{2}));
@@ -634,7 +634,7 @@ CASE_TEST(matchsvr_waiting_rule, reservations_and_faction_ids_survive_partial_in
   const auto overflow = waiting_unit(5, 5001);
   const auto rejected = matching_logic::check_waiting_units_can_join(*room, {&overflow}, 0, 102);
   CASE_EXPECT_FALSE(rejected.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, rejected.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL, rejected.result);
   CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 103));
   CASE_EXPECT_TRUE(room->remove_waiting_unit(3));
   CASE_EXPECT_EQ(3, room->get_successful_user_count());

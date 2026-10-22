@@ -426,21 +426,21 @@ matching_logic::join_check_result matching_logic::make_rejected_join(int32_t res
 int32_t matching_logic::validate_unit(int32_t matching_pool_id, const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
   auto pool = excel::get_ExcelMatchingPool_by_id(matching_pool_id);
   if (!pool) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND;
+    return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_POOL_NOT_FOUND;
   }
   if (unit.unit_id() == 0 || unit.users_size() == 0 || pool->unit_max_size() <= 0 ||
       unit.users_size() > pool->unit_max_size() ||
       (unit.faction_fill_policy() != PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE &&
        unit.faction_fill_policy() != PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE)) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+    return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
   }
   for (int left = 0; left < unit.users_size(); ++left) {
     if (unit.users(left).user_key().user_id() == 0) {
-      return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+      return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
     }
     for (int right = left + 1; right < unit.users_size(); ++right) {
       if (matching_utility::same_user(unit.users(left).user_key(), unit.users(right).user_key())) {
-        return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+        return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
       }
     }
   }
@@ -452,15 +452,15 @@ matching_logic::join_check_result matching_logic::check_unit_can_create_room(
     int32_t global_matching_users_count) {
   auto pool = excel::get_ExcelMatchingPool_by_id(scope.matching_pool_id());
   if (!pool) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_POOL_NOT_FOUND);
   }
   const size_t unit_size = static_cast<size_t>(unit.users_size());
   if (unit_size == 0 || unit.acceptable_level_ids().empty() || pool->unit_max_size() <= 0 ||
       unit_size > static_cast<size_t>(pool->unit_max_size())) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
   }
   if (pool->max_user_cout_limit() > 0 && unit_size > static_cast<size_t>(pool->max_user_cout_limit())) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL);
   }
 
   unit_view existing_units;
@@ -468,14 +468,14 @@ matching_logic::join_check_result matching_logic::check_unit_can_create_room(
   const auto rules = select_rules(scope, now, now, global_matching_users_count);
   faction_assignment_list assignments;
   if (pool->max_faction_cout_limit() <= 0) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
   const bool fill_enabled = unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
   const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
   const size_t faction_capacity = fill_enabled ? fill_capacity : unit_size;
   if (fill_capacity == 0 || unit_size > fill_capacity ||
       !has_compatible_rule(rules, scope, existing_units, incoming_units, faction_capacity, 0)) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
   auto* assignment = assignments.Add();
   assignment->set_user_capacity(static_cast<uint32_t>(faction_capacity));
@@ -508,25 +508,25 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
     int32_t global_matching_users_count, bool allow_new_faction) {
   auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
   if (!pool) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_POOL_NOT_FOUND);
   }
 
   const size_t unit_size = static_cast<size_t>(unit.users_size());
 
   // 人数上限检查
   if (unit_size == 0 || pool->unit_max_size() <= 0 || unit_size > static_cast<size_t>(pool->unit_max_size())) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
   }
   if (pool->max_user_cout_limit() > 0 &&
       room.get_user_count() + unit_size > static_cast<size_t>(pool->max_user_cout_limit())) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL);
   }
 
   unit_view existing_units;
   existing_units.reserve(room.get_units().size());
   for (const auto& stored : room.get_units()) {
     if (!stored.second) {
-      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
     }
     existing_units.emplace_back(&stored.second->get_data());
   }
@@ -534,24 +534,24 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
   // 相同关卡
   unit_view incoming_units{&unit};
   if (!incoming_levels_are_compatible(room.get_compatible_level_ids(), incoming_units)) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_SAME_LEVEL);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_SAME_LEVEL);
   }
 
   const auto& assignments = room.get_faction_assignments();
   if (!assignments.empty() && assignments.size() > pool->max_faction_cout_limit()) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL);
   }
   const bool unit_can_fill_faction =
       unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE;
   const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
   if (fill_capacity == 0 || unit_size > fill_capacity || pool->max_faction_cout_limit() <= 0) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
   const size_t incoming_capacity = unit_can_fill_faction ? fill_capacity : unit_size;
   const auto rules = select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count);
   if (!has_compatible_rule(rules, room.get_scope(), existing_units, incoming_units, incoming_capacity,
                            get_max_faction_capacity(assignments))) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
   const bool can_create_faction = allow_new_faction && assignments.size() < pool->max_faction_cout_limit();
   const bool balanced = pool->faction_fill_policy() == PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED;
@@ -569,7 +569,7 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
     create_new_faction = !best_placement.is_valid();
   }
   if (create_new_faction && !can_create_faction) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
 
   auto joined_assignments = copy_assignments(assignments);
@@ -606,43 +606,43 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
   size_t faction_users = 0;
   for (const auto* unit : faction_units) {
     if (unit == nullptr) {
-      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
     }
     faction_users += static_cast<size_t>(unit->users_size());
   }
   if (faction_units.empty() || faction_users != faction_capacity) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
   }
   auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
   if (!pool) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_POOL_NOT_FOUND);
   }
 
   if (pool->faction_user_max_size() <= 0 || faction_capacity > static_cast<uint32_t>(pool->faction_user_max_size()) ||
       room.get_faction_assignments().size() >= pool->max_faction_cout_limit()) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL);
   }
   if (pool->max_user_cout_limit() > 0 &&
       room.get_user_count() + faction_users > static_cast<size_t>(pool->max_user_cout_limit())) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL);
   }
 
   unit_view existing_units;
   existing_units.reserve(room.get_units().size());
   for (const auto& stored : room.get_units()) {
     if (!stored.second) {
-      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT);
     }
     existing_units.emplace_back(&stored.second->get_data());
   }
   if (!incoming_levels_are_compatible(room.get_compatible_level_ids(), faction_units)) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
 
   const auto rules = select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count);
   if (!has_compatible_rule(rules, room.get_scope(), existing_units, faction_units, faction_capacity,
                            get_max_faction_capacity(room.get_faction_assignments()))) {
-    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+    return make_rejected_join(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   }
   auto assignments = copy_assignments(room.get_faction_assignments());
   auto* assignment = assignments.Add();
@@ -662,11 +662,11 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
 PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_ready(
     const matching_room& room, int64_t now, int32_t global_matching_users_count) {
   PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation result;
-  result.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
+  result.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND);
   auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
   if (!pool || room.get_units().empty()) {
-    result.set_result(pool ? PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND
-                           : PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND);
+    result.set_result(pool ? PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND
+                           : PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_POOL_NOT_FOUND);
     return result;
   }
   const auto& assignments = room.get_faction_assignments();
@@ -677,7 +677,7 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
   }
   if ((pool->max_user_cout_limit() > 0 && total_users > static_cast<size_t>(pool->max_user_cout_limit())) ||
       assignments.size() > pool->max_faction_cout_limit()) {
-    result.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL);
+    result.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL);
     return result;
   }
   bool all_factions_full = true;
@@ -720,7 +720,7 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
                                                                                  uint32_t complete_faction_capacity,
                                                                                  int64_t now) {
   waiting_join_result result;
-  result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND;
+  result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND;
   if (!room.is_waiting_open(now) || incoming_units.empty() ||
       (complete_faction_capacity == 0 && incoming_units.size() != 1)) {
     return result;
@@ -742,7 +742,7 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
   bool fill_enabled = true;
   for (const auto* incoming : incoming_units) {
     if (incoming == nullptr) {
-      result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
+      result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_INVALID_ARGUMENT;
       return result;
     }
     // 检测人数
@@ -755,19 +755,19 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
     if (room.has_unit(incoming->unit_id()) ||
         room.get_admitted_units().find(incoming->unit_id()) != room.get_admitted_units().end() ||
         !incoming_unit_ids.emplace(incoming->unit_id()).second) {
-      result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT;
+      result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT;
       return result;
     }
     // 检测关卡是否匹配
     if (std::find(incoming->acceptable_level_ids().begin(), incoming->acceptable_level_ids().end(),
                   room.get_selected_level_id()) == incoming->acceptable_level_ids().end()) {
-      result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_SAME_LEVEL;
+      result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_SAME_LEVEL;
       return result;
     }
     // 检测用户是否已经存在
     for (const auto& user : incoming->users()) {
       if (room.has_user(user.user_key()) || !incoming_user_keys.emplace(user.user_key()).second) {
-        result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT;
+        result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT;
         return result;
       }
     }
@@ -777,7 +777,7 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
   }
   if (pool->max_user_cout_limit() <= 0 || pool->max_faction_cout_limit() <= 0 ||
       room.get_user_count() + incoming_user_count > static_cast<size_t>(pool->max_user_cout_limit())) {
-    result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
+    result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL;
     return result;
   }
   const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
@@ -876,7 +876,7 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
   }
   result.creates_faction = result.faction_id == 0;
   if (result.creates_faction && !can_create_faction) {
-    result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
+    result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL;
     return result;
   }
   result.faction_capacity = static_cast<uint32_t>(incoming_capacity);
