@@ -130,7 +130,7 @@ func matchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserH
 				if rpcErr != nil {
 					return rpcErr
 				}
-				if errCode == int32(public_protocol_pbdesc.EnErrorCode_EN_MATCHING_RESULT_NOT_FOUND) {
+				if errCode == int32(public_protocol_pbdesc.EnErrorCode_EN_ERR_MATCHING_RESULT_NOT_FOUND) {
 					return nil
 				}
 				if errCode < 0 {

@@ -2,6 +2,7 @@ package atsf4g_go_robot_task
 
 import (
 	"fmt"
+	"slices"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
@@ -16,6 +17,30 @@ func MatchingLevelSelectTask(task *user_data.TaskActionUser, levelIds []int32, r
 	}
 	if errCode < 0 {
 		return fmt.Errorf("matching level select failed, errCode: %d", errCode)
+	}
+	errCode, response, rpcErr := protocol.GetInfoRpc(task, task.User, []string{"user_level_select"})
+	if rpcErr != nil {
+		return rpcErr
+	}
+	if errCode < 0 {
+		return fmt.Errorf("matching level select fetch failed, errCode: %d", errCode)
+	}
+	if response == nil {
+		return fmt.Errorf("matching level select response missing")
+	}
+	message, err := response.GetMessage()
+	if err != nil {
+		return fmt.Errorf("failed to get matching level select data: %w", err)
+	}
+	selected := message.GetUserLevelSelect()
+	requestedLevels := slices.Clone(levelIds)
+	selectedLevels := slices.Clone(selected.GetLevelIds())
+	slices.Sort(requestedLevels)
+	slices.Sort(selectedLevels)
+	if selected == nil || selected.GetRegion() != region || selected.GetFactionFillPolicy() != factionFillPolicy ||
+		!slices.Equal(slices.Compact(requestedLevels), slices.Compact(selectedLevels)) {
+		return fmt.Errorf("matching level select mismatch: requested level_ids=%v region=%s fill_policy=%s, received=%v",
+			levelIds, region, factionFillPolicy.String(), selected)
 	}
 	task.Log("matching level select success, level_ids=%v region=%s fill_policy=%s", levelIds, region,
 		factionFillPolicy.String())
@@ -59,7 +84,7 @@ func matchingCheckTask(task *user_data.TaskActionUser, allowNotFound bool) error
 	if rpcErr != nil {
 		return rpcErr
 	}
-	if allowNotFound && errCode == int32(public_protocol_pbdesc.EnErrorCode_EN_MATCHING_RESULT_NOT_FOUND) {
+	if allowNotFound && errCode == int32(public_protocol_pbdesc.EnErrorCode_EN_ERR_MATCHING_RESULT_NOT_FOUND) {
 		return nil
 	}
 	if errCode < 0 {

@@ -7,6 +7,11 @@
 每次使用全新账号前缀，重复次数为 1。替换前缀时也要替换行末引用的完整 OpenID；同一组账号、等待室测试池
 不能由多个 robot 并行使用。执行前须生成资源、重新生成 robot 协议并构建，确认服务和实际 DS 可以正常启动。
 
+`matching_level_select <level_id> [region] [fill_policy] [level_ids_csv]` 的参数保持不变。
+选关请求现在直接发送 `DLevelSelect`，包含地区、关卡集合和补人策略，不再发送战斗版本。
+用例选关成功后通过 `user_get_info(need_user_level_select=true)` 拉取保存结果，核对关卡集合、地区和补人策略；
+字段缺失或内容不一致会立即失败。关卡集合不要求顺序一致。`matching_start` 仍无参数，使用此前保存的选择。
+
 ## 配置与覆盖
 
 测试关卡位于 `Level.xlsx`，池和规则位于 `Matching.xlsx`。四池普通成局条件均为 2 人、2 个 faction；
