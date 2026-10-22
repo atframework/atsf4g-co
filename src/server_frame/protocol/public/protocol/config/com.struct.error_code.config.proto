@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/xrescode_extensions_v3.proto";
+import "protocol/extension/v3/xresloader.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
+
+package atframework.shared.config;
+
+enum EnExcelErrorCodeDisplayType {
+  EN_EXCEL_ERROR_CODE_DISPLAY_TYPE_HIDDEN = 0 [(org.xresloader.enum_alias) = "隐藏"];
+  EN_EXCEL_ERROR_CODE_DISPLAY_TYPE_TOAST = 1 [(org.xresloader.enum_alias) = "飘字"];
+}
+
+message ExcelErrorCode {
+  option (xrescode.loader) = {
+    file_path: "error_code.bytes"
+    indexes: { fields: "error_code" index_type: EN_INDEX_KV }
+
+    tags: "client"
+  };
+
+  int32 error_code = 1 [(org.xresloader.field_unique_tag) = "error_code"];
+  EnExcelErrorCodeDisplayType display_type = 2;
+  int32 text = 3;
+}

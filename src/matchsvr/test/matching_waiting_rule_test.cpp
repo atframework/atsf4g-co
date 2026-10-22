@@ -567,13 +567,13 @@ CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_blocks_
   initial.set_unit_id(2);
   const auto reentry = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
   CASE_EXPECT_FALSE(reentry.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, reentry.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT, reentry.result);
   CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(initial)}, 0, 2, true, 101, 116));
   auto mixed = waiting_unit(3, 2001, 2);
   protobuf_copy_message(*mixed.mutable_users(1)->mutable_user_key(), initial.users(1).user_key());
   const auto mixed_reentry = matching_logic::check_waiting_units_can_join(*room, {&mixed}, 0, 101);
   CASE_EXPECT_FALSE(mixed_reentry.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, mixed_reentry.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT, mixed_reentry.result);
   CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(mixed)}, 0, 2, true, 101, 116));
   CASE_EXPECT_EQ(0, room->get_units().size());
   CASE_EXPECT_EQ(0, room->get_reserved_user_count());
@@ -609,7 +609,7 @@ CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_blocks_
   CASE_EXPECT_TRUE(room->has_user(initial.users(0).user_key()));
   const auto later_reentry = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 103);
   CASE_EXPECT_FALSE(later_reentry.can_join);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, later_reentry.result);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT, later_reentry.result);
   CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(initial)}, 0, 2, true, 103, 118));
   CASE_EXPECT_EQ(0, room->get_units().size());
   CASE_EXPECT_EQ(2, room->get_admitted_units().size());
