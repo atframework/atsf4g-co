@@ -302,17 +302,17 @@ CASE_TEST(matchsvr_matching_room, finalizes_battle_faction_ids_from_membership_o
   CASE_EXPECT_EQ(0, player_view.faction_id());
   CASE_EXPECT_TRUE(room.finalize_faction_ids());
   CASE_EXPECT_TRUE(room.finalize_faction_ids());
-  CASE_EXPECT_EQ(1001, room.get_unit_faction_id(10));
-  CASE_EXPECT_EQ(1001, room.get_unit_faction_id(11));
-  CASE_EXPECT_EQ(1002, room.get_unit_faction_id(20));
+  CASE_EXPECT_EQ(1, room.get_unit_faction_id(10));
+  CASE_EXPECT_EQ(1, room.get_unit_faction_id(11));
+  CASE_EXPECT_EQ(2, room.get_unit_faction_id(20));
 
   room.mark_creating_battle(0x1234, 400);
   first_unit->refresh_view_from_room(room);
   protobuf_copy_message(player_view, first_unit->get_view());
-  CASE_EXPECT_EQ(1001, player_view.faction_id());
+  CASE_EXPECT_EQ(1, player_view.faction_id());
   second_unit->refresh_view_from_room(room);
   protobuf_copy_message(player_view, second_unit->get_view());
-  CASE_EXPECT_EQ(1002, player_view.faction_id());
+  CASE_EXPECT_EQ(2, player_view.faction_id());
 }
 
 CASE_TEST(matchsvr_matching_room, exports_terminal_snapshot) {

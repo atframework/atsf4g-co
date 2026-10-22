@@ -1309,11 +1309,10 @@ void matching_manager::start_waiting_unit(rpc::context& ctx, const matching_room
         const int64_t completed = atfw::util::time::time_utility::get_now();
         if (result != 0) {
           FCTXLOGERROR(child_ctx,
-                       "waiting Unit initialization failed, matching_id={}, unit_id={}, "
+                       "waiting Unit initialization failed, closing waiting room, matching_id={}, unit_id={}, "
                        "initializing_event_id={}, result={}",
                        room->get_matching_id(), unit->get_unit_id(), initializing_event_id, result);
-          remove_waiting_unit(child_ctx, room, unit, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED,
-                              result, completed);
+          close_waiting_room(child_ctx, room, completed, result);
         } else if (room->complete_waiting_unit(unit->get_unit_id(), completed)) {
           unindex_unit(unit->get_data());
           unit->unbind_room();
@@ -1342,8 +1341,7 @@ void matching_manager::start_waiting_unit(rpc::context& ctx, const matching_room
                  "dispatch waiting Unit initialization failed, matching_id={}, unit_id={}, initializing_event_id={}, "
                  "result={}",
                  room->get_matching_id(), unit->get_unit_id(), initializing_event_id, *invoked.get_error());
-    remove_waiting_unit(ctx, room, unit, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED,
-                        *invoked.get_error(), atfw::util::time::time_utility::get_now());
+    close_waiting_room(ctx, room, atfw::util::time::time_utility::get_now(), *invoked.get_error());
   }
 }
 
@@ -1462,7 +1460,8 @@ void matching_manager::advance_waiting_room(rpc::context& ctx, const matching_ro
   }
 }
 
-void matching_manager::close_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now) {
+void matching_manager::close_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now,
+                                          int32_t reason) {
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_WAITING) {
     return;
   }
@@ -1474,13 +1473,16 @@ void matching_manager::close_waiting_room(rpc::context& ctx, const matching_room
     }
   }
   const auto pending = room->get_units();
-  FCTXLOGINFO(ctx, "closing waiting room, matching_id={}, successful_users={}, pending_units={}, deadline={}, now={}",
+  FCTXLOGINFO(ctx,
+              "closing waiting room, matching_id={}, successful_users={}, pending_units={}, deadline={}, now={}, "
+              "reason={}",
               room->get_matching_id(), room->get_successful_user_count(), pending.size(),
-              room->get_waiting_end_timepoint(), now);
+              room->get_waiting_end_timepoint(), now, reason);
+  const auto pending_status = reason == 0 ? PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT
+                                          : PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED;
   for (const auto& value : pending) {
     if (value.second) {
-      remove_waiting_unit(ctx, room, value.second, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT, 0,
-                          now);
+      remove_waiting_unit(ctx, room, value.second, pending_status, reason, now);
     }
   }
   room->mark_waiting_closed(now);

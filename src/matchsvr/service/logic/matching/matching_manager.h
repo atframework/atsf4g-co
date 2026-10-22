@@ -161,7 +161,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   void requeue_waiting_unit(rpc::context& ctx, const matching_room::ptr_t& room, const matching_unit::ptr_t& unit,
                             int64_t now);
   void advance_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
-  void close_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
+  void close_waiting_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now, int32_t reason = 0);
   // 固定目标房间，按稳定顺序从同一粗桶内更新的 donor 连续拉取迁移原子，返回实际迁移数。
   size_t rebalance_room(rpc::context& ctx, const matching_room::ptr_t& target_room, int64_t now,
                         size_t max_migration_count);

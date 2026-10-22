@@ -112,7 +112,7 @@ class matching_room {
   bool has_unit(uint64_t unit_id) const noexcept;
   // 查找房间内的 Unit；不存在时返回 nullptr。
   unit_ptr_t find_unit(uint64_t unit_id) const noexcept;
-  // 判断玩家是否仍在本房间的匹配流程中；已成功入场不占用当前匹配。
+  // 判断玩家是否正在本房间匹配或已成功入场，禁止再次加入同一局。
   bool has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
 
   // 原子加入一个不可拆分 unit；重复 unit 或玩家返回 false。

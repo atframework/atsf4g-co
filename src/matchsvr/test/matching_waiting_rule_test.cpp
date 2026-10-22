@@ -542,7 +542,7 @@ CASE_TEST(matchsvr_waiting_rule, pool_fill_permission_does_not_override_exclusiv
   CASE_EXPECT_EQ(2, room->get_waiting_factions().at(partial_faction_id).user_capacity);
 }
 
-CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_allows_same_room_reentry) {
+CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_blocks_same_room_reentry) {
   waiting_rule_fixture fixture;
   if (!fixture.start()) {
     return;
@@ -553,47 +553,71 @@ CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_allows_
     return;
   }
   std::weak_ptr<matching_unit> retained = room->find_unit(1);
+  CASE_EXPECT_TRUE(room->has_user(initial.users(0).user_key()));
   if (!open_waiting(*room)) {
     return;
   }
   CASE_EXPECT_TRUE(retained.expired());
+  CASE_EXPECT_TRUE(room->has_user(initial.users(0).user_key()));
   CASE_EXPECT_EQ(0, room->get_units().size());
   CASE_EXPECT_EQ(1, room->get_admitted_units().size());
   CASE_EXPECT_EQ(2, room->get_successful_user_count());
   const auto admitted_before = room->get_admitted_units().at(1).SerializeAsString();
   const int32_t initial_faction_id = room->get_unit_faction_id(1);
   initial.set_unit_id(2);
+  const auto reentry = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
+  CASE_EXPECT_FALSE(reentry.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, reentry.result);
+  CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(initial)}, 0, 2, true, 101, 116));
+  auto mixed = waiting_unit(3, 2001, 2);
+  protobuf_copy_message(*mixed.mutable_users(1)->mutable_user_key(), initial.users(1).user_key());
+  const auto mixed_reentry = matching_logic::check_waiting_units_can_join(*room, {&mixed}, 0, 101);
+  CASE_EXPECT_FALSE(mixed_reentry.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, mixed_reentry.result);
+  CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(mixed)}, 0, 2, true, 101, 116));
+  CASE_EXPECT_EQ(0, room->get_units().size());
+  CASE_EXPECT_EQ(0, room->get_reserved_user_count());
+  CASE_EXPECT_EQ(2, room->get_user_count());
+  CASE_EXPECT_EQ(1, room->get_waiting_factions().size());
+
+  initial = waiting_unit(4, 3001, 2);
   initial.mutable_parameter()->set_rank_level(23);
   const auto incompatible = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
   CASE_EXPECT_FALSE(incompatible.can_join);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_RULE_NOT_FOUND, incompatible.result);
   initial.mutable_parameter()->set_rank_level(10);
-  auto returning = std::make_shared<matching_unit>(initial);
-  if (!add_waiting(*room, {returning})) {
+  auto candidate = std::make_shared<matching_unit>(initial);
+  if (!add_waiting(*room, {candidate})) {
     return;
   }
+  CASE_EXPECT_TRUE(room->has_user(initial.users(0).user_key()));
   CASE_EXPECT_EQ(2, room->get_successful_user_count());
   CASE_EXPECT_EQ(2, room->get_reserved_user_count());
   CASE_EXPECT_EQ(4, room->get_user_count());
   CASE_EXPECT_EQ(1, room->get_admitted_units().size());
-  CASE_EXPECT_NE(initial_faction_id, room->get_unit_faction_id(2));
-  initial.set_unit_id(3);
+  CASE_EXPECT_NE(initial_faction_id, room->get_unit_faction_id(4));
+  initial.set_unit_id(5);
   const auto parallel = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
   CASE_EXPECT_FALSE(parallel.can_join);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT, parallel.result);
   CASE_EXPECT_EQ(2, room->get_reserved_user_count());
-  accept_unit(returning);
-  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(2) == std::vector<uint64_t>{2}));
-  returning->mark_initializing();
-  CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 102));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, returning->get_view().status());
+  accept_unit(candidate);
+  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(4) == std::vector<uint64_t>{4}));
+  candidate->mark_initializing();
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(4, 102));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, candidate->get_view().status());
+  CASE_EXPECT_TRUE(room->has_user(initial.users(0).user_key()));
+  const auto later_reentry = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 103);
+  CASE_EXPECT_FALSE(later_reentry.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT, later_reentry.result);
+  CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(initial)}, 0, 2, true, 103, 118));
   CASE_EXPECT_EQ(0, room->get_units().size());
   CASE_EXPECT_EQ(2, room->get_admitted_units().size());
   CASE_EXPECT_EQ(4, room->get_successful_user_count());
   CASE_EXPECT_EQ(0, room->get_reserved_user_count());
   CASE_EXPECT_EQ(4, room->get_user_count());
   CASE_EXPECT_EQ(admitted_before, room->get_admitted_units().at(1).SerializeAsString());
-  CASE_EXPECT_EQ(returning->get_data().SerializeAsString(), room->get_admitted_units().at(2).SerializeAsString());
+  CASE_EXPECT_EQ(candidate->get_data().SerializeAsString(), room->get_admitted_units().at(4).SerializeAsString());
   CASE_EXPECT_EQ(initial_faction_id, room->get_unit_faction_id(1));
 }
 

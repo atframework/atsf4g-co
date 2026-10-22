@@ -680,6 +680,7 @@ struct waiting_orbit_control {
   std::vector<PROJECT_NAMESPACE_ID::SSOrbitUserInitReq> initializations;
   uint64_t fail_user_id = 0;
   int32_t failure_result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_BATTLE_START_FAILED;
+  int32_t failure_rpc_result = 0;
   std::function<void(const PROJECT_NAMESPACE_ID::SSOrbitUserInitReq&)> before_initialize_response;
 };
 
@@ -799,6 +800,7 @@ class waiting_test_fixture {
           for (const auto& user : request.user_list()) {
             if (user.common().user_key().user_key().user_id() == state->fail_user_id) {
               response.set_result_code(state->failure_result);
+              RPC_RETURN_CODE(state->failure_rpc_result);
             }
           }
           RPC_RETURN_CODE(0);
@@ -1085,9 +1087,8 @@ CASE_TEST(matchsvr_waiting_room, opens_after_initial_user_init_and_prioritizes_w
   const auto terminal = fixture.check(newcomer);
   const int32_t faction_id = terminal.snapshot().faction_id();
   CASE_EXPECT_GT(faction_id, 0);
-  auto retry = newcomer;
-  retry.mutable_unit()->set_unit_id(9202);
-  CASE_EXPECT_EQ(0, matching_manager::me()->create_matching(fixture.context, retry, snapshot));
+  const auto additional = fixture.request(9202, 20201, 1, 25);
+  CASE_EXPECT_EQ(0, matching_manager::me()->create_matching(fixture.context, additional, snapshot));
   CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, snapshot.snapshot().status());
   if (snapshot.matching_id() != fixture.matching_id ||
@@ -1095,48 +1096,94 @@ CASE_TEST(matchsvr_waiting_room, opens_after_initial_user_init_and_prioritizes_w
     fixture.stop();
     return;
   }
-  CASE_EXPECT_EQ(retry.unit().unit_id(), snapshot.snapshot().unit().unit_id());
+  CASE_EXPECT_EQ(additional.unit().unit_id(), snapshot.snapshot().unit().unit_id());
   CASE_EXPECT_EQ(faction_id, snapshot.snapshot().faction_id());
   CASE_EXPECT_EQ(terminal.snapshot().SerializeAsString(), fixture.check(newcomer).snapshot().SerializeAsString());
-  const auto retry_confirming = snapshot.snapshot();
-  auto parallel = newcomer;
+  const auto additional_confirming = snapshot.snapshot();
+  auto parallel = additional;
   parallel.mutable_unit()->set_unit_id(9203);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_USER_ALREADY_IN_MATCHING,
                  matching_manager::me()->create_matching(fixture.context, parallel, snapshot));
-  CASE_EXPECT_EQ(retry_confirming.SerializeAsString(), fixture.check(retry).snapshot().SerializeAsString());
+  CASE_EXPECT_EQ(additional_confirming.SerializeAsString(), fixture.check(additional).snapshot().SerializeAsString());
   CASE_EXPECT_EQ(faction_id, fixture.check(newcomer).snapshot().faction_id());
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_USER_ALREADY_IN_MATCHING,
                  matching_manager::me()->create_matching(fixture.context, newcomer, snapshot));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED,
                  fixture.check(newcomer).snapshot().status());
-  PROJECT_NAMESPACE_ID::SSMatchingConfirmReq retry_confirmation;
-  retry_confirmation.set_unit_id(retry.unit().unit_id());
-  protobuf_copy_message(*retry_confirmation.mutable_operator_user(), retry.operator_user());
-  retry_confirmation.set_confirmed(true);
-  retry_confirmation.set_last_event_id(retry_confirming.last_event_id());
-  retry_confirmation.set_subscriber_server_id(0x160001);
-  retry_confirmation.set_acknowledge_event_id(retry_confirming.last_event_id());
-  retry_confirmation.set_user_open_id("returning-player-open-id");
-  CASE_EXPECT_EQ(0, matching_manager::me()->confirm_matching(fixture.context, retry_confirmation, snapshot));
-  CASE_EXPECT_TRUE(fixture.wait_for_status(retry, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED));
-  const auto retried_terminal = fixture.check(retry);
-  CASE_EXPECT_EQ(retry.unit().unit_id(), retried_terminal.snapshot().unit().unit_id());
-  CASE_EXPECT_EQ(faction_id, retried_terminal.snapshot().faction_id());
-  CASE_EXPECT_GT(retried_terminal.snapshot().last_event_id(), retry_confirming.last_event_id());
+  PROJECT_NAMESPACE_ID::SSMatchingConfirmReq additional_confirmation;
+  additional_confirmation.set_unit_id(additional.unit().unit_id());
+  protobuf_copy_message(*additional_confirmation.mutable_operator_user(), additional.operator_user());
+  additional_confirmation.set_confirmed(true);
+  additional_confirmation.set_last_event_id(additional_confirming.last_event_id());
+  additional_confirmation.set_subscriber_server_id(0x160001);
+  additional_confirmation.set_acknowledge_event_id(additional_confirming.last_event_id());
+  additional_confirmation.set_user_open_id("additional-player-open-id");
+  CASE_EXPECT_EQ(0, matching_manager::me()->confirm_matching(fixture.context, additional_confirmation, snapshot));
+  CASE_EXPECT_TRUE(
+      fixture.wait_for_status(additional, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED));
+  const auto additional_terminal = fixture.check(additional);
+  CASE_EXPECT_EQ(additional.unit().unit_id(), additional_terminal.snapshot().unit().unit_id());
+  CASE_EXPECT_EQ(faction_id, additional_terminal.snapshot().faction_id());
+  CASE_EXPECT_GT(additional_terminal.snapshot().last_event_id(), additional_confirming.last_event_id());
   CASE_EXPECT_EQ(terminal.snapshot().SerializeAsString(), fixture.check(newcomer).snapshot().SerializeAsString());
   CASE_EXPECT_EQ(3, fixture.control->initializations.size());
   if (fixture.control->initializations.size() == 3) {
     const auto& previous_init = fixture.control->initializations[1];
-    const auto& returning_init = fixture.control->initializations[2];
-    CASE_EXPECT_EQ(previous_init.room_key().SerializeAsString(), returning_init.room_key().SerializeAsString());
-    CASE_EXPECT_EQ(1, returning_init.user_list_size());
-    if (returning_init.user_list_size() == 1) {
-      CASE_EXPECT_EQ(newcomer.operator_user().SerializeAsString(),
-                     returning_init.user_list(0).common().user_key().user_key().SerializeAsString());
-      CASE_EXPECT_EQ(faction_id, returning_init.user_list(0).common().faction_id());
-      CASE_EXPECT_EQ("returning-player-open-id", returning_init.user_list(0).common().user_key().orbit_user_key());
+    const auto& additional_init = fixture.control->initializations[2];
+    CASE_EXPECT_EQ(previous_init.room_key().SerializeAsString(), additional_init.room_key().SerializeAsString());
+    CASE_EXPECT_EQ(1, additional_init.user_list_size());
+    if (additional_init.user_list_size() == 1) {
+      CASE_EXPECT_EQ(additional.operator_user().SerializeAsString(),
+                     additional_init.user_list(0).common().user_key().user_key().SerializeAsString());
+      CASE_EXPECT_EQ(faction_id, additional_init.user_list(0).common().faction_id());
+      CASE_EXPECT_EQ("additional-player-open-id", additional_init.user_list(0).common().user_key().orbit_user_key());
     }
   }
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, admitted_players_can_rematch_but_cannot_rejoin_previous_room) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  const auto newcomer = fixture.request(9210, 20301, 1, 25);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto manager = matching_manager::me();
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, newcomer, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  fixture.confirm(newcomer, true);
+  if (!fixture.wait_for_status(newcomer, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED)) {
+    fixture.stop();
+    return;
+  }
+  const auto initial_terminal = fixture.check(fixture.initial_first).snapshot();
+  const auto newcomer_terminal = fixture.check(newcomer).snapshot();
+  CASE_EXPECT_EQ(2, fixture.control->initializations.size());
+  auto initial_retry = fixture.initial_first;
+  initial_retry.mutable_unit()->set_unit_id(9211);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, initial_retry, snapshot));
+  CASE_EXPECT_NE(fixture.matching_id, snapshot.matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, snapshot.snapshot().status());
+  auto newcomer_retry = newcomer;
+  newcomer_retry.mutable_unit()->set_unit_id(9212);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, newcomer_retry, snapshot));
+  CASE_EXPECT_NE(fixture.matching_id, snapshot.matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, snapshot.snapshot().status());
+  manager->tick();
+  CASE_EXPECT_NE(fixture.matching_id, fixture.check(initial_retry).matching_id());
+  CASE_EXPECT_NE(fixture.matching_id, fixture.check(newcomer_retry).matching_id());
+  CASE_EXPECT_EQ(0, manager->get_room_unit_count(fixture.matching_id));
+  CASE_EXPECT_EQ(3, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(2, fixture.control->initializations.size());
+  CASE_EXPECT_EQ(initial_terminal.SerializeAsString(),
+                 fixture.check(fixture.initial_first).snapshot().SerializeAsString());
+  CASE_EXPECT_EQ(newcomer_terminal.SerializeAsString(), fixture.check(newcomer).snapshot().SerializeAsString());
+  const auto fresh = fixture.request(9213, 20401, 1, 25);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, fresh, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, snapshot.snapshot().status());
+  CASE_EXPECT_EQ(newcomer_terminal.faction_id(), snapshot.snapshot().faction_id());
   fixture.stop();
 }
 
@@ -1279,22 +1326,81 @@ CASE_TEST(matchsvr_waiting_room, hard_deadline_ends_pending_units_and_ignores_la
   fixture.stop();
 }
 
-CASE_TEST(matchsvr_waiting_room, failed_initialize_releases_reservation_and_successful_full_room_stays_closed) {
+CASE_TEST(matchsvr_waiting_room, failed_initialize_closes_waiting_room_and_ends_pending_units) {
   waiting_test_fixture fixture;
   if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
     return;
   }
   auto failed = fixture.request(9601, 24101, 2);
+  auto pending = fixture.request(9602, 24201);
+  fixture.control->fail_user_id = failed.unit().users(1).user_key().user_id();
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto manager = matching_manager::me();
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, failed, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, pending, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  const size_t notification_start = fixture.runtime.transport().outbound_count();
+  const size_t initialization_start = fixture.control->initializations.size();
+  fixture.confirm(failed, true);
+  CASE_EXPECT_TRUE(fixture.wait_for_status(failed, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED));
+  CASE_EXPECT_EQ(fixture.control->failure_result, fixture.check(failed).snapshot().result());
+  const auto pending_result = fixture.check(pending);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED, pending_result.snapshot().status());
+  CASE_EXPECT_EQ(fixture.control->failure_result, pending_result.snapshot().result());
+  CASE_EXPECT_EQ(initialization_start + 1, fixture.control->initializations.size());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED,
+                 fixture.check(fixture.initial_first).snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED,
+                 fixture.check(fixture.initial_second).snapshot().status());
+  const auto pending_notifications = fixture.notifications_since(notification_start, pending.unit().unit_id());
+  CASE_EXPECT_FALSE(pending_notifications.empty());
+  if (!pending_notifications.empty()) {
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED,
+                   pending_notifications.back().status());
+    CASE_EXPECT_EQ(fixture.control->failure_result, pending_notifications.back().result());
+  }
+  fixture.control->fail_user_id = 0;
+  auto replacement = failed;
+  replacement.mutable_unit()->set_unit_id(9603);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, replacement, snapshot));
+  CASE_EXPECT_NE(fixture.matching_id, snapshot.matching_id());
+  manager->tick();
+  CASE_EXPECT_NE(fixture.matching_id, fixture.check(replacement).matching_id());
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, initialize_rpc_failure_closes_waiting_room_after_retries) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  auto failed = fixture.request(9611, 24501, 2);
   fixture.control->fail_user_id = failed.operator_user().user_id();
+  fixture.control->failure_rpc_result = PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT;
+  const size_t initialization_start = fixture.control->initializations.size();
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
   auto manager = matching_manager::me();
   CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, failed, snapshot));
   fixture.confirm(failed, true);
   CASE_EXPECT_TRUE(fixture.wait_for_status(failed, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED));
-  CASE_EXPECT_EQ(fixture.control->failure_result, fixture.check(failed).snapshot().result());
-  fixture.control->fail_user_id = 0;
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT, fixture.check(failed).snapshot().result());
+  CASE_EXPECT_EQ(initialization_start + 3, fixture.control->initializations.size());
+  auto replacement = fixture.request(9612, 24601, 2);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, replacement, snapshot));
+  CASE_EXPECT_NE(fixture.matching_id, snapshot.matching_id());
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, successful_full_room_stays_closed) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
   auto replacement = fixture.request(9602, 24201, 2);
   auto last = fixture.request(9603, 24301, 2);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto manager = matching_manager::me();
   CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, replacement, snapshot));
   CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
   CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, last, snapshot));
@@ -4256,11 +4362,11 @@ CASE_TEST(matchsvr_matching_manager, validates_and_idempotently_handles_orbit_st
   auto check = make_heartbeat_request(first_request.unit().unit_id(), first_request.operator_user());
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, snapshot));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE, snapshot.snapshot().status());
-  CASE_EXPECT_EQ(1001, snapshot.snapshot().faction_id());
+  CASE_EXPECT_EQ(1, snapshot.snapshot().faction_id());
   check.set_unit_id(second_request.unit().unit_id());
   protobuf_copy_message(*check.mutable_heartbeat_data()->mutable_user_key(), second_request.operator_user());
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, snapshot));
-  CASE_EXPECT_EQ(1001, snapshot.snapshot().faction_id());
+  CASE_EXPECT_EQ(1, snapshot.snapshot().faction_id());
   check.set_unit_id(first_request.unit().unit_id());
   protobuf_copy_message(*check.mutable_heartbeat_data()->mutable_user_key(), first_request.operator_user());
 
