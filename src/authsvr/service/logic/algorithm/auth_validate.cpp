@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <string>
 
 namespace {
 static std::unordered_map<uint32_t, validate_fn_t> build_validate_fn_map() {
@@ -62,7 +63,7 @@ rpc::result_code_type auth_validate_internal(rpc::context& ctx, atfw::util::nost
   }
 
   if (!is_new_user) {
-    if (db_auth_table.access_token_code() == input_account_data.access()) {
+    if (db_auth_table.last_account_data().access() == input_account_data.access()) {
       RPC_RETURN_CODE(0);
     }
 
@@ -80,7 +81,7 @@ rpc::result_code_type auth_validate_internal(rpc::context& ctx, atfw::util::nost
 
 #ifdef ATFW_MACRO_CHANNEL_WITH_STEAMWORKS_SDK
 rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::string_view openid,
-                                          bool /*is_new_user*/, PROJECT_NAMESPACE_ID::table_login_auth& db_auth_table,
+                                          bool /*is_new_user*/, PROJECT_NAMESPACE_ID::table_login_auth& /*db_auth_table*/,
                                           const PROJECT_NAMESPACE_ID::DAccountData& input_account_data) {
   const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::authsvr_cfg>();
   const auto& steam_auth_cfg = server_cfg.steam_auth();
@@ -125,9 +126,8 @@ rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::
     // 1. 用后台生成的对称密钥解密
     if (!SteamEncryptedAppTicket_BDecryptTicket(reinterpret_cast<const uint8*>(input_account_data.access().data()),
                                                 static_cast<uint32>(input_account_data.access().size()), decrypted,
-                                                &cbDecrypted,
-                                                reinterpret_cast<const uint8*>(steam_auth_cfg.rgub_key().data()),
-                                                static_cast<int>(steam_auth_cfg.rgub_key().size()))) {
+                                                &cbDecrypted, reinterpret_cast<const uint8*>(rgub_key.data()),
+                                                static_cast<int>(rgub_key.size()))) {
       FCTXLOGINFO(ctx, "user {} try to validate auth token, decrypt ticket failed", openid);
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_OPENAPI_PARSE_FAIL);
     }
@@ -135,6 +135,7 @@ rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::
     // 2. 确认票据属于本游戏
     if (!SteamEncryptedAppTicket_BIsTicketForApp(decrypted, cbDecrypted, steam_auth_cfg.app_id())) {
       FCTXLOGINFO(ctx, "user {} try to validate auth token, ticket is not for this app", openid);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     }
 
     // 3. 检查签发时间（票据签发 21 天后过期）
@@ -153,6 +154,8 @@ rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::
       FCTXLOGINFO(ctx, "user {} try to validate auth token, steamID {} mismatch", openid, steamID.ConvertToUint64());
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     }
+
+    RPC_RETURN_CODE(0);
   } while (false);
 
   // TODO(any): online validate
