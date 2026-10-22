@@ -30,6 +30,8 @@
 
 namespace rpc {
 
+class context;
+
 SERVER_FRAME_API bool is_exiting_error_code(int32_t code);
 
 template <class TVALUE>

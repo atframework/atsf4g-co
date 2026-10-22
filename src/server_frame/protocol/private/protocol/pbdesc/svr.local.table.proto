@@ -17,6 +17,7 @@ import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/common/com.struct.item.common.proto";
 import "protocol/pbdesc/svr.struct.proto";
 import "protocol/pbdesc/svr.struct.rank.proto";
+import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 import "protocol/pbdesc/com.struct.match.proto";
@@ -41,6 +42,9 @@ message table_login_auth {
 
   string access_token_code = 11;                        // 认证码
   google.protobuf.Timestamp access_token_expired = 12;  // 认证码过期时间
+
+  // 上次登入的账号数据,如果时内部鉴权模式，里面会保存密码Hash
+  DAccountData last_account_data = 21;
 }
 
 message table_login_lock {

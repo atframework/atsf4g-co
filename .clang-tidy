@@ -72,6 +72,7 @@ Checks:
   # 由于C++标准版本兼容性考虑而忽略的checks
   - "-modernize-use-ranges"
   - "-modernize-use-starts-ends-with"
+  - "-modernize-use-designated-initializers"
   - "-readability-use-anyofallof"
   - "-readability-use-concise-preprocessor-directives"
   # 以下检查由于性能问题被关闭(@see https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/TidyFastChecks.inc)

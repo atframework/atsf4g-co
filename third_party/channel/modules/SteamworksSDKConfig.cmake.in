@@ -1,0 +1,92 @@
+# CMake package configuration of the prebuilt Steamworks SDK.
+# Generated from third_party/channel/modules/SteamworksSDKConfig.cmake.in, see
+# third_party/channel/steam/import.cmake for the download and cache handling.
+#
+# Imported targets:
+#   SteamworksSDK::SteamworksSDK  - steam_api[64], the main Steamworks API library
+#   SteamworksSDK::AppTicket      - sdkencryptedappticket[64], the encrypted app ticket library
+# Variables:
+#   SteamworksSDK_VERSION           - SDK version, e.g. 1.65.0
+#   SteamworksSDK_INCLUDE_DIRS      - public headers directory (steam/*.h)
+#   SteamworksSDK_LIBRARIES         - libraries to link (import libraries on Windows)
+#   SteamworksSDK_RUNTIME_LIBRARIES - redistributable binaries to deploy beside executables
+
+@PACKAGE_INIT@
+
+set(SteamworksSDK_VERSION "@PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION@")
+
+set_and_check(SteamworksSDK_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include")
+
+if(WIN32)
+  # CMAKE_SIZEOF_VOID_P is unavailable when the consumer project enables no language
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8
+     OR (NOT DEFINED CMAKE_SIZEOF_VOID_P AND EXISTS "${PACKAGE_PREFIX_DIR}/lib/steam/steam_api64.lib"))
+    set(_STEAMWORKS_SDK_LIBRARY_SUFFIX "64")
+  else()
+    set(_STEAMWORKS_SDK_LIBRARY_SUFFIX "")
+  endif()
+  set(_STEAMWORKS_SDK_API_IMPORT_LIBRARY
+      "${PACKAGE_PREFIX_DIR}/lib/steam/steam_api${_STEAMWORKS_SDK_LIBRARY_SUFFIX}.lib")
+  set(_STEAMWORKS_SDK_API_RUNTIME_LIBRARY
+      "${PACKAGE_PREFIX_DIR}/bin/steam/steam_api${_STEAMWORKS_SDK_LIBRARY_SUFFIX}.dll")
+  set(_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY
+      "${PACKAGE_PREFIX_DIR}/lib/steam/sdkencryptedappticket${_STEAMWORKS_SDK_LIBRARY_SUFFIX}.lib")
+  set(_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY
+      "${PACKAGE_PREFIX_DIR}/bin/steam/sdkencryptedappticket${_STEAMWORKS_SDK_LIBRARY_SUFFIX}.dll")
+elseif(APPLE)
+  # libsteam_api.dylib and libsdkencryptedappticket.dylib are universal (x86_64 + arm64)
+  set(_STEAMWORKS_SDK_API_IMPORT_LIBRARY "${PACKAGE_PREFIX_DIR}/lib/steam/libsteam_api.dylib")
+  set(_STEAMWORKS_SDK_API_RUNTIME_LIBRARY "${_STEAMWORKS_SDK_API_IMPORT_LIBRARY}")
+  set(_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY "${PACKAGE_PREFIX_DIR}/lib/steam/libsdkencryptedappticket.dylib")
+  set(_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY "${_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY}")
+else()
+  set(_STEAMWORKS_SDK_API_IMPORT_LIBRARY "${PACKAGE_PREFIX_DIR}/lib/steam/libsteam_api.so")
+  set(_STEAMWORKS_SDK_API_RUNTIME_LIBRARY "${_STEAMWORKS_SDK_API_IMPORT_LIBRARY}")
+  set(_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY "${PACKAGE_PREFIX_DIR}/lib/steam/libsdkencryptedappticket.so")
+  set(_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY "${_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY}")
+endif()
+
+foreach(_STEAMWORKS_SDK_CHECK_FILE IN LISTS _STEAMWORKS_SDK_API_IMPORT_LIBRARY
+          _STEAMWORKS_SDK_API_RUNTIME_LIBRARY _STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY
+          _STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY)
+  if(NOT EXISTS "${_STEAMWORKS_SDK_CHECK_FILE}")
+    set(SteamworksSDK_FOUND FALSE)
+    set(SteamworksSDK_NOT_FOUND_MESSAGE "Steamworks SDK file not found: ${_STEAMWORKS_SDK_CHECK_FILE}")
+    return()
+  endif()
+endforeach()
+unset(_STEAMWORKS_SDK_CHECK_FILE)
+
+if(NOT TARGET SteamworksSDK::SteamworksSDK)
+  add_library(SteamworksSDK::SteamworksSDK SHARED IMPORTED)
+  set_target_properties(
+    SteamworksSDK::SteamworksSDK PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${SteamworksSDK_INCLUDE_DIRS}"
+                                            IMPORTED_LOCATION "${_STEAMWORKS_SDK_API_RUNTIME_LIBRARY}")
+  if(WIN32)
+    set_target_properties(SteamworksSDK::SteamworksSDK PROPERTIES IMPORTED_IMPLIB
+                                                                  "${_STEAMWORKS_SDK_API_IMPORT_LIBRARY}")
+  endif()
+endif()
+
+if(NOT TARGET SteamworksSDK::AppTicket)
+  add_library(SteamworksSDK::AppTicket SHARED IMPORTED)
+  set_target_properties(
+    SteamworksSDK::AppTicket PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${SteamworksSDK_INCLUDE_DIRS}"
+                                        IMPORTED_LOCATION "${_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY}")
+  if(WIN32)
+    set_target_properties(SteamworksSDK::AppTicket PROPERTIES IMPORTED_IMPLIB
+                                                              "${_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY}")
+  endif()
+endif()
+
+set(SteamworksSDK_LIBRARIES "${_STEAMWORKS_SDK_API_IMPORT_LIBRARY}" "${_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY}")
+set(SteamworksSDK_RUNTIME_LIBRARIES "${_STEAMWORKS_SDK_API_RUNTIME_LIBRARY}"
+                                    "${_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY}")
+
+unset(_STEAMWORKS_SDK_LIBRARY_SUFFIX)
+unset(_STEAMWORKS_SDK_API_IMPORT_LIBRARY)
+unset(_STEAMWORKS_SDK_API_RUNTIME_LIBRARY)
+unset(_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY)
+unset(_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY)
+
+check_required_components(SteamworksSDK)

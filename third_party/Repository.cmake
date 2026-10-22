@@ -157,6 +157,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/go-task/go-task.cmake")
 # =========== third_party - otel ===========
 include("${CMAKE_CURRENT_LIST_DIR}/otel/otelcol-contrib.cmake")
 
+# =========== third_party - channel ===========
+include("${CMAKE_CURRENT_LIST_DIR}/channel/channel.cmake")
+
 # =========== set dependency variables ===========
 # Changes in otel-cpp v1.8.0
 if(TARGET opentelemetry-cpp::prometheus_exporter)

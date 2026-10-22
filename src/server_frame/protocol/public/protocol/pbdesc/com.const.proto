@@ -29,8 +29,14 @@ enum EnConstLimits {
 
 // account type
 enum EnAccountTypeID {
-  EN_ATI_ACCOUNT_INTERNAL = 0;   // internal: username/password
-  EN_ATI_ACCOUNT_IOS_GUEST = 1;  // ios guest
+  // internal: username/password
+  EN_ATI_ACCOUNT_INTERNAL = 0;
+
+  // ios guest
+  EN_ATI_ACCOUNT_IOS_GUEST = 1;
+
+  // steam
+  EN_ATI_ACCOUNT_STEAM = 11;
 }
 
 // channel id
@@ -201,7 +207,7 @@ enum EnErrorCode {
   [(error_code.description) = "校验不通过"];
   EN_ERR_LOGIN_ALREADY_ONLINE = -406
   [(error_code.description) = "仍然在线且踢下线失败"];
-  EN_ERR_LOGIN_INVALID_PLAT = -407
+  EN_ERR_LOGIN_INVALID_PLATFORM = -407
   [(error_code.description) = "平台不受支持"];
   EN_ERR_LOGIN_OTHER_DEVICE = -408
   [(error_code.description) = "在其他地方有登入"];

@@ -1,20 +1,27 @@
-﻿// Copyright 2021 atframework
+// Copyright 2021 atframework
 // @brief Created by owent with generate-for-pb.py at 2021-11-14 20:27:12
 
 #pragma once
 
+#include <nostd/string_view.h>
+
 #include <dispatcher/task_action_cs_req_base.h>
-#include "nostd/string_view.h"
+
+#include <string>
+
+PROJECT_NAMESPACE_BEGIN
+class table_login_auth;
+PROJECT_NAMESPACE_END
 
 class task_action_login_auth
     : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq, PROJECT_NAMESPACE_ID::SCLoginAuthRsp> {
  public:
   using base_type = task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginAuthReq, PROJECT_NAMESPACE_ID::SCLoginAuthRsp>;
-  using message_type = base_type::message_type;
-  using msg_ref_type = base_type::msg_ref_type;
-  using msg_cref_type = base_type::msg_cref_type;
-  using rpc_request_type = base_type::rpc_request_type;
-  using rpc_response_type = base_type::rpc_response_type;
+  using base_type::message_type;
+  using base_type::msg_cref_type;
+  using base_type::msg_ref_type;
+  using base_type::rpc_request_type;
+  using base_type::rpc_response_type;
 
   using task_action_cs_req_base::operator();
 

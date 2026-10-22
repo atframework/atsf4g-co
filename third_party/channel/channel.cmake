@@ -1,0 +1,10 @@
+include_guard(GLOBAL)
+
+list(APPEND CMAKE_FIND_ROOT_PATH "${CMAKE_CURRENT_LIST_DIR}/modules")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_LIST_DIR}/modules")
+
+option(PROJECT_CHANNEL_INTEGRATION_STEAM "Enable Steam integration" ON)
+
+if(PROJECT_CHANNEL_INTEGRATION_STEAM)
+  include("${CMAKE_CURRENT_LIST_DIR}/steam/import.cmake")
+endif()

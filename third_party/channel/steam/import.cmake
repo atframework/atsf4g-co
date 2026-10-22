@@ -1,0 +1,184 @@
+# =========== third_party steamworks sdk ==================
+
+include_guard(GLOBAL)
+
+# The official Steamworks SDK at https://partner.steamgames.com/downloads requires a Steamworks partner account and
+# can not be fetched anonymously, so download the repacked release from the community mirror by default.
+# Each archive contains the public headers and the redistributable binaries:
+#   include/steam/*.h, lib/steam/*, bin/steam/*.dll (Windows only)
+# The x64 archive covers Windows x64, Linux x86_64 and macOS (the dylib is universal), the arm64 archive covers
+# Linux aarch64. Set PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_MIRROR to use another mirror (the SHA256 below
+# must match the mirrored archive then), or set SteamworksSDK_ROOT/SteamworksSDK_DIR to a prepared package to skip
+# downloading entirely.
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION "1.65.0")
+if(NOT PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_MIRROR)
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_MIRROR
+      "https://github.com/julianxhokaxhiu/SteamworksSDKCI/releases/download")
+endif()
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_SHA256_X64
+    "E9B6085868AA30222FF7545E4E7281D3FE27842C444CC6CF7F4F98E1E1D0FE38")
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_SHA256_X86
+    "66939AEF1419CD523914FA33B229F7654BBF3E508AC65583A6DFC7602F890A13")
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_SHA256_ARM64
+    "4BE29C544EAD887F821BAC662645130449B750461DA42F9351B00995FAD7A54A")
+
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR
+    "${PROJECT_THIRD_PARTY_PACKAGE_DIR}/steamworks-sdk-v${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION}")
+
+# Distinguish caller provided hints from the cache entries written by a previous run of this script
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_USER_PROVIDED FALSE)
+if(DEFINED SteamworksSDK_DIR AND NOT SteamworksSDK_DIR STREQUAL
+                                PROJECT_THIRD_PARTY_STEAMWORKS_SDK_MANAGED_CONFIG_DIR)
+  # Caller prepared package configuration
+  if(EXISTS "${SteamworksSDK_DIR}/SteamworksSDKConfig.cmake")
+    find_package(SteamworksSDK REQUIRED)
+    return()
+  endif()
+endif()
+if(DEFINED SteamworksSDK_ROOT AND NOT SteamworksSDK_ROOT STREQUAL PROJECT_THIRD_PARTY_STEAMWORKS_SDK_MANAGED_ROOT)
+  # Caller prepared package directory, only validate it below, never download into it
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR "${SteamworksSDK_ROOT}")
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_USER_PROVIDED TRUE)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|aarch64)")
+    message(FATAL_ERROR "Steamworks SDK does not provide Windows ARM64 binaries")
+  endif()
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH "x64")
+  else()
+    set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH "x86")
+  endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH "x64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)")
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH "arm64")
+else()
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH "x64")
+endif()
+
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/include/steam/steam_api.h"
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/include/steam/steam_gameserver.h"
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/include/steam/steamencryptedappticket.h")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  if(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH STREQUAL "x64")
+    list(APPEND PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/steam_api64.lib"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/bin/steam/steam_api64.dll"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/sdkencryptedappticket64.lib"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/bin/steam/sdkencryptedappticket64.dll")
+  else()
+    list(APPEND PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/steam_api.lib"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/bin/steam/steam_api.dll"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/sdkencryptedappticket.lib"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/bin/steam/sdkencryptedappticket.dll")
+  endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  list(APPEND PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES
+       "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/libsteam_api.dylib"
+       "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/libsdkencryptedappticket.dylib")
+else()
+  list(APPEND PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES
+       "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/libsteam_api.so"
+       "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/steam/libsdkencryptedappticket.so")
+endif()
+
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_FILES_MISSING FALSE)
+foreach(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CHECK_FILE IN LISTS PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES)
+  if(NOT EXISTS "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CHECK_FILE}")
+    set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_FILES_MISSING TRUE)
+    break()
+  endif()
+endforeach()
+
+if(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_USER_PROVIDED)
+  if(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_FILES_MISSING)
+    message(
+      FATAL_ERROR
+        "Steamworks SDK files are incomplete in ${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}, "
+        "please prepare a package with include/steam, lib/steam and bin/steam, "
+        "or unset SteamworksSDK_ROOT to download it")
+  endif()
+else()
+  set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_NEED_DOWNLOAD
+      ${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_FILES_MISSING})
+  if(EXISTS "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/version")
+    file(READ "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/version"
+         PROJECT_THIRD_PARTY_STEAMWORKS_SDK_EXISTED_VERSION)
+    if(NOT PROJECT_THIRD_PARTY_STEAMWORKS_SDK_EXISTED_VERSION STREQUAL PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION)
+      set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_NEED_DOWNLOAD TRUE)
+    endif()
+  else()
+    set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_NEED_DOWNLOAD TRUE)
+  endif()
+
+  if(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_NEED_DOWNLOAD)
+    file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}")
+    string(REGEX MATCH "^[0-9]+\\.[0-9]+" PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_TAG
+                 "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION}")
+    string(TOUPPER "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH}"
+                   PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH_UPPER)
+    message(
+      STATUS "Downloading Steamworks SDK ${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION} "
+             "(${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH}) "
+             "into ${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}")
+    set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_DOWNLOAD_URL
+        "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_MIRROR}/${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_TAG}")
+    set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_FILE
+        "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/steamworks_sdk_${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH}.zip"
+    )
+    findconfigurepackagedownloadfile(
+      "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_DOWNLOAD_URL}/SteamworksSDK-v${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION}_${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH}.zip"
+      "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_FILE}"
+      SHA256
+      "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_SHA256_${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_ARCH_UPPER}}"
+      REQUIRED)
+    findconfigurepackageunzip("${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_ARCHIVE_FILE}"
+                              "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/")
+
+    foreach(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CHECK_FILE IN LISTS
+            PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PREBUILT_FILES)
+      if(NOT EXISTS "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CHECK_FILE}")
+        message(
+          FATAL_ERROR "Failed to download Steamworks SDK into ${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}")
+      endif()
+    endforeach()
+
+    file(WRITE "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/version"
+         "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION}")
+  endif()
+endif()
+
+# =========== generate the find_package(SteamworksSDK) configuration ===========
+include(CMakePackageConfigHelpers)
+get_filename_component(PROJECT_THIRD_PARTY_CHANNEL_MODULES_DIR "${CMAKE_CURRENT_LIST_DIR}/../modules" ABSOLUTE)
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CMAKE_PACKAGE_DIR
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}/lib/cmake/SteamworksSDK")
+file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CMAKE_PACKAGE_DIR}")
+configure_package_config_file(
+  "${PROJECT_THIRD_PARTY_CHANNEL_MODULES_DIR}/SteamworksSDKConfig.cmake.in"
+  "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CMAKE_PACKAGE_DIR}/SteamworksSDKConfig.cmake"
+  INSTALL_DESTINATION "lib/cmake/SteamworksSDK")
+write_basic_package_version_file(
+  "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CMAKE_PACKAGE_DIR}/SteamworksSDKConfigVersion.cmake"
+  VERSION "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_VERSION}"
+  COMPATIBILITY SameMajorVersion)
+
+# Remember the entries written by this script to keep caller provided hints distinguishable above
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_MANAGED_ROOT
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}"
+    CACHE INTERNAL "Steamworks SDK package directory managed by third_party/channel/steam/import.cmake")
+set(PROJECT_THIRD_PARTY_STEAMWORKS_SDK_MANAGED_CONFIG_DIR
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CMAKE_PACKAGE_DIR}"
+    CACHE INTERNAL "SteamworksSDK config directory managed by third_party/channel/steam/import.cmake")
+set(SteamworksSDK_ROOT
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_PACKAGE_DIR}"
+    CACHE PATH "Root directory of the Steamworks SDK prebuilt package" FORCE)
+set(SteamworksSDK_DIR
+    "${PROJECT_THIRD_PARTY_STEAMWORKS_SDK_CMAKE_PACKAGE_DIR}"
+    CACHE PATH "Directory containing SteamworksSDKConfig.cmake" FORCE)
+
+find_package(SteamworksSDK REQUIRED)

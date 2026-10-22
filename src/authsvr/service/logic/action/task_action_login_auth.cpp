@@ -39,13 +39,16 @@
 
 #include "app/authsvr_helper.h"
 
+#include "logic/algorithm/auth_validate.h"
+
 task_action_login_auth::task_action_login_auth(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
+
 task_action_login_auth::~task_action_login_auth() {}
 
 const char* task_action_login_auth::name() const { return "task_action_login_auth"; }
 
 task_action_login_auth::result_type task_action_login_auth::operator()() {
-  const rpc_request_type& req_body = get_request_body();
+  rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> login_auth_tb{get_shared_context()};
@@ -71,7 +74,31 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     login_auth_tb->set_open_id(req_body.open_id());
   }
 
-  // TODO(any): 鉴权实现
+  // 鉴权实现
+  validate_fn_t validate_fn = get_validate_fn(static_cast<uint32_t>(req_body.account().account_type()));
+  if (validate_fn == nullptr) {
+    FCTXLOGINFO(get_shared_context(),
+                "session {}:{}, user {} try to validate login auth failed, invalid account_type: {}",
+                session_key.node_id, session_key.session_id, req_body.open_id(),
+                static_cast<uint32_t>(req_body.account().account_type()));
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_INVALID_PLATFORM);
+    RPC_RETURN_CODE(0);
+  }
+
+  res = RPC_AWAIT_CODE_RESULT(
+      (*validate_fn)(get_shared_context(), req_body.open_id(),
+                     res == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND || login_auth_tb->user_id() == 0,
+                     *login_auth_tb, *req_body.mutable_account()));
+  if (res < 0) {
+    FCTXLOGINFO(get_shared_context(), "session {}:{}, user {} try to validate login auth failed, error code: {}({})",
+                session_key.node_id, session_key.session_id, req_body.open_id(), res,
+                protobuf_mini_dumper_get_error_msg(res));
+    set_response_code(res);
+    RPC_RETURN_CODE(res);
+  }
+
+  // 复制鉴权信息
+  protobuf_copy_message(*login_auth_tb->mutable_last_account_data(), req_body.account());
 
   // 如果是新用户，需要创建user_id
   if (login_auth_tb->user_id() == 0) {
@@ -88,7 +115,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     login_auth_tb->set_user_id(static_cast<uint64_t>(new_user_id));
 
     res = RPC_AWAIT_CODE_RESULT(
-        rpc::db::login_auth::insert(get_shared_context(), login_auth_tb, &login_auth_cas_version));
+        rpc::db::login_auth::replace(get_shared_context(), login_auth_tb, login_auth_cas_version));
     if (res < 0) {
       FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to save user_id failed, error code: {}({})",
                    session_key.node_id, session_key.session_id, req_body.open_id(), res,

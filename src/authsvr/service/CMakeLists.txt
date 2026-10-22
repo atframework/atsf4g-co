@@ -11,6 +11,8 @@ project_service_declare_instance(
   "${CMAKE_CURRENT_LIST_DIR}"
   RUNTIME_OUTPUT_DIRECTORY
   "${SERVICE_TARGET_NAME}/bin"
+  OUTPUT_TARGET_NAME
+  SERVICE_FULL_TARGET_NAME
   USE_COMPONENTS
   "user-sdk"
   HEADERS
@@ -23,3 +25,9 @@ project_service_declare_instance(
   "authsvr-config"
   GENERATED_FLOW_NAMES
   "${PROJECT_NAMESPACE}.AuthsvrClientService")
+
+
+if (TARGET SteamworksSDK::AppTicket)
+  target_compile_definitions(${SERVICE_FULL_TARGET_NAME} PRIVATE ATFW_MACRO_CHANNEL_WITH_STEAMWORKS_SDK)
+  target_link_libraries(${SERVICE_FULL_TARGET_NAME} PRIVATE SteamworksSDK::AppTicket)
+endif()

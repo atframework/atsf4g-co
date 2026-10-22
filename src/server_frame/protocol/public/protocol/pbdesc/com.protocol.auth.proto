@@ -16,8 +16,9 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 package atframework.shared;
 
 message CSLoginUpdateReq {
-  DAccountData account = 1;      // 平台信息
-  EnSystemID system_id = 2;      // 系统id，ios or android
+  DAccountData old_account = 1;  // 平台信息
+  DAccountData new_account = 2;  // 平台信息
+  EnSystemID system_id = 3;      // 系统id，ios or android
   string package_version = 11;   // 包版本
   string resource_version = 12;  // 资源版本
   string protocol_version = 13;  // 协议版本

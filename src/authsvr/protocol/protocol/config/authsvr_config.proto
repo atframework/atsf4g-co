@@ -31,6 +31,29 @@ message authsvr_router_cfg {
   atframework.atapp.protocol.atapp_metadata policy_selector = 12;
 }
 
+message auth_channel_internal {
+  // 内部鉴权配置
+  bool enable = 1;
+  bool allow_register = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
+}
+
+message auth_channel_steam {
+  // 内部鉴权配置
+  bool enable = 1;
+  bool enable_offline = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  uint32 app_id = 3;
+  bytes rgub_key = 4;
+  string rgub_key_hex = 5;
+
+  // 离线验证token的默认值21天
+  google.protobuf.Duration offline_token_timeout = 11
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "504h" min_value: "1s" }];
+
+  // 定期在线验证
+  google.protobuf.Duration online_checking_interval = 12
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1h" min_value: "1s" }];
+}
+
 message authsvr_cfg {
   string version_conf = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_version.xml" }];
   string strategy_conf = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../cfg/cfg_strategy.xml" }];
@@ -48,4 +71,7 @@ message authsvr_cfg {
         [(atframework.atapp.protocol.CONFIGURE) = { default_value: "14400s" min_value: "1" }];
   }
   backend_ingress_cfg backend = 31;
+
+  auth_channel_internal internal_auth = 101;
+  auth_channel_steam steam_auth = 102;
 }
