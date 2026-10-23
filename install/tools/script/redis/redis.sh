@@ -58,7 +58,7 @@ if [ "$REDIS_VERSION" = "latest" ]; then
   REDIS_VERSION="7.2.16"
 fi
 
-REDIS_IMAGE="redis:${REDIS_VERSION}"
+REDIS_IMAGE="docker.io/library/redis:${REDIS_VERSION}"
 CONTAINER_NAME="atsf4g-redis-unit-test"
 CID_FILE="${WORK_DIR}/redis.cid"
 
