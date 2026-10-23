@@ -155,6 +155,11 @@ class user_team_manager_utility {
         }
         break;
       }
+      case atfw::team::DTeamMemberAction::kGotNotification: {
+        team_mgr.insert_dirty_handle_for_notification(action->got_notification());
+        break;
+      }
+
       default:
         FCTXLOGINFO(ctx, "dispatch_team_member_event: unknown action type {}",
                     static_cast<int32_t>(action->action_case()));
