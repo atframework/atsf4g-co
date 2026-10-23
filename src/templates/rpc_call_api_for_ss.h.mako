@@ -86,6 +86,9 @@ ${ns}
     rpc_is_user_rpc = rpc.get_extension_field('atframework.rpc_options', lambda x: x.user_rpc, False)
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
     rpc_allow_ignore_discovery = rpc.get_extension_field('atframework.rpc_options', lambda x: x.allow_ignore_discovery, False)
+    rpc_allow_no_wait = False
+    if not rpc_is_stream_mode:
+        rpc_allow_no_wait = rpc.get_extension_field('atframework.rpc_options', lambda x: x.allow_no_wait, False)
     rpc_unicast_params_decl = ['context& __ctx']
     rpc_unicast_params_docs = ['__ctx               RPC context, you can get it from get_shared_context() of task_action or just create one on stack']
     rpc_broadcast_params_decl = ['context& __ctx']
@@ -117,10 +120,12 @@ ${ns}
     rpc_unicast_params_docs.append('request_body       request body')
     rpc_broadcast_params_decl.append('{0} &request_body'.format(rpc.get_request().get_cpp_class_name()))
     rpc_broadcast_params_docs.append('request_body       request body')
+    rpc_nowait_params_decl = [x for x in rpc_unicast_params_decl]
+    rpc_nowait_params_docs = [x for x in rpc_unicast_params_docs]
     if not rpc_is_stream_mode:
         rpc_unicast_params_decl.append('{0} &response_body'.format(rpc.get_response().get_cpp_class_name()))
         rpc_unicast_params_docs.append('response_body       response body')
-        if rpc.get_extension_field('atframework.rpc_options', lambda x: x.allow_no_wait, False):
+        if rpc_allow_no_wait:
             rpc_unicast_params_decl.append('bool __no_wait = false')
             rpc_unicast_params_decl.append('dispatcher_await_options* __wait_later = nullptr')
             rpc_unicast_params_docs.append('__no_wait           set true if not need to wait response')
@@ -128,6 +133,8 @@ ${ns}
     if rpc_allow_ignore_discovery:
         rpc_unicast_params_decl.append('bool __ignore_discovery = false')
         rpc_unicast_params_docs.append('__ignore_discovery  set true if not need to wait response')
+        rpc_nowait_params_decl.append('bool __ignore_discovery = false')
+        rpc_nowait_params_docs.append('__ignore_discovery  set true if not need to wait response')
     if not rpc_is_router_api and rpc_is_stream_mode:
         rpc_return_type = 'rpc::always_ready_code_type'
     else:
@@ -138,6 +145,12 @@ ${ns}
             rpc_unicast_params_decl_legacy.append('uint64_t destination_server_id')
         else:
             rpc_unicast_params_decl_legacy.append(param)
+    rpc_nowait_params_decl_modern = []
+    for param in rpc_nowait_params_decl:
+        if 'TargetServerNode&& destination_server' == param:
+            rpc_nowait_params_decl_modern.append('const atfw::atapp::etcd_discovery_node& destination_server')
+        else:
+            rpc_nowait_params_decl_modern.append(param)
 %>
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 namespace packer {
@@ -176,6 +189,22 @@ ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} rpc::always_ready_code_type
 }  // namespace broadcast
 % endif
 
+% if (rpc_is_stream_mode or rpc_allow_no_wait) and not rpc_is_router_api:
+namespace oneway {
+/**
+ * @brief ${rpc.get_extension_field('atframework.rpc_options', lambda x: x.api_name, rpc.get_name())}
+%   for param_doc in rpc_nowait_params_docs:
+ * @param ${param_doc.replace('*/', '*')}
+%   endfor
+%   for desc in rpc.get_extension_field('atframework.rpc_options', lambda x: x.descriptions, []):
+ * @note  ${desc.replace('*/', '*')}
+%   endfor
+ * @return 0 or error code
+ */
+${rpc_dllexport_decl} ${rpc_return_type}::value_type ${rpc.get_name()}(
+  ${', '.join(rpc_nowait_params_decl_modern)});
+}  // namespace oneway
+% endif
 namespace unicast {
 /**
  * @brief ${rpc.get_extension_field('atframework.rpc_options', lambda x: x.api_name, rpc.get_name())}

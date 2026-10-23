@@ -10,14 +10,20 @@
 #include <config/compiler_features.h>
 #include <design_pattern/singleton.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/descriptor.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <gsl/select-gsl.h>
 #include <mem_pool/lru_map.h>
+
+#include <atframe/etcdcli/etcd_discovery.h>
 
 #include <functional>
 #include <string>
@@ -48,9 +54,9 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
   gsl::string_view type_name;
   uint64_t zone_id;
 
-  inline ss_msg_logic_index() noexcept : type_id(0), type_name(), zone_id(0) {}
+  inline ss_msg_logic_index() noexcept : type_id(0), zone_id(0) {}
   inline ss_msg_logic_index(uint64_t input_type_id, uint64_t input_zone_id)
-      : type_id(input_type_id), type_name(), zone_id(input_zone_id) {}
+      : type_id(input_type_id), zone_id(input_zone_id) {}
   inline ss_msg_logic_index(gsl::string_view input_type_name, uint64_t input_zone_id) noexcept
       : type_id(0), type_name(input_type_name), zone_id(input_zone_id) {}
 
@@ -62,8 +68,8 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
 
 class ss_msg_dispatcher : public dispatcher_implement {
  public:
-  using msg_raw_t = dispatcher_implement::msg_raw_t;
-  using msg_type_t = dispatcher_implement::msg_type_t;
+  using dispatcher_implement::msg_raw_t;
+  using dispatcher_implement::msg_type_t;
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
@@ -152,6 +158,10 @@ class ss_msg_dispatcher : public dispatcher_implement {
 
   SERVER_FRAME_API bool is_target_server_available(uint64_t node_id) const;
   SERVER_FRAME_API bool is_target_server_available(const std::string &node_name) const;
+
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_node::ptr_t get_target_server_node(uint64_t node_id) const noexcept;
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_node::ptr_t get_target_server_node(
+      const std::string &node_name) const noexcept;
 
   /**
    * @brief 广播消息

@@ -31,6 +31,7 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <unordered_set>
+#include <utility>
 
 #include "data/user.h"
 #include "logic/chat/user_chat_manager.h"
@@ -73,8 +74,11 @@ class user_team_manager_utility {
         } else {
           FCTXLOGINFO(ctx, "{} receive an invitation to team {}:{} from {}:{}", user_inst, invited.team_key().zone_id(),
                       invited.team_key().team_id(), invited.inviter().zone_id(), invited.inviter().user_id());
-          team_mgr.add_pending_invitation(
-              ctx, atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>(invited));
+          auto copy_invitation = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>(invited);
+          bool accepted = team_mgr.add_pending_invitation(ctx, copy_invitation);
+          if (accepted) {
+            team_mgr.send_accept_invitation_notification(ctx, copy_invitation);
+          }
         }
         break;
       }
@@ -1015,6 +1019,66 @@ bool user_team_manager::remove_pending_invitation(rpc::context& /*ctx*/, const a
 
   insert_dirty_handle_for_invitation(team_key);
   return true;
+}
+
+void user_team_manager::send_accept_invitation_notification(rpc::context& ctx,
+                                                            const team_invitation_ptr_t& invitation) {
+  if (!invitation) {
+    return;
+  }
+
+  if (invitation->inviter().zone_id() == 0 || invitation->inviter().user_id() == 0) {
+    return;
+  }
+
+  if (owner_->is(invitation->inviter())) {
+    return;
+  }
+
+  rpc::context::message_holder<atfw::team::DTeamMemberAction> action{ctx};
+  auto* got_notification = action->mutable_got_notification();
+  got_notification->set_invite_to_team_type(invitation->team_type());
+  protobuf_copy_message(*got_notification->mutable_invite_to_team_key(), invitation->team_key());
+  protobuf_copy_message(*got_notification->mutable_invitee(), invitation->invitee());
+  protobuf_copy_message(*got_notification->mutable_inviter(), invitation->inviter());
+  protobuf_copy_message(*got_notification->mutable_expired_timepoint(), invitation->expired_timepoint());
+  protobuf_copy_message(*got_notification->mutable_start_timepoint(), invitation->start_timepoint());
+
+  auto already_in_team = get_team_by_team_type(static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(invitation->team_type()));
+  if (already_in_team) {
+    protobuf_copy_message(*got_notification->mutable_invitee_already_in_team()->mutable_team_key(),
+                          already_in_team->get_team_key());
+    got_notification->mutable_invitee_already_in_team()->set_team_type(already_in_team->get_team_type());
+  }
+
+  auto* details = ctx.create<google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessageDetail>>();
+  // 这个通知是可选的，如果无法创建消息详情也可以直接返回
+  if (nullptr == details) {
+    return;
+  }
+
+  if (!details->Add()->mutable_event()->PackFrom(*action)) {
+    FCTXLOGERROR(ctx, "{} failed to pack DTeamMemberAction for invitation of team room {}:{}", *owner_,
+                 invitation->team_key().zone_id(), invitation->team_key().team_id());
+    return;
+  }
+
+  atfw::dtmq::channel_subscriber no_subscriber;
+  atfw::dtmq::DChannelIdKey channel_key;
+  channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+  channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(
+      channel_key.channel_type(), invitation->inviter().zone_id(), invitation->inviter().user_id()));
+  auto res = rpc::dtmq::send_message_oneway(ctx, std::move(no_subscriber), channel_key, std::move(*details));
+
+  // 只是一个通知，如果不存在已下线可以忽略
+  if (res == PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND) {
+    return;
+  }
+  if (res < 0) {
+    FCTXLOGERROR(ctx, "{} failed to send_message_oneway for invitation of team room {}:{}, result: {}({})", *owner_,
+                 invitation->team_key().zone_id(), invitation->team_key().team_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
+  }
 }
 
 bool user_team_manager::insert_dirty_handle() {

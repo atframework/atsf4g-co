@@ -440,6 +440,24 @@ SERVER_FRAME_API bool ss_msg_dispatcher::is_target_server_available(const std::s
   return !get_app()->get_discovery_node_by_name(node_name);
 }
 
+SERVER_FRAME_API atfw::atapp::etcd_discovery_node::ptr_t ss_msg_dispatcher::get_target_server_node(
+    uint64_t node_id) const noexcept {
+  if (nullptr == get_app()) {
+    return nullptr;
+  }
+
+  return get_app()->get_discovery_node_by_id(node_id);
+}
+
+SERVER_FRAME_API atfw::atapp::etcd_discovery_node::ptr_t ss_msg_dispatcher::get_target_server_node(
+    const std::string &node_name) const noexcept {
+  if (nullptr == get_app()) {
+    return nullptr;
+  }
+
+  return get_app()->get_discovery_node_by_name(node_name);
+}
+
 SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg, const ss_msg_logic_index &index,
                                                       ::atfw::atapp::protocol::atapp_metadata *metadata) {
   atfw::atapp::app *owner = get_app();

@@ -261,6 +261,27 @@ message DTeamInvitation {
   repeated MemberAdmissionData member_admission_data = 15;
 }
 
+message DTeamInvitationGotNotification {
+  atframework.shared.DUserIDKey inviter = 1;
+  atframework.shared.DUserIDKey invitee = 2;
+
+  DTeamKey invite_to_team_key = 4;
+  uint32 invite_to_team_type = 5;
+
+  // 开始事件
+  google.protobuf.Timestamp start_timepoint = 8;
+  // 失效时间
+  google.protobuf.Timestamp expired_timepoint = 9;
+
+  // 反馈被邀请者已经在某个队伍中
+  message InviteeAlreadyInTeam {
+    DTeamKey team_key = 1;
+    uint32 team_type = 2;
+  }
+
+  InviteeAlreadyInTeam invitee_already_in_team = 11;
+}
+
 message DTeamJoinRequest {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey requester = 2;
@@ -359,6 +380,9 @@ message DTeamMemberAction {
     // 通知新成员已入队(接受邀请或加入请求被批准)
     DTeamMemberJoinData joined_team = 5;
     DTeamMemberRemoveData remove_member = 6;
+
+    // 收到被邀请者的反馈
+    DTeamInvitationGotNotification got_notification = 11;
   }
 }
 

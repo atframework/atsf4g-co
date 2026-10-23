@@ -142,6 +142,7 @@ class user_team_manager {
   size_t cleanup_expired_invitation(rpc::context& ctx);
   bool add_pending_invitation(rpc::context& ctx, const team_invitation_ptr_t& invitation);
   bool remove_pending_invitation(rpc::context& ctx, const atfw::team::DTeamKey& team_key);
+  void send_accept_invitation_notification(rpc::context& ctx, const team_invitation_ptr_t& invitation);
 
   bool insert_dirty_handle();
   bool insert_dirty_handle_for_team(const atfw::team::DTeamKey& key);

@@ -11,12 +11,6 @@
 
 #include <rpc/rpc_common_types.h>
 
-#include <cstdint>
-#include <memory>
-#include <vector>
-
-#include "rpc/dtmq/dtmq_algorithm.h"
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -26,6 +20,11 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <cstdint>
+#include <vector>
+
+#include "rpc/dtmq/dtmq_algorithm.h"
 
 namespace atframework {
 namespace dtmq {
@@ -116,6 +115,23 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_messa
     bool auto_create_channel = false, bool no_wait = false);
 
 /**
+ * @brief 不等待发送消息（无需在协程内）
+ *
+ * @param ctx RPC上下文
+ * @param sender_info 发送者信息
+ * @param channel_key 频道键
+ * @param detail 消息详情
+ * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+ * @param auto_create_channel 是否自动创建频道
+ * @return rpc::result_code_type 发送结果
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type::value_type send_message_oneway(
+    rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
+    atfw::dtmq::DChannelMessageDetail&& detail,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+    bool auto_create_channel = false);
+
+/**
  * @brief 批量发送消息(一次请求按顺序追加多条消息)
  *
  * @param ctx RPC上下文
@@ -136,6 +152,23 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_messa
     bool auto_create_channel = false, bool no_wait = false);
 
 /**
+ * @brief 批量发送消息(一次请求按顺序追加多条消息,无需在协程内)
+ *
+ * @param ctx RPC上下文
+ * @param sender_info 发送者信息
+ * @param channel_key 频道键
+ * @param details 消息详情列表(不能为空)
+ * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+ * @param auto_create_channel 是否自动创建频道
+ * @return rpc::result_code_type 发送结果
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type::value_type send_message_oneway(
+    rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
+    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessageDetail>&& details,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+    bool auto_create_channel = false);
+
+/**
  * @brief 更新频道数据(Writable副本)，目标服务器选择内嵌在本接口内
  *
  * @param ctx RPC上下文
@@ -144,8 +177,10 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_messa
  * @param no_wait 是否不等待
  * @return rpc::result_code_type 发送结果
  */
-ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type update(
-    rpc::context& ctx, atfw::dtmq::SSChannelUpdateReq& req, atfw::dtmq::SSChannelUpdateRsp& rsp, bool no_wait = false);
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type update(rpc::context& ctx,
+                                                                             atfw::dtmq::SSChannelUpdateReq& req,
+                                                                             atfw::dtmq::SSChannelUpdateRsp& rsp,
+                                                                             bool no_wait = false);
 
 /**
  * @brief 重置频道乐观锁(Writable副本)，目标服务器选择内嵌在本接口内
@@ -156,9 +191,10 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type update(
  * @param no_wait 是否不等待
  * @return rpc::result_code_type 发送结果
  */
-ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock(
-    rpc::context& ctx, atfw::dtmq::SSChannelResetLockReq& req, atfw::dtmq::SSChannelResetLockRsp& rsp,
-    bool no_wait = false);
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock(rpc::context& ctx,
+                                                                                 atfw::dtmq::SSChannelResetLockReq& req,
+                                                                                 atfw::dtmq::SSChannelResetLockRsp& rsp,
+                                                                                 bool no_wait = false);
 
 /**
  * @brief 销毁频道(Writable副本)，目标服务器选择内嵌在本接口内
@@ -170,8 +206,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock
  * @return rpc::result_code_type 发送结果
  */
 ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type destroy_channel(
-    rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req, google::protobuf::Empty& rsp,
-    bool no_wait = false);
+    rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req, google::protobuf::Empty& rsp, bool no_wait = false);
 
 /**
  * @brief 查找消息

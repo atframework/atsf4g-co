@@ -102,6 +102,8 @@ ${ns}
     rpc_unicast_params_forward.append('request_body')
     rpc_broadcast_params_decl.append('{0} &request_body'.format(rpc.get_request().get_cpp_class_name()))
     rpc_broadcast_params_forward.append('request_body')
+    rpc_nowait_params_decl = [x for x in rpc_unicast_params_decl]
+    rpc_nowait_params_forward = [x for x in rpc_unicast_params_forward]
     if not rpc_is_stream_mode:
         rpc_unicast_params_decl.append('{0} &response_body'.format(rpc.get_response().get_cpp_class_name()))
         rpc_unicast_params_forward.append('response_body')
@@ -111,6 +113,8 @@ ${ns}
     if rpc_allow_ignore_discovery:
       rpc_unicast_params_decl.append('bool __ignore_discovery')
       rpc_unicast_params_forward.append('__ignore_discovery')
+      rpc_nowait_params_decl.append('bool __ignore_discovery')
+      rpc_nowait_params_forward.append('__ignore_discovery')
     if not rpc_is_router_api and rpc_is_stream_mode:
         rpc_return_type = 'rpc::always_ready_code_type'
         rpc_return_sentense = rpc_return_always_ready_code_sentense
@@ -126,6 +130,12 @@ ${ns}
         else:
             rpc_unicast_params_decl_modern.append(param)
             rpc_unicast_params_decl_legacy.append(param)
+    rpc_nowait_params_decl_modern = []
+    for param in rpc_nowait_params_decl:
+        if 'TargetServerNode&& destination_server' == param:
+            rpc_nowait_params_decl_modern.append('const atfw::atapp::etcd_discovery_node& destination_server')
+        else:
+            rpc_nowait_params_decl_modern.append(param)
 %>
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 namespace packer {
@@ -250,8 +260,108 @@ ${rpc_dllexport_decl} rpc::always_ready_code_type ${rpc.get_name()}(
 }
 }  // namespace broadcast
 % endif
-namespace unicast {
 // NOLINTBEGIN(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
+%   if (rpc_is_stream_mode or rpc_allow_no_wait) and not rpc_is_router_api:
+namespace oneway {
+template<class TargetServerNode>
+static ${rpc_return_type}::value_type __${rpc.get_name()}(
+  ${', '.join(rpc_nowait_params_decl)}) {
+  using return_type = ${rpc_return_type}::value_type;
+  if (internal::is_invalid_server_node(destination_server)) {
+    return static_cast<return_type>(${project_namespace + '::err::EN_SYS_PARAM'});
+  }
+
+  atframework::SSMsg* req_msg_ptr = __ctx.create<atframework::SSMsg>();
+  if (nullptr == req_msg_ptr) {
+    FWLOGERROR("rpc {} create request message failed",
+               "${rpc.get_service().get_full_name()}/${rpc.get_name()}");
+    return static_cast<return_type>(${project_namespace + '::err::EN_SYS_MALLOC'});
+  }
+
+  rpc::result_code_type::value_type res{};
+  atframework::SSMsg& req_msg = *req_msg_ptr;
+  task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
+    logic_config::me()->get_local_server_name());
+  ${rpc_request_meta_pretty_prefix}res = rpc::setup_rpc_stream_header(
+    ${rpc_request_meta_pretty_prefix}*req_msg.mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}","${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+    internal::to_string_view(${rpc_request_meta_pretty_prefix}${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name())
+  ${rpc_request_meta_pretty_prefix});
+
+  if (res < 0) {
+    return static_cast<return_type>(res);
+  }
+
+  res = internal::pack_rpc_body(
+    request_body, req_msg.mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+    internal::to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()), false);
+  if (res < 0) {
+    return static_cast<return_type>(res);
+  }
+
+  rpc::context __child_ctx(__ctx);
+  rpc::telemetry::tracer __tracer;
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+    {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
+    {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_service().get_full_name()}/${rpc.get_name()}"}
+  };
+%   if rpc_is_user_rpc:
+  auto __child_trace_span = rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+%   else:
+  rpc::setup_rpc_tracer(__child_ctx, __tracer, *req_msg.mutable_head(),
+%   endif
+                          "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+                          __trace_attributes);
+
+%   if rpc_is_user_rpc:
+  req_msg.mutable_head()->set_user_user_id(user_id);
+  req_msg.mutable_head()->set_user_zone_id(zone_id);
+  if (__child_trace_span) {
+    __child_trace_span->SetAttribute("user_id", user_id);
+    __child_trace_span->SetAttribute("zone_id", zone_id);
+  }
+%   endif
+
+%     if rpc_allow_ignore_discovery:
+  res = ss_msg_dispatcher::me()->send_to_proc(destination_server, req_msg, __ignore_discovery);
+%     else:
+  res = ss_msg_dispatcher::me()->send_to_proc(destination_server, req_msg);
+%     endif
+  FWLOGDEBUG("{}", protobuf_mini_dumper_get_readable(request_body));
+
+  if (res < 0) {
+%     if rpc.get_extension_field('atframework.rpc_options', lambda x: x.warning_log_response_code, []):
+    const int warning_codes[] = {${', '.join(rpc.get_extension_field('atframework.rpc_options', lambda x: x.warning_log_response_code, []))}};
+    if (internal::redirect_rpc_result_to_warning_log(res, warning_codes,
+        "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+        internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()))) {
+      return static_cast<return_type>(__tracer.finish({res , __trace_attributes}));
+    }
+%     endif
+%     if warning_log_codes in rpc.get_extension_field('atframework.rpc_options', lambda x: x.info_log_response_code, []):
+    const int info_codes[] = {${', '.join(rpc.get_extension_field('atframework.rpc_options', lambda x: x.info_log_response_code, []))}};
+    if (internal::redirect_rpc_result_to_info_log(res, info_codes,
+        "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+        internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()))) {
+      return static_cast<return_type>(__tracer.finish({res , __trace_attributes}));
+    }
+%     endif
+      FWLOGERROR("rpc {} call failed, res: {}({})",
+                 "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+                 res, protobuf_mini_dumper_get_error_msg(res)
+      );
+  }
+
+  return static_cast<return_type>(__tracer.finish({res , __trace_attributes}));
+}
+
+${rpc_dllexport_decl} ${rpc_return_type}::value_type ${rpc.get_name()}(
+  ${', '.join(rpc_nowait_params_decl_modern)}) {
+  return __${rpc.get_name()}(${', '.join(rpc_nowait_params_forward)});
+}
+
+}  // namespace oneway
+%   endif
+namespace unicast {
 %   if rpc_is_router_api:
 static ${rpc_return_type} __${rpc.get_name()}(
   ${', '.join(rpc_unicast_params_decl_modern)}) {
@@ -493,8 +603,8 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)})));
 %   endif
 }
-// NOLINTEND(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
 }  // namespace unicast
+// NOLINTEND(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
 
 ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
   ${', '.join(rpc_unicast_params_decl_legacy)}) {
@@ -509,6 +619,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 namespace mock {
 % for rpc in rpcs.values():
+
 ${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
     std::function<rpc::result_code_type(rpc::context &, const ${rpc.get_request().get_cpp_class_name()} &,
                       ${rpc.get_response().get_cpp_class_name()} &)>
