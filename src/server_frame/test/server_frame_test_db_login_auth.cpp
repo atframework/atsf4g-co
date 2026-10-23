@@ -11,6 +11,9 @@
 #include "rpc/db/local_db_interface.atfw.gen.h"
 
 namespace {
+// login_auth key fields: (account_type, open_id); see EnAccountTypeID.
+constexpr uint32_t kLoginAuthAccountType = 11;
+
 bool start_db_runtime(atfw::testing::runtime &test) {
   atfw::testing::runtime_options options;
   options.features = {atfw::testing::feature::db};
@@ -36,10 +39,12 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     // Missing record reads as EN_DB_RECORD_NOT_FOUND.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> record{ctx};
     uint64_t version = 0;
-    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *record, version));
+    int32_t res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-crud", *record, version));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
 
     // First replace of a versionless record succeeds and starts the CAS sequence at 1.
+    record->set_account_type(kLoginAuthAccountType);
     record->set_open_id("openid-crud");
     record->set_user_id(1001);
     version = 0;
@@ -49,6 +54,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
 
     // CAS replace with the current version bumps it.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> update{ctx};
+    update->set_account_type(kLoginAuthAccountType);
     update->set_open_id("openid-crud");
     update->set_user_id(1002);
     res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, update, version));
@@ -57,6 +63,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
 
     // Stale CAS: rejected with EN_DB_OLD_VERSION and the stored version is written back.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> stale{ctx};
+    stale->set_account_type(kLoginAuthAccountType);
     stale->set_open_id("openid-crud");
     stale->set_user_id(9999);
     uint64_t stale_version = 1;
@@ -67,7 +74,8 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     // The conflicting write did not land.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> restored{ctx};
     version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *restored, version));
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-crud", *restored, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(1002, static_cast<int>(restored->user_id()));
     CASE_EXPECT_EQ(2, static_cast<int>(version));
@@ -75,6 +83,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     // Expected version 0 ignores the CAS check: the replace force-updates regardless of the stored
     // version and returns the new one (bumped from the stored version, 2 -> 3).
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> forced{ctx};
+    forced->set_account_type(kLoginAuthAccountType);
     forced->set_open_id("openid-crud");
     forced->set_user_id(1003);
     uint64_t forced_version = 0;
@@ -84,16 +93,18 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
 
     // The forced write landed and is readable with the new version.
     version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *restored, version));
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-crud", *restored, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(1003, static_cast<int>(restored->user_id()));
     CASE_EXPECT_EQ(3, static_cast<int>(version));
 
     // remove_all clears the record.
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, "openid-crud"));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, kLoginAuthAccountType, "openid-crud"));
     CASE_EXPECT_EQ(0, res);
     version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *restored, version));
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-crud", *restored, version));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
     RPC_RETURN_CODE(0);
   });

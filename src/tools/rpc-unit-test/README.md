@@ -214,6 +214,8 @@ auto rule = rpc::db::login_auth::mock::get_all(
     [](rpc::context &, const PROJECT_NAMESPACE_ID::table_login_auth &input,
        PROJECT_NAMESPACE_ID::table_login_auth &output, rpc::unit_test::db_mock_meta &meta)
         -> rpc::result_code_type {
+      // input 携带 key 字段 (account_type, open_id)
+      output.set_account_type(input.account_type());
       output.set_open_id(input.open_id());
       output.set_user_id(7);
       meta.version = 3;            // CAS 版本：写接口传入期望值、读出记录版本

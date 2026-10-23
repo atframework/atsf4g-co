@@ -44,7 +44,7 @@ title: 数据层
 // 示例：协程内读表
 PROJECT_NAMESPACE_ID::table_login_auth row;
 uint64_t version = 0;
-int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account_type, open_id, row, version));
 ```
 
 ### UUID

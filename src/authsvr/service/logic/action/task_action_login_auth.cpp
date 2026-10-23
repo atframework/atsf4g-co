@@ -61,8 +61,9 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   }
 
   // 拉取鉴权表
-  int res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::login_auth::get_all(get_shared_context(), req_body.open_id(), *login_auth_tb, login_auth_cas_version));
+  uint32_t account_type = req_body.account().account_type();
+  int res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(get_shared_context(), account_type, req_body.open_id(),
+                                                               *login_auth_tb, login_auth_cas_version));
   if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to get login auth table failed, error code: {}({})",
                  session_key.node_id, session_key.session_id, req_body.open_id(), res,
@@ -73,14 +74,14 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   if (login_auth_tb->open_id().empty()) {
     login_auth_tb->set_open_id(req_body.open_id());
   }
+  login_auth_tb->set_account_type(account_type);
 
   // 鉴权实现
-  validate_fn_t validate_fn = get_validate_fn(static_cast<uint32_t>(req_body.account().account_type()));
+  validate_fn_t validate_fn = get_validate_fn(account_type);
   if (validate_fn == nullptr) {
     FCTXLOGINFO(get_shared_context(),
                 "session {}:{}, user {} try to validate login auth failed, invalid account_type: {}",
-                session_key.node_id, session_key.session_id, req_body.open_id(),
-                static_cast<uint32_t>(req_body.account().account_type()));
+                session_key.node_id, session_key.session_id, req_body.open_id(), account_type);
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_INVALID_PLATFORM);
     RPC_RETURN_CODE(0);
   }

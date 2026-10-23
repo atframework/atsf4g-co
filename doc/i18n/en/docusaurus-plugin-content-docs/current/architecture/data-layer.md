@@ -44,7 +44,7 @@ Generated from the table/index extensions in `svr.local.table.proto` / `svr.glob
 // Example: reading a table inside a coroutine
 PROJECT_NAMESPACE_ID::table_login_auth row;
 uint64_t version = 0;
-int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account_type, open_id, row, version));
 ```
 
 ### UUID

@@ -36,10 +36,10 @@ message table_example {
 ```cpp
 PROJECT_NAMESPACE_ID::table_login_auth row;
 uint64_t version = 0;
-int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account_type, open_id, row, version));
 ```
 
-   `ctx` is the current RPC context and `open_id` is the login table's string key.
+   `ctx` is the current RPC context; `account_type` and `open_id` are the login table's key fields.
    New table keys/message types follow their generated APIs. `replace` takes
    `rpc::shared_message<Table>`, rather than a plain protobuf message.
 4. Configure Redis in values and generate instance YAML. Verify insert, read, and update with valid keys.

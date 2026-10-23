@@ -33,6 +33,8 @@
 
 namespace {
 constexpr uint32_t kTestDbChannel = static_cast<uint32_t>(db_msg_dispatcher::channel_t::RAW_DEFAULT);
+// login_auth key fields: (account_type, open_id); see EnAccountTypeID.
+constexpr uint32_t kLoginAuthAccountType = 11;
 
 using op_type = atfw::testing::mock_db::op_type;
 
@@ -704,6 +706,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   auto arrange_task =
       test.run_task("db_login_auth_arrange", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> store{ctx};
+        store->set_account_type(kLoginAuthAccountType);
         store->set_open_id("openid-smoke");
         store->set_user_id(42);
         uint64_t version = 0;
@@ -723,7 +726,9 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   auto get_rule = rpc::db::login_auth::mock::get_all(
       [](rpc::context &, const PROJECT_NAMESPACE_ID::table_login_auth &input,
          PROJECT_NAMESPACE_ID::table_login_auth &output, rpc::unit_test::db_mock_meta &meta) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(kLoginAuthAccountType, input.account_type());
         CASE_EXPECT_EQ("openid-smoke", input.open_id());
+        output.set_account_type(input.account_type());
         output.set_open_id(input.open_id());
         output.set_user_id(100);
         meta.version = 9;
@@ -734,7 +739,8 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
       "db_login_auth_mocked_get", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", *rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-smoke", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(100, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(9, static_cast<int>(version));
@@ -750,6 +756,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   auto replace_rule =
       rpc::db::login_auth::mock::replace([](rpc::context &, const PROJECT_NAMESPACE_ID::table_login_auth &input,
                                             rpc::unit_test::db_mock_meta &meta) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(kLoginAuthAccountType, input.account_type());
         CASE_EXPECT_EQ("openid-smoke", input.open_id());
         CASE_EXPECT_EQ(43, static_cast<int>(input.user_id()));
         CASE_EXPECT_EQ(1, static_cast<int>(meta.version));
@@ -760,6 +767,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   auto replace_task = test.run_task(
       "db_login_auth_mocked_replace", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> store{ctx};
+        store->set_account_type(kLoginAuthAccountType);
         store->set_open_id("openid-smoke");
         store->set_user_id(43);
         uint64_t version = 1;
@@ -777,7 +785,8 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   // remove_all has no registered handler: it falls through to the in-memory backend.
   auto remove_task = test.run_task(
       "db_login_auth_fallthrough_remove", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, "openid-smoke"));
+        int32_t res =
+            RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, kLoginAuthAccountType, "openid-smoke"));
         CASE_EXPECT_EQ(0, res);
         RPC_RETURN_CODE(0);
       });
@@ -794,7 +803,8 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
       "db_login_auth_restored_get", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", *rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-smoke", *rsp, version));
         CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
         RPC_RETURN_CODE(0);
       });
@@ -851,6 +861,7 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
             RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(ctx, 0x130071, 1, 10001, nested_req, nested_rsp));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ("nested:db-handler", nested_rsp.echo());
+        output.set_account_type(input.account_type());
         output.set_open_id(input.open_id());
         output.set_user_id(81);
         meta.version = 3;
@@ -862,7 +873,8 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
       test.run_task("db_nested_handler", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-nested", *rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-nested", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(81, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(3, static_cast<int>(version));
@@ -896,10 +908,11 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
 
   // Seed one record through the engine raw entry API (canonical key layout).
   PROJECT_NAMESPACE_ID::table_login_auth seed;
+  seed.set_account_type(kLoginAuthAccountType);
   seed.set_open_id("openid-callback");
   seed.set_user_id(7);
-  const std::string seed_key =
-      std::string(db_msg_dispatcher::me()->get_record_prefix()) + "-login_auth.openid-callback";
+  const std::string seed_key = std::string(db_msg_dispatcher::me()->get_record_prefix()) + "-login_auth:" +
+                               std::to_string(kLoginAuthAccountType) + ":openid-callback";
   const std::string seed_type_name(PROJECT_NAMESPACE_ID::table_login_auth::descriptor()->full_name());
   test.db().set_raw_kv(seed_key, seed_type_name, seed.SerializeAsString(), 1);
 
@@ -925,7 +938,8 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_fallthrough", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", *rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-callback", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(7, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(1, static_cast<int>(version));
@@ -943,6 +957,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_write", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 1;
+        rsp->set_account_type(kLoginAuthAccountType);
         rsp->set_open_id("openid-callback");
         rsp->set_user_id(8);
         int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, rsp, version));
@@ -962,6 +977,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
   rule.on(op_type::kv_get_all, [&](atfw::testing::db_table_context &context) {
     CASE_EXPECT_TRUE(context.key.find("openid-callback") != gsl::string_view::npos);
     PROJECT_NAMESPACE_ID::table_login_auth canned;
+    canned.set_account_type(kLoginAuthAccountType);
     canned.set_open_id("openid-canned");
     canned.set_user_id(100);
     CASE_EXPECT_TRUE(test.db().make_output(*context.rpc_context, canned, context.output_table));
@@ -973,7 +989,8 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_canned_read", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", *rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-callback", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(100, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(9, static_cast<int>(version));
@@ -998,7 +1015,8 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
   });
   auto remove_task =
       test.run_task("db_callback_catch_all", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, "openid-callback"));
+        int32_t res =
+            RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, kLoginAuthAccountType, "openid-callback"));
         CASE_EXPECT_EQ(-23456, res);
         RPC_RETURN_CODE(0);
       });
@@ -1014,7 +1032,8 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_rule_reset", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", *rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kLoginAuthAccountType, "openid-callback", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(8, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(2, static_cast<int>(version));

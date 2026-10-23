@@ -87,7 +87,7 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
     prefix_fmt_value_from_pb = prefix_fmt_value_from_args
     prefix_fmt_value_from_key = prefix_fmt_value_from_args
     for key_map in key_fields:
-        prefix_fmt_key += ".{}"
+        prefix_fmt_key += ":{}"
         prefix_fmt_value_from_args += ", "
         prefix_fmt_value_from_args += key_map["raw_name"]
         prefix_fmt_value_from_pb += ", store->"

@@ -33,6 +33,8 @@
 
 namespace {
 constexpr uint64_t kReadmeSourceNodeId = 0x130092;
+// login_auth key fields: (account_type, open_id); see EnAccountTypeID.
+constexpr uint32_t kReadmeAccountType = 11;
 
 atfw::testing::mock_node make_example_remote(uint64_t id, const char *name) {
   atfw::testing::mock_node node;
@@ -221,6 +223,7 @@ CASE_TEST(rpc_unit_test_readme, db_mock_handler_and_backend) {
   auto get_rule = rpc::db::login_auth::mock::get_all(
       [](rpc::context &, const PROJECT_NAMESPACE_ID::table_login_auth &input,
          PROJECT_NAMESPACE_ID::table_login_auth &output, rpc::unit_test::db_mock_meta &meta) -> rpc::result_code_type {
+        output.set_account_type(input.account_type());
         output.set_open_id(input.open_id());
         output.set_user_id(7);
         meta.version = 3;
@@ -232,13 +235,15 @@ CASE_TEST(rpc_unit_test_readme, db_mock_handler_and_backend) {
     // Intercepted: served by the handler above.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> loaded{ctx};
     uint64_t version = 0;
-    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-readme", *loaded, version));
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, kReadmeAccountType, "openid-readme", *loaded, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(7, static_cast<int>(loaded->user_id()));
     CASE_EXPECT_EQ(3, static_cast<int>(version));
 
     // Not intercepted: replace/remove_all fall through to the in-memory backend.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> store{ctx};
+    store->set_account_type(kReadmeAccountType);
     store->set_open_id("openid-other");
     store->set_user_id(9);
     version = 0;

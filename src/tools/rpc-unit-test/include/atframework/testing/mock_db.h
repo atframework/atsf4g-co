@@ -41,7 +41,7 @@ class mock_db;
 struct ATFW_UTIL_SYMBOL_VISIBLE db_request_record {
   rpc::db::hash_table::unit_test_request::op_type op = rpc::db::hash_table::unit_test_request::op_type::kv_get_all;
   std::string key;
-  // Table name extracted from the key ("{record_prefix}-{table_name}.{fields}"); empty when the key
+  // Table name extracted from the key ("{record_prefix}-{table_name}:{field}:..."); empty when the key
   // does not follow the generated layout.
   std::string table_name;
   int32_t result_code = 0;

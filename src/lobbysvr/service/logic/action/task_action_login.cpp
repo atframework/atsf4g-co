@@ -117,8 +117,8 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> login_auth_tb{get_shared_context()};
   uint64_t login_auth_cas_version = 0;
 
-  res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::login_auth::get_all(get_shared_context(), req_body.open_id(), *login_auth_tb, login_auth_cas_version));
+  res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(get_shared_context(), req_body.account().account_type(),
+                                                           req_body.open_id(), *login_auth_tb, login_auth_cas_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FCTXLOGERROR(get_shared_context(), "user {} try to get login auth table failed when login", req_body.user_id());

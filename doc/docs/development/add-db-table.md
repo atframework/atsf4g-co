@@ -35,10 +35,10 @@ message table_example {
 ```cpp
 PROJECT_NAMESPACE_ID::table_login_auth row;
 uint64_t version = 0;
-int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, open_id, row, version));
+int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account_type, open_id, row, version));
 ```
 
-   `ctx` 是当前 RPC context，`open_id` 是登录表的字符串键。新表的 key 和消息类型以生成接口为准。
+   `ctx` 是当前 RPC context，`account_type` 与 `open_id` 是登录表的 key 字段。新表的 key 和消息类型以生成接口为准。
    `replace` 使用 `rpc::shared_message<Table>`，不要直接传入普通 protobuf message。
 4. 在 values 中配置 Redis 并生成实例 YAML；用有效 key 验证插入、读取和更新。
    启用 CAS 的表还应验证版本不匹配时更新失败。

@@ -17,6 +17,7 @@
 #include <atframework/testing/runtime.h>
 
 #include <chrono>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -25,6 +26,11 @@
 #include "rpc/dns/lookup.h"
 #include "rpc/rpc_utils.h"
 #include "rpc/unit_test/rpcunittestservice.atfw.gen.h"
+
+namespace {
+// login_auth key fields: (account_type, open_id); see EnAccountTypeID.
+constexpr uint32_t kSmokeAccountType = 11;
+}  // namespace
 
 CASE_TEST(rpc_unit_test, runtime_start_stop) {
   atfw::testing::runtime test;
@@ -224,6 +230,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
 
         // 3. DB write + read of the SS result.
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> store{ctx};
+        store->set_account_type(kSmokeAccountType);
         store->set_open_id("openid-combined");
         store->set_user_id(88);
         uint64_t version = 0;
@@ -236,7 +243,8 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
 
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> loaded{ctx};
         version = 0;
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-combined", *loaded, version));
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_auth::get_all(ctx, kSmokeAccountType, "openid-combined", *loaded, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(88, static_cast<int>(loaded->user_id()));
         CASE_EXPECT_EQ(1, static_cast<int>(version));

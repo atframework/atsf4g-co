@@ -341,11 +341,11 @@ std::string mock_db::extract_table_name(gsl::string_view key) const {
     }
     offset = prefix.size() + 1;
   }
-  size_t dot = key.find('.', offset);
-  if (gsl::string_view::npos == dot || dot == offset) {
+  size_t separator = key.find(':', offset);
+  if (gsl::string_view::npos == separator || separator == offset) {
     return std::string{};
   }
-  return std::string{key.substr(offset, dot - offset)};
+  return std::string{key.substr(offset, separator - offset)};
 }
 
 db_table_rule_handle::db_table_rule_handle(std::shared_ptr<detail::db_table_rule_state> rule)

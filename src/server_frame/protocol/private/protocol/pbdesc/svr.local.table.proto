@@ -32,13 +32,17 @@ message table_login_auth {
       name: "login_auth"
       type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       enable_cas: true
+      key_fields: "account_type"
       key_fields: "open_id"
     }
   };
   // clang-format on
 
-  string open_id = 1;
-  uint64 user_id = 2;
+  // 账号类型(登入渠道)
+  // @Refer EnAccountTypeID
+  uint32 account_type = 1;
+  string open_id = 2;
+  uint64 user_id = 3;
 
   string access_token_code = 11;                        // 认证码
   google.protobuf.Timestamp access_token_expired = 12;  // 认证码过期时间
