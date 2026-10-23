@@ -32,6 +32,8 @@ if(DEFINED SteamworksSDK_DIR AND NOT SteamworksSDK_DIR STREQUAL
   # Caller prepared package configuration
   if(EXISTS "${SteamworksSDK_DIR}/SteamworksSDKConfig.cmake")
     find_package(SteamworksSDK REQUIRED)
+    project_link_or_copy_files(${SteamworksSDK_RUNTIME_LIBRARIES}
+                               "${PROJECT_THIRD_PARTY_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
     return()
   endif()
 endif()
@@ -182,3 +184,8 @@ set(SteamworksSDK_DIR
     CACHE PATH "Directory containing SteamworksSDKConfig.cmake" FORCE)
 
 find_package(SteamworksSDK REQUIRED)
+
+# The SDK is a prebuilt package instead of a port, so copy its redistributable libraries into the install directory to
+# let the deploy tree collect them together with the other shared libraries
+project_link_or_copy_files(${SteamworksSDK_RUNTIME_LIBRARIES}
+                           "${PROJECT_THIRD_PARTY_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
