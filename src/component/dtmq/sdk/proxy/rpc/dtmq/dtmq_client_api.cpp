@@ -309,6 +309,9 @@ DTMQ_PROXY_SDK_API rpc::result_code_type::value_type send_message_oneway(
   }
 
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND;
+  }
 
   auto target_node = ss_msg_dispatcher::me()->get_target_server_node(target_server_id);
   if (!target_node) {
