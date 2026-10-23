@@ -44,8 +44,6 @@ else()
   set(_STEAMWORKS_SDK_API_RUNTIME_LIBRARY "${_STEAMWORKS_SDK_API_IMPORT_LIBRARY}")
   set(_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY "${PACKAGE_PREFIX_DIR}/lib/steam/libsdkencryptedappticket.so")
   set(_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY "${_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY}")
-  # These libraries ship without a soname, so the linker stores the path given on the command line in DT_NEEDED
-  set(_STEAMWORKS_SDK_NO_SONAME TRUE)
 endif()
 
 foreach(_STEAMWORKS_SDK_CHECK_FILE IN LISTS _STEAMWORKS_SDK_API_IMPORT_LIBRARY
@@ -81,12 +79,6 @@ if(NOT TARGET SteamworksSDK::AppTicket)
   endif()
 endif()
 
-# A soname-less library linked by absolute path records that path in DT_NEEDED, so its consumers only resolve it while
-# the package directory stays where it was at build time. Link by file name and deploy the runtime libraries below.
-if(_STEAMWORKS_SDK_NO_SONAME)
-  set_target_properties(SteamworksSDK::SteamworksSDK SteamworksSDK::AppTicket PROPERTIES IMPORTED_NO_SONAME TRUE)
-endif()
-
 set(SteamworksSDK_LIBRARIES "${_STEAMWORKS_SDK_API_IMPORT_LIBRARY}" "${_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY}")
 set(SteamworksSDK_RUNTIME_LIBRARIES "${_STEAMWORKS_SDK_API_RUNTIME_LIBRARY}"
                                     "${_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY}")
@@ -96,6 +88,5 @@ unset(_STEAMWORKS_SDK_API_IMPORT_LIBRARY)
 unset(_STEAMWORKS_SDK_API_RUNTIME_LIBRARY)
 unset(_STEAMWORKS_SDK_APP_TICKET_IMPORT_LIBRARY)
 unset(_STEAMWORKS_SDK_APP_TICKET_RUNTIME_LIBRARY)
-unset(_STEAMWORKS_SDK_NO_SONAME)
 
 check_required_components(SteamworksSDK)
