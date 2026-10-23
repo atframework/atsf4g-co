@@ -148,6 +148,7 @@ class user_team_manager {
   bool insert_dirty_handle_for_team(const atfw::team::DTeamKey& key);
   bool insert_dirty_handle_for_invitation(const atfw::team::DTeamKey& key);
   bool insert_dirty_handle_for_join_request(const atfw::team::DTeamKey& key);
+  bool insert_dirty_handle_for_notification(const atfw::team::DTeamInvitationGotNotification& notification);
 
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
@@ -185,4 +186,5 @@ class user_team_manager {
       dirty_invitation_;
   std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
       dirty_join_request_;
+  std::list<atfw::team::DTeamInvitationGotNotification> dirty_got_notification_;
 };

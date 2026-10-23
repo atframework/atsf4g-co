@@ -16,6 +16,8 @@
 *.cxx.in text working-tree-encoding=UTF-8 eol=lf
 *.cc.in text working-tree-encoding=UTF-8 eol=lf
 *.c.in text working-tree-encoding=UTF-8 eol=lf
+*.proto.in text working-tree-encoding=UTF-8 eol=crlf
+*.proto text working-tree-encoding=UTF-8 eol=crlf
 *.sh eol=lf
 *.sh.mako eol=lf
 *.sh.in eol=lf

@@ -212,6 +212,9 @@ user_team_manager::user_team_manager(user& owner)
           team_mgr.dirty_team_.clear();
           team_mgr.dirty_invitation_.clear();
           team_mgr.dirty_join_request_.clear();
+
+          // get info 不包含收到被邀请者的反馈通知，所以不要清理脏
+          // team_mgr.dirty_got_notification_.clear();
           team_mgr.is_pulled_ = true;
         });
 
@@ -375,7 +378,8 @@ bool user_team_manager::is_dirty() const { return is_dirty_; }
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
 
 void user_team_manager::send_dirty_data(rpc::context& ctx) {
-  if (!dirty_team_.empty() || !dirty_invitation_.empty() || !dirty_join_request_.empty()) {
+  if (!dirty_team_.empty() || !dirty_invitation_.empty() || !dirty_join_request_.empty() ||
+      !dirty_got_notification_.empty()) {
     owner_->send_all_syn_msg(ctx);
   }
 }
@@ -1093,7 +1097,7 @@ bool user_team_manager::insert_dirty_handle() {
         auto& team_mgr = user_inst.get_user_team_manager();
 
         if (team_mgr.dirty_team_.empty() && team_mgr.dirty_invitation_.empty() &&
-            team_mgr.dirty_join_request_.empty()) {
+            team_mgr.dirty_join_request_.empty() && team_mgr.dirty_got_notification_.empty()) {
           return;
         }
 
@@ -1176,6 +1180,11 @@ bool user_team_manager::insert_dirty_handle() {
           }
         }
 
+        for (const auto& notification : team_mgr.dirty_got_notification_) {
+          auto* added = output_teams->Add()->mutable_got_notification();
+          protobuf_copy_message(*added, notification);
+        }
+
         if (output_teams->size() == output_base_size && created_here) {
           // 本次没有追加任何内容且消息由本回调创建, 回收以避免空推送; 已有消息则原样保留其他模块的内容
           output.user_dirty.reset();
@@ -1199,6 +1208,7 @@ bool user_team_manager::insert_dirty_handle() {
         team_mgr.dirty_team_.clear();
         team_mgr.dirty_invitation_.clear();
         team_mgr.dirty_join_request_.clear();
+        team_mgr.dirty_got_notification_.clear();
       });
 
   return true;
@@ -1231,5 +1241,14 @@ bool user_team_manager::insert_dirty_handle_for_join_request(const atfw::team::D
     return false;
   }
   dirty_join_request_.insert(key);
+  return true;
+}
+
+bool user_team_manager::insert_dirty_handle_for_notification(
+    const atfw::team::DTeamInvitationGotNotification& notification) {
+  if (!insert_dirty_handle()) {
+    return false;
+  }
+  dirty_got_notification_.push_back(notification);
   return true;
 }
