@@ -17,12 +17,14 @@
 #include <atframework/testing/runtime.h>
 
 #include <chrono>
+#include <memory>
 #include <string>
 
 #include "dispatcher/ss_msg_dispatcher.h"
 #include "frame/test_macros.h"
 #include "rpc/logic/logiccommonservice.atfw.gen.h"
 #include "rpc/router/routerservice.atfw.gen.h"
+#include "rpc/rpc_context.h"
 #include "rpc/unit_test/rpcunittestservice.atfw.gen.h"
 
 namespace {
@@ -31,7 +33,225 @@ static atfw::testing::mock_node make_remote_node(uint64_t id, const char *name) 
   node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(1);
   return node;
 }
+
+template <class TPredicate>
+static bool pump_until(atfw::testing::runtime &test, const TPredicate &predicate) {
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+  while (!predicate() && std::chrono::steady_clock::now() < deadline) {
+    if (test.pump_once() < 0) {
+      return false;
+    }
+  }
+  return predicate();
+}
 }  // namespace
+
+CASE_TEST(rpc_unit_test, ss_oneway_without_task_mock_awaits_nested_rpc) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  auto remote = test.discovery().add_node(make_remote_node(0x130081, "unit-test-oneway-nested"));
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+
+  auto completed = std::make_shared<std::string>();
+  auto response_count = std::make_shared<size_t>(0);
+  auto forward_request = test.get_app()->get_evt_on_forward_request();
+  test.get_app()->set_evt_on_forward_request([forward_request, response_count](
+                                                 atfw::atapp::app &app,
+                                                 const atfw::atapp::app::message_sender_t &sender,
+                                                 const atfw::atapp::app::message_t &message) -> int {
+    atframework::SSMsg envelope;
+    if (envelope.ParseFromArray(message.data.data(), static_cast<int>(message.data.size())) &&
+        envelope.head().has_rpc_response() &&
+        envelope.head().rpc_response().rpc_name() == rpc::unit_test::packer::get_full_name_of_rpc_unit_test_no_wait()) {
+      ++*response_count;
+    }
+    return forward_request ? forward_request(app, sender, message) : 0;
+  });
+
+  auto inner = rpc::unit_test::mock::rpc_unit_test_unary(
+      [](rpc::context &, const rpc_unit_test::RpcUnitTestEchoReq &request,
+         rpc_unit_test::RpcUnitTestEchoRsp &response) -> rpc::result_code_type {
+        response.set_echo("nested:" + request.payload());
+        RPC_RETURN_CODE(0);
+      });
+  auto outer = rpc::unit_test::mock::rpc_unit_test_no_wait(
+      [completed, remote](rpc::context &ctx, const rpc_unit_test::RpcUnitTestEchoReq &request,
+                          rpc_unit_test::RpcUnitTestEchoRsp &response) -> rpc::result_code_type {
+        CASE_EXPECT_NE(0, ctx.get_task_context().task_id);
+        CASE_EXPECT_EQ("captured-before-return", request.payload());
+        rpc_unit_test::RpcUnitTestEchoReq nested_request;
+        nested_request.set_payload(request.payload());
+        int result =
+            RPC_AWAIT_CODE_RESULT(rpc::unit_test::unicast::rpc_unit_test_unary(ctx, *remote, nested_request, response));
+        CASE_EXPECT_EQ(0, result);
+        *completed = response.echo();
+        // A one-way handler's return value and response must not be sent to the task-free caller.
+        RPC_RETURN_CODE(-54321);
+      });
+  CASE_EXPECT_TRUE(!!inner);
+  CASE_EXPECT_TRUE(!!outer);
+  test.ss().expect(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_no_wait()).times(1).to_node(0x130081);
+  test.ss().expect(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_unary()).times(1).to_node(0x130081);
+  {
+    auto ctx = atfw::testing::make_context();
+    CASE_EXPECT_EQ(0, ctx.get_task_context().task_id);
+    rpc_unit_test::RpcUnitTestEchoReq request;
+    request.set_payload("captured-before-return");
+    CASE_EXPECT_EQ(0, rpc::unit_test::oneway::rpc_unit_test_no_wait(ctx, *remote, request));
+    CASE_EXPECT_TRUE(completed->empty());
+    request.set_payload("changed-after-send");
+  }
+  CASE_EXPECT_TRUE(pump_until(test, [completed]() { return !completed->empty(); }));
+  CASE_EXPECT_EQ("nested:captured-before-return", *completed);
+  const auto *record = test.ss().call_at(0);
+  CASE_EXPECT_TRUE(nullptr != record);
+  if (record != nullptr) {
+    CASE_EXPECT_TRUE(record->is_stream);
+    CASE_EXPECT_TRUE(record->matched_rule);
+    CASE_EXPECT_EQ(0, record->head.source_task_id());
+    CASE_EXPECT_NE(0, record->sequence);
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+  CASE_EXPECT_EQ(0, *response_count);
+}
+
+CASE_TEST(rpc_unit_test, ss_stream_entry_points_without_task_preserve_user_fields) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  auto remote = test.discovery().add_node(make_remote_node(0x130082, "unit-test-user-stream"));
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto handled = std::make_shared<size_t>(0);
+  auto rule = rpc::unit_test::mock::rpc_unit_test_user_stream(
+      [handled](rpc::context &ctx, const rpc_unit_test::RpcUnitTestEchoReq &request,
+                google::protobuf::Empty &) -> rpc::result_code_type {
+        CASE_EXPECT_NE(0, ctx.get_task_context().task_id);
+        CASE_EXPECT_EQ("user-stream", request.payload());
+        ++*handled;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!rule);
+  test.ss().expect(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user_stream()).times(4).to_node(0x130082);
+  auto ctx = atfw::testing::make_context();
+  rpc_unit_test::RpcUnitTestEchoReq request;
+  request.set_payload("user-stream");
+  CASE_EXPECT_EQ(0, rpc::unit_test::oneway::rpc_unit_test_user_stream(ctx, *remote, 7, 10003, request, true));
+  CASE_EXPECT_EQ(0, rpc::unit_test::unicast::rpc_unit_test_user_stream(ctx, *remote, 7, 10003, request).unwrap());
+  CASE_EXPECT_EQ(0, rpc::unit_test::rpc_unit_test_user_stream(ctx, 0x130082, 7, 10003, request).unwrap());
+  ss_msg_logic_index index;
+  CASE_EXPECT_EQ(0, rpc::unit_test::broadcast::rpc_unit_test_user_stream(ctx, 7, 10003, request, index).unwrap());
+  CASE_EXPECT_EQ(0, *handled);
+  CASE_EXPECT_TRUE(pump_until(test, [handled]() { return *handled == 4; }));
+  for (size_t i = 0; i < 4; ++i) {
+    const auto *record = test.ss().call_at(i);
+    CASE_EXPECT_TRUE(nullptr != record);
+    if (record != nullptr) {
+      CASE_EXPECT_TRUE(record->is_stream);
+      CASE_EXPECT_TRUE(record->matched_rule);
+      CASE_EXPECT_EQ(0, record->head.source_task_id());
+      CASE_EXPECT_EQ(7, record->head.user_zone_id());
+      CASE_EXPECT_EQ(10003, record->head.user_user_id());
+    }
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(rpc_unit_test, ss_oneway_invalid_target_and_transport_error) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  auto ctx = atfw::testing::make_context();
+  rpc_unit_test::RpcUnitTestEchoReq request;
+  atfw::atapp::etcd_discovery_node invalid;
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
+                 rpc::unit_test::oneway::rpc_unit_test_no_wait(ctx, invalid, request));
+  CASE_EXPECT_EQ(0, test.transport().outbound_count());
+
+  auto remote = test.discovery().add_node(make_remote_node(0x130083, "unit-test-oneway-error"));
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  atfw::testing::transport_send_behavior behavior;
+  behavior.immediate_error = PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  test.transport().set_default_behavior(behavior);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
+                 rpc::unit_test::oneway::rpc_unit_test_no_wait(ctx, *remote, request));
+  CASE_EXPECT_EQ(1, test.transport().outbound_count());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(rpc_unit_test, ss_no_wait_send_error_preserves_wait_later_contract) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  auto remote = test.discovery().add_node(make_remote_node(0x130084, "unit-test-wait-later-error"));
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  atfw::testing::transport_send_behavior behavior;
+  behavior.immediate_error = PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  test.transport().set_default_behavior(behavior);
+  auto task = test.run_task(
+      "wait_later_send_error", std::chrono::seconds{2}, [remote](rpc::context &ctx) -> rpc::result_code_type {
+        rpc_unit_test::RpcUnitTestEchoReq request;
+        rpc_unit_test::RpcUnitTestEchoRsp response;
+        response.set_echo("unchanged");
+        auto await_options = dispatcher_make_default<dispatcher_await_options>();
+        int result = RPC_AWAIT_CODE_RESULT(
+            rpc::unit_test::unicast::rpc_unit_test_no_wait(ctx, *remote, request, response, false, &await_options));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, result);
+        CASE_EXPECT_NE(0, await_options.sequence);
+        CASE_EXPECT_TRUE(await_options.timeout == std::chrono::seconds{3});
+
+        const auto failed_sequence = await_options.sequence;
+        await_options.timeout = std::chrono::seconds{17};
+        result = RPC_AWAIT_CODE_RESULT(
+            rpc::unit_test::unicast::rpc_unit_test_no_wait(ctx, *remote, request, response, true, &await_options));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, result);
+        CASE_EXPECT_EQ(failed_sequence, await_options.sequence);
+        CASE_EXPECT_TRUE(await_options.timeout == std::chrono::seconds{17});
+        CASE_EXPECT_EQ("unchanged", response.echo());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_FALSE(result.hard_timed_out);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(2, test.transport().outbound_count());
+  CASE_EXPECT_EQ(0, test.stop());
+}
 
 CASE_TEST(rpc_unit_test, ss_unary_suspend_resume) {
   atfw::testing::runtime test;

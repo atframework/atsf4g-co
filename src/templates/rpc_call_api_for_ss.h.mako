@@ -193,6 +193,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} rpc::always_ready_code_type
 namespace oneway {
 /**
  * @brief ${rpc.get_extension_field('atframework.rpc_options', lambda x: x.api_name, rpc.get_name())}
+ * @note Sends synchronously without requiring a coroutine task. Returns the send result and does not wait for a response.
 %   for param_doc in rpc_nowait_params_docs:
  * @param ${param_doc.replace('*/', '*')}
 %   endfor
@@ -246,7 +247,8 @@ namespace mock {
  *       calls through rpc::unit_test::get_mock_engine_bridge_for_unit_test() and returns an empty
  *       handle when no mock engine is bound. The handler receives the coroutine context (usable for
  *       nested RPC calls) and the concrete request/response messages, and returns
- *       rpc::result_code_type (RPC_RETURN_CODE).
+ *       rpc::result_code_type (RPC_RETURN_CODE). The same rule handles oneway calls sent outside a task;
+ *       the mock engine runs the handler in its own task and discards the response for those calls.
  */
 ${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
     std::function<rpc::result_code_type(rpc::context &, const ${rpc.get_request().get_cpp_class_name()} &,

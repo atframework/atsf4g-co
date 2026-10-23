@@ -249,7 +249,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_result_guard {
 
   typename details::rpc_result_guard_getter<TVALUE, std::is_lvalue_reference<TVALUE>::value>::value_type
   get() noexcept {
-    return details::rpc_result_guard_getter<TVALUE, std::is_lvalue_reference<TVALUE>::value>::template get(data_);
+    return details::rpc_result_guard_getter<TVALUE, std::is_lvalue_reference<TVALUE>::value>::template get<>(data_);
   }
 
  private:

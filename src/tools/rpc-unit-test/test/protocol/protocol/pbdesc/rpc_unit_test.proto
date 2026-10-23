@@ -50,7 +50,18 @@ service RpcUnitTestService {
 
   // Non-stream allow_no_wait: covers the no-wait/wait-later overloads.
   rpc rpc_unit_test_no_wait(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
-    option (atframework.rpc_options) = {allow_no_wait: true};
+    option (atframework.rpc_options) = {allow_no_wait: true timeout: {seconds: 3}};
+  }
+
+  // Task-free stream sends also carry user identifiers and support discovery/broadcast options.
+  rpc rpc_unit_test_user_stream(stream RpcUnitTestEchoReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      user_rpc: true
+      allow_ignore_discovery: true
+      enable_broadcast: true
+      warning_log_response_code: "-54321"
+      info_log_response_code: "-54322"
+    };
   }
 
   // User RPC: attaches user identifiers into the SS head.

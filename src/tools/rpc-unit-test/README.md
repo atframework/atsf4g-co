@@ -172,6 +172,12 @@ SS handler 返回 `rpc::result_code_type`，可以是协程：`RPC_AWAIT_CODE_RE
 `ss_request_view.context` / typed handler 首参传入）；纯同步 handler 直接 `RPC_RETURN_CODE(...)`。两种
 协程构建模式（std-coroutine / legacy）写法相同。
 
+`rpc::<module>::oneway::<rpc>()` 可在任务外使用 `atfw::testing::make_context()` 调用，直接返回整数发送结果。
+它复用同名 `mock::<rpc>()` 规则，无需另行注册 nowait mock。发送时序列化的请求由 transport 保存；推进
+`runtime::pump_once()` 后，引擎在独立任务中执行 handler，允许 handler 等待嵌套 RPC，但丢弃其响应和返回码。
+调用方的 context 和请求对象可在发送返回后销毁；测试应等待可观察的 handler 结果并检查发送历史。
+任务外调用、请求快照、嵌套等待和无回包的完整用例见 `test/rpc_unit_test_ss.cpp`。
+
 规则选项（`ss_rule_options`）：`match_node_id`（按目标节点匹配）、`times`（FIFO 脚本）、
 `delay_generations`、`no_response`（模拟丢响应触发超时）、`malformed_type_url`/`malformed_body`。
 
@@ -250,7 +256,8 @@ handler 首参 `rpc::context &`（可等待嵌套 RPC），末参统一为可扩
 ## 默认严格策略与覆盖优先级
 
 - 需响应 RPC（unary/wait 变体）：未匹配规则默认**快速失败**并输出调用与可用规则诊断。
-- 单向通知类（stream/no-wait/broadcast/wait-later）：默认**记录并成功**（结果丢弃）。
+- 单向通知类（stream/oneway/no-wait/broadcast）：默认**记录并成功**（结果丢弃）。
+- `wait_later` 仍发送需要响应的请求，沿用 unary 匹配规则；调用方稍后用返回的等待参数接收响应。
 - 两类默认值都可用 per-rule 选项覆盖（如把 stream 显式设为 fail 做负向断言），`mock_error` 直接注册
   错误响应。
 - DB 覆盖顺序：生成层 typed handler → 引擎层 per-table 回调 → 内存 backend；默认不允许真实 Redis
