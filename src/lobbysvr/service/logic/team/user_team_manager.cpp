@@ -1090,9 +1090,9 @@ void user_team_manager::send_accept_invitation_notification(rpc::context& ctx,
   }
 }
 
-bool user_team_manager::insert_dirty_handle() {
+bool user_team_manager::insert_dirty_handle(bool ignore_pulled) {
   // 未拉取过数据，直接返回，不用设置数据推送
-  if (!is_pulled_) {
+  if (!ignore_pulled && !is_pulled_) {
     return false;
   }
 
@@ -1251,7 +1251,7 @@ bool user_team_manager::insert_dirty_handle_for_join_request(const atfw::team::D
 
 bool user_team_manager::insert_dirty_handle_for_notification(
     const atfw::team::DTeamInvitationGotNotification& notification) {
-  if (!insert_dirty_handle()) {
+  if (!insert_dirty_handle(false)) {
     return false;
   }
   dirty_got_notification_.push_back(notification);

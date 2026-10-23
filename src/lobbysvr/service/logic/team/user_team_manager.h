@@ -144,7 +144,7 @@ class user_team_manager {
   bool remove_pending_invitation(rpc::context& ctx, const atfw::team::DTeamKey& team_key);
   void send_accept_invitation_notification(rpc::context& ctx, const team_invitation_ptr_t& invitation);
 
-  bool insert_dirty_handle();
+  bool insert_dirty_handle(bool ignore_pulled = false);
   bool insert_dirty_handle_for_team(const atfw::team::DTeamKey& key);
   bool insert_dirty_handle_for_invitation(const atfw::team::DTeamKey& key);
   bool insert_dirty_handle_for_join_request(const atfw::team::DTeamKey& key);
