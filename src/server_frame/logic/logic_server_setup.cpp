@@ -720,7 +720,7 @@ SERVER_FRAME_API bool logic_server_common_module::suspend_stop_callback() {
     return false;
   }
 
-  if (self->is_enabled() && self->is_runtime_active()) {
+  if (self->is_enabled() && self->is_actived()) {
     return true;
   }
 

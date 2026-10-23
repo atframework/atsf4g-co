@@ -2374,7 +2374,7 @@ void orbit_agent_manager::delete_client(const orbit_agent_client_record_ptr& cli
     seed_client_record_ = nullptr;
   }
   client_record->process_handle_main_thread = nullptr;
-  FWLOGINFO("Deleted client: %s", client_record->client_id.c_str());
+  FWLOGINFO("Deleted client: {}", client_record->client_id.c_str());
 }
 
 // 计算负载系数
