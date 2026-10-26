@@ -28,8 +28,8 @@
 #include <rpc/rpc_context.h>
 
 #include <cstdint>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 namespace {
 static std::unordered_map<uint32_t, validate_fn_t> build_validate_fn_map() {
@@ -81,7 +81,8 @@ rpc::result_code_type auth_validate_internal(rpc::context& ctx, atfw::util::nost
 
 #ifdef ATFW_MACRO_CHANNEL_WITH_STEAMWORKS_SDK
 rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::string_view openid,
-                                          bool /*is_new_user*/, PROJECT_NAMESPACE_ID::table_login_auth& /*db_auth_table*/,
+                                          bool /*is_new_user*/,
+                                          PROJECT_NAMESPACE_ID::table_login_auth& /*db_auth_table*/,
                                           const PROJECT_NAMESPACE_ID::DAccountData& input_account_data) {
   const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::authsvr_cfg>();
   const auto& steam_auth_cfg = server_cfg.steam_auth();
@@ -92,6 +93,11 @@ rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::
   do {
     if (!steam_auth_cfg.enable_offline()) {
       break;
+    }
+
+    const auto& encrypted_ticket = input_account_data.access();
+    if (encrypted_ticket.empty() || encrypted_ticket.size() > 1024) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_VERIFY);
     }
 
     uint8 decrypted[1024];
@@ -124,9 +130,9 @@ rpc::result_code_type auth_validate_steam(rpc::context& ctx, atfw::util::nostd::
     }
 
     // 1. 用后台生成的对称密钥解密
-    if (!SteamEncryptedAppTicket_BDecryptTicket(reinterpret_cast<const uint8*>(input_account_data.access().data()),
-                                                static_cast<uint32>(input_account_data.access().size()), decrypted,
-                                                &cbDecrypted, reinterpret_cast<const uint8*>(rgub_key.data()),
+    if (!SteamEncryptedAppTicket_BDecryptTicket(reinterpret_cast<const uint8*>(encrypted_ticket.data()),
+                                                static_cast<uint32>(encrypted_ticket.size()), decrypted, &cbDecrypted,
+                                                reinterpret_cast<const uint8*>(rgub_key.data()),
                                                 static_cast<int>(rgub_key.size()))) {
       FCTXLOGINFO(ctx, "user {} try to validate auth token, decrypt ticket failed", openid);
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_OPENAPI_PARSE_FAIL);
