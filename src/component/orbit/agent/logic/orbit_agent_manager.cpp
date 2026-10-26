@@ -1164,27 +1164,42 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
   if (state == atfw::orbit::EN_CLIENT_STATE_STARTING) {
     batch_startup_count_++;
   }
-  if (record->state == atfw::orbit::EN_CLIENT_STATE_STARTING && !record->seed_process) {
-    if (state == atfw::orbit::EN_CLIENT_STATE_RUNNING) {
-      repeated_startup_failures_ = 0;
-      pre_start_repeated_failures_.erase(record->client_template_id);
-    } else if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
-      // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
-      // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
-      uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
-      ++failures;
-      FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
-                   record->local_client_id, record->client_template_id, failures);
-      if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
-        disable_pre_start_template(record->client_template_id);
+  if (!record->seed_process) {
+    if (record->state == atfw::orbit::EN_CLIENT_STATE_STARTING) {
+      if (state == atfw::orbit::EN_CLIENT_STATE_RUNNING) {
+        // 正常启动
+        repeated_startup_failures_ = 0;
+        pre_start_repeated_failures_.erase(record->client_template_id);
+      } else if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
+        // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
+        // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
+        uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
+        ++failures;
+        FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
+                     record->local_client_id, record->client_template_id, failures);
+        if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
+          disable_pre_start_template(record->client_template_id);
+        }
+      } else {
+        ++repeated_startup_failures_;
+        if (repeated_startup_failures_fatal_error_ > 0 &&
+            repeated_startup_failures_ > repeated_startup_failures_fatal_error_) {
+          FWLOGERROR("orbit agent repeated client startup failures reached {}, exiting process",
+                     repeated_startup_failures_);
+          agent_fatal_error();
+        }
       }
-    } else {
-      ++repeated_startup_failures_;
-      if (repeated_startup_failures_fatal_error_ > 0 &&
-          repeated_startup_failures_ > repeated_startup_failures_fatal_error_) {
-        FWLOGERROR("orbit agent repeated client startup failures reached {}, exiting process",
-                   repeated_startup_failures_);
-        agent_fatal_error();
+    } else if (record->state == atfw::orbit::EN_CLIENT_STATE_RUNNING) {
+      if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
+        // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
+        // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
+        uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
+        ++failures;
+        FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
+                     record->local_client_id, record->client_template_id, failures);
+        if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
+          disable_pre_start_template(record->client_template_id);
+        }
       }
     }
   }
