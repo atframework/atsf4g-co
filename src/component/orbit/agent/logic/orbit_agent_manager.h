@@ -57,8 +57,11 @@ struct orbit_agent_client_record {
   int32_t client_template_id = 0;
   bool seed_process = false;  // 是否为种子进程
   bool pre_start = false;     // 是否预启动
-  // 是否已开始向 Client 下发 start_client：预启动认领与普通启动统一置位
+  // 是否已向 Client 下发 start_client：这是启动成功的唯一判定依据，
+  // 未置位就退出（进程退出/启动超时/主动 stop）一律按启动失败处理
   bool start_client_sent = false;
+  // 启动失败是否已计数，避免 EXITING/EXITED 多次状态转换重复累加
+  bool startup_failure_counted = false;
 
   // Client 启动参数
   ::google::protobuf::RepeatedPtrField<::std::string> custom_args;  // 来自模板的启动参数
@@ -190,9 +193,13 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                                                     orbit_agent_client_record_ptr client_record);
   // 异步下发 start_client（普通启动：Client 上报 Ready 后被接受时下发）
   void schedule_send_start_client(const orbit_agent_client_record_ptr& client_record);
-  // 向 Client 下发 start_client，成功后才置位 start_client_sent
+  // 向 Client 下发 start_client
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_start_client(rpc::context& ctx,
-                                                                  orbit_agent_client_record_ptr client_record);
+                                                                 orbit_agent_client_record_ptr client_record);
+  // 置位 start_client_sent，并按"启动成功"清理连续失败计数
+  void mark_start_client_sent(const orbit_agent_client_record_ptr& client_record);
+  // 未下发 start_client 就退出时，按"启动失败"累加计数
+  void record_client_startup_failure(const orbit_agent_client_record_ptr& client_record);
   // 周期打印 Agent 运行情况（各模板的预启动/运行数量）
   void log_agent_running_summary(time_t now);
 

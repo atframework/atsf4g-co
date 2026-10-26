@@ -917,7 +917,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
   // 统一流程：普通启动在 Client 上报 Ready 后同样下发 start_client，
   // Client 无需区分预启动，只要进程真正可用就一定会收到 on_start_client
   if (!client_record->start_client_sent) {
-    client_record->start_client_sent = true;
+    mark_start_client_sent(client_record);
     schedule_send_start_client(client_record);
   }
 
@@ -1164,45 +1164,14 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
   if (state == atfw::orbit::EN_CLIENT_STATE_STARTING) {
     batch_startup_count_++;
   }
-  if (!record->seed_process) {
-    if (record->state == atfw::orbit::EN_CLIENT_STATE_STARTING) {
-      if (state == atfw::orbit::EN_CLIENT_STATE_RUNNING) {
-        // 正常启动
-        repeated_startup_failures_ = 0;
-        pre_start_repeated_failures_.erase(record->client_template_id);
-      } else if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
-        // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
-        // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
-        uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
-        ++failures;
-        FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
-                     record->local_client_id, record->client_template_id, failures);
-        if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
-          disable_pre_start_template(record->client_template_id);
-        }
-      } else {
-        ++repeated_startup_failures_;
-        if (repeated_startup_failures_fatal_error_ > 0 &&
-            repeated_startup_failures_ > repeated_startup_failures_fatal_error_) {
-          FWLOGERROR("orbit agent repeated client startup failures reached {}, exiting process",
-                     repeated_startup_failures_);
-          agent_fatal_error();
-        }
-      }
-    } else if (record->state == atfw::orbit::EN_CLIENT_STATE_RUNNING) {
-      if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
-        // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
-        // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
-        uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
-        ++failures;
-        FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
-                     record->local_client_id, record->client_template_id, failures);
-        if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
-          disable_pre_start_template(record->client_template_id);
-        }
-      }
-    }
+
+  // 启动成功与否统一以 start_client_sent 判定：离开前还没有下发过 start_client，
+  // 说明这次拉起从未真正启动成功，按启动失败计数（成功计数在置位时结算）
+  if (!stoped_ && !record->seed_process && !record->start_client_sent &&
+      (state == atfw::orbit::EN_CLIENT_STATE_EXITING || state == atfw::orbit::EN_CLIENT_STATE_EXITED)) {
+    record_client_startup_failure(record);
   }
+
   record->state = state;
 }
 
@@ -1881,7 +1850,7 @@ void orbit_agent_manager::bind_pre_start_client(const orbit_agent_client_record_
   client_record->server_unique_id = request.server_identity().unique_id();
   client_record->notify_client_exit = false;
   // 认领即视为已脱离预启动池，避免在 start_client 回包前被第二个请求重复认领
-  client_record->start_client_sent = true;
+  mark_start_client_sent(client_record);
   client_id_to_instance_id_[client_record->client_id] = client_record->client_instance_id;
   server_unique_id_to_client_ids_[client_record->server_unique_id].insert(client_record->client_id);
   log_client_id_mapping("claim", *client_record);
@@ -1945,12 +1914,58 @@ rpc::result_code_type orbit_agent_manager::send_start_client(rpc::context& ctx,
     RPC_RETURN_CODE(rpc_result);
   }
 
-  client_record->start_client_sent = true;
+  mark_start_client_sent(client_record);
   // 认领时已清掉预启动标记，这里兜底清一次，普通启动记录本身就是 false
   client_record->pre_start = false;
   FWLOGINFO("orbit agent start_client sent for client {}, client_id={}", client_record->local_client_id,
             client_record->client_id);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+void orbit_agent_manager::mark_start_client_sent(const orbit_agent_client_record_ptr& client_record) {
+  if (!client_record || client_record->start_client_sent) {
+    return;
+  }
+
+  // 置位即视为启动成功，历史失败不再影响后续的连续失败判定
+  client_record->start_client_sent = true;
+  if (client_record->seed_process) {
+    return;
+  }
+
+  repeated_startup_failures_ = 0;
+  if (client_record->client_template_id != 0) {
+    pre_start_repeated_failures_.erase(client_record->client_template_id);
+  }
+}
+
+void orbit_agent_manager::record_client_startup_failure(const orbit_agent_client_record_ptr& client_record) {
+  if (!client_record || client_record->startup_failure_counted) {
+    return;
+  }
+  client_record->startup_failure_counted = true;
+
+  if (client_record->pre_start && client_record->client_template_id != 0) {
+    // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
+    // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
+    uint32_t& failures = pre_start_repeated_failures_[client_record->client_template_id];
+    ++failures;
+    FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
+                 client_record->local_client_id, client_record->client_template_id, failures);
+    if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
+      disable_pre_start_template(client_record->client_template_id);
+    }
+    return;
+  }
+
+  ++repeated_startup_failures_;
+  FWLOGWARNING("orbit agent client {} exited before start_client sent, startup failed {} time(s) in a row",
+               client_record->local_client_id, repeated_startup_failures_);
+  if (repeated_startup_failures_fatal_error_ > 0 &&
+      repeated_startup_failures_ > repeated_startup_failures_fatal_error_) {
+    FWLOGERROR("orbit agent repeated client startup failures reached {}, exiting process", repeated_startup_failures_);
+    agent_fatal_error();
+  }
 }
 
 rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ctx,
