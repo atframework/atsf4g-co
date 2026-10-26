@@ -38,6 +38,8 @@ enum class logic_service_type : uint32_t {
   // 好友 相关服务 === 保留一部分31-32
   kFriendManagementSvr = 31,  // 好友管理服务
   kFriendRecommendSvr = 32,   // 好友推荐服务
+
+  kComplianceSvr = 33,  // 合规服务（敏感词、实名认证、防沉迷等的管理）
 };
 }  // namespace component
 }  // namespace atframework

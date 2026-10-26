@@ -1,0 +1,5 @@
+{{- template "libapp.configmap" (list . "compliance-svr.configmap") -}}
+{{- define "compliance-svr.configmap" -}}
+data:
+  {{ include "compliance-svr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/compliance-svr.yaml.tpl") . | quote }}
+{{- end -}}

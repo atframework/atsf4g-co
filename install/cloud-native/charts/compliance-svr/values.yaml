@@ -1,0 +1,26 @@
+# Default values for the compliance service.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: compliance-svrd
+
+type_id: 33
+type_name: "compliance-svr"
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/compliance-svr
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/compliance-svr/cfg
+  logMountPath: /data/atframework/publish/compliance-svr/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/compliance-svr/log
+
+compliance_svr: {}
+enable_excel_config: false

@@ -17,6 +17,7 @@ add_subdirectory(test)
 add_subdirectory(distributed_transaction)
 add_subdirectory(rank)
 add_subdirectory(dtmq)
+add_subdirectory(compliance)
 # ============ Export and install components ============
 install(
   EXPORT ${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}

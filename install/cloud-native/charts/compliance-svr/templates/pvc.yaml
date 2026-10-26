@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "compliance-svr.pvc") -}}
+{{- define "compliance-svr.pvc" -}}
+{{- end -}}

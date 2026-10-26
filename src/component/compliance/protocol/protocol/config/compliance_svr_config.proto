@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+option cc_enable_arenas = true;
+option go_package = "github.com/atframework/atsf4g-co/component/compliance/protocol/protocol/config";
+
+package atframework.compliance.config;
+
+// 合规服务实例配置；业务实现接入时在此增加配置项。
+message compliance_svr_cfg {}

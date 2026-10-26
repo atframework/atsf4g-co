@@ -35,6 +35,12 @@ proc_desc:
     start_instance_id: 1
     group: 2
 
+  - chart_name: "compliance-svr"
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+    group: 2
+
   - chart_name: "cachesvr"
     world_instance: true
     instance_count: 1

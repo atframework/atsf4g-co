@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+import "protocol/extension/atframework.proto";
+
+option optimize_for = SPEED;
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+option go_package = "github.com/atframework/atsf4g-co/component/compliance/protocol/protocol/pbdesc";
+
+package atframework.compliance;
+
+enum EnTextFilterStatus {
+  EN_TEXT_FILTER_STATUS_OK = 0;       // 未命中过滤规则
+  EN_TEXT_FILTER_STATUS_MATCHED = 1;  // 命中过滤规则（发现敏感词）
+}
+
+message text_filter_settings {
+  bool return_original_text = 1;  // 是否在回包中携带原始文本，默认不携带
+  string replacement_text = 2;    // 每个命中敏感词替换成的完整文本；空字符串表示删除命中词
+}
+
+message SSFilterTextReq {
+  string text = 1;  // 待过滤的 UTF-8 文本
+  text_filter_settings settings = 2;
+}
+
+// 仅在 RPC 返回成功时读取过滤结果；RPC 错误码由服务框架的回包头携带。
+message SSFilterTextRsp {
+  string original_text = 1;  // 仅在 return_original_text=true 时填充；未返回或原文为空时均为空字符串
+  string filtered_text = 2;  // 替换后的 UTF-8 文本；未命中时与请求文本相同
+  EnTextFilterStatus status = 3;
+}
+
+service ComplianceService {
+  option (atframework.service_options) = {
+    module_name: "compliance"
+  };
+
+  rpc filter_text(SSFilterTextReq) returns (SSFilterTextRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "敏感词过滤"
+    };
+  };
+}
