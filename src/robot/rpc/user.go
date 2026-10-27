@@ -28,7 +28,7 @@ func LoginAuthRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.L
 		OpenId: user.GetOpenId(),
 		Account: &public_protocol_pbdesc.DAccountData{
 			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INTERNAL),
-			Access:      user.GetAccessToken(),
+			Access:      []byte(user.GetAccessToken()),
 			ChannelId:   uint32(public_protocol_pbdesc.EnPlatformChannelID_EN_PCI_NONE),
 		},
 		SystemId:        public_protocol_pbdesc.EnSystemID_EN_OS_WINDOWS,
@@ -57,7 +57,7 @@ func LoginRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyU
 		UserId:          user.GetUserId(),
 		Account: &public_protocol_pbdesc.DAccountData{
 			AccountType: uint32(public_protocol_pbdesc.EnAccountTypeID_EN_ATI_ACCOUNT_INTERNAL),
-			Access:      user.GetAccessToken(),
+			Access:      []byte(user.GetAccessToken()),
 			ChannelId:   uint32(public_protocol_pbdesc.EnPlatformChannelID_EN_PCI_NONE),
 		},
 		ClientInfo: &public_protocol_pbdesc.DClientDeviceInfo{

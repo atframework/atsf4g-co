@@ -94,18 +94,10 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     RPC_RETURN_CODE(0);
   }
 
-  // access_bytes 仅用于传输；迁移到本地副本的 access，后续逻辑统一读取 access。
-  auto account_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DAccountData>(get_shared_context());
-  protobuf_copy_message(*account_data, req_body.account());
-  if (account_data->account_type() == PROJECT_NAMESPACE_ID::EN_ATI_ACCOUNT_STEAM) {
-    account_data->set_access(account_data->access_bytes());
-  }
-  account_data->clear_access_bytes();
-
   res = RPC_AWAIT_CODE_RESULT(
       (*validate_fn)(get_shared_context(), req_body.open_id(),
                      res == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND || login_auth_tb->user_id() == 0,
-                     *login_auth_tb, *account_data));
+                     *login_auth_tb, req_body.account()));
   if (res < 0) {
     FCTXLOGINFO(get_shared_context(), "session {}:{}, user {} try to validate login auth failed, error code: {}({})",
                 session_key.node_id, session_key.session_id, req_body.open_id(), res,
@@ -115,11 +107,10 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   }
 
   // 复制鉴权信息
-  protobuf_copy_message(*login_auth_tb->mutable_last_account_data(), *account_data);
+  protobuf_copy_message(*login_auth_tb->mutable_last_account_data(), req_body.account());
   if (req_body.account().account_type() == PROJECT_NAMESPACE_ID::EN_ATI_ACCOUNT_STEAM) {
     // Steam 票据仅用于本次验票，不作为账号持久凭证。
     login_auth_tb->mutable_last_account_data()->clear_access();
-    login_auth_tb->mutable_last_account_data()->clear_access_bytes();
   }
 
   // 如果是新用户，需要创建user_id
