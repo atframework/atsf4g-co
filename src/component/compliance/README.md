@@ -12,16 +12,22 @@
 
 资源文件为 `install/resource/compliance/text_filter.acv2`，构建配置时自动复制到 `<发布目录>/resource/compliance`。配置项 `compliance_svr.text_filter_dictionary_file` 默认指向 `../../resource/compliance/text_filter.acv2`，相对于进程工作目录。
 
-`text_filter_manager` 管理词库加载、重载和清理。启动加载失败时报错；重载失败保留旧词库，每批使用同一快照。词库跳过 Unicode 空白、不可见字符、标点和符号，忽略 ASCII 大小写。
+`text_filter_manager` 管理词库加载、重载和清理。启动加载失败时报错；重载失败保留旧词库，每批使用同一快照。词库忽略 ASCII 大小写，使用经过筛选的 2,847 个 skip 字符。
+
+skip 表基于 Unicode 18.0.0 的 `Pattern_Syntax`、`White_Space`、`Cc`、双向格式控制符，以及下划线、软连字符、零宽空格、Word Joiner 和 BOM。兼容形式只有在递归分解的每个字符均属于基础白名单时才加入。再排除字母、组合标记、数字、部首、文字延长符、音调/变音符、连接控制符、变体选择符、表意文字描述符，以及兼容分解后含上述内容的字符；未分配码位和私用区不进入 skip 表。
+
+例如 `*`、`-`、`/`、空格和中文句号会被跳过；`⼀`、`⺀`、`々`、韩文填充字、组合重音符和 ZWJ/ZWNJ 保持有意义，不会被跳过。不直接展开整个 `S*` 或 `Default_Ignorable_Code_Point`，以免吞掉其他语言的正常文字组成部分。规则依据见 [Unicode UAX #31](https://www.unicode.org/reports/tr31/#Pattern_Syntax) 和 [UAX #44](https://www.unicode.org/reports/tr44/)。
 
 更新词库时，用 `ac_automation_tool` 生成到尚不存在的新文件，校验后替换资源文件：
 
 ```text
-ac_automation_tool build --input <UTF-8词表> --output <新词库> --nocase --skip-space --skip-invisible --skip-punctuation --skip-symbols
+ac_automation_tool build --input <UTF-8词表> --output <新词库> --nocase --skip-file <text-filter-safe-skips.utf8.txt>
 ac_automation_tool verify --input <新词库> --semantic
 ```
 
-当前词库来自最终合并去重的 51,758 条词表，大小写归一化后为 51,506 条。测试词库用 `test/data/text_filter_words.utf8.txt` 按同样命令生成，保存为 `test/data/text_filter_fixture.acv2`。
+当前词库来自最终合并去重的 51,758 条词表，大小写归一化后为 51,506 条，文件为 6,305,704 bytes。源词表、`text-filter-safe-skips.utf8.txt` 和 `text-filter-safe-skip-policy.json` 保留在构建目录的 `datasets/ac_automation_v2/2026-10-26/`，不加入 Git；策略文件记录完整码位区间、Unicode 来源和 SHA-256，可重建 skip 表。更新时使用这份显式 skip 表，保持匹配规则可审阅。
+
+测试词库及其小型文本来源分别位于 `test/data/text_filter_fixture.acv2` 和 `test/data/text_filter_words.utf8.txt`。
 
 ## 验证
 
