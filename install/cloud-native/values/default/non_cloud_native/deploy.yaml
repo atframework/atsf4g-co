@@ -36,7 +36,7 @@ proc_desc:
     group: 2
 
   - chart_name: "compliance-svr"
-    world_instance: false
+    world_instance: true
     instance_count: 1
     start_instance_id: 1
     group: 2
