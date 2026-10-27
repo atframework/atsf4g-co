@@ -21,11 +21,11 @@ skip 表基于 Unicode 18.0.0 的 `Pattern_Syntax`、`White_Space`、`Cc`、双�
 更新词库时，用 `ac_automation_tool` 生成到尚不存在的新文件，校验后替换资源文件：
 
 ```text
-ac_automation_tool build --input <UTF-8词表> --output <新词库> --nocase --skip-file <text-filter-safe-skips.utf8.txt>
+ac_automation_tool build --input <UTF-8词表> --output <新词库> --nocase --skip-space --skip-invisible --skip-punctuation --skip-symbols
 ac_automation_tool verify --input <新词库> --semantic
 ```
 
-当前词库来自最终合并去重的 51,758 条词表，大小写归一化后为 51,506 条，文件为 6,305,704 bytes。源词表、`text-filter-safe-skips.utf8.txt` 和 `text-filter-safe-skip-policy.json` 保留在构建目录的 `datasets/ac_automation_v2/2026-10-26/`，不加入 Git；策略文件记录完整码位区间、Unicode 来源和 SHA-256，可重建 skip 表。更新时使用这份显式 skip 表，保持匹配规则可审阅。
+当前词库来自最终合并去重的 51,758 条词表，大小写归一化后为 51,506 条，文件为 6,305,704 bytes。内置四类 skip 选项使用上述保守白名单，可逐字节重建当前资源。源词表、`text-filter-safe-skips.utf8.txt` 和 `text-filter-safe-skip-policy.json` 保留在构建目录的 `datasets/ac_automation_v2/2026-10-26/`，不加入 Git；策略文件记录完整码位区间、Unicode 来源和 SHA-256，也可用 `--skip-file` 显式重建相同规则。
 
 测试词库及其小型文本来源分别位于 `test/data/text_filter_fixture.acv2` 和 `test/data/text_filter_words.utf8.txt`。
 

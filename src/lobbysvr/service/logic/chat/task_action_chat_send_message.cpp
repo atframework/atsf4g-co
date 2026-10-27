@@ -83,7 +83,7 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
       int32_t res = RPC_AWAIT_CODE_RESULT(rpc::compliance::filter_text(get_shared_context(), *filter_req, *filter_rsp));
       // 仅当有回包时才处理,服务故障时忽略过滤
       if (res != 0) {
-        FCTXLOGWARNING(get_shared_context(), "{} filter text {} failed, res={}", *user_inst, text, res,
+        FCTXLOGWARNING(get_shared_context(), "{} filter text {} failed, res={}({})", *user_inst, text, res,
                        protobuf_mini_dumper_get_error_msg(res));
       }
       if (res == 0 && filter_rsp->results_size() > 0) {
