@@ -19,16 +19,24 @@ message text_filter_settings {
   string replacement_text = 2;    // 每个命中敏感词替换成的完整文本；空字符串表示删除命中词
 }
 
-message SSFilterTextReq {
+message text_filter_item {
   string text = 1;  // 待过滤的 UTF-8 文本
   text_filter_settings settings = 2;
 }
 
-// 仅在 RPC 返回成功时读取过滤结果；RPC 错误码由服务框架的回包头携带。
-message SSFilterTextRsp {
+message text_filter_result {
   string original_text = 1;  // 仅在 return_original_text=true 时填充；未返回或原文为空时均为空字符串
   string filtered_text = 2;  // 替换后的 UTF-8 文本；未命中时与请求文本相同
   EnTextFilterStatus status = 3;
+}
+
+message SSFilterTextReq {
+  repeated text_filter_item items = 1;
+}
+
+// 结果与请求条目按下标一一对应；任一条目失败时 RPC 整体失败，不返回部分结果。
+message SSFilterTextRsp {
+  repeated text_filter_result results = 1;
 }
 
 service ComplianceService {

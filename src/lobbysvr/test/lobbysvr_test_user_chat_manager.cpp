@@ -21,7 +21,9 @@
 #include <protocol/pbdesc/com.protocol.user.pb.h>
 #include <protocol/pbdesc/com.struct.chat.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
+#include <protocol/pbdesc/compliance_service.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -59,6 +61,7 @@
 #include "logic/item/user_virtual_inventory.h"
 #include "logic/logic_server_setup.h"
 #include "logic/session_manager.h"
+#include "rpc/compliance/compliance_client_api.h"
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_subscriber.h"
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
@@ -142,6 +145,17 @@ bool setup_dtmq_proxy_node(atfw::testing::runtime &test) {
     return false;
   }
 
+  atfw::testing::mock_node compliance_node;
+  compliance_node.set_id(0x210001)
+      .set_name("unit-test-compliance")
+      .set_type_id(static_cast<uint64_t>(atframework::component::logic_service_type::kComplianceSvr))
+      .set_type_name("compliance-svr")
+      .set_zone_id(kZoneId)
+      .add_label("hpa_scaling_ready", "1");
+  if (!test.discovery().add_node(compliance_node)) {
+    return false;
+  }
+
   // Mock injection writes the global discovery set directly; the common-module discovery index only replays
   // existing nodes on reload.
   if (nullptr != logic_server_last_common_module()) {
@@ -154,16 +168,48 @@ struct dtmq_proxy_capture {
   atframework::dtmq::SSChannelSubscribeReq last_subscribe_req;
   atframework::dtmq::SSChannelSendMessageReq last_send_message_req;
   int send_message_count = 0;
+  atframework::compliance::SSFilterTextReq last_filter_request;
+  int filter_count = 0;
+  int filter_error = 0;
+  bool incomplete_filter_response = false;
+  bool replace_filtered_text = false;
+  std::string filtered_text;
 };
 
 struct dtmq_proxy_rules {
   atfw::testing::ss_rule_handle subscribe;
   atfw::testing::ss_rule_handle send_message;
+  atfw::testing::ss_rule_handle filter_text;
 };
 
 // Subscribe: acknowledge every heartbeat channel. Send message: accept and capture.
 dtmq_proxy_rules mock_dtmq_proxy(atfw::testing::runtime &test, dtmq_proxy_capture &capture) {
   dtmq_proxy_rules rules;
+  rules.filter_text = test.ss().mock(
+      rpc::compliance::packer::get_full_name_of_filter_text(),
+      atframework::compliance::SSFilterTextReq::descriptor()->full_name(),
+      atframework::compliance::SSFilterTextRsp::descriptor()->full_name(),
+      [&capture](const atfw::testing::ss_request_view &request,
+                 google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &body = static_cast<const atframework::compliance::SSFilterTextReq &>(request.body);
+        capture.last_filter_request.CopyFrom(body);
+        ++capture.filter_count;
+        if (capture.filter_error != 0) {
+          RPC_RETURN_CODE(capture.filter_error);
+        }
+        if (capture.incomplete_filter_response) {
+          RPC_RETURN_CODE(0);
+        }
+        auto &output = static_cast<atframework::compliance::SSFilterTextRsp &>(response);
+        for (const auto &item : body.items()) {
+          auto *result = output.add_results();
+          result->set_filtered_text(capture.replace_filtered_text ? capture.filtered_text : item.text());
+          result->set_status(capture.replace_filtered_text ? atframework::compliance::EN_TEXT_FILTER_STATUS_MATCHED
+                                                           : atframework::compliance::EN_TEXT_FILTER_STATUS_OK);
+        }
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!rules.filter_text);
   rules.subscribe = test.ss().mock(rpc::dtmq::packer::get_full_name_of_subscribe(),
                                    atframework::dtmq::SSChannelSubscribeReq::descriptor()->full_name(),
                                    atframework::dtmq::SSChannelSubscribeRsp::descriptor()->full_name(),
@@ -618,10 +664,12 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   CASE_EXPECT_EQ(user1_sync_before_flush + 1, count_channel_sync_records(test, user1.session_id));
   CASE_EXPECT_EQ(user2_sync_before_flush + 1, count_channel_sync_records(test, user2.session_id));
 
-  // user1 sends a text message into the world channel through the CS task.
+  // The CS task submits one batch item and publishes only the filtered text.
+  capture.replace_filtered_text = true;
+  capture.filtered_text = "hello * from u1";
   atframework::chat::CSChatSendMessageReq send_req;
   send_req.mutable_channel_key()->set_world_partition_channel(0);
-  send_req.mutable_detail()->set_text("hello world from u1");
+  send_req.mutable_detail()->set_text("hello bad from u1");
   auto packed_send =
       pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_send));
@@ -637,7 +685,14 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   CASE_EXPECT_EQ(world_channel_id, capture.last_send_message_req.channel_key().channel_id());
   CASE_EXPECT_EQ(world_channel_type, capture.last_send_message_req.channel_key().channel_type());
   CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content(0).sender_key());
-  CASE_EXPECT_EQ("hello world from u1", capture.last_send_message_req.message_content(0).detail().text());
+  CASE_EXPECT_EQ("hello * from u1", capture.last_send_message_req.message_content(0).detail().text());
+  CASE_EXPECT_EQ(1, capture.filter_count);
+  CASE_EXPECT_EQ(1, capture.last_filter_request.items_size());
+  if (capture.last_filter_request.items_size() == 1) {
+    CASE_EXPECT_EQ("hello bad from u1", capture.last_filter_request.items(0).text());
+    CASE_EXPECT_FALSE(capture.last_filter_request.items(0).settings().return_original_text());
+    CASE_EXPECT_EQ("*", capture.last_filter_request.items(0).settings().replacement_text());
+  }
 
   // The dtmq proxy broadcasts two incremental messages. Before the flush tick nothing is pushed downstream.
   const int64_t msg1_seq = base_sequence + 1;
@@ -1142,5 +1197,84 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
     test_inventory_container.reset();
   }
 
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// Unavailable filtering falls back to the original text; an empty matched result still blocks delivery.
+CASE_TEST(lobbysvr_user_chat, text_filter_failure_falls_back_and_empty_match_is_rejected) {
+  atfw::testing::runtime test;
+  if (!start_chat_runtime(test)) {
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(0, handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice());
+  dtmq_proxy_capture capture;
+  auto proxy_rules = mock_dtmq_proxy(test, capture);
+  CASE_EXPECT_TRUE(!!proxy_rules.subscribe);
+  CASE_EXPECT_TRUE(!!proxy_rules.send_message);
+  chat_test_user chat_user;
+  if (!create_chat_user(test, kUserId1, 8001, "openid-chat-filter-fallback", chat_user)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  const auto rpc_name = rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message();
+  const int expected_codes[] = {
+      0,
+      0,
+      PROJECT_NAMESPACE_ID::EN_ERR_TEXT_HAS_DIRTY_WORD,
+  };
+  const int expected_send_counts[] = {1, 2, 2};
+  atframework::chat::CSChatSendMessageReq request;
+  // Private channels allow repeated sends without the world-channel rate limit.
+  *request.mutable_channel_key() = make_chat_key_of_private_channel(kUserId1, kZoneId);
+  request.mutable_detail()->set_text("original chat text");
+  for (int stage = 0; stage < 3; ++stage) {
+    capture.filter_error = stage == 0 ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0;
+    capture.incomplete_filter_response = stage == 1;
+    capture.replace_filtered_text = stage == 2;
+    capture.filtered_text.clear();
+    auto packed = pack_chat_cs_request(rpc_name, request);
+    CASE_EXPECT_TRUE(post_and_pump(test, chat_user.client, packed));
+    atframework::CSMsg response;
+    const auto *record = find_downstream_by_rpc_name(test, chat_user.session_id, rpc_name, response);
+    CASE_EXPECT_TRUE(record != nullptr);
+    if (record != nullptr) {
+      CASE_EXPECT_EQ(expected_codes[stage], response.head().error_code());
+    }
+    CASE_EXPECT_EQ(stage + 1, capture.filter_count);
+    CASE_EXPECT_EQ(expected_send_counts[stage], capture.send_message_count);
+    if (stage < 2) {
+      CASE_EXPECT_EQ(1, capture.last_send_message_req.message_content_size());
+      if (capture.last_send_message_req.message_content_size() == 1) {
+        CASE_EXPECT_EQ("original chat text", capture.last_send_message_req.message_content(0).detail().text());
+        CASE_EXPECT_EQ(make_private_channel_key(kUserId1).channel_id(),
+                       capture.last_send_message_req.channel_key().channel_id());
+      }
+    }
+  }
+
+  test.discovery().remove_node(static_cast<uint64_t>(0x210001));
+  auto *common_module = logic_server_last_common_module();
+  CASE_EXPECT_TRUE(common_module != nullptr);
+  if (common_module != nullptr) {
+    CASE_EXPECT_EQ(0, common_module->reload());
+    auto packed = pack_chat_cs_request(rpc_name, request);
+    CASE_EXPECT_TRUE(post_and_pump(test, chat_user.client, packed));
+    atframework::CSMsg response;
+    const auto *record = find_downstream_by_rpc_name(test, chat_user.session_id, rpc_name, response);
+    CASE_EXPECT_TRUE(record != nullptr);
+    if (record != nullptr) {
+      CASE_EXPECT_EQ(0, response.head().error_code());
+    }
+    CASE_EXPECT_EQ(3, capture.filter_count);
+    CASE_EXPECT_EQ(3, capture.send_message_count);
+    CASE_EXPECT_EQ(1, capture.last_send_message_req.message_content_size());
+    if (capture.last_send_message_req.message_content_size() == 1) {
+      CASE_EXPECT_EQ("original chat text", capture.last_send_message_req.message_content(0).detail().text());
+    }
+  }
   CASE_EXPECT_EQ(0, test.stop());
 }

@@ -25,16 +25,22 @@
 #include <string>
 
 #include "app/handle_ss_rpc_complianceservice.atfw.gen.h"
+#include "logic/text_filter_manager.h"
 
 namespace {
 class main_service_module : public atfw::atapp::module_impl {
  public:
   int init() override {
     INIT_CALL_FN(handle::compliance::register_handles_for_complianceservice);
+    INIT_CALL(compliance::text_filter_manager);
     return 0;
   }
 
   const char* name() const override { return "main_service_module"; }
+
+  int reload() override { return is_actived() ? compliance::text_filter_manager::me()->reload() : 0; }
+
+  void cleanup() override { compliance::text_filter_manager::me()->cleanup(); }
 };
 }  // namespace
 

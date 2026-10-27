@@ -10,5 +10,9 @@ project_component_declare_sdk(
   COMPLIANCE_SDK_API
   USE_COMPONENTS
   "compliance-protocol"
+  HEADERS
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/compliance/compliance_client_api.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/compliance/compliance_client_api.cpp"
   GENERATED_FLOW_NAMES
   "atframework.compliance.ComplianceService")

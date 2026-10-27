@@ -22,3 +22,26 @@ project_add_rpc_unit_test(
   compliance
   TIMEOUT
   60)
+
+target_compile_definitions(
+  ${PROJECT_NAME}-component-compliance-unit-test
+  PRIVATE "COMPLIANCE_TEST_DICTIONARY_FILE=\"${CMAKE_CURRENT_LIST_DIR}/data/text_filter_fixture.acv2\"")
+
+project_add_rpc_unit_test(
+  TARGET
+  ${PROJECT_NAME}-component-compliance-sdk-unit-test
+  COMPONENT
+  compliance
+  CATEGORY
+  sdk
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/compliance_test_client_api.cpp"
+  LINK_LIBRARIES
+  components::compliance-sdk
+  FEATURES
+  SS
+  LABELS
+  fast
+  compliance
+  TIMEOUT
+  60)

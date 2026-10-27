@@ -63,5 +63,8 @@ CMakeLists.txt eol=lf
 *.7z filter=lfs diff=lfs merge=lfs -text
 *.gz filter=lfs diff=lfs merge=lfs -text
 
+# AC自动机配置数据库
+*.acv2 filter=lfs diff=lfs merge=lfs -text
+
 /install/etcd/bin/etcdctl filter=lfs diff=lfs merge=lfs -text
 /install/etcd/bin/etcd filter=lfs diff=lfs merge=lfs -text

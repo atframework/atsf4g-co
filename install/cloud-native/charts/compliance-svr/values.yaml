@@ -22,5 +22,6 @@ vector:
   enabled: false
   log_path: /data/atframework/publish/compliance-svr/log
 
-compliance_svr: {}
+compliance_svr:
+  text_filter_dictionary_file: "../../resource/compliance/text_filter.acv2"
 enable_excel_config: false

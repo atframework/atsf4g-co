@@ -6,5 +6,7 @@ option go_package = "github.com/atframework/atsf4g-co/component/compliance/proto
 
 package atframework.compliance.config;
 
-// 合规服务实例配置；业务实现接入时在此增加配置项。
-message compliance_svr_cfg {}
+message compliance_svr_cfg {
+  // ac_automation_tool 生成的二进制词库；相对路径以服务进程工作目录为基准。
+  string text_filter_dictionary_file = 1;
+}

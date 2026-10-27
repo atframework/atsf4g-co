@@ -85,6 +85,7 @@ project_service_declare_instance(
   "user-sdk"
   "rank-logic-sdk"
   "dtmq-proxy-sdk"
+  "compliance-sdk"
   "ItemAlgorithmSDK"
   "BattleUtilitySDK"
   USE_SERVICE_SDK

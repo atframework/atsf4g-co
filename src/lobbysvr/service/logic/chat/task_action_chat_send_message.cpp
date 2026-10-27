@@ -24,20 +24,25 @@
 
 #include <data/user.h>
 
+#include <rpc/compliance/compliance_client_api.h>
 #include <rpc/rpc_context.h>
+#include <rpc/rpc_shared_message.h>
 
+#include <algorithm>
 #include <utility>
 
 #include "logic/chat/user_chat_manager.h"
+
+namespace {
+static constexpr char kReplacementText = '*';
+}
 
 task_action_chat_send_message::task_action_chat_send_message(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_chat_send_message::~task_action_chat_send_message() {}
 
-const char* task_action_chat_send_message::name() const {
-  return "task_action_chat_send_message";
-}
+const char* task_action_chat_send_message::name() const { return "task_action_chat_send_message"; }
 
 task_action_chat_send_message::result_type task_action_chat_send_message::operator()() {
   rpc_request_type& req_body = get_request_body();
@@ -60,10 +65,46 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
   }
 
   switch (req_body.detail().command_case()) {
-    case atfw::dtmq::DChannelMessageDetail::CommandCase::kText:
-      response_code = RPC_AWAIT_CODE_RESULT(user_inst->get_user_chat_manager().send_text_message(
-          get_shared_context(), dtmq_channel_key, req_body.detail().text()));
+    case atfw::dtmq::DChannelMessageDetail::CommandCase::kText: {
+      // 敏感词过滤
+      auto filter_req = rpc::make_shared_message<atfw::compliance::SSFilterTextReq>(get_shared_context());
+      auto filter_rsp = rpc::make_shared_message<atfw::compliance::SSFilterTextRsp>(get_shared_context());
+
+      auto* item = filter_req->add_items();
+      item->set_text(req_body.detail().text());
+      item->mutable_settings()->set_return_original_text(false);
+      item->mutable_settings()->mutable_replacement_text()->push_back(kReplacementText);
+      if (item->text().empty()) {
+        set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+        TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+      }
+
+      gsl::string_view text = req_body.detail().text();
+      int32_t res = RPC_AWAIT_CODE_RESULT(rpc::compliance::filter_text(get_shared_context(), *filter_req, *filter_rsp));
+      // 仅当有回包时才处理,服务故障时忽略过滤
+      if (res == 0 && filter_rsp->results_size() > 0) {
+        const auto& filtered = filter_rsp->results(0);
+        if (filtered.status() != atfw::compliance::EN_TEXT_FILTER_STATUS_OK) {
+          if (filtered.filtered_text().empty()) {
+            set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEXT_HAS_DIRTY_WORD);
+            TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+          }
+
+          text = filtered.filtered_text();
+
+          // 所有词都是脏字
+          auto iter_not_replacement =
+              std::find_if(text.begin(), text.end(), [](char c) { return c != kReplacementText; });
+          if (iter_not_replacement == text.end()) {
+            set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEXT_HAS_DIRTY_WORD);
+            TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+          }
+        }
+      }
+      response_code = RPC_AWAIT_CODE_RESULT(
+          user_inst->get_user_chat_manager().send_text_message(get_shared_context(), dtmq_channel_key, text));
       break;
+    }
     case atfw::dtmq::DChannelMessageDetail::CommandCase::kEvent:
       response_code = RPC_AWAIT_CODE_RESULT(user_inst->get_user_chat_manager().send_event_message(
           get_shared_context(), dtmq_channel_key, std::move(*req_body.mutable_detail()->mutable_event())));
