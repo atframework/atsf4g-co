@@ -33,8 +33,12 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 ```
 
 When etcd/Redis are already available externally, omit temporary dependency startup and point values to those
-addresses. `generate_config` invokes the published atdtool, renders instance YAML/startup scripts, and
+addresses. `generate_config` first refreshes packaged chart dependencies with Helm, then invokes the published atdtool,
+renders instance YAML/startup scripts, and
 generates `start_all`, `stop_all`, and `kill_all` at the publish root.
+Dependency update failures stop generation. After editing libapp source templates, refresh each service's
+`charts/libapp-*.tgz`; otherwise rendering still uses the old scripts. Before invoking atdtool directly, run
+`tools/script/update_dependency.sh/.ps1`.
 Check logs and etcd registration before testing business requests.
 
 ## Start and Reload Individual Instances

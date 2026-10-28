@@ -1,5 +1,9 @@
 #!/bin/bash
-cd "$(dirname $0)"
+set -e
+cd "$(dirname "$0")"
+
+# Helm consumes packaged library dependencies, even when ../libapp has newer sources.
+bash ./update_dependency.sh
 
 chmod +x ../atdtool/atdtool
 ../atdtool/atdtool template ../../cloud-native/charts -o ../../ --values ../../cloud-native/values/default,../../cloud-native/values/dev,../../cloud-native/values/personal --set global.world_id=1

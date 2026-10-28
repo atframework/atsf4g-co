@@ -33,8 +33,10 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 ```
 
 已有外部 etcd/Redis 时不需要启动临时依赖，但 values 必须使用对应地址。
-`generate_config` 调用发布的 atdtool，生成每实例 YAML 和启动脚本，以及 publish 根目录的
+`generate_config` 先用 Helm 更新打包的 chart 依赖，再调用发布的 atdtool，生成每实例 YAML 和启动脚本，以及 publish 根目录的
 `start_all`、`stop_all`、`kill_all`。检查服务日志和 etcd 注册后，再验证业务请求。
+依赖更新失败时停止生成。修改 libapp 源模板后，必须同步刷新各服务 `charts/libapp-*.tgz`，
+否则渲染仍会使用旧脚本。直接调用 atdtool 前，先运行 `tools/script/update_dependency.sh/.ps1`。
 
 ## 按实例启动与重载
 

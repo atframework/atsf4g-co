@@ -3,6 +3,13 @@ $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 
 Set-Location -LiteralPath $PSScriptRoot
 
+# Refresh packaged library charts before atdtool loads the service dependencies.
+$global:LASTEXITCODE = 0
+& (Join-Path $PSScriptRoot 'update_dependency.ps1')
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 $AtdtoolExecutable = Join-Path $PSScriptRoot '..\atdtool\atdtool.exe'
 $ValuesPaths = (Join-Path $PSScriptRoot '..\..\cloud-native\values\default') + ',' +
     (Join-Path $PSScriptRoot '..\..\cloud-native\values\dev') + ',' +

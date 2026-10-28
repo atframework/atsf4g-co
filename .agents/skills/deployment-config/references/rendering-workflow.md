@@ -7,8 +7,10 @@ Use `helm` from `PATH` and `atdtool` from `<PUBLISH_DIR>/tools/atdtool/atdtool` 
 
 ## Prepare dependencies and values
 
-- Update chart dependencies with `<PUBLISH_DIR>/tools/script/update_dependency.sh` on Unix-like systems or
-  `update_dependency.ps1` on Windows.
+- `generate_config.sh/.ps1` refresh chart dependencies before rendering and abort if the update fails.
+  Before a direct atdtool invocation, run `<PUBLISH_DIR>/tools/script/update_dependency.sh` or `.ps1` explicitly.
+  Service charts consume their packaged `charts/libapp-*.tgz`; newer libapp source files alone do not update that
+  archive. Inspect both the source helper and the rendered lifecycle script when validating a deployment fix.
 - Default values are under `<PUBLISH_DIR>/cloud-native/values/default/`: `global.yaml`, `modules/*.yaml`, and
   `non_cloud_native/deploy.yaml` are common inputs.
 - Multiple `--values`/`-p` inputs layer in order; later values win. Preserve explicitly supplied paths and `--set`

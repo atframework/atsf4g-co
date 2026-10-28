@@ -2,7 +2,7 @@
 
 set -e
 
-cd "$(dirname $0)"
+cd "$(dirname "$0")"
 
 # helm is installed by the CMake build into <build>/tools/helm, next to the deploy tree (<build>/publish).
 # Probe that location first, then the legacy in-tree <publish>/tools/helm for older build trees.
