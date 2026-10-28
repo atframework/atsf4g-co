@@ -8,7 +8,7 @@ DEPLOY_BASE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 
 print_usage() {
   echo "usage: $0 [-d deploy_base_dir]"
-  echo "Forcefully kills processes whose executable is under a service bin directory."
+  echo "Stops each instance through its recorded manager before forcefully killing it."
 }
 
 while getopts "d:h" option; do
@@ -31,42 +31,17 @@ while getopts "d:h" option; do
   esac
 done
 
-shopt -s nullglob
-bin_dirs=()
-{{ range $group := .Values.proc_groups }}{{ range $proc := $group.procs }}bin_dirs+=("${DEPLOY_BASE_DIR}/{{ $proc.name }}/bin")
-{{ end }}{{ end }}
-if [[ ${#bin_dirs[@]} -eq 0 ]]; then
-  echo "[INFO] No service bin directories found under ${DEPLOY_BASE_DIR}."
-  exit 0
+failed=0
+{{ range $group := reverse .Values.proc_groups }}{{ range $proc := $group.procs }}{{ range $instance := $proc.instances }}
+kill_script="${DEPLOY_BASE_DIR}/{{ $proc.name }}/bin/kill_{{ $instance.bus_addr }}.sh"
+if [[ ! -f "$kill_script" ]]; then
+  echo "[ERROR] Missing kill script: $kill_script; regenerate the deployment scripts." >&2
+  failed=1
+elif ! bash "$kill_script"; then
+  failed=1
 fi
-
-target_executables=()
-for bin_dir in "${bin_dirs[@]}"; do
-  if [[ ! -d "$bin_dir" ]]; then
-    continue
-  fi
-  while IFS= read -r -d '' executable_path; do
-    target_executables+=("$(readlink -f "$executable_path")")
-  done < <(find "$bin_dir" -maxdepth 1 -type f -perm -111 -print0)
-done
-
-if [[ ${#target_executables[@]} -eq 0 ]]; then
-  echo "[INFO] No executable files found under service bin directories."
-  exit 0
+{{ end }}{{ end }}{{ end }}
+if [[ -f "$DEPLOY_BASE_DIR/otelcol/bin/otelcol.service/backend" ]]; then
+  bash "$DEPLOY_BASE_DIR/tools/script/service-manager.sh" kill "$DEPLOY_BASE_DIR/otelcol/bin/otelcol.service" || failed=1
 fi
-
-for process_dir in /proc/[0-9]*; do
-  process_pid="${process_dir##*/}"
-  process_executable="$(readlink -f "$process_dir/exe" 2>/dev/null)" || continue
-  process_executable="${process_executable% (deleted)}"
-
-  for target_executable in "${target_executables[@]}"; do
-    if [[ "$process_executable" == "$target_executable" ]]; then
-      echo "[INFO] Killing ${process_executable} (pid ${process_pid})"
-      kill -9 "$process_pid" 2>/dev/null || true
-      break
-    fi
-  done
-done
-
-echo "[INFO] Kill all completed."
+exit "$failed"

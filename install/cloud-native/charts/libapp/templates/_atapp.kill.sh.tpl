@@ -20,6 +20,9 @@ if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ 
 fi
 
 SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid";
+if [[ -f "${SERVER_PID_FILE_NAME}.service/backend" ]]; then
+  exec bash "$PROJECT_INSTALL_DIR/tools/script/service-manager.sh" kill "$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service"
+fi
 
 CheckProcessRunning "$SERVER_PID_FILE_NAME";
 if [[ 0 -eq $? ]]; then
@@ -30,14 +33,13 @@ fi
 PROC_PID=$(cat "$SERVER_PID_FILE_NAME" 2>/dev/null);
 
 if [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
-    proc_pid=$(ps aux | grep "$SCRIPT_DIR/{{ .Values.proc_name }}" | grep -w "{{ .Values.type_name }}_{{ $bus_addr }}.pid" | grep -v grep | awk '{print $2}')
-    if [ "x${proc_pid}" != "x" ]; then
-        kill -9 $proc_pid
-    fi
+    kill -9 "$PROC_PID" || exit $?
+    WaitProcessStoped "$SERVER_PID_FILE_NAME" 5000
 
     CheckProcessRunning "$SERVER_PID_FILE_NAME";
     if [[ 0 -ne $? ]]; then
         ErrorMsg "kill -9 {{ .Values.proc_name }} - {{ $bus_addr }} failed." ;
+        exit 1
     else
         NoticeMsg "kill -9 {{ .Values.proc_name }} - {{ $bus_addr }} done." ;
     fi

@@ -13,6 +13,10 @@ print_usage() {
 
 stop_otel_collector() {
   local otel_bin_dir="${DEPLOY_BASE_DIR}/otelcol/bin"
+  if [[ -f "$otel_bin_dir/otelcol.service/backend" ]]; then
+    bash "$DEPLOY_BASE_DIR/tools/script/service-manager.sh" stop "$otel_bin_dir/otelcol.service"
+    return $?
+  fi
   if [[ ! -d "$otel_bin_dir" ]]; then
     echo "[INFO] Otel collector not found, skipped."
     return 0
@@ -126,6 +130,6 @@ if ! run_batch {{ $group.group }}{{ range $proc := $group.procs }}{{ range $inst
 fi
 {{ end }}
 
-stop_otel_collector
+stop_otel_collector || exit $?
 
 echo "[INFO] All batches completed successfully."

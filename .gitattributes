@@ -21,6 +21,7 @@
 *.sh eol=lf
 *.sh.mako eol=lf
 *.sh.in eol=lf
+*.sh.tpl eol=lf
 *.py eol=lf
 *.mako.py eol=lf
 *.md eol=crlf

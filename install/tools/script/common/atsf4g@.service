@@ -1,0 +1,18 @@
+# atsf4g service-manager unit; copied into each instance's package state directory.
+[Unit]
+Description=atsf4g service %i
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# %Y resolves the real unit file's directory, including through its registration symlink.
+# The ':' prefix preserves literal dollar signs in deployment paths.
+ExecStart=:/bin/bash "%Y/run.sh"
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

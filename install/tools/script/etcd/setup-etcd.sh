@@ -1,12 +1,13 @@
 #!/bin/sh
 # Copyright 2026 atframework
 # POSIX shell script to download, start, stop, and manage etcd for unit testing.
-# Works with /bin/sh on Linux (dash, bash, busybox) and macOS.
+# The command frontend uses /bin/sh; the shared lifecycle controller requires Bash.
 # Usage: setup-etcd.sh <command> [options]
 #   --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)
 #   --client-port PORT    Client port (default: 12379)
 #   --peer-port PORT      Peer port (default: 12380)
 #   --etcd-version VER    Specify version tag (default: latest)
+#   --service-manager MODE auto|systemd|supervisord|none (default: auto)
 
 set -eu
 
@@ -14,6 +15,8 @@ WORK_DIR="${WORK_DIR:-$PWD}/etcd-unit-test"
 CLIENT_PORT=12379
 PEER_PORT=12380
 ETCD_VERSION="latest"
+SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
+SERVICE_MANAGER="$SCRIPT_DIR/../service-manager.sh"
 
 # Parse command
 COMMAND="${1:-}"
@@ -24,6 +27,11 @@ fi
 # Parse options
 while [ $# -gt 0 ]; do
   case "$1" in
+    --service-manager)
+      ATF_SERVICE_MANAGER="$2"
+      export ATF_SERVICE_MANAGER
+      shift 2
+      ;;
     --work-dir)
       WORK_DIR="$2"
       shift 2
@@ -53,6 +61,7 @@ PID_FILE="${WORK_DIR}/etcd.pid"
 LOG_FILE="${WORK_DIR}/etcd.log"
 STDERR_LOG_FILE="${WORK_DIR}/etcd-stderr.log"
 DATA_DIR="${WORK_DIR}/data"
+SERVICE_STATE="${WORK_DIR}/service"
 
 get_etcd_version() {
   if [ "$ETCD_VERSION" != "latest" ]; then
@@ -155,6 +164,10 @@ do_start() {
     do_download
   fi
 
+  if [ -f "$SERVICE_STATE/backend" ]; then
+    do_stop
+  fi
+
   # Check if already running
   if [ -f "$PID_FILE" ]; then
     local existing_pid
@@ -169,17 +182,18 @@ do_start() {
 
   echo "Starting etcd on client port $CLIENT_PORT, peer port $PEER_PORT..."
 
-  "$ETCD_BIN" \
-    --data-dir "$DATA_DIR" \
+  bash "$SERVICE_MANAGER" start "$SERVICE_STATE" "etcd-${CLIENT_PORT}" "$WORK_DIR" -- \
+    "$(cd "$WORK_DIR" && pwd)/etcd" \
+    --data-dir "$(cd "$WORK_DIR" && pwd)/data" \
     --listen-client-urls "http://127.0.0.1:${CLIENT_PORT}" \
     --advertise-client-urls "http://127.0.0.1:${CLIENT_PORT}" \
     --listen-peer-urls "http://127.0.0.1:${PEER_PORT}" \
     --initial-advertise-peer-urls "http://127.0.0.1:${PEER_PORT}" \
     --initial-cluster "default=http://127.0.0.1:${PEER_PORT}" \
-    --log-outputs "$LOG_FILE" \
-    >"$STDERR_LOG_FILE" 2>&1 &
+    --log-outputs "$(cd "$WORK_DIR" && pwd)/etcd.log"
 
-  local etcd_pid=$!
+  local etcd_pid
+  etcd_pid=$(bash "$SERVICE_MANAGER" pid "$SERVICE_STATE")
   echo "$etcd_pid" > "$PID_FILE"
 
   echo "etcd started with PID: $etcd_pid"
@@ -202,6 +216,7 @@ do_start() {
     # Check if process is still alive
     if ! kill -0 "$etcd_pid" 2>/dev/null; then
       echo "etcd process died during startup. Check $LOG_FILE for details." >&2
+      do_stop
       exit 1
     fi
   done
@@ -216,6 +231,11 @@ do_start() {
 }
 
 do_stop() {
+  if [ -f "$SERVICE_STATE/backend" ]; then
+    bash "$SERVICE_MANAGER" stop "$SERVICE_STATE"
+    rm -f "$PID_FILE"
+    return 0
+  fi
   if [ ! -f "$PID_FILE" ]; then
     echo "No PID file found. etcd may not be running."
     return 0
@@ -272,6 +292,10 @@ do_cleanup() {
 }
 
 do_status() {
+  if [ -f "$SERVICE_STATE/backend" ]; then
+    bash "$SERVICE_MANAGER" status "$SERVICE_STATE"
+    return
+  fi
   if [ ! -f "$PID_FILE" ]; then
     echo "etcd is not running (no PID file)."
     return 0
@@ -300,12 +324,21 @@ case "$COMMAND" in
   download) do_download ;;
   start) do_start ;;
   stop) do_stop ;;
+  kill)
+    if [ -f "$SERVICE_STATE/backend" ]; then
+      bash "$SERVICE_MANAGER" kill "$SERVICE_STATE"
+      rm -f "$PID_FILE"
+    else
+      do_stop
+    fi
+    ;;
   cleanup) do_cleanup ;;
   status) do_status ;;
   *)
-    echo "Usage: $0 <download|start|stop|cleanup|status> [options]" >&2
+    echo "Usage: $0 <download|start|stop|kill|cleanup|status> [options]" >&2
     echo "" >&2
     echo "Options:" >&2
+    echo "  --service-manager MODE  auto (default), systemd, supervisord or none" >&2
     echo "  --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)" >&2
     echo "  --client-port PORT    Client port (default: 12379)" >&2
     echo "  --peer-port PORT      Peer port (default: 12380)" >&2

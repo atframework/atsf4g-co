@@ -7,7 +7,7 @@
 DEPLOY_BASE_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 
 print_usage() {
-  echo "usage: $0 [-d deploy_base_dir]"
+  echo "usage: $0 [-d deploy_base_dir] [-m auto|systemd|supervisord|none]"
   echo "Each batch is one group; entries in the same batch start in parallel."
 }
 
@@ -19,7 +19,7 @@ start_otel_collector() {
     return 0
   fi
 
-  if pgrep -x otelcol-contrib >/dev/null 2>&1; then
+  if [[ ! -f "$otel_bin_dir/otelcol.service/backend" ]] && pgrep -x otelcol-contrib >/dev/null 2>&1; then
     echo "[INFO] Otel collector already started, skipped."
     return 0
   fi
@@ -29,10 +29,8 @@ start_otel_collector() {
   fi
 
   echo "[INFO] Starting otel collector: ${otel_exe}"
-  (
-    cd "$otel_bin_dir" || exit 1
-    nohup ./otelcol-contrib --config=../cfg/config.yaml >> ../log/otelcol.log 2>&1 &
-  )
+  bash "$DEPLOY_BASE_DIR/tools/script/service-manager.sh" start "$otel_bin_dir/otelcol.service" otelcol "$otel_bin_dir" \
+    -- "$otel_exe" --config=../cfg/config.yaml || return $?
   echo "[INFO] Otel collector started."
   return 0
 }
@@ -94,7 +92,7 @@ run_batch() {
   return 0
 }
 
-while getopts "d:h" option; do
+while getopts "d:m:h" option; do
   case "$option" in
     d)
       if [[ ! -d "$OPTARG" ]]; then
@@ -102,6 +100,9 @@ while getopts "d:h" option; do
         exit 1
       fi
       DEPLOY_BASE_DIR="$(cd "$OPTARG" && pwd -P)"
+      ;;
+    m)
+      export ATF_SERVICE_MANAGER="$OPTARG"
       ;;
     h)
       print_usage
@@ -116,7 +117,11 @@ done
 
 shift $((OPTIND - 1))
 
-start_otel_collector
+ATF_SERVICE_MANAGER=$(bash "$DEPLOY_BASE_DIR/tools/script/service-manager.sh" select) || exit $?
+export ATF_SERVICE_MANAGER
+echo "[INFO] Service manager: $ATF_SERVICE_MANAGER"
+
+start_otel_collector || exit $?
 
 {{ range $group := .Values.proc_groups }}
 if ! run_batch {{ $group.group }}{{ range $proc := $group.procs }}{{ range $instance := $proc.instances }} "{{ $proc.name }} {{ $instance.bus_addr }}"{{ end }}{{ end }}; then

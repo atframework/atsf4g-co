@@ -20,6 +20,9 @@ if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ 
 fi
 
 SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid";
+if [[ -f "${SERVER_PID_FILE_NAME}.service/backend" ]]; then
+  exec bash "$PROJECT_INSTALL_DIR/tools/script/service-manager.sh" stop "$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service"
+fi
 REAL_SERVER_PID_FILE_NAME="$SERVER_PID_FILE_NAME"
 
 if [[ -e "$SERVER_PID_FILE_NAME" ]]; then

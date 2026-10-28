@@ -5,6 +5,7 @@
 # redis has no official binary release for Linux/macOS, so the Docker Official Image is
 # used through a local container engine (docker, podman or nerdctl, auto-detected in
 # this order). No root or system packages are required.
+# The shared lifecycle controller requires Bash; daemon backends are optional.
 #
 # Usage: redis.sh <command> [options]
 #   --work-dir DIR           Working directory (default: ${TMPDIR:-/tmp}/redis-unit-test)
@@ -13,6 +14,7 @@
 #                            BSD-3-Clause release line)
 #   --container-engine ENG   Container engine to use (docker|podman|nerdctl;
 #                            default: auto-detect)
+#   --service-manager MODE  auto|systemd|supervisord|none (default: auto)
 
 set -eu
 
@@ -20,6 +22,8 @@ WORK_DIR="${WORK_DIR:-$PWD}/redis-unit-test"
 CLIENT_PORT=6379
 REDIS_VERSION="7.2.16"
 CONTAINER_ENGINE=""
+SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
+SERVICE_MANAGER="$SCRIPT_DIR/../service-manager.sh"
 
 # Parse command
 COMMAND="${1:-}"
@@ -30,6 +34,11 @@ fi
 # Parse options
 while [ $# -gt 0 ]; do
   case "$1" in
+    --service-manager)
+      ATF_SERVICE_MANAGER="$2"
+      export ATF_SERVICE_MANAGER
+      shift 2
+      ;;
     --work-dir)
       WORK_DIR="$2"
       shift 2
@@ -61,6 +70,13 @@ fi
 REDIS_IMAGE="docker.io/library/redis:${REDIS_VERSION}"
 CONTAINER_NAME="atsf4g-redis-unit-test"
 CID_FILE="${WORK_DIR}/redis.cid"
+SERVICE_STATE="${WORK_DIR}/service"
+if [ -f "$SERVICE_STATE/container-engine" ]; then
+  if [ "$COMMAND" != start ] && [ "$COMMAND" != download ]; then
+    CONTAINER_ENGINE=$(cat "$SERVICE_STATE/container-engine")
+  fi
+  CONTAINER_NAME=$(cat "$SERVICE_STATE/key")
+fi
 
 # Prints the engine command name on stdout; returns 1 when none is available.
 find_engine() {
@@ -138,6 +154,9 @@ do_download() {
 }
 
 do_start() {
+  if [ -f "$SERVICE_STATE/backend" ]; then
+    do_stop
+  fi
   local engine
   engine="$(require_engine)"
   check_engine_ready "$engine"
@@ -162,7 +181,21 @@ do_start() {
   echo "Starting Redis container $CONTAINER_NAME on port $CLIENT_PORT..."
 
   local cid
-  cid="$("$engine" run -d --name "$CONTAINER_NAME" -p "127.0.0.1:${CLIENT_PORT}:6379" "$REDIS_IMAGE")"
+  bash "$SERVICE_MANAGER" start "$SERVICE_STATE" "redis-${CLIENT_PORT}" "$WORK_DIR" \
+    --container "$engine" "$REDIS_IMAGE" -- -p "127.0.0.1:${CLIENT_PORT}:6379"
+  CONTAINER_NAME=$(cat "$SERVICE_STATE/key")
+  # The manager's foreground client may still be creating the container.
+  local created=0
+  while ! container_exists "$engine"; do
+    created=$((created + 1))
+    if [ "$created" -ge 100 ]; then
+      do_stop
+      echo "Redis container was not created." >&2
+      exit 1
+    fi
+    sleep 0.1
+  done
+  cid="$("$engine" inspect -f '{{.Id}}' "$CONTAINER_NAME")"
   echo "$cid" > "$CID_FILE"
   echo "Redis container started (ID: $cid)"
 
@@ -185,6 +218,7 @@ do_start() {
 
     if ! container_running "$engine"; then
       echo "Error: redis container died during startup. Check '$engine logs $CONTAINER_NAME' for details." >&2
+      do_stop
       exit 1
     fi
   done
@@ -199,6 +233,11 @@ do_start() {
 }
 
 do_stop() {
+  if [ -f "$SERVICE_STATE/backend" ]; then
+    bash "$SERVICE_MANAGER" stop "$SERVICE_STATE"
+    rm -f "$CID_FILE"
+    return 0
+  fi
   local engine
   if ! engine="$(find_engine)"; then
     if [ -f "$CID_FILE" ]; then
@@ -245,6 +284,10 @@ do_cleanup() {
 }
 
 do_status() {
+  if [ -f "$SERVICE_STATE/backend" ]; then
+    bash "$SERVICE_MANAGER" status "$SERVICE_STATE"
+    return
+  fi
   if [ ! -f "$CID_FILE" ]; then
     echo "Redis is not running (no container state file)."
     return 0
@@ -280,12 +323,21 @@ case "$COMMAND" in
   download) do_download ;;
   start) do_start ;;
   stop) do_stop ;;
+  kill)
+    if [ -f "$SERVICE_STATE/backend" ]; then
+      bash "$SERVICE_MANAGER" kill "$SERVICE_STATE"
+      rm -f "$CID_FILE"
+    else
+      do_stop
+    fi
+    ;;
   cleanup) do_cleanup ;;
   status) do_status ;;
   *)
-    echo "Usage: $0 <download|start|stop|cleanup|status> [options]" >&2
+    echo "Usage: $0 <download|start|stop|kill|cleanup|status> [options]" >&2
     echo "" >&2
     echo "Options:" >&2
+    echo "  --service-manager MODE  auto (default), systemd, supervisord or none" >&2
     echo "  --work-dir DIR           Working directory (default: \${TMPDIR:-/tmp}/redis-unit-test)" >&2
     echo "  --client-port PORT       Listening port (default: 6379)" >&2
     echo "  --redis-version VER      Image tag to use (default: 7.2.16)" >&2

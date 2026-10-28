@@ -6,10 +6,10 @@ cd "$( dirname "$0" )"
 if [ ! -x ./stop_{{ $bus_addr }}.sh ]; then
     chmod +x ./stop_{{ $bus_addr }}.sh;
 fi
-bash ./stop_{{ $bus_addr }}.sh --upgrade
+bash ./stop_{{ $bus_addr }}.sh --upgrade || exit $?
 
-if [ ! -x ./stop_{{ $bus_addr }}.sh ]; then
+if [ ! -x ./start_{{ $bus_addr }}.sh ]; then
     chmod +x ./start_{{ $bus_addr }}.sh;
 fi
-bash ./start_{{ $bus_addr }}.sh
+bash ./start_{{ $bus_addr }}.sh "$@"
 {{- end }}

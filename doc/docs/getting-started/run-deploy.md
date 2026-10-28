@@ -47,6 +47,94 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 `tools/script/stop_local_test_env.sh/.ps1` 停止。
 修改配置的具体步骤见[服务端配置](../development/server-config)。
 
+## 进程托管
+
+Linux shell 脚本通过 `tools/script/service-manager.sh` 选择托管方式。默认 `auto` 依次检查
+可连接的 systemd 用户管理器、PATH 中的 `supervisord` 和 `supervisorctl`，最后使用普通后台进程。
+安装了 `systemctl` 但没有用户会话总线时，不会选用 systemd。显式指定的后端不可用时，启动报错。
+
+```bash
+bash start_all.sh -m auto
+bash start_all.sh -m systemd
+bash start_all.sh -m supervisord
+bash start_all.sh -m none
+
+# 单实例及依赖服务也读取此环境变量。
+export ATF_SERVICE_MANAGER=supervisord
+bash tools/script/etcd/setup-etcd.sh start --service-manager supervisord
+bash tools/script/redis/redis.sh start --service-manager systemd --container-engine podman
+```
+
+运行中的实例保留最初的命令、参数、部署环境变量和后端；改变它们需要先停止再启动。每个实例在
+`bin/<PID 文件名>.service/` 记录控制器路径、实例名和启动参数，etcd/Redis 则使用各自工作目录的
+`service/`。stop、kill 和 cleanup 使用这份记录，不重新探测后端，也不读取新的后端选择。
+控制器不可用时保留状态并报错，恢复控制器后重试停止。迁移部署目录前先停止服务，运行中不要删除状态目录。
+没有托管记录的旧部署仍使用原有 PID 停止方式。
+
+普通进程根据 `tools/script/common/atsf4g@.service` 在实例状态目录生成 unit，与 `run.sh` 放在一起；
+`~/.config/systemd/user/` 仅保存指向该 unit 的注册和启用链接，不再创建用户状态目录中的实例索引。
+unit 通过 `%Y` 定位自身在发布包中的实际目录。实例标识包含完整服务名和状态目录摘要，
+不同部署目录可以使用相同服务名。参数按原始 argv 保存并执行，服务在前台运行，systemd 跟踪实际服务进程。
+生成脚本的内部前台模式参数为 `--atapp-foreground`。
+start 执行 `systemctl --user enable --now`；stop/kill 先移除启动意图并 disable，再通过 systemctl 停止。
+`Restart=on-failure` 负责崩溃拉起，`enable/disable` 负责用户管理器启动时的自动启动。
+注销后继续运行或开机启动还需要运维按需配置 user lingering；脚本不会修改该系统设置。
+
+supervisord 使用独立的用户级 daemon、Unix socket 和程序配置，默认目录为
+`<发布包>/var/service-manager/supervisor`，可在启动前通过 `ATF_SUPERVISOR_DIR` 指定绝对路径
+（不包含换行、反斜杠或分号）。该目录必须由当前用户专用。
+本地构建的 `tools` 即使链接到源码树，默认配置仍写入发布目录。路径超过 Unix socket 长度限制时，
+仅将控制 socket 放入用户运行时目录，配置、日志和 PID 文件继续保存在发布目录。
+停止时移除对应程序配置并更新 daemon，
+避免它再次启动时重新拉起已停实例。后台运行的服务使用 `autorestart=unexpected`；退出码 0 不触发重启。
+普通进程模式没有崩溃重启。日志分别在 systemd journal、supervisord 目录和实例状态目录的 `output.log` 中。
+
+### 已有容器镜像
+
+宿主机托管已有镜像，无需把 supervisord 加入业务镜像。容器内的主进程应在前台运行。
+下面的参数在镜像名后通过第二个 `--` 传给容器命令；省略该部分时沿用镜像的 ENTRYPOINT/CMD。
+
+```bash
+export ATF_SERVICE_MANAGER=supervisord
+bash tools/script/service-manager.sh start "$PWD/runtime/game-1" game-1 "$PWD" \
+  --container docker registry.example/game:version -- \
+  --publish 127.0.0.1:7001:7001 --volume "$PWD/config:/app/config:ro"
+bash tools/script/service-manager.sh stop "$PWD/runtime/game-1"
+
+# 可选：覆盖镜像的 CMD。
+bash tools/script/service-manager.sh start "$PWD/runtime/redis-1" redis-1 "$PWD" \
+  --container podman docker.io/library/redis:7.2.16 -- \
+  --publish 127.0.0.1:16379:6379 -- redis-server --appendonly yes
+bash tools/script/service-manager.sh kill "$PWD/runtime/redis-1"
+```
+
+容器名、detach、restart、rm、cidfile 和 sdnotify 等生命周期参数由控制器管理，调用方不要覆盖。
+Docker/supervisord 使用前台容器客户端，stop/kill 还会通过记录的引擎停止实际容器并确认退出。
+绑定目录、命名卷和镜像不会随 stop/kill 删除；容器临时层和匿名卷不用于保存持久数据。
+Redis 的显式 `cleanup` 仍遵循其原有镜像清理行为。
+
+Podman + systemd 使用 rootless Quadlet：每实例的 `.container` 和启用 drop-in 都保存在实例状态目录，
+`~/.config/containers/systemd/` 只保存文件及 drop-in 目录的链接，
+由 Podman generator 生成 unit；配置目录遵循 `XDG_CONFIG_HOME`。常用的 publish、volume、env、network
+参数转换成 Quadlet 字段，其他引擎选项通过 `PodmanArgs` 传递，需要与 Quadlet 的生命周期设置兼容。
+Quadlet 要求支持该功能的 Podman 和 cgroup v2。
+WSL 等没有激活系统 `network-online.target` 的环境，若镜像已缓存且服务只需本地网络，启动前设置
+`ATF_QUADLET_WAIT_NETWORK=0` 可关闭 Quadlet 的网络就绪等待；默认保留该等待。
+生成的 unit 不能直接 `systemctl enable/disable`，因此 start 安装带 `WantedBy=default.target` 的
+`[Install]` drop-in，stop/kill 移除它并 daemon-reload；进程启停仍通过 `systemctl --user`。
+停止成功后移除安装的 Quadlet 链接，实例状态保留供下次启动使用。
+
+实现依据：[systemd service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)、
+[Supervisor 配置](https://supervisord.org/configuration.html)、
+[Podman Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)。
+
+旧版 atsf4g 镜像的 `/entrypoint.sh start` 会后台启动业务进程、前台运行配置 watcher。
+使用这些镜像时，将 `tools/script/container-entrypoint.sh` 只读挂载为 `/atf-entrypoint.sh`，
+设置 `--entrypoint /bin/bash`，容器命令使用 `-- /atf-entrypoint.sh start`，并保留原来的环境变量和配置挂载。
+该兼容入口复用镜像内的配置初始化、reload 和 stop，通过 `health_check` 发现业务进程退出并让容器失败退出，
+使外部托管器能够重启容器。启动等待默认 180 秒，可通过容器环境变量 `ATF_CONTAINER_START_TIMEOUT` 调整。
+此方式不需要重打镜像；仅监控前台容器客户端无法发现旧入口掩盖的业务进程退出。
+
 ## 部署形态
 
 | 形态 | 输入与输出 |

@@ -2,7 +2,7 @@
 {{- $bus_addr := include "libapp.busAddr" . -}}
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCRIPT_DIR="$(readlink -f $SCRIPT_DIR)"
+SCRIPT_DIR="$(readlink -f "$SCRIPT_DIR")"
 cd "$SCRIPT_DIR"
 
 echo "[$(date -u '+%F %T')]: {{ include "libapp.name" . }}-{{ $bus_addr }} -- Prepare start"
@@ -23,6 +23,13 @@ if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ 
 fi
 
 SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid"
+SERVICE_STATE_DIR="$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service"
+SERVICE_MANAGER="$PROJECT_INSTALL_DIR/tools/script/service-manager.sh"
+ATAPP_FOREGROUND=0
+if [[ "${1:-}" == --atapp-foreground ]]; then
+  ATAPP_FOREGROUND=1
+  shift
+fi
 
 echo "[$(date -u '+%F %T')]: {{ include "libapp.name" . }}-{{ $bus_addr }} -- Prepare done"
 
@@ -32,26 +39,12 @@ if [[ -e "$SERVER_PID_FILE_NAME" ]]; then
 else
   PROC_PID=0
 fi
-if [[ $PROC_PID -gt 0 ]]  && [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
+if [[ $ATAPP_FOREGROUND -eq 0 && ! -f "$SERVICE_STATE_DIR/backend" && $PROC_PID -gt 0 ]] && [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
   NoticeMsg "[$(date -u '+%F %T')]: {{ .Values.proc_name }} - {{ $bus_addr }} already started, skipped.";
   exit 0
 fi
 
-exec 256<> "${SERVER_PID_FILE_NAME}.start.lock"
-if command -v flock >/dev/null 2>&1; then
-  flock -x -w 30 256
-
-  if [[ $? -ne 0 ]]; then
-    ErrorMsg "[$(date -u '+%F %T')]: lock ${SERVER_PID_FILE_NAME}.start.lock failed.";
-  fi
-fi
-
-if [[ -e "$SERVER_PID_FILE_NAME" ]]; then
-  PROC_PID=$(cat $SERVER_PID_FILE_NAME 2>/dev/null)
-else
-  PROC_PID=0
-fi
-if [[ $PROC_PID -gt 0 ]]; then
+if [[ $ATAPP_FOREGROUND -eq 1 && $PROC_PID -gt 0 ]]; then
   cp -f "$SERVER_PID_FILE_NAME" "$SERVER_PID_FILE_NAME.old"
 fi
 {{- end }}
