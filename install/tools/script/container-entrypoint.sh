@@ -29,6 +29,7 @@ while ! /bin/bash /entrypoint.sh health_check >/dev/null 2>&1; do
   sleep 1
 done
 
+echo '[container-entrypoint] service is healthy' >&2
 while kill -0 "$entrypoint_pid" 2>/dev/null; do
   if ! /bin/bash /entrypoint.sh health_check >/dev/null 2>&1; then
     echo '[container-entrypoint] service exited; stopping container for supervisor restart' >&2

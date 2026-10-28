@@ -9,6 +9,7 @@ Type=simple
 # %Y resolves the real unit file's directory, including through its registration symlink.
 # The ':' prefix preserves literal dollar signs in deployment paths.
 ExecStart=:/bin/bash "%Y/run.sh"
+ExecStop=:/bin/bash "%Y/stop.sh"
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=30

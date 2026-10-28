@@ -10,7 +10,7 @@ if [[ $ATAPP_FOREGROUND -eq 1 ]]; then
     exec "$SCRIPT_DIR/{{ .Values.proc_name }}" -env {{ .Values.atapp.deployment.deployment_environment }} -id {{ $bus_addr }} -p "$SERVER_PID_FILE_NAME" --startup-error-file "$SERVER_STARTUP_ERROR_FILE_NAME" -c ../cfg/{{ include "libapp.name" . }}_{{ $bus_addr }}.yaml start "$@"
 fi
 
-bash "$SERVICE_MANAGER" start "$SERVICE_STATE_DIR" "{{ .Values.atapp.deployment.deployment_environment }}-{{ include "libapp.name" . }}-{{ $bus_addr }}" "$SCRIPT_DIR" -- /bin/bash "$SCRIPT_DIR/$(basename "$0")" --atapp-foreground "$@" || exit $?
+bash "$SERVICE_MANAGER" start "$SERVICE_STATE_DIR" "{{ .Values.atapp.deployment.deployment_environment }}-{{ include "libapp.name" . }}-{{ $bus_addr }}" "$SCRIPT_DIR" --stop-script "$SCRIPT_DIR/stop_{{ $bus_addr }}.sh" -- /bin/bash "$SCRIPT_DIR/$(basename "$0")" --atapp-foreground "$@" || exit $?
 RUNNING_EXE_PID=$(bash "$SERVICE_MANAGER" pid "$SERVICE_STATE_DIR")
 WaitProcessStarted "$SERVER_PID_FILE_NAME" 20000 "${RUNNING_EXE_PID:-0}" "$SERVER_STARTUP_ERROR_FILE_NAME"
 if [[ $? -ne 0 ]]; then

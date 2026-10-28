@@ -87,6 +87,8 @@ class Lifecycle(unittest.TestCase):
                                     check=False).returncode, 0)
             self.assertNotEqual(run("systemctl", "--user", "is-active", unit,
                                     check=False).returncode, 0)
+            self.assertEqual(run("systemctl", "--user", "show", "-p", "ActiveState", "--value", unit).stdout.strip(),
+                             "inactive")
         elif backend == "supervisord":
             name = (state / "key").read_text().strip()
             self.assertIn("no such process", run("supervisorctl", "-c",

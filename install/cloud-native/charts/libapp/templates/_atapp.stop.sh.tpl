@@ -20,8 +20,13 @@ if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ 
 fi
 
 SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid";
-if [[ -f "${SERVER_PID_FILE_NAME}.service/backend" ]]; then
-  exec bash "$PROJECT_INSTALL_DIR/tools/script/service-manager.sh" stop "$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service"
+ATAPP_STOP_COMMAND=0
+if [[ "${1:-}" == --atapp-stop-command ]]; then
+  ATAPP_STOP_COMMAND=1
+  shift
+fi
+if [[ $ATAPP_STOP_COMMAND -eq 0 && -f "${SERVER_PID_FILE_NAME}.service/backend" ]]; then
+  exec bash "$PROJECT_INSTALL_DIR/tools/script/service-manager.sh" stop "$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service" --stop-script "$SCRIPT_DIR/$(basename "$0")" -- "$@"
 fi
 REAL_SERVER_PID_FILE_NAME="$SERVER_PID_FILE_NAME"
 
@@ -36,7 +41,7 @@ if [[ $PROC_PID -le 0 ]] && [[ -e "$SERVER_PID_FILE_NAME.old" ]]; then
 fi
 
 CheckProcessRunning "$REAL_SERVER_PID_FILE_NAME";
-if [[ 0 -eq $? ]] && [[ $PROC_PID -gt 0 ]]; then
+if [[ 0 -eq $? ]] || [[ $PROC_PID -le 0 ]]; then
     NoticeMsg "{{ .Values.proc_name }} - {{ $bus_addr }} - pid $PROC_PID already stopped";
     exit 0;
 fi
@@ -89,19 +94,24 @@ if [[ $PROC_PID -le 0 ]] || [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Value
 
     if [[ $? -ne 0 ]]; then
         ErrorMsg "send stop command to {{ .Values.proc_name }} - {{ $bus_addr }} failed.";
+        exit 1
     else
         WaitProcessStoped "$REAL_SERVER_PID_FILE_NAME";
+        if [[ $? -ne 0 ]]; then
+          ErrorMsg "wait for {{ .Values.proc_name }} - {{ $bus_addr }} stop failed."
+          exit 1
+        fi
     fi
 
     CheckProcessRunning "$REAL_SERVER_PID_FILE_NAME";
     if [[ 0 -ne $? ]] && [[ $PROC_PID -gt 0 ]]; then
-        NoticeMsg "{{ .Values.proc_name }} - {{ $bus_addr }} can not be stoped by command, try to kill by signal";
-        kill $(cat "$REAL_SERVER_PID_FILE_NAME");
-        WaitProcessStoped "$REAL_SERVER_PID_FILE_NAME";
+        ErrorMsg "{{ .Values.proc_name }} - {{ $bus_addr }} is still running after the stop command.";
+        exit 1
     fi
 
     NoticeMsg "stop {{ .Values.proc_name }} - {{ $bus_addr }} done." ;
 else
-    NoticeMsg "{{ .Values.proc_name }} - {{ $bus_addr }} not running, skipped.";
+    ErrorMsg "{{ .Values.proc_name }} - {{ $bus_addr }} PID belongs to a different executable.";
+    exit 1
 fi
 {{- end }}

@@ -60,6 +60,14 @@ operational procedure rather than treating rendering permission as deployment pe
   terminates the container; an attached client alone only observes the container lifetime.
 - Preserve the state directory until a successful stop. Changing backend or startup arguments requires stopping first.
   Keep crash restart disabled before force-killing a managed process; killing only its PID can revive it or orphan a container.
+- Generated atapp starts record their matching stop script. Normal stop must execute the application stop command
+  and preserve stop arguments, including `--upgrade`; do not replace it with a process signal. The internal
+  `--atapp-stop-command` path bypasses manager dispatch to avoid recursive locking. Systemd uses `ExecStop`;
+  Supervisor uses a foreground adapter with `stopasgroup=false`. A failed command retains the running process
+  and returns failure; explicit kill bypasses the business stop callback. Verify command effects and absence of
+  TERM delivery, including direct manager stops and crash-restarted processes.
+- After an intentional stop/kill, clear only that unit's failed record and verify `ActiveState=inactive`.
+  A deleted unit file may still appear as `not-found/failed`; `is-active` returning nonzero alone does not prove cleanup.
 - Run `install/tools/script/tests/test_service_manager.py` with `--work-dir <BUILD_DIR>/_agent_tmp/<test-dir>` for
   real backend acceptance. `test_dependency_services.py` additionally needs `--etcd-bin-dir` and `--container-engine`.
   `test_rendered_lifecycle.py --publish-dir <rendered-dir>` executes a rendered two-instance echosvr layout against a

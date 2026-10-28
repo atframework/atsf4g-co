@@ -76,8 +76,17 @@ bash tools/script/redis/redis.sh start --service-manager systemd --container-eng
 unit 通过 `%Y` 定位自身在发布包中的实际目录。实例标识包含完整服务名和状态目录摘要，
 不同部署目录可以使用相同服务名。参数按原始 argv 保存并执行，服务在前台运行，systemd 跟踪实际服务进程。
 生成脚本的内部前台模式参数为 `--atapp-foreground`。
+启动时还会记录同实例生成的 stop 脚本。正常 stop 先撤销自动启动意图，调用该脚本执行应用停止命令，
+并等待业务进程退出，再由托管器完成收尾；`--upgrade` 等停止参数按原始 argv 透传。
+停止命令失败时返回失败并保留进程，修复原因后可重试 stop，或显式执行 kill。
+kill 跳过业务停止命令并强制终止进程。
+systemd 的 `ExecStop` 使用同一回调；supervisord 通过前台适配脚本接收停止请求，
+不会将停止信号直接发给业务进程。每次进程运行期间，成功的停止命令仅执行一次，崩溃重启后重新计数。
+直接通过 systemctl/supervisorctl 停止时也调用该回调，超时后的终止行为遵循托管器配置。
 start 执行 `systemctl --user enable --now`；stop/kill 先移除启动意图并 disable，再通过 systemctl 停止。
 `Restart=on-failure` 负责崩溃拉起，`enable/disable` 负责用户管理器启动时的自动启动。
+stop/kill 确认停止后会清除该 unit 的 `failed` 记录。旧测试删除配置后若仍显示 `not-found/failed`，
+可对已确认停止的具体 unit 执行 `systemctl --user reset-failed <unit>`；这不会删除 journal 日志。
 注销后继续运行或开机启动还需要运维按需配置 user lingering；脚本不会修改该系统设置。
 
 supervisord 使用独立的用户级 daemon、Unix socket 和程序配置，默认目录为

@@ -55,7 +55,11 @@ class Dependencies(unittest.TestCase):
         legacy = work / "legacy-entrypoint.sh"
         legacy.write_text('''#!/bin/bash
 case "$1" in
-  start) sleep 600 & echo $! > /service.pid; exec sleep 600 ;;
+  start)
+    (while [[ ! -f /fixture/crash-request ]]; do sleep 0.05; done
+     rm /fixture/crash-request; exit 77) &
+    echo $! > /service.pid
+    exec sleep 600 ;;
   health_check)
     [[ -f /service.pid ]] || exit 1
     pid=$(cat /service.pid)
@@ -65,21 +69,30 @@ case "$1" in
 esac
 ''')
         state = work / "service"
+        crash_request = work / "crash-request"
+        crash_request.unlink(missing_ok=True)
         try:
             run("bash", SCRIPTS / "service-manager.sh", "start", state, "legacy-image", work,
                 "--container", engine, "docker.io/library/redis:7.2.16", "--",
                 "--volume", f"{legacy}:/entrypoint.sh:ro",
+                "--volume", f"{work}:/fixture",
                 "--volume", f"{SCRIPTS / 'container-entrypoint.sh'}:/atf-entrypoint.sh:ro",
                 "--entrypoint", "/bin/bash", "--", "/atf-entrypoint.sh", "start",
                 env=dict(ENV, ATF_SERVICE_MANAGER="supervisord"))
             name = (state / "key").read_text().strip()
+            # An attached container client can be RUNNING before application readiness.
+            eventually(lambda: '[container-entrypoint] service is healthy' in
+                       run(engine, "logs", name, check=False).stdout)
             first = run(engine, "inspect", "-f", "{{.Id}}", name).stdout.strip()
-            run(engine, "exec", name, "bash", "-c", 'kill -KILL "$(cat /service.pid)"')
+            # Do not require an exec acknowledgement from a container being removed.
+            # The mounted request deterministically makes only the background service exit.
+            crash_request.touch()
             def restarted():
                 result = run(engine, "inspect", "-f", "{{.Id}}", name, check=False)
                 return (result.returncode == 0 and result.stdout.strip() != first and
                         run(engine, "exec", name, "bash", "/entrypoint.sh", "health_check", check=False).returncode == 0)
             eventually(restarted)
+            self.assertFalse(crash_request.exists())
             run("bash", SCRIPTS / "service-manager.sh", "stop", state)
             self.assertNotEqual(run(engine, "inspect", name, check=False).returncode, 0)
         finally:
@@ -181,6 +194,8 @@ esac
                         self.assertFalse(quadlet.exists())
                         self.assertFalse(os.path.lexists(dropins))
                         self.assertNotEqual(run("systemctl", "--user", "is-active", unit, check=False).returncode, 0)
+                        self.assertEqual(run("systemctl", "--user", "show", "-p", "ActiveState", "--value", unit).stdout.strip(),
+                                         "inactive")
                     run("sh", script, "stop", "--work-dir", work)
                 finally:
                     run("bash", SCRIPTS / "service-manager.sh", "kill", state)

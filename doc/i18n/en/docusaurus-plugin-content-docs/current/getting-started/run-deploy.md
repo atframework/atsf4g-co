@@ -80,8 +80,20 @@ The instance identifier combines the full service
 name with a digest of its state directory, allowing separate deployments to reuse service names. Arguments retain
 their original argv boundaries. The server runs in the foreground and systemd tracks the actual process.
 Generated scripts use `--atapp-foreground` for their internal foreground mode.
+Startup also records the generated stop script for that instance. Normal stop removes startup intent, runs the
+application's stop command through that script, and waits for the business process to exit before manager cleanup.
+Stop arguments such as `--upgrade` retain their argv boundaries. A failed stop command returns failure and leaves
+the process running; retry stop after resolving the cause, or explicitly use kill. Kill bypasses the business stop
+command and forcibly terminates the process.
+Systemd's `ExecStop` uses the same callback. Supervisor signals a foreground adapter, which calls the stop script
+without forwarding that signal to the business process. A successful callback runs once per process lifetime and
+is reset after a crash restart. Direct systemctl/supervisorctl stops also invoke it; timeout termination follows
+the manager's configuration.
 Start uses `systemctl --user enable --now`; stop/kill remove startup intent, disable the instance and stop it through
 systemctl. `Restart=on-failure` handles crashes; enable/disable controls startup with the user manager.
+After confirming shutdown, stop/kill clear the unit's failed record. If an older test still appears as
+`not-found/failed` after its configuration was deleted, run `systemctl --user reset-failed <unit>` for that
+confirmed stopped unit. Journal logs remain available.
 Running after logout or starting at boot may require user lingering, which operators configure separately.
 
 Supervisor uses a private user daemon, Unix socket and program configurations, by default under

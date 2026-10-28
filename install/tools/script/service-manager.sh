@@ -142,6 +142,28 @@ load_state() {
   if [[ "$BACKEND" == supervisord ]]; then SUPERVISOR_DIR="$(read_field supervisor-dir)"; fi
 }
 
+reset_stopped_unit_failure() {
+  # systemd keeps failed units loaded even after their files and links are removed.
+  if [[ "$BACKEND" == systemd && "$("$CONTROLLER" --user show -p ActiveState --value "$UNIT")" == failed ]]; then
+    "$CONTROLLER" --user reset-failed "$UNIT"
+  fi
+}
+
+register_stop_script() {
+  local script="$1" directory="$2"
+  write_field stop-script "$script"
+  {
+    echo '#!/bin/bash'
+    printf 'exec /bin/bash %q %q "$@"\n' "$SCRIPT_DIR/common/service-manager-stop.sh" "$STATE"
+  } > "$STATE/stop.sh"
+  {
+    echo '#!/bin/bash'
+    printf 'if [[ -f %q ]]; then source %q; fi\n' "$STATE/runtime-environment.sh" "$STATE/runtime-environment.sh"
+    printf 'cd %q || exit 1\n' "$directory"
+    printf 'exec /bin/bash %q --atapp-stop-command "$@"\n' "$script"
+  } > "$STATE/stop-command.sh"
+}
+
 start_backend() {
   case "$BACKEND" in
     systemd)
@@ -189,12 +211,19 @@ start_backend() {
 
 stop_backend() {
   local mode="$1" stop_job='' pid='' status=''
+  shift
   # Persist intent first. A restarted daemon must not launch this instance again.
   rm -f "$STATE/enabled"
+  if [[ "$mode" == kill ]]; then touch "$STATE/force-kill"
+  else
+    rm -f "$STATE/force-kill"
+    { printf 'set --'; if [[ $# -gt 0 ]]; then printf ' %q' "$@"; fi; printf '\n'; } > "$STATE/stop-arguments.sh"
+  fi
   case "$BACKEND" in
     systemd)
       if [[ "$KIND" == quadlet ]]; then quadlet_disable
       else "$CONTROLLER" --user disable "$UNIT"; fi
+      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
       "$CONTROLLER" --user stop "$UNIT" & stop_job=$!
       if [[ "$mode" == kill ]]; then
         # Queue the stop before SIGKILL so Restart=on-failure cannot race the kill.
@@ -207,6 +236,7 @@ stop_backend() {
     supervisord)
       supervisor_ctl pid >/dev/null || fail 'recorded supervisord is unavailable; state retained'
       rm -f "$SUPERVISOR_DIR/programs/$KEY.ini"
+      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
       status="$(supervisor_ctl status "$KEY" 2>&1 || true)"
       case "$status" in
         *RUNNING*|*STARTING*|*BACKOFF*|*STOPPING*)
@@ -221,7 +251,8 @@ stop_backend() {
           fi ;;
       esac ;;
     none)
-      if pid="$(live_pid)"; then
+      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"
+      elif pid="$(live_pid)"; then
         if [[ "$mode" != kill ]]; then kill -TERM "$pid"; fi
       fi ;;
     *) fail "invalid recorded backend: $BACKEND" ;;
@@ -253,6 +284,7 @@ stop_backend() {
     case "$BACKEND" in
       systemd) "$CONTROLLER" --user kill --signal=KILL "$UNIT" 2>/dev/null || true ;;
       supervisord)
+        if [[ -s "$STATE/stop-script" ]] && pid="$(live_pid)"; then kill -KILL "$pid"; fi
         if [[ "$(supervisor_ctl status "$KEY" 2>&1 || true)" == *STOPPING* ]]; then
           supervisor_ctl signal KILL "$KEY" || true
         fi ;;
@@ -263,7 +295,10 @@ stop_backend() {
   local attempts=0
   while pid="$(live_pid)"; do
     ((attempts+=1))
-    if [[ $attempts -eq 300 ]]; then kill -KILL "$pid"; fi
+    if [[ $attempts -eq 300 ]]; then
+      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then fail "business stop command did not stop process: $pid"
+      else kill -KILL "$pid"; fi
+    fi
     [[ $attempts -lt 350 ]] || fail "process did not stop: $pid"
     sleep 0.1
   done
@@ -274,6 +309,7 @@ stop_backend() {
       supervisor_ctl update "$KEY"
     fi
   fi
+  [[ ! -f "$STATE/stop-command.error" || "$mode" == kill ]] || fail 'business stop command failed; state retained'
   if [[ -s "$STATE/container-engine" ]]; then
     if "$engine" container inspect "$KEY" >/dev/null 2>&1; then
       [[ "$("$engine" inspect -f '{{.State.Running}}' "$KEY")" == false ]] || fail "container still running: $KEY"
@@ -295,6 +331,7 @@ stop_backend() {
     registry_link="$(read_field registry-link)"
     if [[ -L "$registry_link" && "$(readlink "$registry_link")" == "$STATE" ]]; then rm -f "$registry_link"; fi
   fi
+  reset_stopped_unit_failure
   write_field stopped yes
 }
 
@@ -303,9 +340,10 @@ shift || true
 if [[ "$ACTION" == select ]]; then select_backend "${1:-${ATF_SERVICE_MANAGER:-auto}}"; exit; fi
 if [[ "$ACTION" == help || $# -eq 0 ]]; then
   echo 'Usage: service-manager.sh select [auto|systemd|supervisord|none]'
-  echo '       service-manager.sh start STATE NAME CWD -- COMMAND [ARG...]'
+  echo '       service-manager.sh start STATE NAME CWD [--stop-script SCRIPT] -- COMMAND [ARG...]'
   echo '       service-manager.sh start STATE NAME CWD --container ENGINE IMAGE -- [RUN_OPTIONS] [-- COMMAND ARG...]'
-  echo '       service-manager.sh stop|kill|pid|status STATE'
+  echo '       service-manager.sh stop STATE [--stop-script SCRIPT --] [ARG...]'
+  echo '       service-manager.sh kill|pid|status STATE'
   exit 0
 fi
 STATE="$1"; shift
@@ -325,6 +363,12 @@ case "$ACTION" in
     [[ "$NAME" =~ ^[a-zA-Z0-9_.-]+$ && ${#NAME} -lt 180 ]] || fail 'invalid or overly long service name'
     WORK_DIR="$(cd "$WORK_DIR" && pwd -P)"
     ENGINE=''
+    STOP_SCRIPT=''
+    if [[ "$1" == --stop-script ]]; then
+      [[ -f "$2" ]] || fail "stop script not found: $2"
+      STOP_SCRIPT="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"
+      shift 2
+    fi
     CONTAINER_IMAGE=''
     if [[ "$1" == --container ]]; then
       ENGINE="$(command -v "$2")"
@@ -360,6 +404,14 @@ case "$ACTION" in
     write_field backend "$BACKEND"
     write_field stopped yes
     write_field controller ''
+    rm -f "$STATE/stop-script" "$STATE/command.sh" "$STATE/stop-command.done" "$STATE/stop-command.error" "$STATE/force-kill" "$STATE/stop-arguments.sh"
+    {
+      echo '#!/bin/bash'
+      printf 'exec /bin/bash %q %q "$@"\n' "$SCRIPT_DIR/common/service-manager-stop.sh" "$STATE"
+    } > "$STATE/stop.sh"
+    if [[ -n "$STOP_SCRIPT" ]]; then
+      register_stop_script "$STOP_SCRIPT" "$WORK_DIR"
+    fi
     rm -f "$STATE/container-engine"
     if [[ -n "$ENGINE" ]]; then
       CONTAINER_OPTIONS=()
@@ -380,11 +432,6 @@ case "$ACTION" in
       set -- "$ENGINE" run --rm --restart=no --name "$KEY" "${CONTAINER_OPTIONS[@]}" "$CONTAINER_IMAGE" "${CONTAINER_COMMAND[@]}"
     fi
     {
-      echo '#!/bin/bash'
-      printf '[[ -f %q ]] || exit 0\n' "$STATE/enabled"
-      printf 'echo $$ > %q\n' "$STATE/pid"
-      printf 'ps -p $$ -o lstart= > %q\n' "$STATE/identity"
-      printf 'cd %q || exit 1\n' "$WORK_DIR"
       # Preserve deployment inputs across user-manager and daemon environment boundaries.
       while IFS= read -r variable; do
         case "$variable" in
@@ -392,10 +439,25 @@ case "$ACTION" in
             printf 'export %s=%q\n' "$variable" "${!variable}" ;;
         esac
       done < <(compgen -e)
+    } > "$STATE/runtime-environment.sh"
+    {
+      echo '#!/bin/bash'
+      printf '[[ -f %q ]] || exit 0\n' "$STATE/enabled"
+      printf 'rm -f %q %q %q\n' "$STATE/stop-command.done" "$STATE/stop-command.error" "$STATE/stop-arguments.sh"
+      printf 'echo $$ > %q\n' "$STATE/pid"
+      printf 'ps -p $$ -o lstart= > %q\n' "$STATE/identity"
+      printf 'cd %q || exit 1\n' "$WORK_DIR"
+      printf 'source %q\n' "$STATE/runtime-environment.sh"
       if [[ -n "$ENGINE" ]]; then printf 'source %q\n' "$STATE/container-environment.sh"; fi
       printf 'exec'; printf ' %q' "$@"; printf '\n'
     } > "$STATE/run.sh.tmp"
     mv -f "$STATE/run.sh.tmp" "$STATE/run.sh"
+    STOP_AS_GROUP=true
+    if [[ "$BACKEND" == supervisord && -n "$STOP_SCRIPT" ]]; then
+      STOP_AS_GROUP=false
+      mv -f "$STATE/run.sh" "$STATE/command.sh"
+      { echo '#!/bin/bash'; printf 'exec /bin/bash %q %q\n' "$SCRIPT_DIR/common/service-manager-worker.sh" "$STATE"; } > "$STATE/run.sh"
+    fi
     case "$BACKEND" in
       systemd)
         CONTROLLER="$(command -v systemctl)"
@@ -438,7 +500,7 @@ startsecs=1
 startretries=3
 stopsignal=TERM
 stopwaitsecs=30
-stopasgroup=true
+stopasgroup=$STOP_AS_GROUP
 killasgroup=true
 redirect_stderr=true
 stdout_logfile=$LOG_PATH
@@ -455,8 +517,22 @@ EOF
     ;;
   stop|kill)
     load_state
+    if [[ "$ACTION" == stop && "${1:-}" == --stop-script ]]; then
+      [[ -f "$2" ]] || fail "stop script not found: $2"
+      STOP_SCRIPT="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"
+      if [[ -s "$STATE/stop-script" ]]; then
+        [[ "$(read_field stop-script)" == "$STOP_SCRIPT" ]] || fail 'stop script differs from the recorded instance'
+      else
+        # Upgrade a lifecycle started before business stop callbacks were recorded.
+        register_stop_script "$STOP_SCRIPT" "$(dirname "$STOP_SCRIPT")"
+      fi
+      shift 2
+      [[ "${1:-}" == -- ]] || fail 'expected -- before stop command arguments'
+      shift
+    fi
     if [[ "$BACKEND" == supervisord ]]; then lock_dir "$SUPERVISOR_DIR" 8; fi
-    if [[ ! -f "$STATE/stopped" ]]; then stop_backend "$ACTION"; fi ;;
+    if [[ ! -f "$STATE/stopped" ]]; then stop_backend "$ACTION" "$@"
+    else reset_stopped_unit_failure; fi ;;
   status)
     load_state
     echo "backend=$BACKEND name=$KEY"
