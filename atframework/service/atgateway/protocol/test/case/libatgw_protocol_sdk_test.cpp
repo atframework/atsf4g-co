@@ -397,6 +397,147 @@ CASE_TEST(atgateway_protocol_sdk, setup_crypto_with_key_and_roundtrip) {
   receiver.close();
 }
 
+CASE_TEST(atgateway_protocol_sdk, xxtea_short_payload_vectors) {
+  ensure_openssl_init();
+  crypto_session_t sender;
+  crypto_session_t receiver;
+  unsigned char key[16];
+  unsigned char plaintext[16];
+  for (size_t i = 0; i < sizeof(key); ++i) {
+    key[i] = static_cast<unsigned char>(i + 1);
+  }
+  for (size_t i = 0; i < sizeof(plaintext); ++i) {
+    plaintext[i] = static_cast<unsigned char>(i);
+  }
+  auto algorithm = ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kXxtea);
+  int result = sender.setup_crypto_with_key(algorithm, key, {}, false);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+  result = receiver.setup_crypto_with_key(algorithm, key, {}, false);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+
+  // Fixed vectors from atframe_utils XXTEA with 8-byte alignment and PKCS#7-valued padding.
+  struct vector_t {
+    size_t plaintext_size;
+    std::string ciphertext;
+  };
+  const vector_t vectors[] = {
+      {1, std::string("\xe1\xe1\x4b\xfb\xa7\x67\x36\x9c", 8)},
+      {2, std::string("\xba\x40\xd2\x5c\xa4\x26\x90\x23", 8)},
+      {3, std::string("\x70\x1e\x95\x34\x34\x9c\xba\x2b", 8)},
+      {4, std::string("\xae\x76\x53\xd2\xbe\x48\x29\x15", 8)},
+      {5, std::string("\x04\xd6\x3b\x6b\x0e\x30\x8a\xd6", 8)},
+      {7, std::string("\x96\xf3\xa1\x69\x8f\xaf\xe3\x07", 8)},
+      {8, std::string("\x84\x97\xd8\xf5\xba\xa1\xb4\xcd", 8)},
+      {9, std::string("\xf9\x49\x46\xd7\x9c\xf9\xe7\x74\x6b\xef\xa3\xa8\x76\x3e\x03\x00", 16)},
+      {12, std::string("\x1d\x20\xad\x3d\x84\x87\xfa\xfc\xa2\xcd\x51\x23\x64\xa4\x57\xbb", 16)},
+      {16, std::string("\xba\x04\x09\xfb\x26\x37\x42\x4d\x2d\x66\x09\x3a\xe4\x47\xa3\xbb", 16)},
+  };
+  for (const auto &vector : vectors) {
+    gsl::span<const unsigned char> encrypted;
+    gsl::span<const unsigned char> iv;
+    atfw::util::nostd::string_view aad;
+    std::vector<unsigned char> compression_buffer;
+    std::unique_ptr<unsigned char[]> crypto_buffer;
+    result =
+        sender.encrypt_data({plaintext, vector.plaintext_size}, encrypted, compression_buffer, crypto_buffer, iv, aad);
+    CASE_EXPECT_EQ(0, result);
+    CASE_EXPECT_EQ(vector.ciphertext.size(), encrypted.size());
+    if (result != 0 || vector.ciphertext.size() != encrypted.size()) {
+      continue;
+    }
+    CASE_EXPECT_EQ(0, memcmp(vector.ciphertext.data(), encrypted.data(), encrypted.size()));
+    // Encrypt/decrypt share a TLS buffer; preserve ciphertext before calling the receiver.
+    std::vector<unsigned char> ciphertext(encrypted.begin(), encrypted.end());
+    gsl::span<const unsigned char> decrypted;
+    std::unique_ptr<unsigned char[]> decrypt_buffer;
+    result = receiver.decrypt_data(ciphertext, decrypted, decrypt_buffer, iv, aad);
+    CASE_EXPECT_EQ(0, result);
+    CASE_EXPECT_EQ(vector.ciphertext.size(), decrypted.size());
+    if (result != 0 || vector.ciphertext.size() != decrypted.size()) {
+      continue;
+    }
+    CASE_EXPECT_EQ(0, memcmp(plaintext, decrypted.data(), vector.plaintext_size));
+    for (size_t i = vector.plaintext_size; i < decrypted.size(); ++i) {
+      CASE_EXPECT_EQ(static_cast<unsigned char>(decrypted.size() - vector.plaintext_size), decrypted[i]);
+    }
+  }
+
+  for (size_t size : {size_t{4}, size_t{7}, size_t{9}, size_t{12}}) {
+    gsl::span<const unsigned char> decrypted;
+    std::unique_ptr<unsigned char[]> decrypt_buffer;
+    result = receiver.decrypt_data({plaintext, size}, decrypted, decrypt_buffer, {}, {});
+    CASE_EXPECT_EQ(static_cast<int>(::atfw::gateway::error_code_t::kCryptoOperation), result);
+    CASE_EXPECT_TRUE(decrypted.empty());
+  }
+}
+
+CASE_TEST(atgateway_protocol_sdk, xxtea_refresh_checks_active_receive_cipher) {
+  ensure_openssl_init();
+  const unsigned char key[16] = {0x41, 0x27};
+  const unsigned char initial_iv[12] = {0x32, 0x16};
+  const unsigned char plaintext[1] = {0x68};
+  auto aes_algorithm = ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes128Gcm);
+  auto xxtea_algorithm = ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kXxtea);
+  crypto_session_t sender;
+  crypto_session_t receiver;
+  int result = sender.setup_crypto_with_key(aes_algorithm, key, initial_iv, false);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+  result = receiver.setup_crypto_with_key(aes_algorithm, key, initial_iv, false);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+  receiver.update_handshake(2);
+  result = receiver.setup_crypto_with_key(xxtea_algorithm, key, {}, true);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+
+  // Until confirmation, a 17-byte GCM ciphertext still belongs to the old receive cipher.
+  std::vector<unsigned char> compression_buffer;
+  std::unique_ptr<unsigned char[]> crypto_buffer;
+  gsl::span<const unsigned char> ciphertext;
+  gsl::span<const unsigned char> iv;
+  atfw::util::nostd::string_view aad;
+  result = sender.encrypt_data(plaintext, ciphertext, compression_buffer, crypto_buffer, iv, aad);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+  std::vector<unsigned char> ciphertext_copy(ciphertext.begin(), ciphertext.end());
+  gsl::span<const unsigned char> decrypted;
+  result = receiver.decrypt_data(ciphertext_copy, decrypted, crypto_buffer, iv, aad);
+  CASE_EXPECT_EQ(0, result);
+  CASE_EXPECT_EQ(sizeof(plaintext), decrypted.size());
+  if (result != 0 || decrypted.size() != sizeof(plaintext)) {
+    return;
+  }
+  CASE_EXPECT_EQ(plaintext[0], decrypted[0]);
+
+  receiver.confirm_handshake(2);
+  receiver.update_handshake(3);
+  result = receiver.setup_crypto_with_key(aes_algorithm, key, initial_iv, true);
+  CASE_EXPECT_EQ(0, result);
+  if (result != 0) {
+    return;
+  }
+  // The active XXTEA receiver must reject a single word even though AES is now selected.
+  const unsigned char invalid_ciphertext[4] = {};
+  result = receiver.decrypt_data(invalid_ciphertext, decrypted, crypto_buffer, {}, {});
+  CASE_EXPECT_EQ(static_cast<int>(::atfw::gateway::error_code_t::kCryptoOperation), result);
+  CASE_EXPECT_TRUE(decrypted.empty());
+}
+
 CASE_TEST(atgateway_protocol_sdk, encrypt_decrypt_no_cipher) {
   ensure_openssl_init();
 
@@ -2622,6 +2763,24 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_xxtea) {
     CASE_EXPECT_EQ(reply, received);
   }
 
+  // Exercise short payloads in both directions after a real key exchange.
+  for (size_t size : {size_t{1}, size_t{2}, size_t{3}, size_t{4}, size_t{5}, size_t{7}, size_t{8}, size_t{9}}) {
+    std::vector<unsigned char> payload(size, static_cast<unsigned char>(0x30 + size));
+    size_t server_count = server.received_messages.size();
+    ret = client.sdk->send_post(payload);
+    CASE_EXPECT_EQ(0, ret);
+    CASE_EXPECT_EQ(server_count + 1, server.received_messages.size());
+    if (server.received_messages.size() == server_count + 1) {
+      CASE_EXPECT_TRUE(payload == server.received_messages.back());
+    }
+    size_t client_count = client.received_messages.size();
+    ret = server.sdk->send_post(payload);
+    CASE_EXPECT_EQ(0, ret);
+    CASE_EXPECT_EQ(client_count + 1, client.received_messages.size());
+    if (client.received_messages.size() == client_count + 1) {
+      CASE_EXPECT_TRUE(payload == client.received_messages.back());
+    }
+  }
   CASE_MSG_INFO() << "server-client x25519+xxtea handshake and messaging verified" << '\n';
 }
 

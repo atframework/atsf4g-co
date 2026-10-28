@@ -194,9 +194,12 @@ advances it only after success. Each peer must preserve message boundaries:
 | XXTEA | No IV |
 
 AEAD wire data is ciphertext followed by the authentication tag. AES-CBC and
-XXTEA messages use the gateway's block-alignment padding; an already aligned
-plaintext does not acquire an extra block. Backend defaults must not change
-these conventions.
+XXTEA use block-alignment padding; padding bytes contain the number of bytes
+added. XXTEA uses the cipher adapter's 8-byte block size (two 32-bit words),
+which avoids its invalid single-word path. Already aligned nonempty plaintext
+does not acquire an extra block. The receiver trims padding using the post's
+original length. XXTEA ciphertext must be nonempty and aligned to 8 bytes.
+Both peers must use this alignment. Backend defaults must not change these conventions.
 
 The adapter was checked with OpenSSL 3.5.7, mbedTLS 2.28.10/3.6.3, and libsodium
 1.0.22 on Windows x64. Six consecutive messages of 8, 15, 16, 17, 64, and 97 bytes
