@@ -206,7 +206,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock
  * @return rpc::result_code_type 发送结果
  */
 ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type destroy_channel(
-    rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req, google::protobuf::Empty& rsp, bool no_wait = false);
+    rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req, bool no_wait = false);
 
 /**
  * @brief 查找消息

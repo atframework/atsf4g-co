@@ -3412,15 +3412,28 @@ rpc::result_code_type team_room::execute_timer_event(rpc::context& ctx, team_roo
     case team_room_timer_event_type::kDestroyChannel: {
       if (subscriber_ && subscriber_->is_ready() && lock_acquired_ && !channel_destroy_sent_) {
         auto checker = make_write_lock_checker();
-        auto ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_destroy(ctx, checker));
+        // 尝试移除组队聊天频道
+        int32_t ret = 0;
+        {
+          rpc::context::message_holder<atfw::dtmq::SSChannelDestroyChannelReq> destroy_req{ctx};
+          *destroy_req->mutable_channel_key() = rpc::team::team_api::make_team_chat_channel_key(get_team_key());
+          ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *destroy_req, true));
+          if (ret != 0 && ret != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND &&
+              ret != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL) {
+            FCTXLOGERROR(ctx, "team room {}:{} destroy chat channel failed: {}", team_key_.zone_id(),
+                         team_key_.team_id(), ret);
+            break;
+          }
+        }
+        ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_destroy(ctx, checker));
         if (0 == ret) {
           channel_destroy_sent_ = true;
         } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED == ret) {
           channel_destroy_sent_ = true;
           step_down();
         } else {
-          FCTXLOGERROR(ctx, "team room {}:{} destroy channel failed: {}", team_key_.zone_id(), team_key_.team_id(),
-                       ret);
+          FCTXLOGERROR(ctx, "team room {}:{} destroy event channel failed: {}", team_key_.zone_id(),
+                       team_key_.team_id(), ret);
         }
       }
       break;

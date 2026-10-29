@@ -95,9 +95,8 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_update_and_destroy_routed_by_req_channel_ke
 
   CASE_EXPECT_EQ(0, env.run("destroy", [&fake](rpc::context& ctx) -> rpc::result_code_type {
     rpc::context::message_holder<atfw::dtmq::SSChannelDestroyChannelReq> req{ctx};
-    rpc::context::message_holder<google::protobuf::Empty> rsp{ctx};
     protobuf_copy_message(*req->mutable_channel_key(), fake.channel_key());
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *req, *rsp)));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *req)));
   }));
   CASE_EXPECT_EQ(1u, fake.destroy_calls());
   CASE_EXPECT_EQ(kDtmqProxyNodeId,
@@ -132,8 +131,7 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_wrappers_reject_empty_channel_key) {
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
                  env.run("empty_destroy", [](rpc::context& ctx) -> rpc::result_code_type {
                    rpc::context::message_holder<atfw::dtmq::SSChannelDestroyChannelReq> req{ctx};
-                   rpc::context::message_holder<google::protobuf::Empty> rsp{ctx};
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *req, *rsp)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *req)));
                  }));
   CASE_EXPECT_EQ(0u, fake.update_calls());
   CASE_EXPECT_EQ(0u, fake.reset_lock_calls());
@@ -246,13 +244,12 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_create_allows_server_generated_team_id)
   const auto full_name = rpc::team::packer::get_full_name_of_create();
   const size_t calls_before = env.runtime().ss().calls(full_name);
   atfw::team::SSTeamRoomCreateRsp response;
-  int32_t create_result =
-      env.run("create_generate_team_id", [&response](rpc::context& ctx) -> rpc::result_code_type {
-        rpc::context::message_holder<atfw::team::SSTeamRoomCreateReq> request{ctx};
-        request->mutable_team_key()->set_zone_id(kTestZoneId);
-        protobuf_copy_message(*request->mutable_sender_user_key(), make_user_key(kTestZoneId, 9100));
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::team::team_api::create(ctx, *request, response)));
-      });
+  int32_t create_result = env.run("create_generate_team_id", [&response](rpc::context& ctx) -> rpc::result_code_type {
+    rpc::context::message_holder<atfw::team::SSTeamRoomCreateReq> request{ctx};
+    request->mutable_team_key()->set_zone_id(kTestZoneId);
+    protobuf_copy_message(*request->mutable_sender_user_key(), make_user_key(kTestZoneId, 9100));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::team::team_api::create(ctx, *request, response)));
+  });
   CASE_EXPECT_EQ(0, create_result);
   if (0 != create_result) {
     CASE_EXPECT_EQ(0, env.stop());
@@ -520,14 +517,13 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_reject_invalid_routing_key) {
   CASE_EXPECT_EQ(calls_before, env.runtime().ss().calls(full_name));
 
   // zone_id 为 0 表示不分区的全局队伍,从全局发现集(含 zone 1 的节点)路由,RPC 正常下发
-  CASE_EXPECT_EQ(0,
-                 env.run("send_zero_zone", [](rpc::context& ctx) -> rpc::result_code_type {
-                   rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageReq> req{ctx};
-                   rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageRsp> rsp{ctx};
-                   protobuf_copy_message(*req->mutable_team_key(), make_team_key(next_test_team_id(), 0));
-                   protobuf_copy_message(*req->mutable_sender_user_key(), make_user_key(1, 9110));
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::team::team_api::send_message(ctx, *req, *rsp)));
-                 }));
+  CASE_EXPECT_EQ(0, env.run("send_zero_zone", [](rpc::context& ctx) -> rpc::result_code_type {
+    rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageReq> req{ctx};
+    rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageRsp> rsp{ctx};
+    protobuf_copy_message(*req->mutable_team_key(), make_team_key(next_test_team_id(), 0));
+    protobuf_copy_message(*req->mutable_sender_user_key(), make_user_key(1, 9110));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::team::team_api::send_message(ctx, *req, *rsp)));
+  }));
   CASE_EXPECT_EQ(calls_before + 1, env.runtime().ss().calls(full_name));
   CASE_EXPECT_EQ(kLocalRoomNodeId, last_call_target(env.runtime(), full_name, 0));
 

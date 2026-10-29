@@ -531,8 +531,10 @@ user_team::ptr_t user_team::create(rpc::context& ctx, user_team_manager& owner, 
     return nullptr;
   }
 
+  // 请注意组队聊天频道要在Excel里配置较短的过期时间，否则队伍销毁后会泄露频道
   rpc::dtmq::client_subscriber::subscriber_options chat_options{
       owner.get_owner().get_user_chat_manager().get_subscriber_key()};
+  chat_options.auto_create_channel = true;
   auto chat_channel_subscriber =
       rpc::dtmq::client_subscriber::create(rpc::team::team_api::make_team_chat_channel_key(team_key), chat_options);
   if (!chat_channel_subscriber) {

@@ -380,7 +380,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock(rpc::context& ctx, atfw::dtm
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type destroy_channel(rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req,
-                                                         google::protobuf::Empty& rsp, bool no_wait) {
+                                                         bool no_wait) {
   const auto& channel_key = req.channel_key();
   if (channel_key.channel_id().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -392,6 +392,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type destroy_channel(rpc::context& ctx, atfw
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
 
+  google::protobuf::Empty rsp;
   auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, target_server_id, req, rsp, no_wait));
   RPC_RETURN_CODE(ret);
 }

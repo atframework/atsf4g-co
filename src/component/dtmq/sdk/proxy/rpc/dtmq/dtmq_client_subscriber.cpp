@@ -1715,7 +1715,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_sub
   }
 
   // 目标服务器选择内嵌在 rpc::dtmq::destroy_channel 内(从请求体 channel_key 提取)
-  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *rpc_req_body, *rpc_rsp_body, no_wait));
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *rpc_req_body, no_wait));
   RPC_RETURN_CODE(ret);
 }
 
