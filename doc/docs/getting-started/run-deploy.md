@@ -75,6 +75,13 @@ bash tools/script/redis/redis.sh start --service-manager systemd --container-eng
 仍在运行、等待崩溃重启或无法确认控制器状态时，不会覆盖原记录。已卸载且确认停止的 unit 也可正常完成 stop。
 没有托管记录的旧部署仍使用原有 PID 停止方式。
 
+可单独重复执行实例的 start/stop 脚本，无需先运行 start_all/stop_all。状态目录中的 `lifecycle.record` 和备份
+使用 SHA-256 校验并原子替换，保存启动后端、实例名称和运行/停止意图。字段丢失或损坏、误留 `stopped`、误删
+`enabled` 时从有效记录恢复；真实 stop 失败留下的停止意图仍要求先完成 stop，不会被 start 当成损坏忽略。
+进程记录同时保存 PID 和启动时间，恢复前校验真实进程；应用启动确认完成后，才允许修复它的 PID 文件。
+停止完成记录绑定本次进程，空标记或上一次进程的标记不会跳过业务停止命令。两份生命周期记录都损坏、记录属于
+其他目录或无法确认进程身份时，脚本保留现场并报错；恢复记录或控制器后重试，不猜测后端或终止其他进程。
+
 普通进程根据 `tools/script/common/atsf4g@.service` 在实例状态目录生成 unit，与 `run.sh` 放在一起；
 `~/.config/systemd/user/` 仅保存指向该 unit 的注册和启用链接，不再创建用户状态目录中的实例索引。
 unit 通过 `%Y` 定位自身在发布包中的实际目录。systemd、Quadlet 和 supervisord 的实例标识由完整服务名和

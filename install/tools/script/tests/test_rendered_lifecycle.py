@@ -152,6 +152,9 @@ while not request.exists():
                     self.assertFalse((state / "stopped").exists())
                     events = [json.loads(line) for line in (script.parent / f"echosvr_{instance}.events").read_text().splitlines()]
                     self.assertEqual(events, [["stop-command", []]])
+                    refused_start = run("bash", script, backend=backend, check=False)
+                    self.assertNotEqual(refused_start.returncode, 0)
+                    self.assertEqual(run("bash", ROOT / "tools/script/service-manager.sh", "pid", state).stdout.strip(), pid)
                 finally:
                     rejected.unlink()
                 run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
@@ -186,6 +189,97 @@ while not request.exists():
                 run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
                 events = [json.loads(line) for line in script.with_name(f"echosvr_{instance}.events").read_text().splitlines()]
                 self.assertEqual(events, [["stop-command", []]])
+
+    def test_single_service_start_stop_repairs_damaged_control_data(self):
+        script = self.starts[0]
+        other = self.starts[1]
+        instance = script.stem.removeprefix("start_")
+        state = script.parent / f"echosvr_{instance}.pid.service"
+        manager = ROOT / "tools/script/service-manager.sh"
+        app_pid = script.with_name(f"echosvr_{instance}.pid")
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                run("bash", other, backend=backend)
+                other_instance = other.stem.removeprefix("start_")
+                other_pid = other.with_name(f"echosvr_{other_instance}.pid").read_text()
+                for damage in ("metadata", "markers", "pid-and-stop-receipt", "record-checksum"):
+                    with self.subTest(damage=damage):
+                        run("bash", script, backend=backend)
+                        pid = app_pid.read_text()
+                        expected_key = (state / "key").read_text()
+                        if damage == "metadata":
+                            (state / "backend").unlink()
+                            for field in ("key", "unit", "controller", "kind", "stop-script"):
+                                (state / field).write_text("damaged\n")
+                        elif damage == "markers":
+                            (state / "stopped").write_text("yes\n")
+                            (state / "enabled").unlink()
+                        elif damage == "pid-and-stop-receipt":
+                            app_pid.write_text("invalid-pid\n")
+                            (state / "pid").write_text(str(os.getpid()) + "\n")
+                            (state / "identity").write_text("wrong process\n")
+                            (state / "stop-command.done").touch()
+                        else:
+                            (state / "lifecycle.record").write_bytes(b"truncated record")
+                            (state / "backend").write_text("damaged\n")
+                        if damage in ("markers", "record-checksum"):
+                            run("bash", script, backend=backend)
+                            self.assertEqual(app_pid.read_text(), pid)
+                            self.assertEqual((state / "key").read_text(), expected_key)
+                        extra = ["--upgrade", damage, ""]
+                        run("bash", script.parent / f"stop_{instance}.sh", *extra, backend="invalid")
+                        run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
+                        self.assertNotEqual(run("bash", manager, "pid", state, check=False).returncode, 0)
+                        events = [json.loads(line) for line in script.with_name(f"echosvr_{instance}.events").read_text().splitlines()]
+                        self.assertEqual(events, [["stop-command", extra]])
+                        self.assertEqual(other.with_name(f"echosvr_{other_instance}.pid").read_text(), other_pid)
+                        run("bash", script, backend=backend)
+                        run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
+                run("bash", other.parent / f"stop_{other_instance}.sh", backend="invalid")
+
+    def test_unrecoverable_records_fail_without_stopping_a_live_service(self):
+        script = self.starts[0]
+        instance = script.stem.removeprefix("start_")
+        state = script.parent / f"echosvr_{instance}.pid.service"
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                run("bash", script, backend=backend)
+                pid = script.with_name(f"echosvr_{instance}.pid").read_text()
+                saved = {}
+                try:
+                    for name in ("lifecycle.record", "lifecycle.record.bak"):
+                        path = state / name
+                        saved[name] = path.read_bytes()
+                        path.write_bytes(b"damaged record")
+                    failed = run("bash", script.parent / f"stop_{instance}.sh", backend="invalid", check=False)
+                    self.assertNotEqual(failed.returncode, 0)
+                    self.assertEqual(script.with_name(f"echosvr_{instance}.pid").read_text(), pid)
+                    self.assertEqual(script.with_name(f"echosvr_{instance}.events").read_text(), "")
+                finally:
+                    for name, content in saved.items():
+                        (state / name).write_bytes(content)
+                run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
+
+    def test_unverifiable_process_does_not_fall_back_to_a_stop_signal(self):
+        script = self.starts[0]
+        instance = script.stem.removeprefix("start_")
+        state = script.parent / f"echosvr_{instance}.pid.service"
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                run("bash", script, backend=backend)
+                files = [state / name for name in ("process.record", "pid", "identity")]
+                files.append(script.with_name(f"echosvr_{instance}.pid"))
+                saved = {path: path.read_bytes() for path in files}
+                try:
+                    for path in files:
+                        path.write_text("damaged\n")
+                    failed = run("bash", script.parent / f"stop_{instance}.sh", backend="invalid", check=False)
+                    self.assertNotEqual(failed.returncode, 0)
+                    self.assertEqual(script.with_name(f"echosvr_{instance}.events").read_text(), "")
+                finally:
+                    for path, content in saved.items():
+                        path.write_bytes(content)
+                run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
 
     def test_deployment_link_keeps_names_across_package_versions(self):
         for backend in BACKENDS:

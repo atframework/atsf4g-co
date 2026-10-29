@@ -322,16 +322,16 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual((state / "stopped").read_text().strip(), "yes")
         self.assert_stopped(state, "systemd")
 
-    def test_incomplete_stop_still_refuses_start_while_process_is_alive(self):
+    def test_missing_enabled_marker_is_repaired_without_replacing_the_process(self):
         for backend in BACKENDS:
             with self.subTest(backend=backend):
                 state = self.state(backend)
                 pid = self.start(state, backend)
                 (state / "enabled").unlink()
-                result = run("bash", MANAGER, "start", state, "acceptance-service.1", ROOT,
-                             "--", "/bin/false", env=dict(ENV, ATF_SERVICE_MANAGER=backend), check=False)
-                self.assertNotEqual(result.returncode, 0)
+                run("bash", MANAGER, "start", state, "acceptance-service.1", ROOT,
+                    "--", "/bin/false", env=dict(ENV, ATF_SERVICE_MANAGER=backend))
                 self.assertEqual(self.pid(state), pid)
+                self.assertTrue((state / "enabled").exists())
 
     def test_missing_command_does_not_enable_instance(self):
         for backend in BACKENDS:

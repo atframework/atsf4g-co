@@ -18,5 +18,6 @@ if [[ $? -ne 0 ]]; then
     ErrorMsg "[$(date -u '+%F %T')]: start {{ .Values.proc_name }} - {{ $bus_addr }} failed."
     exit 1
 fi
+bash "$SERVICE_MANAGER" ready "$SERVICE_STATE_DIR" || exit $?
 NoticeMsg "[$(date -u '+%F %T')]: start {{ .Values.proc_name }} - {{ $bus_addr }} done."
 {{- end }}

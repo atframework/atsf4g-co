@@ -38,7 +38,8 @@ if [[ -e "$SERVER_PID_FILE_NAME" ]]; then
 else
   PROC_PID=0
 fi
-if [[ $ATAPP_FOREGROUND -eq 0 && ! -f "$SERVICE_STATE_DIR/backend" && $PROC_PID -gt 0 ]] && [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
+[[ "$PROC_PID" =~ ^[0-9]+$ ]] || PROC_PID=0
+if [[ $ATAPP_FOREGROUND -eq 0 && ! -f "$SERVICE_STATE_DIR/backend" && ! -f "$SERVICE_STATE_DIR/lifecycle.record" && ! -f "$SERVICE_STATE_DIR/lifecycle.record.bak" && ! -f "$SERVICE_STATE_DIR/unit" && $PROC_PID -gt 0 ]] && [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Values.proc_name }}" $PROC_PID) ]] ; then
   NoticeMsg "[$(date -u '+%F %T')]: {{ .Values.proc_name }} - {{ $bus_addr }} already started, skipped.";
   exit 0
 fi

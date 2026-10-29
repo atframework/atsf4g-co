@@ -146,6 +146,8 @@ esac
                             result = run("bash", SCRIPTS / "service-manager.sh", "pid", state, check=False)
                             return result.returncode == 0 and int(result.stdout) != pid and health()
                         eventually(restarted)
+                    (state / "backend").unlink()
+                    (state / "key").write_text("damaged-instance\n")
                     run("sh", script, "stop", "--work-dir", work, "--service-manager", "invalid")
                     self.assertFalse(health())
                     self.assertNotEqual(run("bash", SCRIPTS / "service-manager.sh", "pid", state,
@@ -186,6 +188,8 @@ esac
                             return (result.returncode == 0 and result.stdout.strip() != first_id and
                                     run(engine, "exec", name, "redis-cli", "PING", check=False).stdout.strip() == "PONG")
                         eventually(restarted)
+                    (state / "backend").unlink()
+                    (state / "key").write_text("damaged-instance\n")
                     run("sh", script, "kill", "--work-dir", work, "--service-manager", "invalid",
                         "--container-engine", "does-not-exist")
                     self.assertNotEqual(run(engine, "container", "inspect", name, check=False).returncode, 0)

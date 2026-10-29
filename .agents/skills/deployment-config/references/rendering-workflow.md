@@ -68,6 +68,12 @@ operational procedure rather than treating rendering permission as deployment pe
   If a process has exited after an incomplete stop, start may finish cleanup only after the recorded controller
   confirms that no instance or pending restart remains. Unavailable controllers retain state and fail.
   Keep crash restart disabled before force-killing a managed process; killing only its PID can revive it or orphan a container.
+- Keep lifecycle metadata in atomic, checksummed `lifecycle.record` and backup files. Recover per-field files and
+  marker files from a valid record without changing the recorded backend. Preserve a real failed stop's intent.
+  Bind process and stop receipts to PID plus start time; repair application PID files only after startup readiness.
+  If both metadata copies or process ownership cannot be verified, fail with state intact instead of signaling.
+  Test repeated standalone start/stop with a second running instance, damaged fields, stale markers, invalid PID
+  files and truncated records; assert the business stop command runs and the other instance remains unchanged.
 - Generated atapp starts record their matching stop script. Normal stop must execute the application stop command
   and preserve stop arguments, including `--upgrade`; do not replace it with a process signal. The internal
   `--atapp-stop-command` path bypasses manager dispatch to avoid recursive locking. Systemd uses `ExecStop`;

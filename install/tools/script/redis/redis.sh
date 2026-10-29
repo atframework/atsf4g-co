@@ -71,6 +71,13 @@ REDIS_IMAGE="docker.io/library/redis:${REDIS_VERSION}"
 CONTAINER_NAME="atsf4g-redis-unit-test"
 CID_FILE="${WORK_DIR}/redis.cid"
 SERVICE_STATE="${WORK_DIR}/service"
+has_service_state() {
+  [ -f "$SERVICE_STATE/backend" ] || [ -f "$SERVICE_STATE/unit" ] ||
+    [ -f "$SERVICE_STATE/lifecycle.record" ] || [ -f "$SERVICE_STATE/lifecycle.record.bak" ]
+}
+if has_service_state && [ "$COMMAND" != download ]; then
+  bash "$SERVICE_MANAGER" recover "$SERVICE_STATE"
+fi
 if [ -f "$SERVICE_STATE/container-engine" ]; then
   if [ "$COMMAND" != start ] && [ "$COMMAND" != download ]; then
     CONTAINER_ENGINE=$(cat "$SERVICE_STATE/container-engine")

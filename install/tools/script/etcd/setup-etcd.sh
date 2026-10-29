@@ -62,6 +62,13 @@ LOG_FILE="${WORK_DIR}/etcd.log"
 STDERR_LOG_FILE="${WORK_DIR}/etcd-stderr.log"
 DATA_DIR="${WORK_DIR}/data"
 SERVICE_STATE="${WORK_DIR}/service"
+has_service_state() {
+  [ -f "$SERVICE_STATE/backend" ] || [ -f "$SERVICE_STATE/unit" ] ||
+    [ -f "$SERVICE_STATE/lifecycle.record" ] || [ -f "$SERVICE_STATE/lifecycle.record.bak" ]
+}
+if has_service_state && [ "$COMMAND" != download ]; then
+  bash "$SERVICE_MANAGER" recover "$SERVICE_STATE"
+fi
 
 get_etcd_version() {
   if [ "$ETCD_VERSION" != "latest" ]; then

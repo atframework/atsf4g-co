@@ -15,11 +15,16 @@ else
   done
   trap 'rmdir "$state/stop-command.lock.d"' EXIT
 fi
-if [[ -f "$state/stop-command.done" || -f "$state/force-kill" ]]; then exit 0; fi
+if [[ -f "$state/force-kill" ]]; then exit 0; fi
+if [[ -f "$state/process.record" && -f "$state/stop-command.done" ]] &&
+    cmp -s "$state/process.record" "$state/stop-command.done"; then exit 0; fi
 if [[ $# -eq 0 && -f "$state/stop-arguments.sh" ]]; then source "$state/stop-arguments.sh"; fi
 rm -f "$state/stop-command.error"
 if /bin/bash "$state/stop-command.sh" "$@"; then
-  touch "$state/stop-command.done"
+  if [[ -f "$state/process.record" ]]; then
+    cp "$state/process.record" "$state/stop-command.done.tmp"
+    mv -f "$state/stop-command.done.tmp" "$state/stop-command.done"
+  else touch "$state/stop-command.done"; fi
 else
   result=$?
   printf '%s\n' "$result" > "$state/stop-command.error"

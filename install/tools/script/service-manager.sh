@@ -7,6 +7,7 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -L)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -L)"
 source "$SCRIPT_DIR/common/service-manager-quadlet.sh"
+source "$SCRIPT_DIR/common/service-manager-state.sh"
 fail() { echo "[service-manager] $*" >&2; exit 1; }
 
 select_backend() {
@@ -134,12 +135,30 @@ EOF
 }
 
 load_state() {
+  if ! restore_state_record; then
+    if [[ -f "$STATE/stopped" ]]; then PHASE=stopped
+    elif [[ -f "$STATE/enabled" ]]; then PHASE=running
+    else PHASE=stopping; fi
+  fi
   BACKEND="$(read_field backend)"
   KEY="$(read_field key)"
   CONTROLLER="$(read_field controller)"
   KIND="$(read_field kind)"
   UNIT="$(read_field unit)"
+  case "$BACKEND:$KIND" in systemd:process|systemd:quadlet|supervisord:process|none:process) ;;
+    *) fail 'invalid lifecycle metadata; state retained' ;; esac
+  [[ "$KEY" =~ ^[a-zA-Z0-9_.-]+$ && "$UNIT" =~ ^[a-zA-Z0-9@_.-]+\.service$ ]] || fail 'invalid instance identity; state retained'
   if [[ "$BACKEND" == supervisord ]]; then SUPERVISOR_DIR="$(read_field supervisor-dir)"; fi
+  restore_process_identity
+  if ! valid_process_record; then
+    local legacy_pid
+    if legacy_pid="$(live_pid)"; then
+      record_process_identity "$STATE" "$legacy_pid"
+      if [[ ! -f "$STATE/lifecycle.record" ]]; then save_state_record "$PHASE"; fi
+    elif [[ "$BACKEND" == none && "$PHASE" != stopped && -f "$STATE/lifecycle.record" ]]; then
+      fail 'cannot verify the process identity; state retained'
+    fi
+  fi
 }
 
 backend_stopped() {
@@ -196,6 +215,7 @@ reset_stopped_unit_failure() {
 register_stop_script() {
   local script="$1" directory="$2"
   write_field stop-script "$script"
+  write_field working-directory "$directory"
   {
     echo '#!/bin/bash'
     printf 'exec /bin/bash %q %q "$@"\n' "$SCRIPT_DIR/common/service-manager-stop.sh" "$STATE"
@@ -257,6 +277,12 @@ stop_backend() {
   local mode="$1" stop_job='' pid='' status='' already_stopped=0
   shift
   if backend_stopped; then already_stopped=1; fi
+  if [[ "$mode" == stop && $already_stopped -eq 0 && -s "$STATE/stop-script" ]] &&
+      ! live_pid >/dev/null && ! valid_process_record; then
+    fail 'cannot verify the business process identity; restore its process record before stopping'
+  fi
+  if [[ "$mode" == kill ]]; then save_state_record killing
+  else save_state_record stopping; fi
   # Persist intent first. A restarted daemon must not launch this instance again.
   rm -f "$STATE/enabled"
   if [[ "$mode" == kill ]]; then touch "$STATE/force-kill"
@@ -384,6 +410,7 @@ stop_backend() {
     if [[ -L "$registry_link" && "$(readlink "$registry_link")" == "$STATE" ]]; then rm -f "$registry_link"; fi
   fi
   reset_stopped_unit_failure
+  save_state_record stopped
   write_field stopped yes
 }
 
@@ -399,14 +426,22 @@ if [[ "$ACTION" == help || $# -eq 0 ]]; then
   exit 0
 fi
 STATE="$1"; shift
-if [[ "$ACTION" != start && ! -f "$STATE/backend" ]]; then
+if [[ "$ACTION" != start ]] && ! has_state_record; then
   [[ "$ACTION" == stop || "$ACTION" == kill ]] && exit 0
   exit 1
 fi
 mkdir -p "$STATE"
 STATE="$(cd "$STATE" && pwd -P)"
-if [[ "$ACTION" == pid ]]; then live_pid; exit; fi
 lock_dir "$STATE" 9
+if [[ "$ACTION" == pid ]]; then load_state; live_pid; exit; fi
+if [[ "$ACTION" == ready ]]; then
+  load_state
+  READY_PID="$(live_pid)"
+  [[ "$STATE" == *.pid.service && "$(cat "${STATE%.service}")" == "$READY_PID" ]] || fail 'application has not completed startup'
+  cp "$STATE/process.record" "$STATE/ready.record.tmp"
+  mv -f "$STATE/ready.record.tmp" "$STATE/ready.record"
+  exit
+fi
 
 case "$ACTION" in
   start)
@@ -435,15 +470,20 @@ case "$ACTION" in
       (cd "$WORK_DIR" && command -v -- "$1" >/dev/null) || fail "executable not found: $1"
     fi
     REQUESTED="${ATF_SERVICE_MANAGER:-auto}"
-    if [[ -f "$STATE/backend" && ! -f "$STATE/stopped" ]]; then
+    if has_state_record; then
       load_state
       if [[ "$BACKEND" == supervisord ]]; then lock_dir "$SUPERVISOR_DIR" 8; fi
-      if backend_stopped; then
+      if [[ "$PHASE" == stopped ]] && ! live_pid >/dev/null; then
+        # A completed stop remains valid after its private daemon has shut down.
+        :
+      elif backend_stopped; then
         # Finish an interrupted stop or an exited lifecycle before using new inputs.
         stop_backend stop
       else
         [[ "$REQUESTED" == auto || "$REQUESTED" == "$BACKEND" ]] || fail 'stop the instance before changing its backend'
         [[ -f "$STATE/enabled" ]] || fail 'previous stop is incomplete; retry stop before starting'
+        rm -f "$STATE/stopped"
+        save_state_record running
         # Keep the original command, environment and controller, including during restart.
         start_backend
         exit 0
@@ -462,6 +502,7 @@ case "$ACTION" in
     write_field backend "$BACKEND"
     write_field stopped yes
     write_field controller ''
+    write_field working-directory "$WORK_DIR"
     rm -f "$STATE/stop-script" "$STATE/command.sh" "$STATE/stop-command.done" "$STATE/stop-command.error" "$STATE/force-kill" "$STATE/stop-arguments.sh"
     {
       echo '#!/bin/bash'
@@ -502,8 +543,8 @@ case "$ACTION" in
       echo '#!/bin/bash'
       printf '[[ -f %q ]] || exit 0\n' "$STATE/enabled"
       printf 'rm -f %q %q %q\n' "$STATE/stop-command.done" "$STATE/stop-command.error" "$STATE/stop-arguments.sh"
-      printf 'echo $$ > %q\n' "$STATE/pid"
-      printf 'ps -p $$ -o lstart= > %q\n' "$STATE/identity"
+      printf 'source %q\n' "$SCRIPT_DIR/common/service-manager-state.sh"
+      printf 'record_process_identity %q $$\n' "$STATE"
       printf 'cd %q || exit 1\n' "$WORK_DIR"
       printf 'source %q\n' "$STATE/runtime-environment.sh"
       if [[ -n "$ENGINE" ]]; then printf 'source %q\n' "$STATE/container-environment.sh"; fi
@@ -572,6 +613,7 @@ EOF
         ;;
     esac
     rm -f "$STATE/stopped"
+    save_state_record running
     ROLLBACK_START=1
     touch "$STATE/enabled"
     start_backend
@@ -587,17 +629,19 @@ EOF
       else
         # Upgrade a lifecycle started before business stop callbacks were recorded.
         register_stop_script "$STOP_SCRIPT" "$(dirname "$STOP_SCRIPT")"
+        save_state_record "$PHASE"
       fi
       shift 2
       [[ "${1:-}" == -- ]] || fail 'expected -- before stop command arguments'
       shift
     fi
     if [[ "$BACKEND" == supervisord ]]; then lock_dir "$SUPERVISOR_DIR" 8; fi
-    if [[ ! -f "$STATE/stopped" ]]; then stop_backend "$ACTION" "$@"
+    if [[ "$PHASE" != stopped ]] || live_pid >/dev/null; then stop_backend "$ACTION" "$@"
     else reset_stopped_unit_failure; fi ;;
   status)
     load_state
     echo "backend=$BACKEND name=$KEY"
     live_pid ;;
+  recover) load_state ;;
   *) fail "unknown action: $ACTION" ;;
 esac

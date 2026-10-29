@@ -80,6 +80,16 @@ finishes cleanup and starts with the new arguments. Running instances, pending c
 controllers retain their records. Stop also completes for an unloaded unit once shutdown is confirmed.
 Older deployments without a manager record retain their PID-based stop path.
 
+Instance start/stop scripts support repeated standalone execution without start_all/stop_all. `lifecycle.record`
+and its backup are atomically replaced and checked with SHA-256. They preserve the backend, identity and running/stop
+intent, allowing missing or damaged fields, stale `stopped` markers and missing `enabled` markers to be repaired.
+A real failed stop retains its stop intent and must be completed before starting. Process records contain both PID
+and start time and are checked against the live process. The application PID file is repaired only after startup
+has been confirmed. Stop receipts belong to one process lifetime; empty or old receipts cannot bypass the business
+stop command. If both lifecycle copies are corrupt, belong to another directory, or process identity cannot be
+verified, scripts retain state and fail. Restore the record or controller and retry; scripts do not guess a backend
+or terminate unrelated processes.
+
 Native processes generate a unit from `tools/script/common/atsf4g@.service` beside `run.sh` in their instance state
 directory. `~/.config/systemd/user/` holds only registration and enablement links to that unit; no instance registry
 is created in the user's state directory. `%Y` resolves the unit's actual directory in the package.

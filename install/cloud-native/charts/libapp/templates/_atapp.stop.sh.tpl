@@ -24,7 +24,7 @@ if [[ "${1:-}" == --atapp-stop-command ]]; then
   ATAPP_STOP_COMMAND=1
   shift
 fi
-if [[ $ATAPP_STOP_COMMAND -eq 0 && -f "${SERVER_PID_FILE_NAME}.service/backend" ]]; then
+if [[ $ATAPP_STOP_COMMAND -eq 0 ]] && [[ -f "${SERVER_PID_FILE_NAME}.service/backend" || -f "${SERVER_PID_FILE_NAME}.service/lifecycle.record" || -f "${SERVER_PID_FILE_NAME}.service/lifecycle.record.bak" || -f "${SERVER_PID_FILE_NAME}.service/unit" ]]; then
   exec bash "$PROJECT_INSTALL_DIR/tools/script/service-manager.sh" stop "$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service" --stop-script "$SCRIPT_DIR/$(basename "$0")" -- "$@"
 fi
 REAL_SERVER_PID_FILE_NAME="$SERVER_PID_FILE_NAME"
@@ -34,9 +34,11 @@ if [[ -e "$SERVER_PID_FILE_NAME" ]]; then
 else
   PROC_PID=0
 fi
+[[ "$PROC_PID" =~ ^[0-9]+$ ]] || PROC_PID=0
 if [[ $PROC_PID -le 0 ]] && [[ -e "$SERVER_PID_FILE_NAME.old" ]]; then
   REAL_SERVER_PID_FILE_NAME="$SERVER_PID_FILE_NAME.old"
   PROC_PID=$(cat "$REAL_SERVER_PID_FILE_NAME" 2>/dev/null)
+  [[ "$PROC_PID" =~ ^[0-9]+$ ]] || PROC_PID=0
 fi
 
 CheckProcessRunning "$REAL_SERVER_PID_FILE_NAME";

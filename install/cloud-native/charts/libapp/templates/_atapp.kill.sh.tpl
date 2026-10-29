@@ -19,7 +19,7 @@ if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ 
 fi
 
 SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid";
-if [[ -f "${SERVER_PID_FILE_NAME}.service/backend" ]]; then
+if [[ -f "${SERVER_PID_FILE_NAME}.service/backend" || -f "${SERVER_PID_FILE_NAME}.service/lifecycle.record" || -f "${SERVER_PID_FILE_NAME}.service/lifecycle.record.bak" || -f "${SERVER_PID_FILE_NAME}.service/unit" ]]; then
   exec bash "$PROJECT_INSTALL_DIR/tools/script/service-manager.sh" kill "$SCRIPT_DIR/${SERVER_PID_FILE_NAME}.service"
 fi
 
