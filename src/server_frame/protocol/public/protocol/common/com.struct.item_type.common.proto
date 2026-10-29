@@ -44,7 +44,7 @@ enum EnItemType {
     (org.xresloader.enum_alias) = "装备ID段"
   ];
   // 邮件模板
-  EN_ITEM_TYPE_MAIL_TEMPLATE = 5 [
+  EN_ITEM_TYPE_MAIL_TEMPLATE = 7 [
     (item_type_option) = { item_type_range: { start_index: 600000 end_index: 700000 } },
     (org.xresloader.enum_alias) = "邮件模板ID段"
   ];
