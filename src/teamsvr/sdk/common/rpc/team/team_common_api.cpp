@@ -12,8 +12,9 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/config/svr.hpa.config.pb.h>
 #include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/config/svr.hpa.config.pb.h>
+#include <protocol/pbdesc/com.struct.chat.pb.h>
 #include <protocol/pbdesc/com.struct.team.pb.h>
 
 // clang-format off
@@ -28,6 +29,14 @@ TEAM_SDK_COMMON_API atfw::dtmq::DChannelIdKey make_team_room_channel_key(const a
   channel_key.set_channel_type(atfw::team::EN_TEAM_CHANNEL_TYPE_TEAM_ROOM);
   channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(
       atfw::team::EN_TEAM_CHANNEL_TYPE_TEAM_ROOM, team_key.zone_id(), static_cast<uint64_t>(team_key.team_id())));
+  return channel_key;
+}
+
+TEAM_SDK_COMMON_API atfw::dtmq::DChannelIdKey make_team_chat_channel_key(const atfw::team::DTeamKey &team_key) {
+  atfw::dtmq::DChannelIdKey channel_key;
+  channel_key.set_channel_type(atfw::chat::EN_CHAT_CHANNEL_TYPE_TEAM_CHAT);
+  channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(
+      atfw::chat::EN_CHAT_CHANNEL_TYPE_TEAM_CHAT, team_key.zone_id(), static_cast<uint64_t>(team_key.team_id())));
   return channel_key;
 }
 

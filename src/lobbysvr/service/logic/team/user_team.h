@@ -73,8 +73,9 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
  public:
   user_team(ctor_guard_t&, rpc::context& ctx, user_team_manager& owner,
-            atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& channel_subscriber, uint32_t team_type,
-            const atfw::team::DTeamKey& team_key);
+            atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& event_channel_subscriber,
+            atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& chat_channel_subscriber,
+            uint32_t team_type, const atfw::team::DTeamKey& team_key);
 
   ~user_team();
 
@@ -282,7 +283,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   uint32_t team_type_;
   atfw::team::DTeamKey team_key_;
-  atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> channel_subscriber_;
+  atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> event_channel_subscriber_;
+  atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> chat_channel_subscriber_;
   int64_t channel_create_sequence_;
   int64_t channel_saved_sequence_;
 

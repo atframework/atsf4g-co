@@ -21,6 +21,7 @@
 
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
+#include <rpc/team/team_common_api.h>
 #include <rpc/team/team_room_client_api.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -256,6 +257,10 @@ class user_team_utility {
             hold_lifetime->owner_->remove_team(ctx, hold_lifetime->get_team_key(),
                                                atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
             hold_lifetime->owner_->send_dirty_data(ctx);
+
+            // 聊天频道
+            hold_lifetime->owner_->get_owner().get_user_chat_manager().unregister_external_chat_channel(
+                hold_lifetime->chat_channel_subscriber_);
           }
         });
 
@@ -482,13 +487,15 @@ struct user_team::ctor_guard_t {};
 
 // NOLINTNEXTLINE(modernize-pass-by-value)
 user_team::user_team(ctor_guard_t&, rpc::context& /*ctx*/, user_team_manager& owner,
-                     atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& channel_subscriber,
+                     atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& event_channel_subscriber,
+                     atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& chat_channel_subscriber,
                      // NOLINTNEXTLINE(modernize-pass-by-value)
                      uint32_t team_type, const atfw::team::DTeamKey& team_key)
     : owner_(&owner),
       team_type_(team_type),
       team_key_(team_key),
-      channel_subscriber_(channel_subscriber),
+      event_channel_subscriber_(event_channel_subscriber),
+      chat_channel_subscriber_(chat_channel_subscriber),
       channel_create_sequence_(0),
       channel_saved_sequence_(0),
       actived_timepoint_(std::chrono::system_clock::from_time_t(0)),
@@ -501,27 +508,39 @@ user_team::user_team(ctor_guard_t&, rpc::context& /*ctx*/, user_team_manager& ow
       last_applied_action_hash_code_(0),
       last_heartbeat_timepoint_(std::chrono::system_clock::from_time_t(0)) {
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
-  channel_subscriber_->set_local_private_data(local_private_data);
+  event_channel_subscriber_->set_local_private_data(local_private_data);
 }
 
-user_team::~user_team() { channel_subscriber_->set_local_private_data({}); }
+user_team::~user_team() {
+  event_channel_subscriber_->set_local_private_data({});
+
+  owner_->get_owner().get_user_chat_manager().unregister_external_chat_channel(chat_channel_subscriber_);
+}
 
 user_team::ptr_t user_team::create(rpc::context& ctx, user_team_manager& owner, uint32_t team_type,
                                    const atfw::team::DTeamKey& team_key, const atfw::dtmq::DChannelIdKey& channel_key) {
   ctor_guard_t guard;
-  rpc::dtmq::client_subscriber::subscriber_options options{
+  rpc::dtmq::client_subscriber::subscriber_options event_options{
       owner.get_owner().get_user_chat_manager().get_subscriber_key()};
 
   // auto_create_channel 设为false，如果是恢复已经失效的频道，后续会通过 on_destroyed 回调移除
-  options.auto_create_channel = false;
-  options.event_callback_set = user_team_utility::get_event_callback_set();
-  auto channel_subscriber = rpc::dtmq::client_subscriber::create(channel_key, options);
-  if (!channel_subscriber) {
+  event_options.auto_create_channel = false;
+  event_options.event_callback_set = user_team_utility::get_event_callback_set();
+  auto event_channel_subscriber = rpc::dtmq::client_subscriber::create(channel_key, event_options);
+  if (!event_channel_subscriber) {
     return nullptr;
   }
 
-  return atfw::component::memory::stl::make_strong_rc<user_team>(guard, ctx, owner, std::move(channel_subscriber),
-                                                                 team_type, team_key);
+  rpc::dtmq::client_subscriber::subscriber_options chat_options{
+      owner.get_owner().get_user_chat_manager().get_subscriber_key()};
+  auto chat_channel_subscriber =
+      rpc::dtmq::client_subscriber::create(rpc::team::team_api::make_team_chat_channel_key(team_key), chat_options);
+  if (!chat_channel_subscriber) {
+    return nullptr;
+  }
+
+  return atfw::component::memory::stl::make_strong_rc<user_team>(
+      guard, ctx, owner, std::move(event_channel_subscriber), std::move(chat_channel_subscriber), team_type, team_key);
 }
 
 void user_team::refresh_feature_limit_minute(rpc::context& ctx) {
@@ -606,7 +625,7 @@ void user_team::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamSnapshot&
 
 bool user_team::can_be_removed(rpc::context& ctx) const noexcept {
   // 频道已销毁，可以直接移除
-  if (channel_subscriber_->is_destroyed()) {
+  if (event_channel_subscriber_->is_destroyed()) {
     return true;
   }
 
@@ -618,7 +637,7 @@ bool user_team::can_be_removed(rpc::context& ctx) const noexcept {
     return true;
   }
 
-  if (!channel_subscriber_->is_ready()) {
+  if (!event_channel_subscriber_->is_ready()) {
     return false;
   }
 
@@ -627,7 +646,7 @@ bool user_team::can_be_removed(rpc::context& ctx) const noexcept {
 
 bool user_team::wait_to_be_member_but_timeout(rpc::context& ctx) const noexcept {
   // 频道已销毁，可以直接视为member添加超时
-  if (channel_subscriber_->is_destroyed()) {
+  if (event_channel_subscriber_->is_destroyed()) {
     return true;
   }
 
@@ -642,7 +661,7 @@ bool user_team::is_exiting() const noexcept {
   return last_exit_team_request_timepoint_ > std::chrono::system_clock::from_time_t(0);
 }
 
-bool user_team::is_destroyed() const noexcept { return channel_subscriber_->is_destroyed(); }
+bool user_team::is_destroyed() const noexcept { return event_channel_subscriber_->is_destroyed(); }
 
 bool user_team::is_removed_for_client() const noexcept {
   // 与 user_team_manager 脏数据下发时的移除判定一致: 已不是成员、正在退出、频道已销毁、
@@ -662,7 +681,7 @@ bool user_team::is_captain() const noexcept {
 }
 
 const atfw::dtmq::DChannelIdKey& user_team::get_channel_key() const noexcept {
-  return channel_subscriber_->get_channel_key();
+  return event_channel_subscriber_->get_channel_key();
 }
 
 bool user_team::foreach_member(
@@ -700,7 +719,7 @@ void user_team::send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExit
   set_exit_team(ctx, exit_reason);
 
   // 如果频道已销毁，则不用再发送退出
-  if (channel_subscriber_->is_destroyed()) {
+  if (event_channel_subscriber_->is_destroyed()) {
     return;
   }
 
@@ -742,6 +761,10 @@ void user_team::repair_from_room_error(rpc::context& ctx, int32_t result_code) {
   // Room 已确认频道或操作者成员身份不存在。清理缓存并登记 remove，不再向失效队伍补发退出。
   auto hold_lifetime = shared_from_this();
   set_flag(team_flag::kMember, false);
+
+  // 聊天频道
+  owner_->get_owner().get_user_chat_manager().unregister_external_chat_channel(chat_channel_subscriber_);
+
   cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
   reset_cached_state(ctx);
   owner_->remove_team(ctx, team_key_, false,
@@ -1043,7 +1066,7 @@ void user_team::retry_send_exit_team_request(rpc::context& ctx) {
 }
 
 void user_team::try_load_snapshot(rpc::context& ctx) {
-  if (!channel_subscriber_->is_ready()) {
+  if (!event_channel_subscriber_->is_ready()) {
     return;
   }
 
@@ -1199,7 +1222,7 @@ bool user_team::insert_dirty_snapshot_handle() {
   }
 
   // 未准备好数据则不需要下发
-  if (!channel_subscriber_->is_ready() && !channel_subscriber_->is_destroyed()) {
+  if (!event_channel_subscriber_->is_ready() && !event_channel_subscriber_->is_destroyed()) {
     return false;
   }
 
@@ -1283,8 +1306,14 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
   if (before_is_member != check_flag(team_flag::kMember)) {
     if (check_flag(team_flag::kMember)) {
       insert_dirty_snapshot_handle();
+
+      // 聊天频道
+      owner_->get_owner().get_user_chat_manager().register_external_chat_channel(chat_channel_subscriber_);
     } else {
       owner_->insert_dirty_handle_for_team(team_key_);
+
+      // 聊天频道
+      owner_->get_owner().get_user_chat_manager().unregister_external_chat_channel(chat_channel_subscriber_);
     }
   }
   return true;
@@ -1334,6 +1363,9 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
           if (refresh_member_data) {
             async_flush_all_member_shared_data(ctx);
           }
+
+          // 聊天频道
+          owner_->get_owner().get_user_chat_manager().register_external_chat_channel(chat_channel_subscriber_);
         }
         cached_permission_role_ =
             member_iter != cached_members_.end() ? member_iter->second->member_data.role() : member_data.role();
@@ -1358,6 +1390,9 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
 
           // 本人的移除由 manager 下发 team_remove，保留其他成员的增量语义。
           owner_->insert_dirty_handle_for_team(team_key_);
+
+          // 聊天频道
+          owner_->get_owner().get_user_chat_manager().unregister_external_chat_channel(chat_channel_subscriber_);
         }
 
         cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
@@ -1758,10 +1793,10 @@ size_t user_team::cleanup_expired_admissions(rpc::context& ctx) {
 
 void user_team::maybe_send_heartbeat(rpc::context& ctx) {
   // 只在确认是成员且频道可用时心跳，退出中/未入队/频道销毁时无需心跳
-  if (!check_flag(team_flag::kMember) || is_exiting() || channel_subscriber_->is_destroyed()) {
+  if (!check_flag(team_flag::kMember) || is_exiting() || event_channel_subscriber_->is_destroyed()) {
     return;
   }
-  if (!channel_subscriber_->is_ready()) {
+  if (!event_channel_subscriber_->is_ready()) {
     return;
   }
 
@@ -1802,21 +1837,21 @@ void user_team::load_snapshot(rpc::context& ctx) {
   }
 
   FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, load a snapshot, last sequence:{}", owner_->get_owner(),
-               team_key_.zone_id(), team_key_.team_id(), channel_subscriber_->get_last_message_sequence());
+               team_key_.zone_id(), team_key_.team_id(), event_channel_subscriber_->get_last_message_sequence());
 
-  channel_create_sequence_ = channel_subscriber_->get_create_sequence();
+  channel_create_sequence_ = event_channel_subscriber_->get_create_sequence();
 
   // 在重建前记录成员身份，避免回放压缩点之后的历史入队事件时再次提交默认成员数据。
   const bool refresh_member_data = !check_flag(team_flag::kMember);
   // 加载快照
-  if (!load_dtmq_custom_data(ctx, channel_subscriber_->get_custom_data_content())) {
+  if (!load_dtmq_custom_data(ctx, event_channel_subscriber_->get_custom_data_content())) {
     return;
   }
 
   // 回放压缩点之后的增量日志(本端的 add_member 可能尚未落入快照，由回放补齐成员身份)
   rpc::dtmq::client_subscriber::query_options options;
-  options.start_sequence = channel_subscriber_->get_last_removed_sequence() + 1;
-  channel_subscriber_->query_cached_message(
+  options.start_sequence = event_channel_subscriber_->get_last_removed_sequence() + 1;
+  event_channel_subscriber_->query_cached_message(
       ctx,
       [this, &ctx, refresh_member_data](const ::atfw::dtmq::DChannelMessage& message) {
         on_receive_raw_message(ctx, message, refresh_member_data);
@@ -1886,6 +1921,10 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
     }
     case atfw::dtmq::DChannelMessageDetail::kDestroy: {
       set_flag(team_flag::kMember, false);
+
+      // 聊天频道
+      owner_->get_owner().get_user_chat_manager().unregister_external_chat_channel(chat_channel_subscriber_);
+
       // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
 
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;

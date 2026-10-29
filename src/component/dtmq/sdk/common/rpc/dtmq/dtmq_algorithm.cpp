@@ -138,5 +138,20 @@ DTMQ_COMMON_SDK_API uint32_t parse_world_partition_channel_type_from_channel_id(
   return atfw::util::string::to_int<uint32_t>(substr);
 }
 
+DTMQ_COMMON_SDK_API uint32_t parse_channel_type_from_channel_id(gsl::string_view channel_id) {
+  // 目前所有的标准频道的:分割后第二段都是频道类型
+  auto pos = channel_id.find(':');
+  if (pos == gsl::string_view::npos) {
+    return 0;
+  }
+  auto substr = channel_id.substr(pos + 1);
+  pos = substr.find(':');
+  if (pos != gsl::string_view::npos) {
+    substr = substr.substr(0, pos);
+  }
+
+  return atfw::util::string::to_int<uint32_t>(substr);
+}
+
 }  // namespace dtmq
 }  // namespace rpc

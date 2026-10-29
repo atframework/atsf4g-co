@@ -24,6 +24,8 @@ enum EnChatChannelType {
   EN_CHAT_CHANNEL_TYPE_PRIVATE = 2;           // 私聊用户 Channel
   EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION = 3;  // 系统通知 Channel(生命周期短)
   EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT = 4;  // 系统公告 Channel(生命周期长)
+
+  EN_CHAT_CHANNEL_TYPE_TEAM_CHAT = 12;  // 系统公告 Channel(生命周期长)
 }
 
 message DChatChannelMeta {

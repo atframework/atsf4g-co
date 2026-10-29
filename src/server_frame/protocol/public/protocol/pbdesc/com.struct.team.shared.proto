@@ -12,6 +12,7 @@ import "protocol/common/com.struct.team.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.match.proto";
 import "protocol/pbdesc/com.struct.team.proto";
+import "protocol/pbdesc/com.struct.chat.proto";
 
 package atframework.shared;
 

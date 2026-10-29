@@ -25,7 +25,7 @@
 #include <rpc/rpc_common_types.h>
 
 #include <string>
-#include <utility>
+#include <unordered_map>
 
 namespace rpc {
 class context;
@@ -76,7 +76,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
 
   void foreach_channel(
       atfw::util::nostd::function_ref<bool(const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&)>
-          callback) const;
+          callback,
+      bool with_external = true) const;
 
   /**
    * @brief 检查是否有写权限
@@ -105,6 +106,10 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
 
   int32_t build_dtmq_channel_key_from_chat_channel_key(const atfw::chat::DChatChannelKey& chat_channel_key,
                                                        atfw::dtmq::DChannelIdKey& dtmq_channel_key);
+
+  bool register_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel);
+
+  bool unregister_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel);
 
   static void dump_dtmq_to_chat_channel_metadata(rpc::context& ctx, const rpc::dtmq::client_subscriber& channel,
                                                  atfw::chat::DChatChannelMeta& metadata, bool with_configure);
@@ -137,7 +142,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
  private:
   rpc::dtmq::client_subscriber::ptr_t get_channel_by_key(const atfw::dtmq::DChannelIdKey& channel_key) const;
 
-  static void setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
+  static void install_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
+  static void uninstall_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
 
   static rpc::dtmq::client_subscriber::event_callback_set_t& global_setup_private_channel_event_get_callback_set();
   static bool global_setup_private_channel_event_is_existed(uintptr_t unique_guard);
@@ -156,4 +162,6 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
 
   rpc::dtmq::client_subscriber::ptr_t sys_notification_channel_;
   rpc::dtmq::client_subscriber::ptr_t sys_announcement_channel_;
+
+  std::unordered_map<std::string, rpc::dtmq::client_subscriber::ptr_t> external_chat_channels_;
 };
