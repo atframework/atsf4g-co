@@ -834,7 +834,8 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   size_t user2_sync_baseline = count_channel_sync_records(test, user2.session_id);
   size_t user1_sync_baseline = count_channel_sync_records(test, user1.session_id);
 
-  // user2 sends a message into its own private channel through the CS task.
+  // user2 sends through the CS task; its custom nickname takes precedence over the platform nickname.
+  user2.user_inst->get_account_info().mutable_profile()->set_nick_name("Platform Sender");
   user2.user_inst->get_account_info().mutable_profile()->set_custom_nick_name("Private Sender");
   atframework::chat::CSChatSendMessageReq send_req;
   *send_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId2, kZoneId);

@@ -754,15 +754,18 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
 }
 
 void user_chat_manager::pack_self_as_sender(rpc::context& /*ctx*/, atfw::chat::DChatMessageSender& sender) {
-  const auto& custom_nick_name = owner_->get_account_info().profile().custom_nick_name();
-  if (!custom_nick_name.empty()) {
-    sender.set_nick_name(custom_nick_name.data(), custom_nick_name.size());
-  }
+  do {
+    const auto& custom_nick_name = owner_->get_account_info().profile().custom_nick_name();
+    if (!custom_nick_name.empty()) {
+      sender.set_nick_name(custom_nick_name.data(), custom_nick_name.size());
+      break;
+    }
 
-  const auto& platform_nick_name = owner_->get_account_info().profile().nick_name();
-  if (!platform_nick_name.empty()) {
-    sender.set_nick_name(platform_nick_name.data(), platform_nick_name.size());
-  }
+    const auto& platform_nick_name = owner_->get_account_info().profile().nick_name();
+    if (!platform_nick_name.empty()) {
+      sender.set_nick_name(platform_nick_name.data(), platform_nick_name.size());
+    }
+  } while (false);
 }
 
 int32_t user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(
