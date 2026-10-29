@@ -414,9 +414,21 @@ atframework::dtmq::DChannelMessage make_channel_message(int64_t sequence, gsl::s
   msg.set_sequence(sequence);
   msg.set_sender_key(sender_key.data(), sender_key.size());
   msg.set_channel_type(channel_type);
-  msg.mutable_detail()->set_text(text.data(), text.size());
+  atframework::chat::DChatUserMessage chat_message;
+  chat_message.mutable_sender()->set_nick_name("test sender");
+  chat_message.mutable_content()->set_text(text.data(), text.size());
+  CASE_EXPECT_TRUE(msg.mutable_detail()->mutable_event()->PackFrom(chat_message));
   *msg.mutable_create_timepoint() = protobuf_from_system_clock(std::chrono::system_clock::now());
   return msg;
+}
+
+atframework::chat::DChatUserMessage unpack_chat_user_message(const atframework::dtmq::DChannelMessage &message) {
+  atframework::chat::DChatUserMessage chat_message;
+  CASE_EXPECT_TRUE(message.detail().has_event());
+  CASE_EXPECT_TRUE(message.detail().event().UnpackTo(&chat_message));
+  CASE_EXPECT_TRUE(chat_message.has_sender());
+  CASE_EXPECT_TRUE(chat_message.content().has_text());
+  return chat_message;
 }
 
 // Build a list of messages with a valid hash chain (the WAL validates incremental messages via
@@ -667,9 +679,10 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   // The CS task submits one batch item and publishes only the filtered text.
   capture.replace_filtered_text = true;
   capture.filtered_text = "hello * from u1";
+  user1.user_inst->get_account_info().mutable_profile()->set_nick_name("World Sender");
   atframework::chat::CSChatSendMessageReq send_req;
   send_req.mutable_channel_key()->set_world_partition_channel(0);
-  send_req.mutable_detail()->set_text("hello bad from u1");
+  send_req.mutable_content()->set_text("hello bad from u1");
   auto packed_send =
       pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_send));
@@ -685,7 +698,9 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   CASE_EXPECT_EQ(world_channel_id, capture.last_send_message_req.channel_key().channel_id());
   CASE_EXPECT_EQ(world_channel_type, capture.last_send_message_req.channel_key().channel_type());
   CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content(0).sender_key());
-  CASE_EXPECT_EQ("hello * from u1", capture.last_send_message_req.message_content(0).detail().text());
+  const auto sent_chat = unpack_chat_user_message(capture.last_send_message_req.message_content(0));
+  CASE_EXPECT_EQ("hello * from u1", sent_chat.content().text());
+  CASE_EXPECT_EQ("World Sender", sent_chat.sender().nick_name());
   CASE_EXPECT_EQ(1, capture.filter_count);
   CASE_EXPECT_EQ(1, capture.last_filter_request.items_size());
   if (capture.last_filter_request.items_size() == 1) {
@@ -698,9 +713,10 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   const int64_t msg1_seq = base_sequence + 1;
   const int64_t msg2_seq = base_sequence + 2;
   std::vector<atframework::dtmq::DChannelMessage> incremental_msgs{
-      make_channel_message(msg1_seq, "user:1:10001", world_channel_type, "m1-from-u1"),
+      capture.last_send_message_req.message_content(0),
       make_channel_message(msg2_seq, "user:1:10002", world_channel_type, "m2-from-u2"),
   };
+  incremental_msgs[0].set_sequence(msg1_seq);
   chain_message_hashes(incremental_msgs, 0);
   CASE_EXPECT_TRUE(
       receive_channel_event(test, make_incremental_event(make_world_channel_key(), msg2_seq, incremental_msgs)));
@@ -729,9 +745,12 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
       CASE_EXPECT_EQ(2, channel_data.incremental().message_list_size());
       if (channel_data.incremental().message_list_size() >= 2) {
         CASE_EXPECT_EQ(msg1_seq, channel_data.incremental().message_list(0).sequence());
-        CASE_EXPECT_EQ("m1-from-u1", channel_data.incremental().message_list(0).detail().text());
+        const auto first_chat = unpack_chat_user_message(channel_data.incremental().message_list(0));
+        CASE_EXPECT_EQ("hello * from u1", first_chat.content().text());
+        CASE_EXPECT_EQ("World Sender", first_chat.sender().nick_name());
         CASE_EXPECT_EQ(msg2_seq, channel_data.incremental().message_list(1).sequence());
-        CASE_EXPECT_EQ("m2-from-u2", channel_data.incremental().message_list(1).detail().text());
+        CASE_EXPECT_EQ("m2-from-u2",
+                       unpack_chat_user_message(channel_data.incremental().message_list(1)).content().text());
       }
       CASE_EXPECT_EQ(msg2_seq, channel_data.metadata().last_message_sequence());
     }
@@ -743,10 +762,14 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   const auto world_key = make_world_channel_key();
   CASE_EXPECT_TRUE(
       run_sync_task(test, "chat.world_rate_limit", [&user1, &world_key](rpc::context &ctx) -> rpc::result_code_type {
-        int32_t first =
-            RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_text_message(ctx, world_key, "first"));
-        int32_t second =
-            RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_text_message(ctx, world_key, "second"));
+        rpc::context::message_holder<atframework::chat::DChatMessageContent> first_content{ctx};
+        first_content->set_text("first");
+        int32_t first = RPC_AWAIT_CODE_RESULT(
+            user1.user_inst->get_user_chat_manager().send_chat_message(ctx, world_key, std::move(*first_content)));
+        rpc::context::message_holder<atframework::chat::DChatMessageContent> second_content{ctx};
+        second_content->set_text("second");
+        int32_t second = RPC_AWAIT_CODE_RESULT(
+            user1.user_inst->get_user_chat_manager().send_chat_message(ctx, world_key, std::move(*second_content)));
         // If the first send was accepted (fresh second), the second must be rate-limited. If the first was already
         // rate-limited (same second as an earlier send), the second stays rate-limited too.
         if (0 == first) {
@@ -812,9 +835,10 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   size_t user1_sync_baseline = count_channel_sync_records(test, user1.session_id);
 
   // user2 sends a message into its own private channel through the CS task.
+  user2.user_inst->get_account_info().mutable_profile()->set_custom_nick_name("Private Sender");
   atframework::chat::CSChatSendMessageReq send_req;
   *send_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId2, kZoneId);
-  send_req.mutable_detail()->set_text("secret-u2");
+  send_req.mutable_content()->set_text("secret-u2");
   auto packed_send =
       pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user2.client, packed_send));
@@ -828,13 +852,16 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   }
   CASE_EXPECT_EQ(user2_private_channel_id, capture.last_send_message_req.channel_key().channel_id());
   CASE_EXPECT_EQ("user:1:10002", capture.last_send_message_req.message_content(0).sender_key());
-  CASE_EXPECT_EQ("secret-u2", capture.last_send_message_req.message_content(0).detail().text());
+  const auto sent_chat = unpack_chat_user_message(capture.last_send_message_req.message_content(0));
+  CASE_EXPECT_EQ("secret-u2", sent_chat.content().text());
+  CASE_EXPECT_EQ("Private Sender", sent_chat.sender().nick_name());
 
   // The private channel event is only delivered to user2's session; user1's session receives nothing.
   const int64_t msg1_seq = private_base_sequence + 1;
   std::vector<atframework::dtmq::DChannelMessage> private_msgs{
-      make_channel_message(msg1_seq, "user:1:10002", user2_private_key.channel_type(), "secret-u2"),
+      capture.last_send_message_req.message_content(0),
   };
+  private_msgs[0].set_sequence(msg1_seq);
   chain_message_hashes(private_msgs, 0);
   CASE_EXPECT_TRUE(receive_channel_event(test, make_incremental_event(user2_private_key, msg1_seq, private_msgs)));
   flush_pending_chat_messages(test);
@@ -854,7 +881,9 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
       CASE_EXPECT_TRUE(sync_body.chat_channel(0).has_incremental());
       CASE_EXPECT_EQ(1, sync_body.chat_channel(0).incremental().message_list_size());
       if (sync_body.chat_channel(0).incremental().message_list_size() > 0) {
-        CASE_EXPECT_EQ("secret-u2", sync_body.chat_channel(0).incremental().message_list(0).detail().text());
+        const auto received_chat = unpack_chat_user_message(sync_body.chat_channel(0).incremental().message_list(0));
+        CASE_EXPECT_EQ("secret-u2", received_chat.content().text());
+        CASE_EXPECT_EQ("Private Sender", received_chat.sender().nick_name());
       }
     }
   }
@@ -862,7 +891,7 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   // user1 writes into user2's private channel too (PRIVATE channels are writable per manager ACL).
   atframework::chat::CSChatSendMessageReq cross_send_req;
   *cross_send_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId2, kZoneId);
-  cross_send_req.mutable_detail()->set_text("from-u1");
+  cross_send_req.mutable_content()->set_text("from-u1");
   auto packed_cross_send =
       pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), cross_send_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_cross_send));
@@ -874,44 +903,70 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
     CASE_EXPECT_EQ(0, cross_rsp_msg.head().error_code());
   }
   CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content(0).sender_key());
+  CASE_EXPECT_EQ("from-u1",
+                 unpack_chat_user_message(capture.last_send_message_req.message_content(0)).content().text());
+
+  // Missing content and empty text are rejected before filtering or DTMQ delivery.
+  const int send_count_before_invalid = capture.send_message_count;
+  const int filter_count_before_invalid = capture.filter_count;
+  for (bool empty_text : {false, true}) {
+    atframework::chat::CSChatSendMessageReq invalid_req;
+    *invalid_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId1, kZoneId);
+    if (empty_text) {
+      invalid_req.mutable_content()->set_text("");
+    }
+    auto packed_invalid =
+        pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), invalid_req);
+    CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_invalid));
+    atframework::CSMsg invalid_rsp_msg;
+    const auto *invalid_rsp_record = find_downstream_by_rpc_name(
+        test, user1.session_id, rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(),
+        invalid_rsp_msg);
+    CASE_EXPECT_TRUE(nullptr != invalid_rsp_record);
+    if (nullptr != invalid_rsp_record) {
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, invalid_rsp_msg.head().error_code());
+    }
+    CASE_EXPECT_EQ(send_count_before_invalid, capture.send_message_count);
+    CASE_EXPECT_EQ(filter_count_before_invalid, capture.filter_count);
+  }
 
   // System channels reject writes at the manager ACL (they are not addressable from the CS chat API at all).
   const auto sys_notification_key = make_sys_notification_channel_key();
   const auto sys_announcement_key = make_sys_announcement_channel_key();
-  CASE_EXPECT_TRUE(run_sync_task(
-      test, "chat.sys_deny",
-      [&user1, &sys_notification_key, &sys_announcement_key](rpc::context &ctx) -> rpc::result_code_type {
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            user1.user_inst->get_user_chat_manager().send_text_message(ctx, sys_notification_key, "notification"));
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE, res);
-        res = RPC_AWAIT_CODE_RESULT(
-            user1.user_inst->get_user_chat_manager().send_text_message(ctx, sys_announcement_key, "announcement"));
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE, res);
-        RPC_RETURN_CODE(0);
-      }));
+  CASE_EXPECT_TRUE(
+      run_sync_task(test, "chat.sys_deny",
+                    [&user1, &sys_notification_key, &sys_announcement_key](rpc::context &ctx) -> rpc::result_code_type {
+                      rpc::context::message_holder<atframework::chat::DChatMessageContent> notification{ctx};
+                      notification->set_text("notification");
+                      int32_t res = RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_chat_message(
+                          ctx, sys_notification_key, std::move(*notification)));
+                      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE, res);
+                      rpc::context::message_holder<atframework::chat::DChatMessageContent> announcement{ctx};
+                      announcement->set_text("announcement");
+                      res = RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_chat_message(
+                          ctx, sys_announcement_key, std::move(*announcement)));
+                      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE, res);
+                      RPC_RETURN_CODE(0);
+                    }));
 
-  // Event messages carry the Any payload through the send contract.
+  // Internal event messages still carry arbitrary Any payloads through the manager send contract.
   atframework::dtmq::DChannelSyncPoint event_payload;
   event_payload.set_last_sequence(42);
   google::protobuf::Any any_payload;
   CASE_EXPECT_TRUE(any_payload.PackFrom(event_payload));
-  atframework::chat::CSChatSendMessageReq event_req;
-  *event_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId1, kZoneId);
-  event_req.mutable_detail()->mutable_event()->CopyFrom(any_payload);
-  auto packed_event =
-      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), event_req);
-  CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_event));
-  atframework::CSMsg event_rsp_msg;
-  const auto *event_rsp_record = find_downstream_by_rpc_name(
-      test, user1.session_id, rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), event_rsp_msg);
-  CASE_EXPECT_TRUE(nullptr != event_rsp_record);
-  if (nullptr != event_rsp_record) {
-    CASE_EXPECT_EQ(0, event_rsp_msg.head().error_code());
-  }
+  CASE_EXPECT_TRUE(
+      run_sync_task(test, "chat.send_event", [&user1, &any_payload](rpc::context &ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_event_message(
+            ctx, make_private_channel_key(kUserId1), std::move(any_payload))));
+      }));
+  CASE_EXPECT_EQ(send_count_before_invalid + 1, capture.send_message_count);
   CASE_EXPECT_TRUE(capture.last_send_message_req.message_content(0).detail().has_event());
   const std::string expected_type_url =
       "type.googleapis.com/" + std::string(atframework::dtmq::DChannelSyncPoint::descriptor()->full_name());
   CASE_EXPECT_EQ(expected_type_url, capture.last_send_message_req.message_content(0).detail().event().type_url());
+  atframework::dtmq::DChannelSyncPoint received_event;
+  CASE_EXPECT_TRUE(capture.last_send_message_req.message_content(0).detail().event().UnpackTo(&received_event));
+  CASE_EXPECT_EQ(42, received_event.last_sequence());
 
   flush_pending_chat_messages(test);
   CASE_EXPECT_EQ(0, test.stop());
@@ -1230,7 +1285,7 @@ CASE_TEST(lobbysvr_user_chat, text_filter_failure_falls_back_and_empty_match_is_
   atframework::chat::CSChatSendMessageReq request;
   // Private channels allow repeated sends without the world-channel rate limit.
   *request.mutable_channel_key() = make_chat_key_of_private_channel(kUserId1, kZoneId);
-  request.mutable_detail()->set_text("original chat text");
+  request.mutable_content()->set_text("original chat text");
   for (int stage = 0; stage < 3; ++stage) {
     capture.filter_error = stage == 0 ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0;
     capture.incomplete_filter_response = stage == 1;
@@ -1249,7 +1304,8 @@ CASE_TEST(lobbysvr_user_chat, text_filter_failure_falls_back_and_empty_match_is_
     if (stage < 2) {
       CASE_EXPECT_EQ(1, capture.last_send_message_req.message_content_size());
       if (capture.last_send_message_req.message_content_size() == 1) {
-        CASE_EXPECT_EQ("original chat text", capture.last_send_message_req.message_content(0).detail().text());
+        CASE_EXPECT_EQ("original chat text",
+                       unpack_chat_user_message(capture.last_send_message_req.message_content(0)).content().text());
         CASE_EXPECT_EQ(make_private_channel_key(kUserId1).channel_id(),
                        capture.last_send_message_req.channel_key().channel_id());
       }
@@ -1273,7 +1329,8 @@ CASE_TEST(lobbysvr_user_chat, text_filter_failure_falls_back_and_empty_match_is_
     CASE_EXPECT_EQ(3, capture.send_message_count);
     CASE_EXPECT_EQ(1, capture.last_send_message_req.message_content_size());
     if (capture.last_send_message_req.message_content_size() == 1) {
-      CASE_EXPECT_EQ("original chat text", capture.last_send_message_req.message_content(0).detail().text());
+      CASE_EXPECT_EQ("original chat text",
+                     unpack_chat_user_message(capture.last_send_message_req.message_content(0)).content().text());
     }
   }
   CASE_EXPECT_EQ(0, test.stop());

@@ -64,14 +64,14 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  switch (req_body.detail().command_case()) {
-    case atfw::dtmq::DChannelMessageDetail::CommandCase::kText: {
+  switch (req_body.content().chat_type_case()) {
+    case atfw::chat::DChatMessageContent::kText: {
       // 敏感词过滤
       auto filter_req = rpc::make_shared_message<atfw::compliance::SSFilterTextReq>(get_shared_context());
       auto filter_rsp = rpc::make_shared_message<atfw::compliance::SSFilterTextRsp>(get_shared_context());
 
       auto* item = filter_req->add_items();
-      item->set_text(req_body.detail().text());
+      item->set_text(req_body.content().text());
       item->mutable_settings()->set_return_original_text(false);
       item->mutable_settings()->mutable_replacement_text()->push_back(kReplacementText);
       if (item->text().empty()) {
@@ -79,7 +79,7 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
         TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
       }
 
-      gsl::string_view text = req_body.detail().text();
+      gsl::string_view text = req_body.content().text();
       int32_t res = RPC_AWAIT_CODE_RESULT(rpc::compliance::filter_text(get_shared_context(), *filter_req, *filter_rsp));
       // 仅当有回包时才处理,服务故障时忽略过滤
       if (res != 0) {
@@ -96,7 +96,7 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
 
           text = filtered.filtered_text();
 
-          // 所有词都是脏字
+          // 所有词都是敏感词
           auto iter_not_replacement =
               std::find_if(text.begin(), text.end(), [](char c) { return c != kReplacementText; });
           if (iter_not_replacement == text.end()) {
@@ -105,14 +105,15 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
           }
         }
       }
-      response_code = RPC_AWAIT_CODE_RESULT(
-          user_inst->get_user_chat_manager().send_text_message(get_shared_context(), dtmq_channel_key, text));
+
+      // 替换敏感词
+      if (text.data() != req_body.content().text().data()) {
+        req_body.mutable_content()->set_text(text.data(), text.size());
+      }
+      response_code = RPC_AWAIT_CODE_RESULT(user_inst->get_user_chat_manager().send_chat_message(
+          get_shared_context(), dtmq_channel_key, std::move(*req_body.mutable_content())));
       break;
     }
-    case atfw::dtmq::DChannelMessageDetail::CommandCase::kEvent:
-      response_code = RPC_AWAIT_CODE_RESULT(user_inst->get_user_chat_manager().send_event_message(
-          get_shared_context(), dtmq_channel_key, std::move(*req_body.mutable_detail()->mutable_event())));
-      break;
     default:
       response_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
       break;

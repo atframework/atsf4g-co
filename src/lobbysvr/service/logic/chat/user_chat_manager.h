@@ -15,6 +15,7 @@
 // clang-format on
 
 #include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/pbdesc/com.struct.chat.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -92,10 +93,15 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   rpc::result_code_type send_event_message(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key,
                                            google::protobuf::Any&& event_data);
 
+  rpc::result_code_type send_chat_message(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key,
+                                          atfw::chat::DChatMessageContent&& content);
+
   int32_t get_snapshot(rpc::context& ctx, gsl::string_view channel_id, atfw::chat::DChatChannelData& data);
 
   int32_t receive_heartbeat(rpc::context& ctx, const atfw::dtmq::DChannelSyncPoint& sync_point,
                             atfw::chat::SCChatChannelSync& sync_msg);
+
+  void pack_self_as_sender(rpc::context& ctx, atfw::chat::DChatMessageSender& sender);
 
   static int32_t build_dtmq_channel_key_from_chat_channel_key(const atfw::chat::DChatChannelKey& chat_channel_key,
                                                               atfw::dtmq::DChannelIdKey& dtmq_channel_key);

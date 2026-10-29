@@ -653,6 +653,23 @@ rpc::result_code_type user_chat_manager::send_event_message(rpc::context& ctx,
   RPC_RETURN_CODE(ret);
 }
 
+rpc::result_code_type user_chat_manager::send_chat_message(rpc::context& ctx,
+                                                           const atfw::dtmq::DChannelIdKey& channel_key,
+                                                           atfw::chat::DChatMessageContent&& content) {
+  rpc::context::message_holder<atfw::chat::DChatUserMessage> user_message{ctx};
+
+  pack_self_as_sender(ctx, *user_message->mutable_sender());
+  protobuf_move_message(*user_message->mutable_content(), std::move(content));
+
+  rpc::context::message_holder<google::protobuf::Any> packed_user_message{ctx};
+  if (false == packed_user_message->PackFrom(*user_message)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BAD_PACKAGE);
+  }
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(send_event_message(ctx, channel_key, std::move(*packed_user_message)));
+  RPC_RETURN_CODE(ret);
+}
+
 int32_t user_chat_manager::get_snapshot(rpc::context& ctx, gsl::string_view channel_id,
                                         atfw::chat::DChatChannelData& data) {
   int32_t ret = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND;
@@ -734,6 +751,18 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
     dump_dtmq_to_chat_channel_metadata(ctx, *channel_ptr, *sync_channel->mutable_metadata(), false);
   }
   return 0;
+}
+
+void user_chat_manager::pack_self_as_sender(rpc::context& /*ctx*/, atfw::chat::DChatMessageSender& sender) {
+  const auto& custom_nick_name = owner_->get_account_info().profile().custom_nick_name();
+  if (!custom_nick_name.empty()) {
+    sender.set_nick_name(custom_nick_name.data(), custom_nick_name.size());
+  }
+
+  const auto& platform_nick_name = owner_->get_account_info().profile().nick_name();
+  if (!platform_nick_name.empty()) {
+    sender.set_nick_name(platform_nick_name.data(), platform_nick_name.size());
+  }
 }
 
 int32_t user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(

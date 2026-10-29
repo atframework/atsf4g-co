@@ -60,6 +60,25 @@ message DChatChannelSnapshot {
   repeated atframework.dtmq.DChannelMessage message_list = 1;
 }
 
+message DChatMessageSender {
+  string nick_name = 1;
+}
+
+message DChatMessageContent {
+  // 保留事件能力。这个类型作为发送Chat的内容类型，但是将来可能并不是所有type都允许用户发送
+  oneof chat_type {
+    string text = 1;
+  }
+}
+
+// 用于作为atframework.dtmq.DChannelMessage的Event型内容，比text类型提供更多信息
+message DChatUserMessage {
+  // 发送者信息
+  DChatMessageSender sender = 1;
+
+  DChatMessageContent content = 2;
+}
+
 message DChatChannelMessageList {
   repeated atframework.dtmq.DChannelMessage message_list = 1;
 }
