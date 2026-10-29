@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/v3/xresloader.proto";
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
+
+package atframework.shared;
+
+
+// 和 logic.mail.user_mail_major_types / logic.mail.global_mail_major_types 配置对应
+enum EnMailMajorType {
+  EN_MAIL_MT_INVALID = 0;
+  EN_MAIL_MT_SYSTEM_PAY = 1;           // 系统邮件-支付系统
+  EN_MAIL_MT_SYSTEM_ANNOUNCEMENT = 2;  // 系统邮件-特殊公告
+  EN_MAIL_MT_SYSTEM_BUSINESS = 3;      // 系统邮件-业务逻辑
+  EN_MAIL_MT_SYSTEM_ACTIVITY = 5;      // 系统邮件-营销活动
+  EN_MAIL_MT_SYSTEM_COMPENSATION = 6;  // 系统邮件-补偿
+  EN_MAIL_MT_BUSINESS_BOUND = 20;      // 特定功能性邮件大类的边界
+  EN_MAIL_MT_FRIEND_GIFT = 21;         // 好友邮件-赠送类（带附件）
+  EN_MAIL_MT_FRIEND_INVITE = 22;       // 好友邮件-邀请类（只是消息，不带附件）
+  EN_MAIL_MT_GUILD_NOTIFY = 31;        // 公会邮件-通知类（只是消息，不带附件）
+  EN_MAIL_MT_RANK_SETTLEMENT = 41;     // 排行榜邮件-结算
+}
+
+enum EnMailStatusType {
+  EN_MAIL_ST_NONE = 0;
+  EN_MAIL_ST_READ = 1;              // 已读标记
+  EN_MAIL_ST_TOKEN_ATTACHMENT = 2;  // 已领取附件标记
+  EN_MAIL_ST_REMOVED = 4;           // 已领删除标记
+}
+
+// 按位flags
+enum EnMailFlagType {
+  EN_MAIL_FLAG_NONE = 0;
+  EN_MAIL_FLAG_KEEP_AFTER_TAKE_ATTACHMENTS = 1;  // 0x00000001 - 领取附件后保留
+                                                 // 2; // 0x00000002
+                                                 // 4; // 0x00000004
+                                                 // ...
+}
+
+message DMailTemplate {
+  // 主要类型
+  int32 major_type = 1 [(org.xresloader.verifier) = "atframework.shared.EnMailMajorType"];
+  // 次要类型
+  int32 minor_type = 2;
+  bool is_admin_sender = 3;                                                    // 是否管理员发送
+  string title = 4;                                                            // 标题
+  string content = 5;                                                          // 正文
+  google.protobuf.Duration expired_duration = 6;                               // 有效期
+  google.protobuf.Timestamp show_time = 7;                                     // 展示时间
+  google.protobuf.Timestamp start_time = 8;                                    // 开始时间
+  google.protobuf.Timestamp expired_time = 9;                                  // 过期时间
+  bool is_padding_expired_time = 10;                                           // 过期时间对齐到天
+  google.protobuf.Duration resolve_expired_time = 11;                          // 按实际接收时间重算有效期
+
+  repeated DItemOffset attachments = 21;  // 附件
+  bool keep_after_take_attachments = 22;  // 领取附件后保留
+}

@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+import "protocol/pbdesc/com.struct.mail.proto";
+
+package atframework.shared;
+
+message CSMailGetAllReq {
+  int32 major_type = 1;
+  int32 page_count = 2;
+  int32 page_no = 3;
+}
+
+message SCMailGetAllRsp {
+  repeated DMailContent mails = 1;
+  int32 page_count = 2;
+  int32 page_no = 3;
+  int32 mail_count = 4;  // 总邮件数量
+  int32 major_type = 5;
+}
+
+message CSMailReadReq {
+  repeated int64 mail_ids = 1;
+  bool need_remove = 2;
+}
+
+message SCMailReadRsp {
+  repeated DMailOperationResult mails = 1;
+}
+
+message CSMailReadAllReq {
+  int32 major_type = 1;  // 全部已读必须设置邮件大类型, @see EnMailMajorType
+  int32 minor_type = 2;  // 全部已读可选设置邮件小类型，留空则视为全部
+  bool need_remove = 3;
+}
+
+message SCMailReadAllRsp {
+  repeated DMailOperationResult mails = 1;
+}
+
+message CSMailReceiveAttachmentsReq {
+  repeated int64 mail_ids = 1;
+  bool need_remove = 2;
+}
+
+message SCMailReceiveAttachmentsRsp {
+  repeated DMailOperationResult mails = 1;
+}
+
+message CSMailReceiveAttachmentsAllReq {
+  int32 major_type = 1;  // 全部领取必须设置邮件大类型, @see EnMailMajorType
+  int32 minor_type = 2;  // 全部领取可选设置邮件小类型，留空则视为全部
+  bool need_remove = 3;
+}
+
+message SCMailReceiveAttachmentsAllRsp {
+  repeated DMailOperationResult mails = 1;
+}
+
+message SCMailChangeSync {
+  repeated DMailRecord mails = 1;       // 邮件变更、删除、已读、已领取通知
+  repeated DMailContent add_mails = 2;  // 新邮件通知
+}

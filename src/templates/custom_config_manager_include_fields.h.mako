@@ -1,3 +1,4 @@
 #include "config/excel_type_trait_setting.h"
 #include "config/excel_config_matching_index.h"
 #include "config/excel_config_rank_index.h"
+#include "config/excel_config_mail_defines.h"

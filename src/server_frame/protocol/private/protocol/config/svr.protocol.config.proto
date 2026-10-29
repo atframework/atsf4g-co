@@ -192,6 +192,16 @@ message logic_rank_cfg {
   uint32 query_max_count = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" }];
 }
 
+message logic_mail_cfg {
+  // 邮件压缩淘汰时最大相对于发送时间的差值
+  google.protobuf.Duration compact_delivery_time_max_offset = 1 [(atapp.protocol.CONFIGURE) = { default_value: "30d" }];
+
+  // 个人邮件的额外可用ID
+  repeated string user_mail_major_types = 11;
+  // 全服邮件的额外可用ID
+  repeated string global_mail_major_types = 12;
+}
+
 message logic_cache_watcher_cfg {
   google.protobuf.Duration heartbeat_interval = 1;
   google.protobuf.Duration expired_timeout = 2;
@@ -258,6 +268,7 @@ message logic_section_cfg {
   logic_cache_cfg cache = 113;
   logic_gm_cfg gm = 114;
   logic_friend_api_cfg friend_api = 115;
+  logic_mail_cfg mail = 116;
 }
 
 message db_group_gateway_cfg {

@@ -22,6 +22,7 @@ import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 import "protocol/pbdesc/com.struct.match.proto";
 import "protocol/pbdesc/svr.struct.friend_api.proto";
+import "protocol/pbdesc/svr.struct.mail.proto";
 
 package atframework.shared;
 
@@ -144,6 +145,7 @@ message table_user {
   DUserItemManagerData user_item_container_manager_data = 205;  // 道具管理模块数据
   DUserVirtualInventoryData virtual_inventory = 206;            // 用户仓库数据
   user_friend_data friend_data = 207;                           // 好友数据
+  user_mail_data mail_data = 208;                               // 邮件数据
 
   // 业务逻辑开始
 }
@@ -403,4 +405,38 @@ message table_friend {
   router_system_lock_holder router_lock = 3;  // 路由系统锁
 
   atframework.friend_api.table_friend_blob_data blob_data = 6;
+}
+
+message table_mail_content {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "mail_content"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "mail_id"
+    }
+  };
+  // clang-format on
+  int64 mail_id = 1;
+
+  atframework.mail.table_mail_content_blob_data blob_data = 6;
+}
+
+message table_mail_global_index {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "mail_global_index"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "major_type"
+    }
+  };
+  // clang-format on
+  uint32 zone_id = 1;
+  int32 major_type = 2;
+
+  atframework.mail.table_global_mail_blob_data blob_data = 6;
 }

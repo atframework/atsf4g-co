@@ -11,6 +11,7 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 
 import "google/protobuf/timestamp.proto";
 
+import "protocol/pbdesc/com.struct.mail.proto";
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
@@ -69,6 +70,12 @@ message user_option_public_data {
   DUserSharedOptions custom_options = 1;  // 用户自定义选项
 }
 
+message user_mail_data {
+  repeated DMailRecord mail_box = 1;
+  repeated DMailRecord pending_to_remove = 2;
+  repeated DMailRecord reveived_global_mails = 3;
+}
+
 message user_async_job_debug_message {
   string content = 1;
   string title = 2;
@@ -114,6 +121,10 @@ message user_async_jobs_data {
   }
   repeated history_job_meta history = 1;  // 上一轮处理的UUID列表
   int64 next_task_active_time = 2;        // 下一次异步任务的启动时间
+}
+
+message user_async_job_add_mail {
+  DMailRecord mail_record = 1;
 }
 
 message user_login_data {

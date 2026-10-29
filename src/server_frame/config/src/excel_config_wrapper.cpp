@@ -22,6 +22,7 @@
 #include "config/server_frame_build_feature.h"
 
 #include "config/excel_config_dtmq_index.h"
+#include "config/excel_config_mail_index.h"
 #include "config/excel_config_matching_index.h"
 #include "config/excel_config_rank_index.h"
 
@@ -116,6 +117,7 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
   setup_rank_config(*group);
   setup_dtmq_config(*group);
   setup_matching_config(*group);
+  setup_mail_config(*group);
 
   // 自定义跨表索引在这之后初始化
   setup_const_config(*group);
@@ -177,8 +179,7 @@ static void excel_config_wrapper_setup_loader_and_hooks_once() {
   excel::config_manager::me()->set_version_loader(excel_config_callback_get_version);
   excel::config_manager::me()->set_on_log(excel_config_callback_logger);
 
-  excel::config_manager::on_load_func_t origin_reload_callback =
-      excel::config_manager::me()->get_on_group_reload_all();
+  excel::config_manager::on_load_func_t origin_reload_callback = excel::config_manager::me()->get_on_group_reload_all();
   excel::config_manager::me()->set_on_group_reload_all(
       // NOLINTNEXTLINE(performance-unnecessary-value-param)
       [origin_reload_callback](excel::config_manager::config_group_ptr_t group) {

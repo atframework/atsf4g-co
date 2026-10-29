@@ -1,0 +1,25 @@
+syntax = "proto3";
+// 后台数据结构定义
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
+import "google/protobuf/any.proto";
+
+import "protocol/pbdesc/com.struct.mail.proto";
+
+package atframework.mail;
+
+message table_mail_content_blob_data {
+  atframework.shared.DMailContent mail_content = 1;  // 邮件详情数据
+}
+
+message table_global_mail_blob_data {
+  repeated atframework.shared.DMailRecord mail_records = 1;       // 邮件详情数据
+  repeated atframework.shared.DMailRecord pending_to_remove = 2;  // 待移除队列
+}

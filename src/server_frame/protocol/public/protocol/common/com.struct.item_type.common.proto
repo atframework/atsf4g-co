@@ -18,16 +18,12 @@ enum EnItemType {
   EN_ITEM_TYPE_NONE = 0;
   // 货币
   EN_ITEM_TYPE_COIN = 1 [
-    (item_type_option) = {
-      item_type_range: { start_index: 1000 end_index: 10000 }
-    },
+    (item_type_option) = { item_type_range: { start_index: 1000 end_index: 10000 } },
     (org.xresloader.enum_alias) = "货币"
   ];
   // 虚拟道具
   EN_ITEM_TYPE_VIRTUAL = 2 [
-    (item_type_option) = {
-      item_type_range: { start_index: 10000 end_index: 100000 }
-    },
+    (item_type_option) = { item_type_range: { start_index: 10000 end_index: 100000 } },
     (org.xresloader.enum_alias) = "虚拟道具ID段"
   ];
   // 普通道具
@@ -46,5 +42,10 @@ enum EnItemType {
       need_guid: true
     },
     (org.xresloader.enum_alias) = "装备ID段"
+  ];
+  // 邮件模板
+  EN_ITEM_TYPE_MAIL_TEMPLATE = 5 [
+    (item_type_option) = { item_type_range: { start_index: 600000 end_index: 700000 } },
+    (org.xresloader.enum_alias) = "邮件模板ID段"
   ];
 }
