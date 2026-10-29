@@ -872,6 +872,10 @@ bool user_chat_manager::unregister_external_chat_channel(const rpc::dtmq::client
     return false;
   }
 
+  if (it->second && it->second != channel) {
+    return false;
+  }
+
   if (it->second) {
     uninstall_subscriber_callback(it->second);
     it->second->set_local_private_data({});
