@@ -27,8 +27,8 @@ BACKENDS = OPTIONS.backends.split(",")
 ENV = dict(os.environ, ATF_SUPERVISOR_DIR=str(ROOT / "supervisor"))
 
 
-def run(*args, env=None, check=True):
-    result = subprocess.run([str(x) for x in args], env=env or ENV,
+def run(*args, env=None, check=True, cwd=None):
+    result = subprocess.run([str(x) for x in args], env=env or ENV, cwd=cwd,
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             timeout=45)
     if check and result.returncode:
@@ -59,7 +59,7 @@ class Lifecycle(unittest.TestCase):
         self.states.append(state)
         return state
 
-    def start(self, state, backend, ignore_term=False):
+    def start(self, state, backend, ignore_term=False, manager=MANAGER):
         args = ["argument with spaces", "", "quote'\";$(touch should-not-exist)%", "line\nbreak"]
         code = ("import os,sys,json,signal,time; "
                 "signal.signal(signal.SIGTERM, signal.SIG_IGN) if sys.argv[1]=='1' else None; "
@@ -67,7 +67,7 @@ class Lifecycle(unittest.TestCase):
                 "time.sleep(600)")
         state.mkdir(parents=True, exist_ok=True)
         env = dict(ENV, ATF_SERVICE_MANAGER=backend, ATAPP_TEST_VALUE="space ' % value")
-        run("bash", MANAGER, "start", state, "acceptance-service.1", state, "--",
+        run("bash", manager, "start", state, "acceptance-service.1", state, "--",
             sys.executable, "-c", code, str(int(ignore_term)), *args, env=env)
         eventually(lambda: (state / "observed.json").exists())
         self.assertEqual(json.loads((state / "observed.json").read_text()),
@@ -182,6 +182,13 @@ class Lifecycle(unittest.TestCase):
                 if backend == "none":
                     eventually(lambda: self.pid(state) == 0)
                 else:
+                    if backend == "systemd":
+                        unit = (state / "unit").read_text().strip()
+                        eventually(lambda: run("systemctl", "--user", "show", "-p", "SubState", "--value",
+                                               unit).stdout.strip() == "auto-restart")
+                        # An explicit start during the restart delay must retain the saved command.
+                        run("bash", MANAGER, "start", state, "acceptance-service.1", ROOT,
+                            "--", "/bin/false", env=dict(ENV, ATF_SERVICE_MANAGER=backend))
                     new_pid = eventually(lambda: (p if (p := self.pid(state)) and p != pid else 0))
                     os.kill(new_pid, signal.SIGKILL)
                 run("bash", MANAGER, "stop", state,
@@ -212,12 +219,119 @@ class Lifecycle(unittest.TestCase):
             with self.subTest(backend=backend):
                 first = self.state(backend, " space % first")
                 second = self.state(backend, " space % second")
-                first_pid = self.start(first, backend)
-                second_pid = self.start(second, backend)
+                managers = []
+                for package in (first, second):
+                    scripts = package / "tools/script"
+                    shutil.copytree(MANAGER.parent, scripts, dirs_exist_ok=True)
+                    managers.append(scripts / "service-manager.sh")
+                first_pid = self.start(first, backend, manager=managers[0])
+                second_pid = self.start(second, backend, manager=managers[1])
                 self.assertNotEqual(first_pid, second_pid)
+                self.assertNotEqual((first / "key").read_text(), (second / "key").read_text())
                 run("bash", MANAGER, "stop", first)
                 self.assert_stopped(first, backend)
                 self.assertEqual(self.pid(second), second_pid)
+
+    def test_identity_survives_new_arguments_workdirs_and_package_versions(self):
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                work = ROOT / f"{self._testMethodName}-{backend}"
+                work.mkdir(exist_ok=True)
+                deployment = work / "deployment"
+                names = []
+                for version in ("v1", "v2"):
+                    release = work / version
+                    scripts = release / "tools/script"
+                    shutil.copytree(MANAGER.parent, scripts, dirs_exist_ok=True)
+                    with (scripts / "service-manager.sh").open("a") as output:
+                        output.write(f"\n# package {version}\n")
+                    deployment.unlink(missing_ok=True)
+                    deployment.symlink_to(release, target_is_directory=True)
+                    state = deployment / f"runtime-{version}"
+                    state.mkdir()
+                    self.states.append(state.resolve())
+                    directory = deployment / f"working-{version}"
+                    directory.mkdir()
+                    marker = state / "version"
+                    manager = deployment / "tools/script/service-manager.sh"
+                    run("bash", os.path.relpath(manager, ROOT), "start", state,
+                        "stable-service.1", directory, "--", sys.executable, "-c",
+                        "import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_text(sys.argv[2]); time.sleep(600)",
+                        marker, version, env=dict(ENV, ATF_SERVICE_MANAGER=backend), cwd=ROOT)
+                    eventually(lambda: marker.exists())
+                    self.assertEqual(marker.read_text(), version)
+                    names.append((state / "key").read_text().strip())
+                    run("bash", manager, "stop", state, cwd=directory)
+                    self.assert_stopped(state, backend)
+                self.assertEqual(names[0], names[1])
+
+    def test_same_name_in_one_deployment_cannot_replace_a_running_instance(self):
+        for backend in (item for item in BACKENDS if item != "none"):
+            with self.subTest(backend=backend):
+                first = self.state(backend, "-first")
+                second = self.state(backend, "-second")
+                pid = self.start(first, backend)
+                result = run("bash", MANAGER, "start", second, "acceptance-service.1", ROOT,
+                             "--", "/bin/sleep", "600", env=dict(ENV, ATF_SERVICE_MANAGER=backend), check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.pid(first), pid)
+                self.assertEqual(self.pid(second), 0)
+
+    def interrupt_stop_after_process_exit(self, state, backend):
+        (state / "enabled").unlink()
+        if backend == "systemd":
+            unit = (state / "unit").read_text().strip()
+            run("systemctl", "--user", "disable", "--now", unit)
+            Path((state / "unit-link").read_text().strip()).unlink(missing_ok=True)
+            (state / unit).unlink()
+            # Some developer hosts retain the old shared atsf4g@ template. Use a
+            # distinct missing template to model hosts without that fallback.
+            missing = unit.replace("atsf4g@", "atsf4g-unregistered-acceptance@", 1)
+            (state / "unit").write_text(missing + "\n")
+            (state / "unit-link").write_text(str(Path((state / "unit-link").read_text().strip()).with_name(missing)) + "\n")
+            run("systemctl", "--user", "daemon-reload")
+            self.assertEqual(run("systemctl", "--user", "show", "-p", "LoadState", "--value", missing).stdout.strip(),
+                             "not-found")
+        elif backend == "supervisord":
+            run("supervisorctl", "-c", ROOT / "supervisor/supervisord.conf", "stop",
+                (state / "key").read_text().strip())
+        else:
+            os.kill(self.pid(state), signal.SIGTERM)
+        eventually(lambda: self.pid(state) == 0)
+        self.assertFalse((state / "stopped").exists())
+
+    def test_exited_process_recovers_from_incomplete_stop_on_start(self):
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                state = self.state(backend)
+                self.start(state, backend)
+                self.interrupt_stop_after_process_exit(state, backend)
+                (state / "observed.json").unlink()
+                self.assertGreater(self.start(state, backend), 0)
+                run("bash", MANAGER, "stop", state)
+                self.assert_stopped(state, backend)
+
+    def test_stop_completes_for_exited_unregistered_unit(self):
+        if "systemd" not in BACKENDS:
+            return
+        state = self.state("systemd")
+        self.start(state, "systemd")
+        self.interrupt_stop_after_process_exit(state, "systemd")
+        result = run("bash", MANAGER, "stop", state)
+        self.assertNotIn("not loaded", result.stdout)
+        self.assertEqual((state / "stopped").read_text().strip(), "yes")
+        self.assert_stopped(state, "systemd")
+
+    def test_incomplete_stop_still_refuses_start_while_process_is_alive(self):
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                state = self.state(backend)
+                pid = self.start(state, backend)
+                (state / "enabled").unlink()
+                result = run("bash", MANAGER, "start", state, "acceptance-service.1", ROOT,
+                             "--", "/bin/false", env=dict(ENV, ATF_SERVICE_MANAGER=backend), check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.pid(state), pid)
 
     def test_missing_command_does_not_enable_instance(self):
         for backend in BACKENDS:

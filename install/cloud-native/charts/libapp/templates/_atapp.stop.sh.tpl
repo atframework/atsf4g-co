@@ -1,8 +1,7 @@
 {{- define "atapp.stop.sh" -}}
 {{- $bus_addr := include "libapp.busAddr" . -}}
 #!/bin/bash
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )";
-SCRIPT_DIR="$( readlink -f $SCRIPT_DIR )";
+SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd -L )";
 cd "$SCRIPT_DIR";
 
 export PROJECT_INSTALL_DIR=$(cd ../.. && pwd);

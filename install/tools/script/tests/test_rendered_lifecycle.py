@@ -24,9 +24,9 @@ ENV = dict(os.environ, ATF_SUPERVISOR_DIR=str(ROOT / "supervisor"))
 BACKENDS = options.backends.split(",")
 
 
-def run(*args, backend="none", check=True):
+def run(*args, backend="none", check=True, cwd=None):
     result = subprocess.run([str(x) for x in args], env=dict(ENV, ATF_SERVICE_MANAGER=backend),
-                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             timeout=60)
     if check and result.returncode:
         raise AssertionError(f"{args}: exit {result.returncode}\n{result.stdout}")
@@ -157,6 +157,64 @@ while not request.exists():
                 run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
                 events = [json.loads(line) for line in (script.parent / f"echosvr_{instance}.events").read_text().splitlines()]
                 self.assertEqual(events, [["stop-command", []], ["stop-command", []]])
+
+    def test_start_recovers_after_failed_stop_and_process_exit(self):
+        script = self.starts[0]
+        instance = script.stem.removeprefix("start_")
+        state = script.parent / f"echosvr_{instance}.pid.service"
+        rejected = script.parent / f"echosvr_{instance}.reject-stop"
+        manager = ROOT / "tools/script/service-manager.sh"
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                run("bash", script, backend=backend)
+                old_pid = run("bash", manager, "pid", state).stdout.strip()
+                rejected.touch()
+                try:
+                    self.assertNotEqual(run("bash", script.parent / f"stop_{instance}.sh",
+                                            backend="invalid", check=False).returncode, 0)
+                finally:
+                    rejected.unlink()
+                # The business process exits after a failed stop; no signal is used.
+                script.with_name(f"echosvr_{instance}.stop-request").touch()
+                eventually(lambda: run("bash", manager, "pid", state, check=False).returncode != 0)
+                run("bash", script, "--custom", "recovered", backend=backend)
+                self.assertNotEqual(run("bash", manager, "pid", state).stdout.strip(), old_pid)
+                observed = json.loads(script.with_name(f"echosvr_{instance}.arguments").read_text())
+                self.assertEqual(observed[-2:], ["--custom", "recovered"])
+                self.assertTrue((state / "enabled").exists())
+                self.assertFalse((state / "stop-command.error").exists())
+                run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
+                events = [json.loads(line) for line in script.with_name(f"echosvr_{instance}.events").read_text().splitlines()]
+                self.assertEqual(events, [["stop-command", []]])
+
+    def test_deployment_link_keeps_names_across_package_versions(self):
+        for backend in BACKENDS:
+            with self.subTest(backend=backend):
+                work = ROOT / f"versioned-{backend}"
+                work.mkdir(exist_ok=True)
+                deployment = work / "deployment"
+                keys = []
+                for version in ("v1", "v2"):
+                    release = work / version
+                    shutil.copytree(ROOT / "echosvr", release / "echosvr", dirs_exist_ok=True,
+                                    ignore=shutil.ignore_patterns("*.pid*", "*.events", "*.arguments", "*.stop-request"))
+                    shutil.copytree(SOURCE, release / "tools/script", dirs_exist_ok=True)
+                    (release / "lib").mkdir(exist_ok=True)
+                    deployment.unlink(missing_ok=True)
+                    deployment.symlink_to(release, target_is_directory=True)
+                    script = deployment / "echosvr/bin" / self.starts[0].name
+                    instance = script.stem.removeprefix("start_")
+                    state = script.parent / f"echosvr_{instance}.pid.service"
+                    try:
+                        run("bash", os.path.relpath(script, ROOT), "--custom", version, backend=backend, cwd=ROOT)
+                        keys.append((state / "key").read_text().strip())
+                        # Emulate a shell entered through the deployment link, as in manual operations.
+                        run("bash", "-c", 'cd "$1" && exec bash "$2" --upgrade', "stop-test",
+                            script.parent, f"./stop_{instance}.sh", backend="invalid")
+                        self.assertTrue((state / "stopped").exists())
+                    finally:
+                        run("bash", deployment / "tools/script/service-manager.sh", "kill", state, backend="invalid")
+                self.assertEqual(keys[0], keys[1])
 
     def test_stop_adopts_business_command_for_pre_callback_lifecycle(self):
         script = self.starts[0]

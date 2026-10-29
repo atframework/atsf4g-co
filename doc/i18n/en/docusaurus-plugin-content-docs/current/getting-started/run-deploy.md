@@ -75,14 +75,22 @@ Each instance records its controller path, identity and startup arguments under 
 Etcd/Redis use `service/` in their working directories. Stop, kill and cleanup use this record without probing again
 or applying a new backend choice. If the controller is unavailable, state is retained and the operation fails;
 restore it and retry. Stop services before moving a deployment directory, and retain state while they run.
+If a previous stop was incomplete but both the business process and its manager have stopped, the next start
+finishes cleanup and starts with the new arguments. Running instances, pending crash restarts and unavailable
+controllers retain their records. Stop also completes for an unloaded unit once shutdown is confirmed.
 Older deployments without a manager record retain their PID-based stop path.
 
 Native processes generate a unit from `tools/script/common/atsf4g@.service` beside `run.sh` in their instance state
 directory. `~/.config/systemd/user/` holds only registration and enablement links to that unit; no instance registry
 is created in the user's state directory. `%Y` resolves the unit's actual directory in the package.
-The instance identifier combines the full service
-name with a digest of its state directory, allowing separate deployments to reuse service names. Arguments retain
-their original argv boundaries. The server runs in the foreground and systemd tracks the actual process.
+Systemd, Quadlet and Supervisor identifiers combine the full service name with the first 16 hexadecimal digits
+of the SHA-256 of the absolute deployment root. The suffix depends only on that directory, excluding startup
+arguments, execution directory, state directory and package version. Scripts retain the logical deployment path
+instead of resolving links to version directories. Updating packages through the same deployment entry preserves
+the name; stop the old instance before switching that entry. Full service names must be unique within a deployment;
+separate deployments may reuse names. Existing lifecycles stop using their recorded names and adopt the new rule
+on their next start. Arguments retain their original argv boundaries. The server runs in the foreground and
+systemd tracks the actual process.
 Generated scripts use `--atapp-foreground` for their internal foreground mode.
 Startup also records the generated stop script for that instance. Normal stop removes startup intent, runs the
 application's stop command through that script, and waits for the business process to exit before manager cleanup.

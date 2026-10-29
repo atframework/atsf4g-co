@@ -60,7 +60,13 @@ operational procedure rather than treating rendering permission as deployment pe
   `systemctl enable/disable`. Docker and Supervisor use an attached container client and must also stop the container.
   For older images whose entrypoint backgrounds the server, mount `container-entrypoint.sh` so server death also
   terminates the container; an attached client alone only observes the container lifetime.
+- Service suffixes use only the logical deployment root (`tools/script/../..`), never argv, CWD, state paths or
+  package versions. Preserve that logical path through generated start/stop/kill scripts; do not resolve it into
+  a version directory. Stop the old instance before switching a deployment link. Full service names are unique per
+  deployment; existing lifecycles retain their recorded unit until stopped.
 - Preserve the state directory until a successful stop. Changing backend or startup arguments requires stopping first.
+  If a process has exited after an incomplete stop, start may finish cleanup only after the recorded controller
+  confirms that no instance or pending restart remains. Unavailable controllers retain state and fail.
   Keep crash restart disabled before force-killing a managed process; killing only its PID can revive it or orphan a container.
 - Generated atapp starts record their matching stop script. Normal stop must execute the application stop command
   and preserve stop arguments, including `--upgrade`; do not replace it with a process signal. The internal

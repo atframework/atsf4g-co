@@ -4,8 +4,8 @@ set -euo pipefail
 umask 077
 
 # Keep the published path when tools/ is linked to the source tree by a local build.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -L)"
+PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -L)"
 source "$SCRIPT_DIR/common/service-manager-quadlet.sh"
 fail() { echo "[service-manager] $*" >&2; exit 1; }
 
@@ -142,6 +142,50 @@ load_state() {
   if [[ "$BACKEND" == supervisord ]]; then SUPERVISOR_DIR="$(read_field supervisor-dir)"; fi
 }
 
+backend_stopped() {
+  # A missing PID alone is not proof: the manager may be restarting the process.
+  if live_pid >/dev/null; then return 1; fi
+  local status property value active='' main_pid='' job=''
+  case "$BACKEND" in
+    systemd)
+      status="$("$CONTROLLER" --user show --property=LoadState,ActiveState,MainPID,Job "$UNIT")" ||
+        fail 'recorded systemd user manager is unavailable; state retained'
+      SYSTEMD_LOAD_STATE=''
+      while IFS='=' read -r property value; do
+        case "$property" in
+          LoadState) SYSTEMD_LOAD_STATE="$value" ;;
+          ActiveState) active="$value" ;;
+          MainPID) main_pid="$value" ;;
+          Job) job="$value" ;;
+        esac
+      done <<< "$status"
+      [[ "$main_pid" == 0 && -z "$job" ]] || return 1
+      case "$active" in inactive|failed) ;; *) return 1 ;; esac ;;
+    supervisord)
+      supervisor_ctl pid >/dev/null || fail 'recorded supervisord is unavailable; state retained'
+      status="$(supervisor_ctl status "$KEY" 2>&1 || true)"
+      case "$status" in
+        *STOPPED*|*EXITED*|*FATAL*|*'no such process'*) ;;
+        *RUNNING*|*STARTING*|*BACKOFF*|*STOPPING*) return 1 ;;
+        *) fail "cannot determine recorded supervisor state: $status" ;;
+      esac ;;
+    none) ;;
+    *) fail "invalid recorded backend: $BACKEND" ;;
+  esac
+  if [[ -s "$STATE/container-engine" ]]; then
+    # Do not replace this invocation's environment when checking the old daemon.
+    status="$(
+      source "$STATE/container-environment.sh"
+      engine="$(read_field container-engine)"
+      "$engine" info >/dev/null || exit 1
+      if "$engine" container inspect "$KEY" >/dev/null 2>&1; then
+        "$engine" inspect -f '{{.State.Running}}' "$KEY"
+      else echo false; fi
+    )" || fail 'recorded container engine is unavailable; state retained'
+    [[ "$status" == false ]] || return 1
+  fi
+}
+
 reset_stopped_unit_failure() {
   # systemd keeps failed units loaded even after their files and links are removed.
   if [[ "$BACKEND" == systemd && "$("$CONTROLLER" --user show -p ActiveState --value "$UNIT")" == failed ]]; then
@@ -210,8 +254,9 @@ start_backend() {
 }
 
 stop_backend() {
-  local mode="$1" stop_job='' pid='' status=''
+  local mode="$1" stop_job='' pid='' status='' already_stopped=0
   shift
+  if backend_stopped; then already_stopped=1; fi
   # Persist intent first. A restarted daemon must not launch this instance again.
   rm -f "$STATE/enabled"
   if [[ "$mode" == kill ]]; then touch "$STATE/force-kill"
@@ -222,9 +267,16 @@ stop_backend() {
   case "$BACKEND" in
     systemd)
       if [[ "$KIND" == quadlet ]]; then quadlet_disable
+      elif [[ "${SYSTEMD_LOAD_STATE:-}" == not-found && $already_stopped -eq 1 ]]; then
+        # A removed unit is already stopped. Remove only our own dangling enable link.
+        if [[ -s "$STATE/unit-link" ]]; then
+          local enable_link
+          enable_link="$(dirname "$(read_field unit-link)")/default.target.wants/$UNIT"
+          if [[ -L "$enable_link" && "$(readlink "$enable_link")" == "$STATE/$UNIT" ]]; then rm -f "$enable_link"; fi
+        fi
       else "$CONTROLLER" --user disable "$UNIT"; fi
-      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
-      "$CONTROLLER" --user stop "$UNIT" & stop_job=$!
+      if [[ "$mode" == stop && $already_stopped -eq 0 && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
+      if [[ $already_stopped -eq 0 ]]; then "$CONTROLLER" --user stop "$UNIT" & stop_job=$!; fi
       if [[ "$mode" == kill ]]; then
         # Queue the stop before SIGKILL so Restart=on-failure cannot race the kill.
         while kill -0 "$stop_job" 2>/dev/null; do
@@ -236,7 +288,7 @@ stop_backend() {
     supervisord)
       supervisor_ctl pid >/dev/null || fail 'recorded supervisord is unavailable; state retained'
       rm -f "$SUPERVISOR_DIR/programs/$KEY.ini"
-      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
+      if [[ "$mode" == stop && $already_stopped -eq 0 && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
       status="$(supervisor_ctl status "$KEY" 2>&1 || true)"
       case "$status" in
         *RUNNING*|*STARTING*|*BACKOFF*|*STOPPING*)
@@ -251,7 +303,7 @@ stop_backend() {
           fi ;;
       esac ;;
     none)
-      if [[ "$mode" == stop && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"
+      if [[ "$mode" == stop && $already_stopped -eq 0 && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"
       elif pid="$(live_pid)"; then
         if [[ "$mode" != kill ]]; then kill -TERM "$pid"; fi
       fi ;;
@@ -309,7 +361,7 @@ stop_backend() {
       supervisor_ctl update "$KEY"
     fi
   fi
-  [[ ! -f "$STATE/stop-command.error" || "$mode" == kill ]] || fail 'business stop command failed; state retained'
+  [[ ! -f "$STATE/stop-command.error" || "$mode" == kill || $already_stopped -eq 1 ]] || fail 'business stop command failed; state retained'
   if [[ -s "$STATE/container-engine" ]]; then
     if "$engine" container inspect "$KEY" >/dev/null 2>&1; then
       [[ "$("$engine" inspect -f '{{.State.Running}}' "$KEY")" == false ]] || fail "container still running: $KEY"
@@ -385,16 +437,22 @@ case "$ACTION" in
     REQUESTED="${ATF_SERVICE_MANAGER:-auto}"
     if [[ -f "$STATE/backend" && ! -f "$STATE/stopped" ]]; then
       load_state
-      [[ "$REQUESTED" == auto || "$REQUESTED" == "$BACKEND" ]] || fail 'stop the instance before changing its backend'
-      [[ -f "$STATE/enabled" ]] || fail 'previous stop is incomplete; retry stop before starting'
       if [[ "$BACKEND" == supervisord ]]; then lock_dir "$SUPERVISOR_DIR" 8; fi
-      # Keep the original command, environment and controller for an existing lifecycle.
-      start_backend
-      exit 0
+      if backend_stopped; then
+        # Finish an interrupted stop or an exited lifecycle before using new inputs.
+        stop_backend stop
+      else
+        [[ "$REQUESTED" == auto || "$REQUESTED" == "$BACKEND" ]] || fail 'stop the instance before changing its backend'
+        [[ -f "$STATE/enabled" ]] || fail 'previous stop is incomplete; retry stop before starting'
+        # Keep the original command, environment and controller, including during restart.
+        start_backend
+        exit 0
+      fi
     fi
     BACKEND="$(select_backend "$REQUESTED")"
-    if command -v sha256sum >/dev/null; then HASH="$(printf '%s' "$STATE" | sha256sum)"
-    else HASH="$(printf '%s' "$STATE" | shasum -a 256)"; fi
+    # The suffix identifies the logical deployment root, never argv, CWD, state or release targets.
+    if command -v sha256sum >/dev/null; then HASH="$(printf '%s' "$PACKAGE_DIR" | sha256sum)"
+    else HASH="$(printf '%s' "$PACKAGE_DIR" | shasum -a 256)"; fi
     KEY="$NAME-${HASH:0:16}"
     write_field key "$KEY"
     KIND=process
@@ -488,6 +546,10 @@ case "$ACTION" in
         # % is escaped for ConfigParser; shlex handles the double-quoted command path.
         RUN_PATH="${STATE//%/%%}/run.sh"
         [[ "$RUN_PATH" != *[\"\\\;]* ]] || fail 'supervisor state path cannot contain quotes, backslash or semicolon'
+        if [[ -f "$SUPERVISOR_DIR/programs/$KEY.ini" ]]; then
+          grep -Fxq -- "command=/bin/bash \"$RUN_PATH\"" "$SUPERVISOR_DIR/programs/$KEY.ini" ||
+            fail 'program registration is owned by another instance in this deployment'
+        fi
         # Supervisor expands program logfile paths twice, unlike command paths.
         LOG_PATH="${SUPERVISOR_DIR//%/%%%%}/$KEY.log"
         cat > "$SUPERVISOR_DIR/programs/$KEY.ini" <<EOF
