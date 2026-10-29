@@ -25,6 +25,7 @@
     <tree id="level" name="关卡"></tree>
     <tree id="matching" name="匹配"></tree>
     <tree id="team" name="组队"></tree>
+    <tree id="mail" name="邮件"></tree>
     <!-- 业务功能开始 -->
   </category>
 
@@ -105,6 +106,11 @@
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">ErrorCode.xlsx|错误码表|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelErrorCode</scheme>
       <scheme name="OutputFile" desc="输出文件名">Both/error_code.bytes</scheme>
+    </item>
+    <item name="邮件" cat="mail" class="all">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Mail.xlsx|邮件模板表|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMailTemplate</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/mail_template.bytes</scheme>
     </item>
     <!-- 业务功能开始 -->
   </list>
