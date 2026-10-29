@@ -56,8 +56,8 @@ task_action_chat_send_message::result_type task_action_chat_send_message::operat
   }
 
   atfw::dtmq::DChannelIdKey dtmq_channel_key;
-  int32_t response_code =
-      user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(req_body.channel_key(), dtmq_channel_key);
+  int32_t response_code = user_inst->get_user_chat_manager().build_dtmq_channel_key_from_chat_channel_key(
+      req_body.channel_key(), dtmq_channel_key);
 
   if (response_code < 0) {
     set_response_code(response_code);

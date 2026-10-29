@@ -27,6 +27,7 @@
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
+#include <rpc/team/team_common_api.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -40,6 +41,8 @@
 #include "data/session.h"
 #include "data/user.h"
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
+
+#include "logic/team/user_team_manager.h"
 
 namespace {
 
@@ -783,12 +786,26 @@ int32_t user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(
                                                      logic_config::me()->get_local_world_id(), partition_id));
       return 0;
     }
-    case atfw::chat::DChatChannelKey::KeyTypeCase::kPrivateChannel:
+    case atfw::chat::DChatChannelKey::KeyTypeCase::kPrivateChannel: {
       dtmq_channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
       dtmq_channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(dtmq_channel_key.channel_type(),
                                                                          chat_channel_key.private_channel().zone_id(),
                                                                          chat_channel_key.private_channel().user_id()));
       return 0;
+    }
+    case atfw::chat::DChatChannelKey::KeyTypeCase::kTeamChannel: {
+      auto team_ptr = owner_->get_user_team_manager().get_team_by_team_key(chat_channel_key.team_channel());
+      if (!team_ptr) {
+        return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
+      }
+
+      if (team_ptr->is_destroyed() || team_ptr->is_exiting() || !team_ptr->is_member()) {
+        return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
+      }
+
+      dtmq_channel_key = rpc::team::team_api::make_team_room_channel_key(chat_channel_key.team_channel());
+      return 0;
+    }
     default:
       return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL;
   }

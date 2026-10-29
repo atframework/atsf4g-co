@@ -10,13 +10,14 @@ import "google/protobuf/timestamp.proto";
 
 import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
+import "protocol/common/com.struct.team.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 package atframework.chat;
 
-// 注意和DtMq.xlsx 表对应，多个模块之间类型不要冲突
+// 注意和 DtMq.xlsx 表对应，多个模块之间类型不要冲突
 enum EnChatChannelType {
   EN_CHAT_CHANNEL_TYPE_INVALID = 0;
   EN_CHAT_CHANNEL_TYPE_PUBLIC = 1;            // 公共频道 Channel
@@ -53,6 +54,7 @@ message DChatChannelKey {
   oneof key_type {
     uint64 world_partition_channel = 1;
     atframework.shared.DUserIDKey private_channel = 2;
+    atframework.team.DTeamKey team_channel = 3;
   }
 }
 

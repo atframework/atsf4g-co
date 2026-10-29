@@ -103,8 +103,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
 
   void pack_self_as_sender(rpc::context& ctx, atfw::chat::DChatMessageSender& sender);
 
-  static int32_t build_dtmq_channel_key_from_chat_channel_key(const atfw::chat::DChatChannelKey& chat_channel_key,
-                                                              atfw::dtmq::DChannelIdKey& dtmq_channel_key);
+  int32_t build_dtmq_channel_key_from_chat_channel_key(const atfw::chat::DChatChannelKey& chat_channel_key,
+                                                       atfw::dtmq::DChannelIdKey& dtmq_channel_key);
 
   static void dump_dtmq_to_chat_channel_metadata(rpc::context& ctx, const rpc::dtmq::client_subscriber& channel,
                                                  atfw::chat::DChatChannelMeta& metadata, bool with_configure);
