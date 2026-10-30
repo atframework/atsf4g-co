@@ -156,6 +156,8 @@ message user_async_jobs_blob_data {
     user_async_job_settle_rank settle_rank = 202;                // 结算排行榜
     user_async_job_orbit_finish orbit_finish = 301;              // Orbit结束
     user_async_job_orbit_remote_start orbit_remote_start = 302;  // Orbit远程启动
+    user_async_job_add_mail add_mail = 401;                      // 追加邮件
+    user_async_job_add_mail remove_mail = 402;                   // 删除邮件
   }
 }
 

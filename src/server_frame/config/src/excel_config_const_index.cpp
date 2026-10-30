@@ -25,29 +25,50 @@
 
 #include <cli/cmd_option.h>
 
+#include <string>
+
 #include "config/excel/config_manager.h"
 
 namespace excel {
 
-SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t& group) {
-  const auto& all_key = group.ExcelConstConfig.get_all_of_fake_key();
+SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t &group) {
+  const auto &all_key = group.ExcelConstConfig.get_all_of_fake_key();
   if (all_key.size() != 1) {
     FWLOGERROR("[EXCEL] setup_const_config key not 1");
     return;
   }
 
-  for (const auto& key : all_key) {
+  for (const auto &key : all_key) {
     group.const_settings = *key.second;
   }
 }
 
-SERVER_FRAME_CONFIG_API const ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig& get_const_config() {
+SERVER_FRAME_CONFIG_API const ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig &get_const_config() {
   auto group = config_manager::me()->get_current_config_group();
   if (!group) {
     return ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig::default_instance();
   }
 
   return group->const_settings;
+}
+
+SERVER_FRAME_CONFIG_API gsl::string_view get_i18n_text(const std::string &name, bool *result) {
+  if (nullptr != result) {
+    *result = false;
+  }
+
+  return name;
+  // TODO(any): Implement international convertion
+}
+
+SERVER_FRAME_CONFIG_API gsl::string_view get_i18n_text(config_group_t & /*group*/, const std::string &name,
+                                                       bool *result) {
+  if (nullptr != result) {
+    *result = false;
+  }
+
+  return name;
+  // TODO(any): Implement international convertion
 }
 
 }  // namespace excel

@@ -17,14 +17,18 @@ package atframework.shared;
 
 option (CONST_SETTINGS) = {
   time_tolerate: 10
+  mail_add_count_limit: 100
 };
 
 // limits
 enum EnConstLimits {
   EN_CL_UNKNOWN = 0;
-  EN_CL_MAX_PROTOCOL_LENGTH = 262144;  // message length limit: 256K
-  EN_CL_MAX_OPEN_ID_LENGTH = 64;       // openid length limit
-  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
+  EN_CL_MAX_PROTOCOL_LENGTH = 262144;           // message length limit: 256K
+  EN_CL_MAX_OPEN_ID_LENGTH = 64;                // openid length limit
+  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;            // token length limit
+  EN_CL_MAIL_PLAYER_TOLERANCE_ERROR_COUNT = 3;  // 玩家邮件容错（次）
+  EN_CL_MAIL_GLOBAL_JOBS_TASK_INTERVAL = 120;   // 全服邮件任务间隔（秒）
+  EN_CL_MAIL_GLOBAL_LEAK_CHECK_TIMEOUT = 600;   // 全服邮件丢失检测的时长判定
 }
 
 // account type
@@ -445,6 +449,32 @@ enum EnErrorCode {
   [(error_code.description) = "好友事务处理失败"];
   EN_ERR_FRIEND_SNS_SHARE_CFG_NOT_FOUND = -1351
   [(error_code.description) = "分享类型错误"];
+
+  // 邮件错误码[1401-1500]
+  EN_ERR_MAIL_TEMPLATE_NOT_FOUND = -1401
+  [(error_code.description) = "邮件模板未找到"];
+  EN_ERR_MAIL_TEMPLATE_SYNTAX_ERROR = -1402
+  [(error_code.description) = "模板语法错误"];
+  EN_ERR_MAIL_TEMPLATE_RENDER_FAILED = -1403
+  [(error_code.description) = "邮件渲染错误"];
+  EN_ERR_MAIL_INVALID_MAJOR_TYPE = -1404
+  [(error_code.description) = "邮件类型错误"];
+  EN_ERR_MAIL_NOT_START = -1405
+  [(error_code.description) = "邮件尚未生效"];
+  EN_ERR_MAIL_EXPIRED = -1406
+  [(error_code.description) = "邮件已过期"];
+  EN_ERR_MAIL_NOT_FOUND = -1407
+  [(error_code.description) = "邮件未找到或已被移除"];
+  EN_ERR_MAIL_ALREADY_RECEIVED = -1408
+  [(error_code.description) = "邮件已领取"];
+  EN_ERR_MAIL_RECEIVE_MAIL_ATTACHMENTS_FAILED_ITEM_INCONSISTENT = -1410
+  [(error_code.description) = "邮件附件领取道具不一致"];
+  EN_ERR_MAIL_MAIL_ITEM_INVALID = -1412
+  [(error_code.description) = "邮件道具非法，不允许同时存在offest和Ditem"];
+  EN_ERR_MAIL_ATTACHMENTS_INVALID = -1414
+  [(error_code.description) = "邮件附件填充错误, Ditem不支持随机池"];
+  EN_ERR_MAIL_ATTACHMENTS_ALREADY_RECEIVED = -1415
+  [(error_code.description) = "部分附件重复领取"];
 
   // 新错误码只能追加在已发布值之后，不能改动已有数值(客户端按值解释错误码)
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码

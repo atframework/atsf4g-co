@@ -13,8 +13,9 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 package atframework.shared;
 
 message DConstSettingsType {
-  int64 time_tolerate = 1;  // 时间错容忍值
-  int64 max_timestamp = 2;  // 最大时间戳
+  int64 time_tolerate = 1;         // 时间错容忍值
+  int64 max_timestamp = 2;         // 最大时间戳
+  int32 mail_add_count_limit = 3;  // 每次增加邮件的最大数量
 }
 
 // 只能配置在 com.const.proto 这个文件里有效

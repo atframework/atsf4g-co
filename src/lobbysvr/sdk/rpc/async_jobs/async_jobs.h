@@ -16,9 +16,7 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <stdint.h>
-#include <cstddef>
-#include <string>
+#include <cstdint>
 #include <vector>
 
 #include "rpc/db/db_utils.h"
@@ -43,7 +41,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
   bool ignore_router_cache = false;
 
   ATFW_UTIL_FORCEINLINE action_options() noexcept {}
-  ATFW_UTIL_FORCEINLINE action_options(bool in_notify_user) noexcept
+  ATFW_UTIL_FORCEINLINE explicit action_options(bool in_notify_user) noexcept
       : notify_user(in_notify_user)  // NOLINT: explicit
   {}
 };
@@ -71,8 +69,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type get_jobs(
  * @return 0或错误码
  */
 ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type del_jobs(::rpc::context &ctx, int32_t jobs_type,
-                                                                          uint64_t user_id, uint32_t zone_id,
-                                                                          const std::vector<uint64_t> &in);
+                                                                           uint64_t user_id, uint32_t zone_id,
+                                                                           const std::vector<uint64_t> &in);
 
 /**
  * @brief 添加用户异步任务操作
@@ -110,8 +108,9 @@ ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API result_code_type add_jobs_with_retry(
  * @param openid 用户的openid
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type remove_all_jobs(::rpc::context &ctx, int32_t jobs_type,
-                                                                                 uint64_t user_id, uint32_t zone_id);
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type remove_all_jobs(::rpc::context &ctx,
+                                                                                  int32_t jobs_type, uint64_t user_id,
+                                                                                  uint32_t zone_id);
 
 /**
  * @brief 更新用户异步任务表单条记录的rpc操作

@@ -9,6 +9,7 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 import "protocol/common/com.struct.mail.common.proto";
 import "protocol/common/com.struct.item.common.proto";
@@ -33,7 +34,7 @@ message DMailContent {
   string content = 6;
   repeated DItemOffset attachments = 7;
   DMailUserInfo sender = 8;
-  int32 flags = 9;           // @see EnMailFlagType
+  int32 flags = 9;  // @see EnMailFlagType
 
   google.protobuf.Timestamp delivery_time = 21;
   google.protobuf.Timestamp show_time = 22;
@@ -42,7 +43,7 @@ message DMailContent {
   // repeated DConditionRule mail_limit = 25;
   google.protobuf.Timestamp remove_time = 26;  // 全服邮件允许失效后仍然存在一段时间
   // 如果大于0，则表示需要从接收到邮件开始重置过期时间。通常用于全服邮件中每个玩家独立核算过期时间
-  google.protobuf.Timestamp resolve_expired_time = 27;
+  google.protobuf.Duration resolve_expired_time = 27;
 
   // 客户端渲染的模板要透传邮件模板ID和插件信息
   int32 mail_template_id = 31;
@@ -60,7 +61,7 @@ message DMailRecord {
   google.protobuf.Timestamp expired_time = 24;
   google.protobuf.Timestamp remove_time = 26;  // 全服邮件允许失效后仍然存在一段时间
   // 如果大于0，则表示需要从接收到邮件开始重置过期时间。通常用于全服邮件中每个玩家独立核算过期时间
-  google.protobuf.Timestamp resolve_expired_time = 27;
+  google.protobuf.Duration resolve_expired_time = 27;
 
   bool is_global_mail = 101;
   uint32 fetch_error_count = 102;

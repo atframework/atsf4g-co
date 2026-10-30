@@ -21,7 +21,7 @@ package atframework.shared;
 /////////////////////////////////////////////////////
 
 message SSUserKickOffReq {
-  int32 reason = 1;          // 原因
+  int32 reason = 1;           // 原因
   string reason_message = 2;  // 原因文本
 }
 
@@ -63,6 +63,15 @@ message SSObjectCacheGetUserCacheDataRsp {
 
 /////////////////////////////////////////////////////
 ////  缓存服的协议到此结束
+/////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////
+////  此处开始是邮件相关协议
+/////////////////////////////////////////////////////
+message SSMailUpdateGlobalMailsSync {}
+
+/////////////////////////////////////////////////////
+////  邮件相关协议到此结束
 /////////////////////////////////////////////////////
 
 // 提供 lobbysvr 内部服务之间的 RPC 接口定义。
@@ -114,6 +123,15 @@ service LobbysvrService {
       module_name: "cache"
       api_name: "拉取用户缓存信息"
       user_rpc: true
+    };
+  };
+
+  // 通知服务器全服邮件刷新
+  rpc mail_update_global_mails(stream SSMailUpdateGlobalMailsSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "通知服务器全服邮件刷新"
+      descriptions: "notify server to update global mails"
+      allow_no_wait: true
     };
   };
 }

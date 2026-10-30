@@ -1,14 +1,7 @@
 // Copyright 2026 atframework
 
-#include <chrono>
-#include <cstdint>
-#include <string>
-
 #include <atframework/testing/mock_resource.h>
 #include <atframework/testing/runtime.h>
-
-#include "config/excel/config_manager.h"
-#include "frame/test_macros.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -21,13 +14,19 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <cstdint>
+#include <string>
+
+#include "config/excel/config_manager.h"
+#include "frame/test_macros.h"
+
 namespace {
 std::string make_const_table_bytes(int32_t fake_key, int32_t mail_max_count) {
   org::xresloader::pb::xresloader_datablocks blocks;
   blocks.mutable_header()->set_hash_code("rpc-unit-test");
   PROJECT_NAMESPACE_ID::config::ExcelConstConfig item;
   item.set_fake_key(fake_key);
-  item.set_mail_max_count_per_major_type(mail_max_count);
+  item.set_user_mail_max_count_per_major_type(mail_max_count);
   blocks.add_data_block(item.SerializeAsString());
   return blocks.SerializeAsString();
 }
@@ -49,7 +48,7 @@ int32_t get_mail_max_count_by_fake_key(int32_t fake_key) {
   if (!item) {
     return -1;
   }
-  return item->mail_max_count_per_major_type();
+  return item->user_mail_max_count_per_major_type();
 }
 }  // namespace
 

@@ -29,4 +29,8 @@ struct config_group_t;
 EXCEL_CONFIG_LOADER_API void setup_const_config(config_group_t &group);
 
 EXCEL_CONFIG_LOADER_API const ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig &get_const_config();
+
+EXCEL_CONFIG_LOADER_API gsl::string_view get_i18n_text(const std::string &name, bool *result = nullptr);
+EXCEL_CONFIG_LOADER_API gsl::string_view get_i18n_text(config_group_t &group, const std::string &name,
+                                                       bool *result = nullptr);
 }  // namespace excel
