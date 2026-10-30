@@ -77,6 +77,7 @@ struct item_operation_checked_add_request {
   item_operation_checked_add_request& operator=(const item_operation_checked_add_request&) = delete;
   item_operation_checked_add_request(item_operation_checked_add_request&&) = default;
   item_operation_checked_add_request& operator=(item_operation_checked_add_request&&) = default;
+  item_operation_result get_check_result() { return check_result; }
 
  private:
   item_operation_checked_add_request(user* ATFW_UTIL_MACRO_NONNULL owner,
@@ -99,6 +100,7 @@ struct item_operation_checked_sub_request {
   item_operation_checked_sub_request& operator=(const item_operation_checked_sub_request&) = delete;
   item_operation_checked_sub_request(item_operation_checked_sub_request&&) = default;
   item_operation_checked_sub_request& operator=(item_operation_checked_sub_request&&) = default;
+  item_operation_result get_check_result() { return check_result; }
 
  private:
   item_operation_checked_sub_request(user* ATFW_UTIL_MACRO_NONNULL owner,
