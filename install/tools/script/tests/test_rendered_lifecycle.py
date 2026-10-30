@@ -135,6 +135,58 @@ while not request.exists():
                 events = [json.loads(line) for line in (script.parent / f"echosvr_{instance}.events").read_text().splitlines()]
                 self.assertEqual(events, [["stop-command", extra]])
 
+    def test_systemd_registration_survives_business_exit_until_manager_stop(self):
+        if "systemd" not in BACKENDS:
+            return
+        script = self.starts[0]
+        instance = script.stem.removeprefix("start_")
+        state = script.parent / f"echosvr_{instance}.pid.service"
+        controller = shutil.which("systemctl")
+        wrapper_dir = ROOT / "gc-controller"
+        wrapper_dir.mkdir(exist_ok=True)
+        probe = wrapper_dir / "fragment-before-stop"
+        # Force a manager reload after the business process exits, immediately
+        # before the public controller's stop request. A host's old shared template
+        # must not replace this instance's original fragment during that gap.
+        wrapper = wrapper_dir / "systemctl"
+        wrapper.write_text("""#!/bin/bash
+set -e
+for argument in "$@"; do
+  if [[ "$argument" == stop ]]; then
+    "$REAL_SYSTEMCTL" --user daemon-reload
+    "$REAL_SYSTEMCTL" --user show -p FragmentPath --value "${@: -1}" > "$GC_FRAGMENT_PROBE"
+  fi
+done
+exec "$REAL_SYSTEMCTL" "$@"
+""")
+        wrapper.chmod(0o755)
+        original = dict(ENV)
+        ENV.update(PATH=str(wrapper_dir) + os.pathsep + ENV.get("PATH", os.defpath),
+                   REAL_SYSTEMCTL=controller, GC_FRAGMENT_PROBE=str(probe))
+        try:
+            run("bash", script, backend="systemd")
+            unit = (state / "unit").read_text().strip()
+            fragment = run(controller, "--user", "show", "-p", "FragmentPath", "--value", unit).stdout.strip()
+            result = run("bash", script.parent / f"stop_{instance}.sh", "--upgrade", backend="invalid")
+            self.assertNotIn("not loaded", result.stdout)
+            self.assertEqual(probe.read_text().strip(), fragment)
+            self.assertEqual((state / "stopped").read_text().strip(), "yes")
+            self.assertFalse((state / "enabled").exists())
+            events = [json.loads(line) for line in script.with_name(f"echosvr_{instance}.events").read_text().splitlines()]
+            self.assertEqual(events, [["stop-command", ["--upgrade"]]])
+            self.assertFalse(os.path.lexists((state / "unit-link").read_text().strip()))
+            run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
+            run("bash", script, backend="systemd")
+            # A lost package fragment while the process is alive is recoverable
+            # from the shipped template before disable tries to open that unit.
+            (state / unit).unlink()
+            run("bash", script.parent / f"stop_{instance}.sh", backend="invalid")
+            self.assertEqual(probe.read_text().strip(), fragment)
+            self.assertFalse(os.path.lexists((state / "unit-link").read_text().strip()))
+        finally:
+            ENV.clear()
+            ENV.update(original)
+
     def test_failed_business_stop_preserves_process_and_can_be_retried(self):
         script = self.starts[0]
         instance = script.stem.removeprefix("start_")

@@ -97,7 +97,11 @@ kill 跳过业务停止命令并强制终止进程。
 systemd 的 `ExecStop` 使用同一回调；supervisord 通过前台适配脚本接收停止请求，
 不会将停止信号直接发给业务进程。每次进程运行期间，成功的停止命令仅执行一次，崩溃重启后重新计数。
 直接通过 systemctl/supervisorctl 停止时也调用该回调，超时后的终止行为遵循托管器配置。
-start 执行 `systemctl --user enable --now`；stop/kill 先移除启动意图并 disable，再通过 systemctl 停止。
+start 在同一用户共用的互斥锁内注册 unit，执行 `enable --no-reload`、`daemon-reload`，再 `start`。
+并行启动其他实例时也遵循这个顺序；未变化的注册链接不会重建。stop/kill 先移除启动意图并 disable，再通过 systemctl 停止。
+原生 unit 的 disable 还会删除注册链接。停止活跃实例时，脚本立即恢复仅用于定位该 unit 的注册，
+直到业务停止命令和 systemctl stop 完成后再注销，避免进程退出后 unit 被回收导致 `Unit not loaded`。
+这不会恢复 `WantedBy` 自启动链接；丢失的包内 unit 文件可从随包模板重建。
 `Restart=on-failure` 负责崩溃拉起，`enable/disable` 负责用户管理器启动时的自动启动。
 stop/kill 确认停止后会清除该 unit 的 `failed` 记录。旧测试删除配置后若仍显示 `not-found/failed`，
 可对已确认停止的具体 unit 执行 `systemctl --user reset-failed <unit>`；这不会删除 journal 日志。
@@ -157,6 +161,29 @@ WSL 等没有激活系统 `network-online.target` 的环境，若镜像已缓存
 该兼容入口复用镜像内的配置初始化、reload 和 stop，通过 `health_check` 发现业务进程退出并让容器失败退出，
 使外部托管器能够重启容器。启动等待默认 180 秒，可通过容器环境变量 `ATF_CONTAINER_START_TIMEOUT` 调整。
 此方式不需要重打镜像；仅监控前台容器客户端无法发现旧入口掩盖的业务进程退出。
+
+## 打包与清理运行状态
+
+`pack_publish.sh` 的主包、debug 包和 otel 包都排除实例状态目录、PID/CID、启动失败标记、控制 socket、
+私有 Supervisor 配置及清理备份。etcd/Redis 在发布目录内部自定义的工作目录也会识别其托管状态；配置和数据目录保留。
+打包只读取运行状态，不会停止服务或清除源目录中的记录。重新生成后的包可在另一部署目录初始化自己的状态。
+
+对于已经复制了运行状态的旧包，以部署用户在 Linux 上执行：
+
+```bash
+# 默认只列出待清理路径。
+bash tools/script/reset-service-state.sh
+# 备份并清除当前发布目录的失效或复制状态。
+bash tools/script/reset-service-state.sh --force
+# 从其他目录操作时显式指定发布根目录。
+bash /path/to/publish/tools/script/reset-service-state.sh -d /path/to/publish --force
+```
+
+脚本不依赖生命周期记录有效，也不会根据复制来的控制器路径执行命令。发现活进程、等待中的 systemd 作业或运行容器时，
+会拒绝清理并要求先正常 stop。确认私有 Supervisor 没有活动程序后，才关闭它并移走配置。
+清理仅移除指向当前发布目录的实例注册链接，并在完成后刷新 systemd；其他部署的链接保留。
+备份位于 `var/service-manager/reset-backups/<时间戳>-<PID>/`；配置、二进制和依赖数据不移动。
+目录外的依赖工作目录或 `ATF_SUPERVISOR_DIR` 不会清理，应单独处理对应部署的状态。
 
 ## 部署形态
 

@@ -111,8 +111,13 @@ Systemd's `ExecStop` uses the same callback. Supervisor signals a foreground ada
 without forwarding that signal to the business process. A successful callback runs once per process lifetime and
 is reset after a crash restart. Direct systemctl/supervisorctl stops also invoke it; timeout termination follows
 the manager's configuration.
-Start uses `systemctl --user enable --now`; stop/kill remove startup intent, disable the instance and stop it through
-systemctl. `Restart=on-failure` handles crashes; enable/disable controls startup with the user manager.
+Start registers the unit, runs `enable --no-reload`, then `daemon-reload` and `start` under one user-wide lock.
+Concurrent instance starts follow this order, and unchanged registration links are retained. Stop/kill remove startup
+intent, disable the instance and stop it through systemctl. `Restart=on-failure` handles crashes; enable/disable controls startup with the user manager.
+Disabling a native linked unit also removes its registration. When stopping a live instance, the script restores
+that registration until both the business stop command and systemctl stop complete, then removes it. This prevents
+`Unit not loaded` if the process exits and the manager unloads the unit. The `WantedBy` startup links stay disabled;
+a missing package fragment can be rebuilt from the shipped template.
 After confirming shutdown, stop/kill clear the unit's failed record. If an older test still appears as
 `not-found/failed` after its configuration was deleted, run `systemctl --user reset-failed <unit>` for that
 confirmed stopped unit. Journal logs remain available.
@@ -178,6 +183,31 @@ configuration initialization, reload and stop behavior. It calls `health_check` 
 dies, allowing the host supervisor to restart the container. Startup waits up to 180 seconds by default; adjust with
 the container environment variable `ATF_CONTAINER_START_TIMEOUT`. No image rebuild is required. Supervising only the
 foreground container client cannot detect a server exit hidden by the old entrypoint.
+
+## Packaging and resetting runtime state
+
+All three `pack_publish.sh` archives exclude instance state, PID/CID files, startup errors, control sockets, private
+Supervisor configuration and reset backups. Managed etcd/Redis work directories inside the deployment are detected
+even with custom names; their configuration and data remain. Packing reads state without stopping services or clearing
+the source deployment. A regenerated package can initialize its own state in another deployment directory.
+
+For an older package containing copied runtime state, run as the deployment user on Linux:
+
+```bash
+# Preview the paths without clearing them.
+bash tools/script/reset-service-state.sh
+# Back up and clear stale or copied state in this deployment.
+bash tools/script/reset-service-state.sh --force
+# Explicitly select the deployment when running elsewhere.
+bash /path/to/publish/tools/script/reset-service-state.sh -d /path/to/publish --force
+```
+
+The script does not require valid lifecycle records or execute controllers named in copied metadata. Live processes,
+pending systemd jobs and running containers cause cleanup to fail until normal stop completes. A private Supervisor
+daemon is shut down only after confirming that none of its programs are active. Only instance registration links
+targeting this deployment are removed, followed by a systemd reload; other deployments retain their links.
+Backups are stored under `var/service-manager/reset-backups/<timestamp>-<PID>/`. Configuration, binaries and dependency
+data are retained. Dependency work directories and `ATF_SUPERVISOR_DIR` outside the deployment require separate cleanup.
 
 ## Deployment Modes
 

@@ -289,6 +289,10 @@ class Lifecycle(unittest.TestCase):
             missing = unit.replace("atsf4g@", "atsf4g-unregistered-acceptance@", 1)
             (state / "unit").write_text(missing + "\n")
             (state / "unit-link").write_text(str(Path((state / "unit-link").read_text().strip()).with_name(missing)) + "\n")
+            # Seed a valid interrupted lifecycle, rather than damaged flat fields
+            # that the authoritative record would repair back to the old template.
+            run("bash", "-c", 'STATE="$1"; source "$2"; read_field() { cat "$STATE/$1"; }; save_state_record stopping',
+                "interrupted-stop", state, MANAGER.parent / "common/service-manager-state.sh")
             run("systemctl", "--user", "daemon-reload")
             self.assertEqual(run("systemctl", "--user", "show", "-p", "LoadState", "--value", missing).stdout.strip(),
                              "not-found")

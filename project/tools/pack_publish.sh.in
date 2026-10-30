@@ -20,6 +20,8 @@
 #     bin/flatc* plus the whole otelcol directory, which go into the separate
 #     otel_bin package instead (relative paths inside both archives match the
 #     deploy tree, so either one can be extracted at the deploy root).
+#   * All archives omit lifecycle records, process/container IDs, startup errors,
+#     private Supervisor state and reset backups. Packing does not clear live state.
 #     go-task and helm are not part of the deploy tree (they live in <build>/tools),
 #     so they do not appear in the archive and need no exclusion.
 #
@@ -69,6 +71,8 @@ if [ ! -d "${DEPLOY_DIR}" ]; then
     echo "[ERROR] Deploy base directory does not exist: ${DEPLOY_DIR}" >&2
     exit 1
 fi
+DEPLOY_DIR="$(cd "${DEPLOY_DIR}" && pwd -P)"
+source "${DEPLOY_DIR}/tools/script/common/service-runtime-paths.sh"
 
 # Vendor the chart dependencies before packing so the archive always carries the resolved charts. helm itself lives in
 # the build-time tools directory (<build>/tools/helm); the update_dependency script locates it.
@@ -142,11 +146,26 @@ split_lib_debug_symbols "${DEPLOY_DIR}"
 # The otel runtime binaries are packed into the separate otel_bin package, so they are
 # kept out of the main one. Members are always generated from "." ("./bin/..."), so the
 # "./" prefix anchors the patterns to the deploy root only.
-EXCLUDES=(
+COMMON_EXCLUDES=(
     --exclude='log'
     --exclude='*/log'
     --exclude='log/*'
     --exclude='*/log/*'
+    --exclude='*.pid.service'
+    --exclude='otelcol.service'
+    --exclude='*.pid'
+    --exclude='*.pid.old'
+    --exclude='*.startup-error'
+    --exclude='*.cid'
+    --exclude='*.sock'
+    --exclude='prepare-package.*.lock'
+    --exclude='var/service-manager'
+)
+RUNTIME_EXCLUDES=(--no-wildcards --anchored)
+while IFS= read -r -d '' RUNTIME_PATH; do
+    RUNTIME_EXCLUDES+=("--exclude=./${RUNTIME_PATH#"$DEPLOY_DIR"/}")
+done < <(service_runtime_paths "$DEPLOY_DIR")
+EXCLUDES=(
     --exclude='*.a'
     --exclude='*.dbg'
     --exclude='./bin/flatc*'
@@ -156,10 +175,11 @@ EXCLUDES=(
 
 echo "[INFO] Packing ${DEPLOY_DIR} -> ${OUTPUT_PACKAGE_FILE}/${OUTPUT_DEBUG_FILE}/${OUTPUT_OTEL_BIN_FILE}"
 cd "${DEPLOY_DIR}"
-tar "${EXCLUDES[@]}" -cvf- . | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_PACKAGE_FILE}" -
-DBG_FILES=($(find . -name "*.dbg"))
+tar "${COMMON_EXCLUDES[@]}" "${EXCLUDES[@]}" "${RUNTIME_EXCLUDES[@]}" -cvf- . | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_PACKAGE_FILE}" -
+DBG_FILES=()
+while IFS= read -r -d '' DBG_FILE; do DBG_FILES+=("$DBG_FILE"); done < <(find . -name '*.dbg' -print0)
 if [[ ${#DBG_FILES[@]} -gt 0 ]]; then
-    tar -cvf- $(find . -name "*.dbg") | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_DEBUG_FILE}" -
+    tar "${COMMON_EXCLUDES[@]}" "${RUNTIME_EXCLUDES[@]}" -cvf- "${DBG_FILES[@]}" | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_DEBUG_FILE}" -
 else
     rm -f "${OUTPUT_DEBUG_FILE}"
 fi
@@ -168,17 +188,17 @@ fi
 # 归档内保留相对路径，解压到部署根目录即可与主包合并。
 OTEL_BIN_ENTRIES=()
 if [ -d "otelcol" ]; then
-    OTEL_BIN_ENTRIES+=("otelcol")
+    OTEL_BIN_ENTRIES+=("./otelcol")
 fi
 for OTEL_BIN_FLATC in bin/flatc*; do
     if [ -e "${OTEL_BIN_FLATC}" ]; then
-        OTEL_BIN_ENTRIES+=("${OTEL_BIN_FLATC}")
+        OTEL_BIN_ENTRIES+=("./${OTEL_BIN_FLATC}")
     fi
 done
 
 if [ "${#OTEL_BIN_ENTRIES[@]}" -gt 0 ]; then
     echo "[INFO] Packing ${OTEL_BIN_ENTRIES[*]} -> ${OUTPUT_OTEL_BIN_FILE}"
-    tar "${EXCLUDES[@]}" -cvf- "${OTEL_BIN_ENTRIES[@]}" | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_OTEL_BIN_FILE}" -
+    tar "${COMMON_EXCLUDES[@]}" --exclude='*.a' --exclude='*.dbg' "${RUNTIME_EXCLUDES[@]}" -cvf- "${OTEL_BIN_ENTRIES[@]}" | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_OTEL_BIN_FILE}" -
 else
     echo "[WARN] Skip ${OUTPUT_OTEL_BIN_FILE}: neither otelcol/ nor bin/flatc* found" >&2
     rm -f "${OUTPUT_OTEL_BIN_FILE}"

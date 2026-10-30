@@ -80,11 +80,24 @@ operational procedure rather than treating rendering permission as deployment pe
   Supervisor uses a foreground adapter with `stopasgroup=false`. A failed command retains the running process
   and returns failure; explicit kill bypasses the business stop callback. Verify command effects and absence of
   TERM delivery, including direct manager stops and crash-restarted processes.
+- Serialize systemd registration, enablement, reload and start with the per-user runtime lock. Keep the deployment
+  lock shared in controllers and exclusive during reset; close these descriptors in launched daemons and children.
+  Reload after enable/disable file changes and before start. Do not rebuild unchanged registration symlinks.
+  Native `disable` also removes linked-unit registration: restore only that instance's registration before reload,
+  keep it until the business callback and systemctl stop complete, then unregister it. Never restore WantedBy links.
+  Test the business-exit/garbage-collection gap and loss of the package fragment, not only the final inactive state.
+- `project/tools/pack_publish.sh.in` excludes paths classified by `common/service-runtime-paths.sh` in every archive,
+  including otel and debug packages. `reset-service-state.sh` uses the same classification; preview by default and
+  require `--force` for backed-up cleanup. Refuse live processes/jobs/containers, ignore foreign copied PID numbers,
+  and remove only per-instance registration links targeting the selected deployment. Retain configuration and data.
 - After an intentional stop/kill, clear only that unit's failed record and verify `ActiveState=inactive`.
   A deleted unit file may still appear as `not-found/failed`; `is-active` returning nonzero alone does not prove cleanup.
 - Run `install/tools/script/tests/test_service_manager.py` with `--work-dir <BUILD_DIR>/_agent_tmp/<test-dir>` for
   real backend acceptance. `test_dependency_services.py` additionally needs `--etcd-bin-dir` and `--container-engine`.
   `test_rendered_lifecycle.py --publish-dir <rendered-dir>` executes a rendered two-instance echosvr layout against a
   foreground CLI fixture. Distinguish fixture/script checks from actual etcd/Redis health and container acceptance.
+- Run maintenance and lifecycle suites sequentially when they share a systemd user manager: fixture code can
+  deliberately edit registrations outside controller locks, and `NeedDaemonReload` also reflects global unit-file
+  cache invalidation. Retain the maintenance suite's internal parallel-start scenario and inspect its warning output.
 - For cached-image, loopback-only tests on WSL without `network-online.target`, use `ATF_QUADLET_WAIT_NETWORK=0`.
   Keep the production default network dependency unless the deployment explicitly does not require it.

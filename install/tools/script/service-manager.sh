@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -L)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -L)"
 source "$SCRIPT_DIR/common/service-manager-quadlet.sh"
 source "$SCRIPT_DIR/common/service-manager-state.sh"
+source "$SCRIPT_DIR/common/service-manager-locks.sh"
 fail() { echo "[service-manager] $*" >&2; exit 1; }
 
 select_backend() {
@@ -34,24 +35,6 @@ select_backend() {
   esac
 }
 
-# Lock descriptors are closed in every launched process. macOS can use the mkdir fallback.
-lock_dir() {
-  local directory="$1" fd="$2"
-  mkdir -p "$directory"
-  if command -v flock >/dev/null; then
-    if [[ "$fd" == 9 ]]; then exec 9>"$directory/lock"; else exec 8>"$directory/lock"; fi
-    flock -x -w 30 "$fd" || fail "lock timeout: $directory"
-  else
-    local attempts=0
-    until mkdir "$directory/lock.d" 2>/dev/null; do
-      ((attempts+=1))
-      [[ $attempts -lt 300 ]] || fail "lock timeout: $directory/lock.d; check its owner before removing it"
-      sleep 0.1
-    done
-    LOCK_DIRS+=("$directory/lock.d")
-  fi
-}
-LOCK_DIRS=()
 ROLLBACK_START=0
 on_exit() {
   local result=$?
@@ -129,7 +112,7 @@ files=programs/*.ini
 EOF
   fi
   if ! supervisor_ctl pid >/dev/null 2>&1; then
-    "$(command -v supervisord)" -c "$SUPERVISOR_DIR/supervisord.conf" 8>&- 9>&-
+    "$(command -v supervisord)" -c "$SUPERVISOR_DIR/supervisord.conf" 7>&- 8>&- 9>&-
     supervisor_ctl pid >/dev/null || fail 'private supervisord did not start'
   fi
 }
@@ -228,15 +211,39 @@ register_stop_script() {
   } > "$STATE/stop-command.sh"
 }
 
+retain_systemd_registration() {
+  # disable removes linked-unit registrations as well as enablement links.
+  # Keep this fragment addressable until the business callback and stop job finish.
+  [[ -s "$STATE/unit-link" ]] || return 0
+  local link fragment="$STATE/$UNIT"
+  link="$(read_field unit-link)"
+  [[ "$(basename "$link")" == "$UNIT" ]] || fail 'recorded unit registration has a different name'
+  if [[ ! -f "$fragment" ]]; then
+    cp "$SCRIPT_DIR/common/atsf4g@.service" "$fragment.tmp"
+    chmod 600 "$fragment.tmp"
+    mv -f "$fragment.tmp" "$fragment"
+  fi
+  if [[ -L "$link" ]]; then
+    [[ "$(readlink "$link")" == "$fragment" ]] || fail 'unit registration is owned by another installation'
+  elif [[ -e "$link" ]]; then
+    fail 'unit registration is owned by another installation'
+  else
+    mkdir -p "$(dirname "$link")"
+    ln -s "$fragment" "$link"
+  fi
+}
+
 start_backend() {
   case "$BACKEND" in
     systemd)
+      systemd_begin
       "$CONTROLLER" --user reset-failed "$UNIT" >/dev/null 2>&1 || true
-      if [[ "$KIND" == quadlet ]]; then
-        "$CONTROLLER" --user start "$UNIT"
-      else
-        "$CONTROLLER" --user enable --now "$UNIT"
-      fi ;;
+      if [[ "$KIND" != quadlet ]]; then
+        "$CONTROLLER" --user enable --no-reload "$UNIT"
+      fi
+      "$CONTROLLER" --user daemon-reload
+      "$CONTROLLER" --user start "$UNIT"
+      systemd_end ;;
     supervisord)
       supervisor_ctl reread
       supervisor_ctl update "$KEY"
@@ -254,7 +261,7 @@ start_backend() {
       done ;;
     none)
       if ! live_pid >/dev/null; then
-        nohup /bin/bash "$STATE/run.sh" >> "$STATE/output.log" 2>&1 < /dev/null 8>&- 9>&- &
+        nohup /bin/bash "$STATE/run.sh" >> "$STATE/output.log" 2>&1 < /dev/null 7>&- 8>&- 9>&- &
         local child=$! attempts=0
         until live_pid >/dev/null; do
           kill -0 "$child" 2>/dev/null || fail "process exited; see $STATE/output.log"
@@ -292,6 +299,8 @@ stop_backend() {
   fi
   case "$BACKEND" in
     systemd)
+      systemd_begin
+      if [[ "$KIND" != quadlet && $already_stopped -eq 0 ]]; then retain_systemd_registration; fi
       if [[ "$KIND" == quadlet ]]; then quadlet_disable
       elif [[ "${SYSTEMD_LOAD_STATE:-}" == not-found && $already_stopped -eq 1 ]]; then
         # A removed unit is already stopped. Remove only our own dangling enable link.
@@ -300,9 +309,12 @@ stop_backend() {
           enable_link="$(dirname "$(read_field unit-link)")/default.target.wants/$UNIT"
           if [[ -L "$enable_link" && "$(readlink "$enable_link")" == "$STATE/$UNIT" ]]; then rm -f "$enable_link"; fi
         fi
-      else "$CONTROLLER" --user disable "$UNIT"; fi
+      else "$CONTROLLER" --user disable --no-reload "$UNIT"; fi
+      if [[ "$KIND" != quadlet && $already_stopped -eq 0 ]]; then retain_systemd_registration; fi
+      "$CONTROLLER" --user daemon-reload
+      systemd_end
       if [[ "$mode" == stop && $already_stopped -eq 0 && -s "$STATE/stop-script" ]]; then /bin/bash "$STATE/stop.sh"; fi
-      if [[ $already_stopped -eq 0 ]]; then "$CONTROLLER" --user stop "$UNIT" & stop_job=$!; fi
+      if [[ $already_stopped -eq 0 ]]; then "$CONTROLLER" --user stop "$UNIT" 7>&- 8>&- 9>&- & stop_job=$!; fi
       if [[ "$mode" == kill ]]; then
         # Queue the stop before SIGKILL so Restart=on-failure cannot race the kill.
         while kill -0 "$stop_job" 2>/dev/null; do
@@ -394,6 +406,7 @@ stop_backend() {
       "$engine" rm "$KEY" >/dev/null
     fi
   fi
+  if [[ "$BACKEND" == systemd ]]; then systemd_begin; fi
   if [[ "$KIND" == quadlet ]]; then quadlet_remove; fi
   if [[ -f "$STATE/unit-link" ]]; then
     local unit_link
@@ -410,6 +423,7 @@ stop_backend() {
     if [[ -L "$registry_link" && "$(readlink "$registry_link")" == "$STATE" ]]; then rm -f "$registry_link"; fi
   fi
   reset_stopped_unit_failure
+  if [[ "$BACKEND" == systemd ]]; then systemd_end; fi
   save_state_record stopped
   write_field stopped yes
 }
@@ -432,6 +446,7 @@ if [[ "$ACTION" != start ]] && ! has_state_record; then
 fi
 mkdir -p "$STATE"
 STATE="$(cd "$STATE" && pwd -P)"
+lock_dir "$PACKAGE_DIR/var/service-manager/control" 7 -s
 lock_dir "$STATE" 9
 if [[ "$ACTION" == pid ]]; then load_state; live_pid; exit; fi
 if [[ "$ACTION" == ready ]]; then
@@ -561,6 +576,7 @@ case "$ACTION" in
       systemd)
         CONTROLLER="$(command -v systemctl)"
         write_field controller "$CONTROLLER"
+        systemd_begin
         if [[ -n "$ENGINE" && "$(basename "$ENGINE")" == podman ]]; then
           KIND=quadlet
           quadlet_setup
@@ -578,7 +594,7 @@ case "$ACTION" in
             chmod 600 "$UNIT_FILE.tmp"
             mv -f "$UNIT_FILE.tmp" "$UNIT_FILE"
           fi
-          ln -sfn "$UNIT_FILE" "$UNIT_LINK"
+          if [[ ! -L "$UNIT_LINK" ]]; then ln -s "$UNIT_FILE" "$UNIT_LINK"; fi
           write_field unit-link "$UNIT_LINK"
           "$CONTROLLER" --user daemon-reload
         fi ;;
