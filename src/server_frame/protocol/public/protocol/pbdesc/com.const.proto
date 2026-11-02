@@ -101,16 +101,17 @@ enum EnVersionType {
 }
 
 // item change type
-enum EnItemChgMainType {
-  EN_ICMT_UNKNOWN = 0;  // unknown
-  EN_ICMT_USE = 1;      // use
-  EN_ICMT_SALE = 2;     // sale
-  EN_ICMT_BUY = 3;      // 使用资源
+enum EnItemChgMajorType {
+  EN_ITEM_CHANGE_MAJOR_TYPE_UNKNOWN = 0;  // unknown
+  EN_ITEM_CHANGE_MAJOR_TYPE_USE = 1;      // use
+  EN_ITEM_CHANGE_MAJOR_TYPE_SALE = 2;     // sale
+  EN_ITEM_CHANGE_MAJOR_TYPE_BUY = 3;      // 使用资源
+  EN_ITEM_CHANGE_MAJOR_TYPE_MAIL_ATTACHMENT = 4;
 }
 
 // item change sub type
-enum EnItemChgSubType {
-  EN_ICST_DEFAULT = 0;  // default
+enum EnItemChgMinorType {
+  EN_ITEM_CHANGE_MINOR_TYPE_DEFAULT = 0;  // default
 }
 
 // @see atframework/service/atgateway/protocol/libatgw_protocol_api.h

@@ -4415,9 +4415,9 @@ CASE_TEST(ItemContainer, operation_source_reaches_hooks) {
     CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(state->count_changed_calls, 1);
     CASE_EXPECT_TRUE(state->last_count_context.reason == item_algorithm::ItemOperationReason::kAdd);
-    CASE_EXPECT_EQ(state->last_count_context.source.major_type, 1);
-    CASE_EXPECT_EQ(state->last_count_context.source.minor_type, 42);
-    CASE_EXPECT_EQ(state->last_count_context.source.micro_type, 7);
+    CASE_EXPECT_EQ(state->last_count_context.source.major_reason, 1);
+    CASE_EXPECT_EQ(state->last_count_context.source.minor_reason, 42);
+    CASE_EXPECT_EQ(state->last_count_context.source.reason_param, 7);
   }
 
   // sub: 同样要带上 check_sub 传入的来源, 原因换成 kSub
@@ -4435,9 +4435,9 @@ CASE_TEST(ItemContainer, operation_source_reaches_hooks) {
     CASE_EXPECT_EQ(grid.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(state->count_changed_calls, 1);
     CASE_EXPECT_TRUE(state->last_count_context.reason == item_algorithm::ItemOperationReason::kSub);
-    CASE_EXPECT_EQ(state->last_count_context.source.major_type, 2);
-    CASE_EXPECT_EQ(state->last_count_context.source.minor_type, 43);
-    CASE_EXPECT_EQ(state->last_count_context.source.micro_type, 8);
+    CASE_EXPECT_EQ(state->last_count_context.source.major_reason, 2);
+    CASE_EXPECT_EQ(state->last_count_context.source.minor_reason, 43);
+    CASE_EXPECT_EQ(state->last_count_context.source.reason_param, 8);
   }
 
   // load: 不经 check_*, 来源为空, 原因固定为 kLoad
@@ -4450,9 +4450,9 @@ CASE_TEST(ItemContainer, operation_source_reaches_hooks) {
     CASE_EXPECT_TRUE(grid.load(config, make_load_entry(load_instance), item_algorithm::ItemOperationSource{}));
     CASE_EXPECT_EQ(state->count_changed_calls, 1);
     CASE_EXPECT_TRUE(state->last_count_context.reason == item_algorithm::ItemOperationReason::kLoad);
-    CASE_EXPECT_EQ(state->last_count_context.source.major_type, 0);
-    CASE_EXPECT_EQ(state->last_count_context.source.minor_type, 0);
-    CASE_EXPECT_EQ(state->last_count_context.source.micro_type, 0);
+    CASE_EXPECT_EQ(state->last_count_context.source.major_reason, 0);
+    CASE_EXPECT_EQ(state->last_count_context.source.minor_reason, 0);
+    CASE_EXPECT_EQ(state->last_count_context.source.reason_param, 0);
   }
 
   // clear: 与 sub 的整体移除同序 (先摘索引, 再逐条摘分组/归零/通知), 不做校验
@@ -4470,9 +4470,9 @@ CASE_TEST(ItemContainer, operation_source_reaches_hooks) {
     CASE_EXPECT_EQ(state->count_changed_calls, static_cast<int32_t>(entries_before));
     CASE_EXPECT_EQ(state->data_changed_calls, static_cast<int32_t>(entries_before));
     CASE_EXPECT_TRUE(state->last_count_context.reason == item_algorithm::ItemOperationReason::kClear);
-    CASE_EXPECT_EQ(state->last_count_context.source.major_type, 0);
-    CASE_EXPECT_EQ(state->last_count_context.source.minor_type, 0);
-    CASE_EXPECT_EQ(state->last_count_context.source.micro_type, 0);
+    CASE_EXPECT_EQ(state->last_count_context.source.major_reason, 0);
+    CASE_EXPECT_EQ(state->last_count_context.source.minor_reason, 0);
+    CASE_EXPECT_EQ(state->last_count_context.source.reason_param, 0);
     CASE_EXPECT_TRUE(grid.is_empty());
     CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 0);
   }

@@ -61,9 +61,9 @@ enum class ItemOperationReason : int32_t {
 
 /// @brief 操作来源 — 由操作接口的调用方传入
 struct ATFW_UTIL_SYMBOL_VISIBLE ItemOperationSource {
-  int64_t major_type = 0;
-  int64_t minor_type = 0;
-  int64_t micro_type = 0;
+  int64_t major_reason = 0;
+  int64_t minor_reason = 0;
+  int64_t reason_param = 0;
 };
 
 /// @brief 钩子收到的操作上下文
