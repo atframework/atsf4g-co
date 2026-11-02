@@ -198,7 +198,8 @@ static result_void_type notify_lobbysvr(rpc::context &ctx, uint32_t zone_id) {
 }  // namespace
 
 LOBBY_RPC_API result_code_type add_global_mail(rpc::context &ctx, PROJECT_NAMESPACE_ID::DMailContent &mail,
-                                               uint32_t zone_id, int32_t channel, int64_t channel_param) {
+                                               uint32_t zone_id, ATFW_EXPLICIT_UNUSED_ATTR int32_t channel,
+                                               ATFW_EXPLICIT_UNUSED_ATTR int64_t channel_param) {
   // check mail type
   if (!excel::mail::is_valid_global_mail(mail.major_type())) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAIL_INVALID_MAJOR_TYPE);
