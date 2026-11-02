@@ -25,7 +25,8 @@
     <tree id="level" name="关卡"></tree>
     <tree id="matching" name="匹配"></tree>
     <tree id="team" name="组队"></tree>
-    <tree id="mail" name="邮件"></tree>
+	  <tree id="mail" name="邮件"></tree>
+    <tree id="orbit" name="DS"></tree>
     <!-- 业务功能开始 -->
   </category>
 
