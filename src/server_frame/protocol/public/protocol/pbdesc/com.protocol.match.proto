@@ -12,7 +12,8 @@ package atframework.shared;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-message CSMatchingStartReq {}
+message CSMatchingStartReq {
+}
 
 message SCMatchingStartRsp {
   int64 heartbeat_interval = 1;
@@ -52,8 +53,11 @@ message CSMatchingLevelSelectReq {
   DLevelSelect data = 1;
 }
 
-message SCMatchingLevelSelectRsp {}
+message SCMatchingLevelSelectRsp {
+}
 
-message CSMatchingHeartBeatReq {}
+message CSMatchingHeartBeatReq {
+}
 
-message SCMatchingHeartBeatRsp {}
+message SCMatchingHeartBeatRsp {
+}

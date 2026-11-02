@@ -8,6 +8,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/pbdesc/com.struct.chat.pb.h>
 #include <protocol/pbdesc/com.struct.team.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>

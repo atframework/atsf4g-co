@@ -1898,17 +1898,24 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
         }
         const int32_t result =
             RPC_AWAIT_CODE_RESULT(rpc::orbit::create_room(child_ctx, orbit_server_id, *request, *response));
-        const int32_t business_result = result == 0 ? response->result_code() : result;
+        // int32_t business_result = result == 0 ? PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_ORBIT_AGENT_OVERLOAD
+        //                                       : PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_ORBIT_AGENT_OVERLOAD;
+        int32_t business_result = result == 0 ? response->result_code() : result;
         if (business_result != 0 &&
             room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
           // 失败直接解散房间
+          FCTXLOGERROR(child_ctx, "create orbit room failed, matching_id={}, orbitsvr_id={:#x}, result={}",
+                       room->get_matching_id(), orbit_server_id, business_result);
+          if (business_result == PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD) {
+            business_result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_ORBIT_AGENT_OVERLOAD;
+          } else {
+            business_result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_DS_START_FAILED;
+          }
           mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED,
                              atfw::util::time::time_utility::get_now(), business_result);
           PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
           event_log.set_failed(business_result);
           publish_room_event(child_ctx, room, std::move(event_log));
-          FCTXLOGERROR(child_ctx, "create orbit room failed, matching_id={}, orbitsvr_id={:#x}, result={}",
-                       room->get_matching_id(), orbit_server_id, business_result);
         } else if (business_result == 0) {
           FCTXLOGDEBUG(child_ctx, "create orbit room finished, matching_id={}, orbitsvr_id={:#x}, room_id={}",
                        room->get_matching_id(), orbit_server_id, room->get_orbit_room_key().client_id());
