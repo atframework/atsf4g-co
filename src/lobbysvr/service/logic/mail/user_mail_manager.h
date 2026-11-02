@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory/rc_ptr.h>
+#include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 
 #include <dispatcher/task_manager.h>
@@ -17,6 +18,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "data/user_type_define.h"
 #include "logic/mail/mail_defs.h"
@@ -61,22 +63,25 @@ class user_mail_manager {
   atfw::util::memory::strong_rc_ptr<mail_box_t> get_mail_box_by_major_type(int32_t major_type) const;
 
   int add_mail(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMailRecord& mail,
-               const PROJECT_NAMESPACE_ID::DMailContent* content = NULL);
+               const PROJECT_NAMESPACE_ID::DMailContent* ATFW_UTIL_MACRO_NULLABLE content = nullptr);
   int add_global_mail(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMailRecord& mail,
                       const PROJECT_NAMESPACE_ID::DMailContent& content);
-  int remove_mail(rpc::context& ctx, int64_t mail_id, PROJECT_NAMESPACE_ID::DMailOperationResult* out = nullptr);
-  int read_mail(rpc::context& ctx, int64_t mail_id, PROJECT_NAMESPACE_ID::DMailOperationResult* out = nullptr,
+  int remove_mail(rpc::context& ctx, int64_t mail_id,
+                  PROJECT_NAMESPACE_ID::DMailOperationResult* ATFW_UTIL_MACRO_NULLABLE out = nullptr);
+  int read_mail(rpc::context& ctx, int64_t mail_id,
+                PROJECT_NAMESPACE_ID::DMailOperationResult* ATFW_UTIL_MACRO_NULLABLE out = nullptr,
                 bool need_remove = true);
   int read_all(rpc::context& ctx, int32_t major_type, int32_t minor_type,
-               ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult>* out = nullptr,
+               ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult>*
+                   ATFW_UTIL_MACRO_NULLABLE out = nullptr,
                bool need_remove = true);
-  rpc::result_code_type receive_mail_attachments(rpc::context& ctx, int64_t mail_id,
-                                                 PROJECT_NAMESPACE_ID::DMailOperationResult* out = nullptr,
-                                                 bool need_remove = true);
-  rpc::result_code_type receive_all(
-      rpc::context& ctx, int32_t major_type, int32_t minor_type,
-      ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult>* out = nullptr,
-      bool need_remove = true);
+  rpc::result_code_type receive_mail_attachments(
+      rpc::context& ctx, int64_t mail_id,
+      PROJECT_NAMESPACE_ID::DMailOperationResult* ATFW_UTIL_MACRO_NULLABLE out = nullptr, bool need_remove = true);
+  rpc::result_code_type receive_all(rpc::context& ctx, int32_t major_type, int32_t minor_type,
+                                    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult>*
+                                        ATFW_UTIL_MACRO_NULLABLE out = nullptr,
+                                    bool need_remove = true);
 
   void pack_mail_user(PROJECT_NAMESPACE_ID::DMailUserInfo& user_info) const;
 
@@ -102,7 +107,7 @@ class user_mail_manager {
       rpc::context& ctx, int64_t mail_id, int32_t mail_template_id, std::chrono::system_clock::time_point delivery_time,
       std::chrono::system_clock::time_point expired_time, PROJECT_NAMESPACE_ID::EnItemChgMajorType main_type,
       const ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& reward_items,
-      const mail_render_extension_type* extension) const;
+      const mail_render_extension_type* ATFW_UTIL_MACRO_NULLABLE extension) const;
 
  private:
   void refresh_mail_box_future_cache(rpc::context& ctx, mail_box_t&);

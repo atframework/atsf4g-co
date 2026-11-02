@@ -43,6 +43,7 @@
 #include <memory>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "data/user.h"
 // #include "logic/condition/user_condition_manager.h"
@@ -214,7 +215,7 @@ atfw::util::memory::strong_rc_ptr<mail_box_t> user_mail_manager::get_mail_box_by
 }
 
 int user_mail_manager::add_mail(rpc::context &ctx, const PROJECT_NAMESPACE_ID::DMailRecord &mail,
-                                const PROJECT_NAMESPACE_ID::DMailContent *content) {
+                                const PROJECT_NAMESPACE_ID::DMailContent *ATFW_UTIL_MACRO_NULLABLE content) {
   if (mail.mail_id() == 0 || mail.major_type() == 0) {
     FCTXLOGERROR(ctx, "{} can not add mail, because mail_id=0 or major_type = 0", *owner_);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
@@ -399,7 +400,7 @@ int user_mail_manager::add_global_mail(rpc::context &ctx, const PROJECT_NAMESPAC
 }
 
 int user_mail_manager::remove_mail(rpc::context &ctx, int64_t mail_id,
-                                   PROJECT_NAMESPACE_ID::DMailOperationResult *out) {
+                                   PROJECT_NAMESPACE_ID::DMailOperationResult *ATFW_UTIL_MACRO_NULLABLE out) {
   mail_data_ptr_t mail = get_mail_raw(mail_id);
   if (!mail || !mail->record) {
     if (nullptr != out) {
@@ -420,7 +421,8 @@ int user_mail_manager::remove_mail(rpc::context &ctx, int64_t mail_id,
   return 0;
 }
 
-int user_mail_manager::read_mail(rpc::context &ctx, int64_t mail_id, PROJECT_NAMESPACE_ID::DMailOperationResult *out,
+int user_mail_manager::read_mail(rpc::context &ctx, int64_t mail_id,
+                                 PROJECT_NAMESPACE_ID::DMailOperationResult *ATFW_UTIL_MACRO_NULLABLE out,
                                  bool need_remove) {
   int ret = 0;
   mail_data_ptr_t mail = get_mail_raw(mail_id);
@@ -478,9 +480,10 @@ int user_mail_manager::read_mail(rpc::context &ctx, int64_t mail_id, PROJECT_NAM
   return ret;
 }
 
-int user_mail_manager::read_all(rpc::context &ctx, int32_t major_type, int32_t minor_type,
-                                ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult> *out,
-                                bool need_remove) {
+int user_mail_manager::read_all(
+    rpc::context &ctx, int32_t major_type, int32_t minor_type,
+    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult> *ATFW_UTIL_MACRO_NULLABLE out,
+    bool need_remove) {
   std::vector<mail_data_ptr_t> mail_box;
 
   auto selected_mail_box = get_mail_box_by_major_type(major_type);
@@ -554,9 +557,9 @@ int user_mail_manager::read_all(rpc::context &ctx, int32_t major_type, int32_t m
   return 0;
 }
 
-rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &ctx, int64_t mail_id,
-                                                                  PROJECT_NAMESPACE_ID::DMailOperationResult *out,
-                                                                  bool need_remove) {
+rpc::result_code_type user_mail_manager::receive_mail_attachments(
+    rpc::context &ctx, int64_t mail_id, PROJECT_NAMESPACE_ID::DMailOperationResult *ATFW_UTIL_MACRO_NULLABLE out,
+    bool need_remove) {
   int ret = 0;
   mail_data_ptr_t mail = get_mail_raw(mail_id);
   do {
@@ -639,7 +642,8 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
 
 rpc::result_code_type user_mail_manager::receive_all(
     rpc::context &ctx, int32_t major_type, int32_t minor_type,
-    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult> *out, bool need_remove) {
+    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMailOperationResult> *ATFW_UTIL_MACRO_NULLABLE out,
+    bool need_remove) {
   std::vector<mail_data_ptr_t> mail_box;
 
   auto selected_mail_box = get_mail_box_by_major_type(major_type);
@@ -1421,9 +1425,9 @@ int user_mail_manager::merge_global_mails(rpc::context &ctx) {
 
 rpc::result_code_type user_mail_manager::add_reward_by_mail(
     rpc::context &ctx, int64_t mail_id, int32_t mail_template_id, std::chrono::system_clock::time_point delivery_time,
-    std::chrono::system_clock::time_point expired_time, PROJECT_NAMESPACE_ID::EnItemChgMajorType main_type,
+    std::chrono::system_clock::time_point expired_time, PROJECT_NAMESPACE_ID::EnItemChgMajorType /*main_type*/,
     const ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset> &reward_items,
-    const mail_render_extension_type *extension) const {
+    const mail_render_extension_type *ATFW_UTIL_MACRO_NULLABLE extension) const {
   rpc::shared_message<PROJECT_NAMESPACE_ID::DMailContent> mail{ctx};
 
   mail->set_mail_id(mail_id);
