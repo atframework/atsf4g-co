@@ -2,6 +2,7 @@
 
 #include <ItemAlgorithm/ItemContainer.h>
 #include <ItemAlgorithm/ItemContainerEntry.h>
+#include <ItemAlgorithm/ItemContainerTypes.h>
 
 #include <utility>
 
@@ -35,9 +36,9 @@ ITEM_ALGORITHM_API PROJECT_NAMESPACE_ID::DItemData& ItemEntry::mutable_item_data
   return *item_instance_.mutable_item_data();
 }
 
-ITEM_ALGORITHM_API void ItemEntry::mark_item_data_dirty() {
+ITEM_ALGORITHM_API void ItemEntry::mark_item_data_dirty(const ItemOperationSource& source) {
   if (auto container = belong_container_.lock()) {
-    const ItemOperationContext context{ItemOperationReason::kModifyInstanceData, ItemOperationSource{}};
+    const ItemOperationContext context{ItemOperationReason::kModifyInstanceData, source};
     container->on_item_data_changed(shared_from_this(), context);
   }
 }

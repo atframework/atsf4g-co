@@ -35,6 +35,8 @@ class context;
 }
 class user;
 
+namespace item_algorithm = ITEM_ALGORITHM_NAMESPACE_ID::item_algorithm;
+
 class user_item_manager : public atfw::util::design_pattern::noncopyable {
   friend struct item_operation_checked_add_request;
   friend struct item_operation_checked_sub_request;
@@ -49,13 +51,15 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
 
  public:
   item_operation_checked_add_request check_add(
-      rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const;
-  item_operation_checked_sub_request check_sub(
-      rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const;
+      rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&,
+      const item_algorithm::ItemOperationSource& source) const;
+  item_operation_checked_sub_request check_sub(rpc::context&,
+                                               google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&,
+                                               const item_algorithm::ItemOperationSource& source) const;
   // 只支持虚拟仓库道具
   item_operation_checked_sub_request check_sub(
       rpc::context&, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>&,
-      int32_t multiple = 1) const;
+      const item_algorithm::ItemOperationSource& source, int32_t multiple = 1) const;
   item_operation_result check_has(rpc::context&,
                                   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&);
   int32_t on_item_not_enough(rpc::context&, int32_t type_id);

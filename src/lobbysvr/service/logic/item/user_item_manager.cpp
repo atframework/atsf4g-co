@@ -116,7 +116,8 @@ item_operation_result item_operation_checked_sub_request::do_operation(rpc::cont
 }
 
 item_operation_checked_add_request user_item_manager::check_add(
-    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
+    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input,
+    const item_algorithm::ItemOperationSource& source) const {
   // 首先分组
   std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
   std::list<std::pair<int32_t, item_operation_handle_checked_add_request>> checked_request;
@@ -136,7 +137,7 @@ item_operation_checked_add_request user_item_manager::check_add(
   for (auto& group : grouped_requests) {
     auto& handler = item_type_handler_.find(group.first)->second;
     // 调用具体的处理器进行检查
-    auto result = handler->check_add(ctx, *owner_, std::move(group.second));
+    auto result = handler->check_add(ctx, *owner_, std::move(group.second), source);
     if (result.check_result.error_code != 0) {
       return item_operation_checked_add_request(owner_, result.check_result.error_code,
                                                 result.check_result.failed_type_id);
@@ -147,7 +148,8 @@ item_operation_checked_add_request user_item_manager::check_add(
 }
 
 item_operation_checked_sub_request user_item_manager::check_sub(
-    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
+    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input,
+    const item_algorithm::ItemOperationSource& source) const {
   // 首先分组
   std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
   std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>> checked_request;
@@ -167,7 +169,7 @@ item_operation_checked_sub_request user_item_manager::check_sub(
   for (auto& group : grouped_requests) {
     auto& handler = item_type_handler_.find(group.first)->second;
     // 调用具体的处理器进行检查
-    auto result = handler->check_sub(ctx, *owner_, std::move(group.second));
+    auto result = handler->check_sub(ctx, *owner_, std::move(group.second), source);
     if (result.check_result.error_code != 0) {
       return item_operation_checked_sub_request(owner_, result.check_result.error_code,
                                                 result.check_result.failed_type_id);
@@ -179,7 +181,7 @@ item_operation_checked_sub_request user_item_manager::check_sub(
 
 item_operation_checked_sub_request user_item_manager::check_sub(
     rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& input,
-    int32_t multiple) const {
+    const item_algorithm::ItemOperationSource& source, int32_t multiple) const {
   if (multiple <= 0) {
     return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0);
   }
@@ -196,7 +198,7 @@ item_operation_checked_sub_request user_item_manager::check_sub(
         owner_->get_user_item_container_manager().get_virtual_inventory_container_guid());
     basic.mutable_position()->mutable_grid_position()->set_virtual_inventory(true);
   }
-  return check_sub(ctx, std::move(basic_input));
+  return check_sub(ctx, std::move(basic_input), source);
 }
 
 item_operation_result user_item_manager::check_has(
@@ -408,7 +410,8 @@ void user_item_manager::on_gm_cmd_add_item(const std::shared_ptr<rpc::context>& 
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NO_EMPTY_POSITION);
         }
 
-        auto checked_request = item_manager.check_add(child_ctx, std::move(item_instances));
+        auto checked_request =
+            item_manager.check_add(child_ctx, std::move(item_instances), item_algorithm::ItemOperationSource{});
         auto add_result = checked_request.do_operation(child_ctx);
         if (add_result.error_code != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
           rsp->set_result_code(add_result.error_code);

@@ -12,6 +12,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <ItemAlgorithm/ItemContainerTypes.h>
 #include <memory/rc_ptr.h>
 
 #include <list>
@@ -39,14 +40,19 @@ class item_operation_checked_sub_private_data {
 
 class user_item_manager;
 
+namespace item_algorithm = ITEM_ALGORITHM_NAMESPACE_ID::item_algorithm;
+
 struct item_operation_handle_checked_add_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request;
+  item_algorithm::ItemOperationSource reason;
+
   explicit item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_type_id = 0)
       : check_result{error_code, failed_type_id} {}
   explicit item_operation_handle_checked_add_request(
-      atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request)
-      : checked_request(std::move(checked_request)) {}
+      atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request,
+      item_algorithm::ItemOperationSource in_reason)
+      : checked_request(std::move(checked_request)), reason(in_reason) {}
 
   item_operation_handle_checked_add_request(const item_operation_handle_checked_add_request&) = delete;
   item_operation_handle_checked_add_request& operator=(const item_operation_handle_checked_add_request&) = delete;
@@ -57,11 +63,14 @@ struct item_operation_handle_checked_add_request {
 struct item_operation_handle_checked_sub_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request;
+  item_algorithm::ItemOperationSource reason;
+
   explicit item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_type_id = 0)
       : check_result{error_code, failed_type_id} {}
   explicit item_operation_handle_checked_sub_request(
-      atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request)
-      : checked_request(std::move(checked_request)) {}
+      atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request,
+      item_algorithm::ItemOperationSource in_reason)
+      : checked_request(std::move(checked_request)), reason(in_reason) {}
 
   item_operation_handle_checked_sub_request(const item_operation_handle_checked_sub_request&) = delete;
   item_operation_handle_checked_sub_request& operator=(const item_operation_handle_checked_sub_request&) = delete;
@@ -119,9 +128,11 @@ struct item_operation_checked_sub_request {
 class item_operation_handler {
  public:
   virtual item_operation_handle_checked_add_request check_add(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const = 0;
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&,
+      const item_algorithm::ItemOperationSource&) const = 0;
   virtual item_operation_handle_checked_sub_request check_sub(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const = 0;
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&,
+      const item_algorithm::ItemOperationSource&) const = 0;
   virtual item_operation_result check_has(
       rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const = 0;
 

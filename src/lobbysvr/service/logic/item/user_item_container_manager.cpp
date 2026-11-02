@@ -65,29 +65,31 @@ static bool init_user_item_container_manager_handle() {
 user_container_item_operation_handler::~user_container_item_operation_handler() {}
 
 item_operation_handle_checked_add_request user_container_item_operation_handler::check_add(
-    rpc::context&, user& user_inst,
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
+    rpc::context&, user& user_inst, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input,
+    const item_algorithm::ItemOperationSource& reason) const {
   // input 是本函数持有的数据, 视图在 check_add 期间一直有效 (组会把请求拷进各容器分片)
   auto result =
-      user_inst.get_user_item_container_manager().check_add(item_algorithm::make_item_readable_iterable(input));
+      user_inst.get_user_item_container_manager().check_add(item_algorithm::make_item_readable_iterable(input), reason);
   if (result.get_error_code() != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     return item_operation_handle_checked_add_request(result.get_error_code(), result.get_failed_type_id());
   }
   return item_operation_handle_checked_add_request(
-      atfw::component::memory::stl::make_strong_rc<user_container_item_operation_checked_add_data>(std::move(result)));
+      atfw::component::memory::stl::make_strong_rc<user_container_item_operation_checked_add_data>(std::move(result)),
+      reason);
 }
 
 item_operation_handle_checked_sub_request user_container_item_operation_handler::check_sub(
-    rpc::context&, user& user_inst,
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
+    rpc::context&, user& user_inst, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input,
+    const item_algorithm::ItemOperationSource& reason) const {
   // input 是本函数持有的数据, 视图在 check_sub 期间一直有效 (组会把请求拷进各容器分片)
   auto result =
-      user_inst.get_user_item_container_manager().check_sub(item_algorithm::make_item_readable_iterable(input));
+      user_inst.get_user_item_container_manager().check_sub(item_algorithm::make_item_readable_iterable(input), reason);
   if (result.get_error_code() != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     return item_operation_handle_checked_sub_request(result.get_error_code(), result.get_failed_type_id());
   }
   return item_operation_handle_checked_sub_request(
-      atfw::component::memory::stl::make_strong_rc<user_container_item_operation_checked_sub_data>(std::move(result)));
+      atfw::component::memory::stl::make_strong_rc<user_container_item_operation_checked_sub_data>(std::move(result)),
+      reason);
 }
 
 item_operation_result user_container_item_operation_handler::check_has(
@@ -197,7 +199,8 @@ rpc::result_void_type user_item_container_manager::create_init(rpc::context& ctx
 
     int32_t item_size = static_cast<int32_t>(item_instances.size());
 
-    auto checked_request = owner_->get_user_item_manager().check_add(ctx, std::move(item_instances));
+    auto checked_request = owner_->get_user_item_manager().check_add(ctx, std::move(item_instances),
+                                                                     item_algorithm::ItemOperationSource{});
     auto add_result = checked_request.do_operation(ctx);
     if (add_result.error_code != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
       FWLOGERROR("{} user_item_container_manager::create_init add_item failed, result={}({}), failed_type_id={}",

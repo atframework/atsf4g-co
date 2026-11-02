@@ -24,6 +24,7 @@ ITEM_ALGORITHM_NAMESPACE_BEGIN
 namespace item_algorithm {
 
 class ItemContainer;
+struct ItemOperationSource;
 
 /// @brief 容器内的一个物品条目
 ///
@@ -36,7 +37,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemEntry : public atfw::util::memory::enable_sh
   ITEM_ALGORITHM_API uint64_t entry_id() const;
   ITEM_ALGORITHM_API const PROJECT_NAMESPACE_ID::DItemInstance& item_instance() const;
   ITEM_ALGORITHM_API PROJECT_NAMESPACE_ID::DItemData& mutable_item_data();
-  ITEM_ALGORITHM_API void mark_item_data_dirty();
+  ITEM_ALGORITHM_API void mark_item_data_dirty(const ItemOperationSource& source);
   /// @brief 所属容器写入的排序键
   ///
   /// 对条目本身是不透明的: 条目只负责保存它, 不理解它的含义。

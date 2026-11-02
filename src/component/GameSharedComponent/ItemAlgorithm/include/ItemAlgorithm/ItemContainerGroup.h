@@ -194,17 +194,17 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainerGroup {
   // ---- 批量操作 ----
   ITEM_ALGORITHM_API ItemContainerGroupAddCheckedRequest
   check_add(const excel_config_group_ptr_t& config_group, const item_instance_readable_iterable& requests,
-            const ItemOperationSource& source = ItemOperationSource{}) const;
+            const ItemOperationSource& source) const;
   ITEM_ALGORITHM_API ItemOperationResult add(ItemContainerGroupAddCheckedRequest& checked_request);
 
   ITEM_ALGORITHM_API ItemContainerGroupSubCheckedRequest
   check_sub(const excel_config_group_ptr_t& config_group, const item_basic_readable_iterable& requests,
-            const ItemOperationSource& source = ItemOperationSource{}) const;
+            const ItemOperationSource& source) const;
   ITEM_ALGORITHM_API ItemOperationResult sub(ItemContainerGroupSubCheckedRequest& checked_request);
 
   ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest
   check_move(const excel_config_group_ptr_t& config_group, std::vector<ItemContainerGroupMoveRequest>&& requests,
-             const ItemOperationSource& source = ItemOperationSource{}) const;
+             const ItemOperationSource& source) const;
   ITEM_ALGORITHM_API ItemOperationResult move(ItemContainerGroupMoveCheckedRequest& checked_request);
 
   ITEM_ALGORITHM_API ItemOperationResult check_has(const excel_config_group_ptr_t& config_group,

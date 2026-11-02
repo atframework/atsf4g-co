@@ -1193,7 +1193,8 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
         basic->mutable_position()->set_container_guid(container_guid);
         google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> items;
         *items.Add() = std::move(dirty_item);
-        auto checked = item_mgr.check_add(item_algorithm::make_item_readable_iterable(items));
+        auto checked = item_mgr.check_add(item_algorithm::make_item_readable_iterable(items),
+                                          item_algorithm::ItemOperationSource{});
         if (PROJECT_NAMESPACE_ID::EN_SUCCESS != checked.get_error_code()) {
           RPC_RETURN_CODE(checked.get_error_code());
         }

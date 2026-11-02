@@ -29,7 +29,7 @@ void user_virtual_inventory::init(const PROJECT_NAMESPACE_ID::DUserVirtualInvent
   virtual_container_->init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, data.container_guid(),
                            data.next_entry_id());
   for (const auto& item : data.items()) {
-    virtual_container_->load(excel::get_current_config_group(), item);
+    virtual_container_->load(excel::get_current_config_group(), item, item_algorithm::ItemOperationSource{});
   }
 }
 
@@ -74,7 +74,8 @@ void user_virtual_inventory::replace(
       item_entry.set_entry_id(original->second);
     }
     *item_entry.mutable_instance() = item;
-    if (!virtual_container_->load(config_group, item_entry, item_algorithm::ItemOperationReason::kReplaceLoad)) {
+    if (!virtual_container_->load(config_group, item_entry, item_algorithm::ItemOperationSource{},
+                                  item_algorithm::ItemOperationReason::kReplaceLoad)) {
       FWLOGWARNING("user_virtual_inventory replace skip invalid item, type_id: {}, count: {}",
                    item.item_basic().type_id(), item.item_basic().count());
     }

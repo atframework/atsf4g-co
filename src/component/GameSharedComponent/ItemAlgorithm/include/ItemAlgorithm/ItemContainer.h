@@ -150,7 +150,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @param requests 具名请求视图 (checked request 会引用它, 所以不能传临时视图; 调用方需保证它活到 add 执行完)
   ITEM_ALGORITHM_API ItemAddCheckedRequest check_add(const excel_config_group_ptr_t& config_group,
                                                      item_instance_readable_iterable& requests,
-                                                     const ItemOperationSource& source = ItemOperationSource{}) const;
+                                                     const ItemOperationSource& source) const;
 
   /// @brief 执行放入: 基类校验 checked request 后逐条调用 on_add_one
   /// @param reason 传给钩子的操作原因 (move 的 Add 阶段等场景由调用方指定, 默认 kAdd)
@@ -161,7 +161,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @param requests 具名请求视图 (checked request 会引用它, 所以不能传临时视图; 调用方需保证它活到 sub 执行完)
   ITEM_ALGORITHM_API ItemSubCheckedRequest check_sub(const excel_config_group_ptr_t& config_group,
                                                      item_basic_readable_iterable& requests,
-                                                     const ItemOperationSource& source = ItemOperationSource{}) const;
+                                                     const ItemOperationSource& source) const;
 
   /// @brief 执行扣减: 基类校验 checked request 后逐条调用 on_sub_one
   /// @param reason 传给钩子的操作原因 (默认 kSub)
@@ -175,7 +175,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// 没有位置语义的模式 (无位置容器) 不支持 move: 基类默认的 on_check_move 直接拒绝。
   ITEM_ALGORITHM_API ItemMoveCheckedRequest check_move(const excel_config_group_ptr_t& config_group,
                                                        ItemMoveRequest&& request,
-                                                       const ItemOperationSource& source = ItemOperationSource{}) const;
+                                                       const ItemOperationSource& source) const;
 
   /// @brief 执行移动: 基类校验 checked request 后, 先跑 kMoveSub 阶段再跑 kMoveAdd 阶段
   ///
@@ -201,15 +201,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @param source 调用方透传的操作来源
   /// @return false 表示本条载入失败 (调用方决定跳过还是中止)
   ITEM_ALGORITHM_API bool load(const excel_config_group_ptr_t& config_group,
-                             const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
-                             ItemOperationReason reason = ItemOperationReason::kLoad,
-                             const ItemOperationSource& source = ItemOperationSource{});
+                               const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
+                               const ItemOperationSource& source,
+                               ItemOperationReason reason = ItemOperationReason::kLoad);
 
   /// @brief 应用客户端同步包: 基类逐条删除 + 逐条新增/更新
   ITEM_ALGORITHM_API void apply_entries(const excel_config_group_ptr_t& config_group,
                                         const google::protobuf::RepeatedField<uint64_t>& remove_entry_ids,
                                         const item_instance_entry_readable_iterable& update_entries,
-                                        const ItemOperationSource& source = ItemOperationSource{});
+                                        const ItemOperationSource& source);
 
   /// @brief 为一批 DItemBasic 寻位 (基类校验入参并预留输出, 子类实现 on_find_positions)
   ITEM_ALGORITHM_API bool find_positions_for_basics(
@@ -383,7 +383,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
       const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const = 0;
   /// @brief 把容器内部坐标写回 proto 位置字段 (由接入层按自己的位置字段实现)
   ITEM_ALGORITHM_API virtual void apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& position,
-                                                const ItemGridPosition& grid_pos) const = 0;
+                                                 const ItemGridPosition& grid_pos) const = 0;
 
   // ============================================================
   // 子类可覆盖的变更通知钩子 (默认空实现)

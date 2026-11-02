@@ -805,7 +805,8 @@ static void call_apply_entries(
     entry->set_entry_id(pair.first);
     *entry->mutable_instance() = pair.second;
   }
-  grid.apply_entries(config_group, pb_remove_ids, make_item_readable_iterable(pb_updates));
+  grid.apply_entries(config_group, pb_remove_ids, make_item_readable_iterable(pb_updates),
+                     item_algorithm::ItemOperationSource{});
 }
 
 /// @brief 初始化 ServerTestItemFiniteGridContainer (与 init_test_container 相同配置)
@@ -919,7 +920,8 @@ static void sync_and_verify(ServerTestItemFiniteGridContainer& server, TestItemF
   server.collect_apply_data(remove_ids, update_entries);
   server.clear_change_cache();
 
-  client.apply_entries(config, remove_ids, make_item_readable_iterable(update_entries));
+  client.apply_entries(config, remove_ids, make_item_readable_iterable(update_entries),
+                       item_algorithm::ItemOperationSource{});
 
   // 验证双方一致
   verify_server_client_sync(server, client);
@@ -966,7 +968,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     ItemAddRequest reqs;
     *reqs.Add() = equip;
 
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     auto result = server.add(checked);
     CASE_EXPECT_EQ(result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -1006,7 +1008,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     ItemAddRequest reqs;
     *reqs.Add() = item1;
     *reqs.Add() = item2;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.add(checked);
   }
@@ -1032,7 +1034,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
   {
     ItemAddRequest reqs;
     *reqs.Add() = make_ungrid_item(kCoinTypeId, 200);
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     CASE_EXPECT_EQ(server.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
@@ -1049,7 +1051,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto item = make_grid_item(kItemTypeId_1x1, 60, 1, 0);
     ItemAddRequest reqs;
     *reqs.Add() = item;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.add(checked);
   }
@@ -1076,7 +1078,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto item = make_grid_item(kItemTypeId_1x1, 10, 1, 0);
     ItemAddRequest reqs;
     *reqs.Add() = item;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW);
     // add 应直接返回错误
     auto result = server.add(checked);
@@ -1087,7 +1089,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto item = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
     ItemAddRequest reqs;
     *reqs.Add() = item;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 5c: out of range — (10,10) 超出 10x10 背包
@@ -1095,7 +1097,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto item = make_grid_item(kItemTypeId_1x1, 1, 10, 10);
     ItemAddRequest reqs;
     *reqs.Add() = item;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 数据应不变
@@ -1113,7 +1115,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto bad = make_grid_item(kEquipmentTypeId, 1, 3, 0, 0);  // guid=0
     ItemAddRequest reqs;
     *reqs.Add() = bad;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 6b: 重复 GUID=1001 应失败
@@ -1121,7 +1123,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto dup = make_equip_item(1001, 3, 0);  // GUID 1001 已存在
     ItemAddRequest reqs;
     *reqs.Add() = dup;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 6c: 位置 (0,0) 被装备 1001 占用
@@ -1129,7 +1131,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto conflict = make_equip_item(9999, 0, 0);  // 新GUID但位置冲突
     ItemAddRequest reqs;
     *reqs.Add() = conflict;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   verify_container_dump(server);
@@ -1143,7 +1145,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto big = make_grid_item(kItemTypeId_2x2, 1, 4, 4);
     ItemAddRequest reqs;
     *reqs.Add() = big;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.add(checked);
   }
@@ -1172,7 +1174,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     ItemAddRequest reqs;
     *reqs.Add() = e2;
     *reqs.Add() = e3;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.add(checked);
   }
@@ -1192,7 +1194,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_sub_basic(kItemTypeId_1x1, 20, 2, 0);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     auto result = server.sub(checked);
     CASE_EXPECT_EQ(result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -1228,7 +1230,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_sub_basic(kItemTypeId_1x1, 30, 2, 0);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     server.sub(checked);
   }
   CASE_EXPECT_EQ(server.get_item_count_debug(kItemTypeId_1x1), 90);  // 只剩 (1,0)=90
@@ -1255,7 +1257,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_sub_basic(kItemTypeId_1x1, 999, 1, 0);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     // sub 应直接返回错误
     auto result = server.sub(checked);
@@ -1266,7 +1268,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_sub_basic(kEquipmentTypeId, 1, 0, 0, 0);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 11c: 装备不存在的 GUID
@@ -1274,7 +1276,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_equip_sub_by_guid(77777);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 11d: 装备 count != 1
@@ -1285,7 +1287,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     bad_sub.set_guid(1001);
     ItemSubRequest reqs;
     *reqs.Add() = bad_sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 数据不变
@@ -1310,7 +1312,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_equip_sub_by_guid(1002);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
-    auto checked = server.check_sub(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.sub(checked);
   }
@@ -1350,7 +1352,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
       move_req.move_add_entrys.push_back({entry, goal, 90});
 
-      auto checked = server.check_move(config, std::move(move_req));
+      auto checked = server.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       auto result = server.move(checked);
       CASE_EXPECT_EQ(result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -1403,7 +1405,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 40});
 
-    auto checked = server.check_move(config, std::move(move_req));
+    auto checked = server.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.move(checked);
   }
@@ -1449,7 +1451,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 10});
 
-    auto checked = server.check_move(config, std::move(move_req));
+    auto checked = server.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
     // 目标已有不同类型的entry (但同type允许合并), 这里同type应合并
     // 实际上 (5,0) 已有 40 个 1x1, 合并后 50, 不超 99, 应成功
     // 这里测试 Move 到已有装备的位置 (不同type, 不可合并)
@@ -1470,7 +1472,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 10});
 
-    auto checked = server.check_move(config, std::move(move_req));
+    auto checked = server.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
   // 数据不变
@@ -1499,7 +1501,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     goal.mutable_grid_position()->mutable_user_inventory()->set_y(0);
     move_req.move_add_entrys.push_back({entry, goal, 1});
 
-    auto checked = server.check_move(config, std::move(move_req));
+    auto checked = server.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.move(checked);
   }
@@ -1540,19 +1542,20 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
 
     // Load 1x1 在 (0,0)
     auto item = make_grid_item(kItemTypeId_1x1, 55, 0, 0);
-    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(item)));
+    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(item), item_algorithm::ItemOperationSource{}));
 
     // Load 装备 guid=2001
     auto equip = make_equip_item(2001, 1, 1);
-    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(equip)));
+    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(equip), item_algorithm::ItemOperationSource{}));
 
     // 同位置同类型 (无 GUID) 的 Load 会堆叠合并, 不会失败
     auto dup = make_grid_item(kItemTypeId_1x1, 10, 0, 0);
-    CASE_EXPECT_TRUE(load_server.load(config, make_load_entry(dup)));  // 合并到 55+10=65
+    CASE_EXPECT_TRUE(
+        load_server.load(config, make_load_entry(dup), item_algorithm::ItemOperationSource{}));  // 合并到 55+10=65
 
     // 重复 Load 同 GUID 应失败
     auto equip_dup = make_equip_item(2001, 2, 2);
-    CASE_EXPECT_FALSE(load_server.load(config, make_load_entry(equip_dup)));
+    CASE_EXPECT_FALSE(load_server.load(config, make_load_entry(equip_dup), item_algorithm::ItemOperationSource{}));
 
     CASE_EXPECT_EQ(load_server.get_item_count_debug(kItemTypeId_1x1), 65);  // 55+10 堆叠
     verify_item_count_consistency(load_server, kItemTypeId_1x1);
@@ -1587,7 +1590,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     ItemAddRequest reqs;
     *reqs.Add() = item1;
     *reqs.Add() = item2;
-    auto checked = temp.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = temp.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     temp.add(checked);
 
     // 记录添加的 entry_id, 用于后续 find_entry_by_id 校验
@@ -1653,20 +1656,21 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     ItemAddRequest ra;
     *ra.Add() = item_a;
     {
-      auto checked = grid_a.check_add(config, make_item_readable_iterable(ra));
+      auto checked = grid_a.check_add(config, make_item_readable_iterable(ra), item_algorithm::ItemOperationSource{});
       grid_a.add(checked);
     }
     ItemAddRequest rb_from_a;
     *rb_from_a.Add() = item_a;
     {
-      auto checked = grid_b.check_add(config, make_item_readable_iterable(rb_from_a));
+      auto checked =
+          grid_b.check_add(config, make_item_readable_iterable(rb_from_a), item_algorithm::ItemOperationSource{});
       grid_b.add(checked);
     }
 
     auto item_b = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
     ItemAddRequest rb;
     *rb.Add() = item_b;
-    auto checked_b = grid_a.check_add(config, make_item_readable_iterable(rb));
+    auto checked_b = grid_a.check_add(config, make_item_readable_iterable(rb), item_algorithm::ItemOperationSource{});
     grid_b.add(checked_b);
 
     // 两个 Grid 的 entry_id 独立
@@ -1698,7 +1702,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     *reqs.Add() = item2;
     *reqs.Add() = item3;
     *reqs.Add() = equip;
-    auto result = grid.check_add(config, make_item_readable_iterable(reqs));
+    auto result = grid.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     grid.add(result);
 
     PROJECT_NAMESPACE_ID::DItemGridPosition gpos00, gpos10, gpos20, gpos30;
@@ -1818,7 +1822,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto item = make_grid_item(kItemTypeId_1x1, 5, 1, 1);
     ItemAddRequest add_reqs;
     *add_reqs.Add() = item;
-    auto checked_add = container.check_add(config, make_item_readable_iterable(add_reqs));
+    auto checked_add =
+        container.check_add(config, make_item_readable_iterable(add_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked_add.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     auto add_result = container.add(checked_add);
     CASE_EXPECT_EQ(add_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -1842,7 +1847,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto sub = make_sub_basic(kItemTypeId_1x1, 3, 1, 1);
     ItemSubRequest sub_reqs;
     *sub_reqs.Add() = sub;
-    auto checked_sub = container.check_sub(config, make_item_readable_iterable(sub_reqs));
+    auto checked_sub =
+        container.check_sub(config, make_item_readable_iterable(sub_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked_sub.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     auto sub_result = container.sub(checked_sub);
     CASE_EXPECT_EQ(sub_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -1855,7 +1861,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto overflow = make_grid_item(kItemTypeId_1x1, 100, 1, 1);
     ItemAddRequest fail_reqs;
     *fail_reqs.Add() = overflow;
-    auto fail_checked = container.check_add(config, make_item_readable_iterable(fail_reqs));
+    auto fail_checked =
+        container.check_add(config, make_item_readable_iterable(fail_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(fail_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW);
     auto fail_result = container.add(fail_checked);
     CASE_EXPECT_EQ(fail_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW);
@@ -1864,7 +1871,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     auto bad_sub = make_sub_basic(kVirtualTypeId, 10);
     ItemSubRequest fail_sub_reqs;
     *fail_sub_reqs.Add() = bad_sub;
-    auto fail_sub_checked = container.check_sub(config, make_item_readable_iterable(fail_sub_reqs));
+    auto fail_sub_checked =
+        container.check_sub(config, make_item_readable_iterable(fail_sub_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_NE(fail_sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
     verify_container_dump(container);
@@ -1886,7 +1894,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       ItemAddRequest reqs;
       *reqs.Add() = i1;
       *reqs.Add() = i2;
-      auto checked = container.check_add(config, make_item_readable_iterable(reqs));
+      auto checked =
+          container.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
       container.add(checked);
     }
 
@@ -1899,7 +1908,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       ItemMoveRequest move_req;
       move_req.move_sub_entrys.push_back({entry, 5});
       move_req.move_add_entrys.push_back({entry, make_inventory_target(0, 0), 5});
-      auto checked = container.check_move(config, std::move(move_req));
+      auto checked = container.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       auto result = container.move(checked);
       CASE_EXPECT_EQ(result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -1916,7 +1925,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       ItemMoveRequest first_move;
       first_move.move_sub_entrys.push_back({entry, 3});
       first_move.move_add_entrys.push_back({entry, make_inventory_target(2, 0), 3});
-      auto first_checked = container.check_move(config, std::move(first_move));
+      auto first_checked = container.check_move(config, std::move(first_move), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(first_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(container.move(first_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -1924,7 +1933,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       ItemMoveRequest second_move;
       second_move.move_sub_entrys.push_back({entry, 2});
       second_move.move_add_entrys.push_back({entry, make_inventory_target(3, 0), 2});
-      auto second_checked = container.check_move(config, std::move(second_move));
+      auto second_checked = container.check_move(config, std::move(second_move), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(second_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(container.move(second_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     }
@@ -1964,7 +1973,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       *reqs.Add() = big;
       *reqs.Add() = s1;
       *reqs.Add() = s2;
-      auto checked = container.check_add(config, make_item_readable_iterable(reqs));
+      auto checked =
+          container.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
       container.add(checked);
     }
 
@@ -1993,7 +2003,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     move_req.move_add_entrys.push_back({s1_entry, make_inventory_target(0, 0), 10});
     move_req.move_add_entrys.push_back({s2_entry, make_inventory_target(1, 0), 20});
 
-    auto checked = container.check_move(config, std::move(move_req));
+    auto checked = container.check_move(config, std::move(move_req), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     auto result = container.move(checked);
     CASE_EXPECT_EQ(result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -2042,7 +2052,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       auto item = make_grid_item(kItemTypeId_1x1, 10, 2, 3);
       ItemAddRequest reqs;
       *reqs.Add() = item;
-      auto checked = inventory.check_add(config, make_item_readable_iterable(reqs));
+      auto checked =
+          inventory.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
       inventory.add(checked);
     }
     CASE_EXPECT_EQ(inventory.get_item_count_debug(kItemTypeId_1x1), 10);
@@ -2051,7 +2062,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     // 跨 Grid: inventory (2,3) → backpack (0,0), 6 个
     ItemSubRequest sub_requests;
     *sub_requests.Add() = make_sub_basic(kItemTypeId_1x1, 6, 2, 3);
-    auto checked_sub = inventory.check_sub(config, make_item_readable_iterable(sub_requests));
+    auto checked_sub =
+        inventory.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked_sub.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(inventory.sub(checked_sub).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -2059,7 +2071,8 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     target_item.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_character_inventory();
     ItemAddRequest add_requests;
     *add_requests.Add() = target_item;
-    auto checked_add = backpack.check_add(config, make_item_readable_iterable(add_requests));
+    auto checked_add =
+        backpack.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked_add.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(backpack.add(checked_add).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -2109,7 +2122,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     ItemAddRequest reqs;
     *reqs.Add() = new_item;
     *reqs.Add() = new_equip;
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.add(checked);
   }
@@ -2277,7 +2290,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
       inst.mutable_item_basic()->set_count(50);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2311,7 +2324,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
         inst.mutable_item_basic()->set_count(1);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-        CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+        CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
       }
     }
 
@@ -2418,7 +2431,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
         inst.mutable_item_basic()->set_count(1);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
         inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-        CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+        CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
       }
     }
 
@@ -2446,7 +2459,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
       inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
       inst.mutable_item_basic()->set_count(1);
       *inst.mutable_item_basic()->mutable_position()->mutable_grid_position() = pos_of(s);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     // 格子现在全满，第 5 件放不下 → 放入 failed_item
@@ -2583,7 +2596,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_ignore_item) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     // 消耗 A×1 (原位), 兑换 A×2
@@ -2621,7 +2634,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_ignore_item) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     // 消耗 A×1 (原位), 兑换 A×2 → 1 个堆回原位, 1 个找新位置
@@ -2665,7 +2678,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_ignore_item) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     // 消耗 A×2 (超过持有 1) → 整体失败
@@ -2804,7 +2817,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
       inst.mutable_item_basic()->set_count(59);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     // 传入 [{A,30},{A,30}]
@@ -2869,10 +2882,14 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
     grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
 
     // (0,0) 放 GUID 装备 1001, 其余 3 格放 1x1 道具 → 满背包
-    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_equip_item(1001, 0, 0))));
-    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 1, 0))));
-    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 0, 1))));
-    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 1, 1))));
+    CASE_EXPECT_TRUE(
+        grid.load(config, make_load_entry(make_equip_item(1001, 0, 0)), item_algorithm::ItemOperationSource{}));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 1, 0)),
+                               item_algorithm::ItemOperationSource{}));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 0, 1)),
+                               item_algorithm::ItemOperationSource{}));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 1, 1)),
+                               item_algorithm::ItemOperationSource{}));
 
     // 消耗装备 1001 (原位), 兑换新装备 2001
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics;
@@ -2917,7 +2934,7 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
       inst.mutable_item_basic()->set_count(50);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     // 消耗 A×50@(1,0) (整体消耗), 兑换 A×250
@@ -3212,7 +3229,7 @@ CASE_TEST(ItemContainer, find_positions_fill_container_guid) {
       inst.mutable_item_basic()->mutable_position()->set_container_guid(kContainerGuid);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     }
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -3330,7 +3347,7 @@ CASE_TEST(ItemContainer, find_positions_fit_various_sizes) {
       inst.mutable_item_basic()->set_count(1);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
       inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst)));
+      CASE_EXPECT_TRUE(grid.load(config, make_load_entry(inst), item_algorithm::ItemOperationSource{}));
     };
     load_occupy(2, 1);
     load_occupy(3, 1);
@@ -3399,7 +3416,8 @@ CASE_TEST(ItemContainer, checked_request_validation) {
   first_item.mutable_item_basic()->mutable_position()->set_container_guid(kPrimaryContainerGuid);
   ItemAddRequest first_requests;
   *first_requests.Add() = first_item;
-  auto checked_for_primary = primary_grid.check_add(config, make_item_readable_iterable(first_requests));
+  auto checked_for_primary = primary_grid.check_add(config, make_item_readable_iterable(first_requests),
+                                                    item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked_for_primary.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
   auto wrong_grid_result = secondary_grid.add(checked_for_primary);
@@ -3417,14 +3435,16 @@ CASE_TEST(ItemContainer, checked_request_validation) {
   stale_item.mutable_item_basic()->mutable_position()->set_container_guid(kPrimaryContainerGuid);
   ItemAddRequest stale_requests;
   *stale_requests.Add() = stale_item;
-  auto stale_checked = primary_grid.check_add(config, make_item_readable_iterable(stale_requests));
+  auto stale_checked = primary_grid.check_add(config, make_item_readable_iterable(stale_requests),
+                                              item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(stale_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
   auto latest_item = make_grid_item(kItemTypeId_1x1, 1, 2, 0);
   latest_item.mutable_item_basic()->mutable_position()->set_container_guid(kPrimaryContainerGuid);
   ItemAddRequest latest_requests;
   *latest_requests.Add() = latest_item;
-  auto latest_checked = primary_grid.check_add(config, make_item_readable_iterable(latest_requests));
+  auto latest_checked = primary_grid.check_add(config, make_item_readable_iterable(latest_requests),
+                                               item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(latest_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
   auto stale_result = primary_grid.add(stale_checked);
@@ -3447,7 +3467,8 @@ CASE_TEST(ItemContainer, no_position_ungrid_lifecycle) {
 
   ItemAddRequest add_requests;
   *add_requests.Add() = make_ungrid_item(kCoinTypeId, 10);
-  auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto add_checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 10);
@@ -3455,13 +3476,15 @@ CASE_TEST(ItemContainer, no_position_ungrid_lifecycle) {
 
   ItemSubRequest sub_requests;
   *sub_requests.Add() = make_sub_basic(kCoinTypeId, 4);
-  auto sub_checked = grid.check_sub(config, make_item_readable_iterable(sub_requests));
+  auto sub_checked =
+      grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.sub(sub_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 6);
   verify_item_count_consistency(grid, kCoinTypeId);
 
-  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(make_ungrid_item(kVirtualTypeId, 3))));
+  CASE_EXPECT_TRUE(
+      grid.load(config, make_load_entry(make_ungrid_item(kVirtualTypeId, 3)), item_algorithm::ItemOperationSource{}));
   CASE_EXPECT_EQ(grid.get_item_count_debug(kVirtualTypeId), 3);
   verify_item_count_consistency(grid, kVirtualTypeId);
 
@@ -3513,13 +3536,15 @@ CASE_TEST(ItemContainer, no_position_rejects_positional_items) {
 
   ItemAddRequest setup_requests;
   *setup_requests.Add() = make_ungrid_item(kCoinTypeId, 5);
-  auto setup_checked = grid.check_add(config, make_item_readable_iterable(setup_requests));
+  auto setup_checked =
+      grid.check_add(config, make_item_readable_iterable(setup_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
   ItemAddRequest grid_item_requests;
   *grid_item_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 3, 4);
-  auto grid_item_checked = grid.check_add(config, make_item_readable_iterable(grid_item_requests));
+  auto grid_item_checked =
+      grid.check_add(config, make_item_readable_iterable(grid_item_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(grid_item_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   CASE_EXPECT_EQ(grid.add(grid_item_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 5);
@@ -3527,11 +3552,13 @@ CASE_TEST(ItemContainer, no_position_rejects_positional_items) {
 
   ItemAddRequest equipment_requests;
   *equipment_requests.Add() = make_equip_item(10001, 1, 2);
-  auto equipment_checked = grid.check_add(config, make_item_readable_iterable(equipment_requests));
+  auto equipment_checked =
+      grid.check_add(config, make_item_readable_iterable(equipment_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(equipment_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   CASE_EXPECT_EQ(grid.add(equipment_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
 
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 0, 0))));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 0, 0)),
+                              item_algorithm::ItemOperationSource{}));
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 5);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 0);
 }
@@ -3546,7 +3573,8 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   // 准备一个合法条目，供 sub、move 和 load 状态不变断言使用。
   ItemAddRequest setup_requests;
   *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
-  auto setup_checked = grid.check_add(config, make_item_readable_iterable(setup_requests));
+  auto setup_checked =
+      grid.check_add(config, make_item_readable_iterable(setup_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3555,7 +3583,8 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   state.reset_call_counts();
   ItemAddRequest add_requests;
   *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
-  auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto add_checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(add_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.check_item_position_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
@@ -3565,7 +3594,8 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   state.reset_call_counts();
   ItemSubRequest sub_requests;
   *sub_requests.Add() = make_sub_basic(kItemTypeId_1x1, 1, 0, 0);
-  auto sub_checked = grid.check_sub(config, make_item_readable_iterable(sub_requests));
+  auto sub_checked =
+      grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(sub_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.check_item_position_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
@@ -3585,7 +3615,7 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   ItemMoveRequest source_move;
   source_move.move_sub_entrys.push_back({source_entry, 1});
   source_move.move_add_entrys.push_back({source_entry, make_inventory_target(1, 0), 1});
-  auto source_move_checked = grid.check_move(config, std::move(source_move));
+  auto source_move_checked = grid.check_move(config, std::move(source_move), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(source_move_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.check_item_position_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
@@ -3596,7 +3626,7 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   ItemMoveRequest target_move;
   target_move.move_sub_entrys.push_back({source_entry, 1});
   target_move.move_add_entrys.push_back({source_entry, make_inventory_target(1, 0), 1});
-  auto target_move_checked = grid.check_move(config, std::move(target_move));
+  auto target_move_checked = grid.check_move(config, std::move(target_move), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(target_move_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.check_item_position_calls, 2);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
@@ -3604,7 +3634,8 @@ CASE_TEST(ItemContainer, check_item_position_hook) {
   // load
   state.rejected_position_x = 3;
   state.reset_call_counts();
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 3, 0))));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 3, 0)),
+                              item_algorithm::ItemOperationSource{}));
   CASE_EXPECT_EQ(state.check_item_position_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
 }
@@ -3620,7 +3651,8 @@ CASE_TEST(ItemContainer, on_check_add_hook) {
   state.reject_all_add = true;
   ItemAddRequest add_requests;
   *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
-  auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto add_checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(add_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.on_check_add_calls, 1);
   CASE_EXPECT_TRUE(grid.is_empty());
@@ -3653,7 +3685,8 @@ CASE_TEST(ItemContainer, on_check_sub_hook) {
 
   ItemAddRequest setup_requests;
   *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 2, 0, 0);
-  auto setup_checked = grid.check_add(config, make_item_readable_iterable(setup_requests));
+  auto setup_checked =
+      grid.check_add(config, make_item_readable_iterable(setup_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3661,7 +3694,8 @@ CASE_TEST(ItemContainer, on_check_sub_hook) {
   state.reset_call_counts();
   ItemSubRequest sub_requests;
   *sub_requests.Add() = make_sub_basic(kItemTypeId_1x1, 1, 0, 0);
-  auto sub_checked = grid.check_sub(config, make_item_readable_iterable(sub_requests));
+  auto sub_checked =
+      grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(sub_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 2);
@@ -3676,7 +3710,8 @@ CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
 
   ItemAddRequest setup_requests;
   *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
-  auto setup_checked = grid.check_add(config, make_item_readable_iterable(setup_requests));
+  auto setup_checked =
+      grid.check_add(config, make_item_readable_iterable(setup_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3686,14 +3721,16 @@ CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
   state.reset_call_counts();
   ItemAddRequest add_requests;
   *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
-  auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto add_checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(add_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
 
   // load
   state.reset_call_counts();
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 3, 0))));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(make_grid_item(kItemTypeId_1x1, 1, 3, 0)),
+                              item_algorithm::ItemOperationSource{}));
   CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
 
@@ -3703,7 +3740,8 @@ CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
   init_test_container(source_grid);
   ItemAddRequest source_requests;
   *source_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
-  auto source_checked = source_grid.check_add(config, make_item_readable_iterable(source_requests));
+  auto source_checked = source_grid.check_add(config, make_item_readable_iterable(source_requests),
+                                              item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(source_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(source_grid.add(source_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3719,7 +3757,7 @@ CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
   state.reset_call_counts();
   ItemMoveRequest move_requests;
   move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(1, 0), 1});
-  auto move_checked = grid.check_move(config, std::move(move_requests));
+  auto move_checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(move_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 1);
@@ -3739,7 +3777,8 @@ CASE_TEST(ItemContainer, check_has) {
     ItemAddRequest add_requests;
     *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 5, 0, 0);
     *add_requests.Add() = make_equip_item(9001, 1, 0);
-    auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+    auto add_checked =
+        grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3782,7 +3821,8 @@ CASE_TEST(ItemContainer, check_has) {
     ItemAddRequest add_requests;
     *add_requests.Add() = make_ungrid_item(kCoinTypeId, 10);
     *add_requests.Add() = make_ungrid_item(kVirtualTypeId, 4);
-    auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+    auto add_checked =
+        grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3833,7 +3873,8 @@ CASE_TEST(ItemContainer, clear_resets_indexes_and_occupancy) {
   set_item_container_guid(equip, container_guid);
   *add_requests.Add() = equip;
 
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_2x2), 1);
@@ -3860,7 +3901,8 @@ CASE_TEST(ItemContainer, clear_resets_indexes_and_occupancy) {
   set_item_container_guid(reuse_equip, container_guid);
   *reuse_requests.Add() = reuse_equip;
 
-  auto reuse_checked = grid.check_add(config, make_item_readable_iterable(reuse_requests));
+  auto reuse_checked =
+      grid.check_add(config, make_item_readable_iterable(reuse_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(reuse_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(reuse_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_2x2), 1);
@@ -3879,7 +3921,8 @@ CASE_TEST(ItemContainer, load_validates_against_container_config) {
   auto seed_item = make_grid_item(kItemTypeId_1x1, 3, 0, 0);
   set_item_container_guid(seed_item, container_guid);
   *add_requests.Add() = seed_item;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3889,16 +3932,16 @@ CASE_TEST(ItemContainer, load_validates_against_container_config) {
   // 越界请求必须被拒绝, 且失败的 load 不得改动容器 (校验用的是容器自己的行列尺寸)
   auto out_of_range_item = make_grid_item(kItemTypeId_1x1, 1, 9, 9);
   set_item_container_guid(out_of_range_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(out_of_range_item)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(out_of_range_item), item_algorithm::ItemOperationSource{}));
   CASE_EXPECT_TRUE(container_state_equal(before, capture_container_state(grid, tracked_types)));
 
   // 两个不同位置的道具都要落到各自的坐标上 (位置字段映射由容器自己的 position_type 决定)
   auto first_item = make_grid_item(kItemTypeId_1x1, 2, 1, 1);
   set_item_container_guid(first_item, container_guid);
-  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(first_item)));
+  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(first_item), item_algorithm::ItemOperationSource{}));
   auto second_item = make_grid_item(kItemTypeId_1x1, 4, 2, 2);
   set_item_container_guid(second_item, container_guid);
-  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(second_item)));
+  CASE_EXPECT_TRUE(grid.load(config, make_load_entry(second_item), item_algorithm::ItemOperationSource{}));
 
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 9);  // seed 3 + 2 + 4
   CASE_EXPECT_TRUE(grid.get(make_inventory_target(1, 1).grid_position()) != nullptr);
@@ -3917,7 +3960,8 @@ CASE_TEST(ItemContainer, area_occupancy_is_rectangular_and_lookup_is_anchor_only
   auto item_2x2 = make_grid_item(kItemTypeId_2x2, 1, 0, 0);
   set_item_container_guid(item_2x2, container_guid);
   *add_requests.Add() = item_2x2;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -3941,7 +3985,8 @@ CASE_TEST(ItemContainer, area_occupancy_is_rectangular_and_lookup_is_anchor_only
   auto overlap_item = make_grid_item(kItemTypeId_1x1, 1, 1, 1);
   set_item_container_guid(overlap_item, container_guid);
   *overlap_requests.Add() = overlap_item;
-  auto overlap_checked = grid.check_add(config, make_item_readable_iterable(overlap_requests));
+  auto overlap_checked =
+      grid.check_add(config, make_item_readable_iterable(overlap_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(overlap_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED);
   CASE_EXPECT_EQ(grid.add(overlap_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED);
 
@@ -3950,7 +3995,8 @@ CASE_TEST(ItemContainer, area_occupancy_is_rectangular_and_lookup_is_anchor_only
   auto free_item = make_grid_item(kItemTypeId_1x1, 2, 3, 3);
   set_item_container_guid(free_item, container_guid);
   *free_requests.Add() = free_item;
-  auto free_checked = grid.check_add(config, make_item_readable_iterable(free_requests));
+  auto free_checked =
+      grid.check_add(config, make_item_readable_iterable(free_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(free_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(free_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 2);
@@ -3968,7 +4014,8 @@ CASE_TEST(ItemContainer, find_positions_is_read_only_plan) {
   auto seed_item = make_grid_item(kItemTypeId_1x1, 5, 0, 0);
   set_item_container_guid(seed_item, container_guid);
   *add_requests.Add() = seed_item;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4018,7 +4065,8 @@ CASE_TEST(ItemContainer, load_failure_has_no_side_effect) {
   auto seed_equip = make_equip_item(500, 3, 3);
   set_item_container_guid(seed_equip, container_guid);
   *add_requests.Add() = seed_equip;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4028,26 +4076,26 @@ CASE_TEST(ItemContainer, load_failure_has_no_side_effect) {
   // 越界
   auto out_of_range_item = make_grid_item(kItemTypeId_1x1, 1, 9, 9);
   set_item_container_guid(out_of_range_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(out_of_range_item)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(out_of_range_item), item_algorithm::ItemOperationSource{}));
 
   // 锚点已被其它类型占用 (2x2 的锚点在 (2,0))
   auto occupied_item = make_grid_item(kItemTypeId_1x1, 1, 2, 0);
   set_item_container_guid(occupied_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(occupied_item)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(occupied_item), item_algorithm::ItemOperationSource{}));
 
   // GUID 重复
   auto duplicate_guid_item = make_equip_item(500, 3, 3);
   set_item_container_guid(duplicate_guid_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(duplicate_guid_item)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(duplicate_guid_item), item_algorithm::ItemOperationSource{}));
 
   // 容器归属不匹配 (实例容器 GUID 保持 0)
   auto foreign_item = make_grid_item(kItemTypeId_1x1, 1, 1, 1);
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(foreign_item)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(foreign_item), item_algorithm::ItemOperationSource{}));
 
   // 未知道具类型
   auto unknown_item = make_grid_item(999999, 1, 1, 1);
   set_item_container_guid(unknown_item, container_guid);
-  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(unknown_item)));
+  CASE_EXPECT_FALSE(grid.load(config, make_load_entry(unknown_item), item_algorithm::ItemOperationSource{}));
 
   // 全部失败路径都不得留下任何副作用
   CASE_EXPECT_TRUE(container_state_equal(before, capture_container_state(grid, tracked_types)));
@@ -4065,7 +4113,8 @@ CASE_TEST(ItemContainer, removed_entry_stays_findable_until_last_owner_releases)
   auto seed_item = make_grid_item(kItemTypeId_1x1, 5, 0, 0);
   set_item_container_guid(seed_item, container_guid);
   *add_requests.Add() = seed_item;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4081,7 +4130,8 @@ CASE_TEST(ItemContainer, removed_entry_stays_findable_until_last_owner_releases)
   auto sub_basic = make_sub_basic(kItemTypeId_1x1, 5, 0, 0);
   set_basic_container_guid(sub_basic, container_guid);
   *sub_requests.Add() = sub_basic;
-  auto sub_checked = grid.check_sub(config, make_item_readable_iterable(sub_requests));
+  auto sub_checked =
+      grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.sub(sub_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4116,7 +4166,8 @@ CASE_TEST(ItemContainer, add_merges_ungrid_items_into_single_entry) {
   auto first_item = make_ungrid_item(kCoinTypeId, 10);
   set_item_container_guid(first_item, container_guid);
   *first_requests.Add() = first_item;
-  auto first_checked = grid.check_add(config, make_item_readable_iterable(first_requests));
+  auto first_checked =
+      grid.check_add(config, make_item_readable_iterable(first_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(first_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(first_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4124,7 +4175,8 @@ CASE_TEST(ItemContainer, add_merges_ungrid_items_into_single_entry) {
   auto second_item = make_ungrid_item(kCoinTypeId, 5);
   set_item_container_guid(second_item, container_guid);
   *second_requests.Add() = second_item;
-  auto second_checked = grid.check_add(config, make_item_readable_iterable(second_requests));
+  auto second_checked =
+      grid.check_add(config, make_item_readable_iterable(second_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(second_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(second_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4143,7 +4195,8 @@ CASE_TEST(ItemContainer, add_merges_ungrid_items_into_single_entry) {
   auto sub_basic = make_sub_basic(kCoinTypeId, 12);
   set_basic_container_guid(sub_basic, container_guid);
   *sub_requests.Add() = sub_basic;
-  auto sub_checked = grid.check_sub(config, make_item_readable_iterable(sub_requests));
+  auto sub_checked =
+      grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.sub(sub_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), 3);
@@ -4171,7 +4224,8 @@ CASE_TEST(ItemContainer, apply_entries_second_ungrid_item_is_counted) {
   auto first_item = make_ungrid_item(kCoinTypeId, 10);
   set_item_container_guid(first_item, container_guid);
   *first_requests.Add() = first_item;
-  auto first_checked = grid.check_add(config, make_item_readable_iterable(first_requests));
+  auto first_checked =
+      grid.check_add(config, make_item_readable_iterable(first_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(first_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(first_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4196,7 +4250,8 @@ CASE_TEST(ItemContainer, apply_entries_rejects_invalid_payload) {
   auto seed_item = make_grid_item(kItemTypeId_1x1, 3, 0, 0);
   set_item_container_guid(seed_item, container_guid);
   *add_requests.Add() = seed_item;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4288,7 +4343,8 @@ CASE_TEST(ItemContainer, get_entries_in_area_covers_multi_cell_items) {
   auto last_item = make_grid_item(kItemTypeId_1x1, 3, 3, 3);
   set_item_container_guid(last_item, container_guid);
   *add_requests.Add() = last_item;
-  auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+  auto checked =
+      grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -4391,7 +4447,7 @@ CASE_TEST(ItemContainer, operation_source_reaches_hooks) {
     state->last_count_context = item_algorithm::ItemOperationContext{};
     state->count_changed_calls = 0;
 
-    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(load_instance)));
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(load_instance), item_algorithm::ItemOperationSource{}));
     CASE_EXPECT_EQ(state->count_changed_calls, 1);
     CASE_EXPECT_TRUE(state->last_count_context.reason == item_algorithm::ItemOperationReason::kLoad);
     CASE_EXPECT_EQ(state->last_count_context.source.major_type, 0);
@@ -4447,7 +4503,8 @@ CASE_TEST(ItemContainer, foreach_instance_locks_container_against_mutation) {
     auto item = make_grid_item(kItemTypeId_1x1, 5, 0, 0);
     set_item_container_guid(item, container_guid);
     *add_requests.Add() = item;
-    auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+    auto checked =
+        grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4469,7 +4526,8 @@ CASE_TEST(ItemContainer, foreach_instance_locks_container_against_mutation) {
     auto add_item = make_grid_item(kItemTypeId_1x1, 1, 1, 1);
     set_item_container_guid(add_item, container_guid);
     *add_requests.Add() = add_item;
-    auto add_checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+    auto add_checked =
+        grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
     add_rejected = add_checked.result.error_code == PROJECT_NAMESPACE_ID::EN_SUCCESS &&
                    PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM == grid.add(add_checked).error_code;
 
@@ -4477,13 +4535,14 @@ CASE_TEST(ItemContainer, foreach_instance_locks_container_against_mutation) {
     auto sub_basic = make_sub_basic(kItemTypeId_1x1, 1, 0, 0);
     set_basic_container_guid(sub_basic, container_guid);
     *sub_requests.Add() = sub_basic;
-    auto sub_checked = grid.check_sub(config, make_item_readable_iterable(sub_requests));
+    auto sub_checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
     sub_rejected = sub_checked.result.error_code == PROJECT_NAMESPACE_ID::EN_SUCCESS &&
                    PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM == grid.sub(sub_checked).error_code;
 
     auto load_instance = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
     set_item_container_guid(load_instance, container_guid);
-    load_rejected = !grid.load(config, make_load_entry(load_instance));
+    load_rejected = !grid.load(config, make_load_entry(load_instance), item_algorithm::ItemOperationSource{});
 
     // 嵌套遍历同样受限, 且回调返回 false 能中断
     inner_stopped = !grid.foreach_instance([&](const PROJECT_NAMESPACE_ID::DItemInstance&) { return false; });
@@ -4503,7 +4562,8 @@ CASE_TEST(ItemContainer, foreach_instance_locks_container_against_mutation) {
   auto after_item = make_grid_item(kItemTypeId_1x1, 1, 1, 1);
   set_item_container_guid(after_item, container_guid);
   *after_requests.Add() = after_item;
-  auto after_checked = grid.check_add(config, make_item_readable_iterable(after_requests));
+  auto after_checked =
+      grid.check_add(config, make_item_readable_iterable(after_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(after_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(grid.add(after_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 }
@@ -4589,7 +4649,7 @@ CASE_TEST(ItemContainerGroup, batch_add_sub_across_containers) {
       *requests.Add() = item;
     }
 
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4610,7 +4670,7 @@ CASE_TEST(ItemContainerGroup, batch_add_sub_across_containers) {
     set_item_container_guid(item, kUnknownContainerGuid);
     *requests.Add() = item;
 
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
     // check 失败的 checked request 不能拿去执行
@@ -4637,7 +4697,7 @@ CASE_TEST(ItemContainerGroup, batch_add_sub_across_containers) {
       *requests.Add() = item;
     }
 
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_2x2);
     CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED);
@@ -4662,7 +4722,7 @@ CASE_TEST(ItemContainerGroup, batch_add_sub_across_containers) {
       *requests.Add() = sub;
     }
 
-    auto checked = group.check_sub(config, requests);
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4679,7 +4739,7 @@ CASE_TEST(ItemContainerGroup, batch_add_sub_across_containers) {
     sub.mutable_position()->set_container_guid(kContainerGuidA);
     *requests.Add() = sub;
 
-    auto checked = group.check_sub(config, requests);
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
   }
@@ -4708,7 +4768,7 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
     auto item = make_grid_item(kItemTypeId_1x1, 40, 0, 0);
     set_item_container_guid(item, kContainerGuidA);
     *requests.Add() = item;
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4737,7 +4797,7 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
   CASE_MSG_INFO() << "Case 1: 跨容器移动\n";
   {
     auto requests = make_group_move(kContainerGuidA, 0, 0, 15, kContainerGuidB, 3, 3);
-    auto checked = group.check_move(config, std::move(requests));
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4758,7 +4818,7 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
   CASE_MSG_INFO() << "Case 2: 同容器换位\n";
   {
     auto requests = make_group_move(kContainerGuidA, 0, 0, 25, kContainerGuidA, 5, 5);
-    auto checked = group.check_move(config, std::move(requests));
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4779,7 +4839,7 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
   CASE_MSG_INFO() << "Case 3: 源条目不存在\n";
   {
     auto requests = make_group_move(kContainerGuidA, 7, 7, 1, kContainerGuidB, 0, 0);
-    auto checked = group.check_move(config, std::move(requests));
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
   }
@@ -4790,7 +4850,7 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
   CASE_MSG_INFO() << "Case 4: 移动数量超过持有量\n";
   {
     auto requests = make_group_move(kContainerGuidA, 5, 5, 26, kContainerGuidB, 0, 0);
-    auto checked = group.check_move(config, std::move(requests));
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
   }
@@ -4804,7 +4864,7 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
     auto second = make_group_move(kContainerGuidA, 5, 5, 5, kContainerGuidB, 6, 6);
     requests.insert(requests.end(), second.begin(), second.end());
 
-    auto checked = group.check_move(config, std::move(requests));
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4829,13 +4889,13 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
     auto big_item = make_grid_item(kItemTypeId_2x2, 1, 1, 1);
     set_item_container_guid(big_item, kContainerGuidB);
     *pre_requests.Add() = big_item;
-    auto pre_checked = group.check_add(config, pre_requests);
+    auto pre_checked = group.check_add(config, pre_requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(pre_checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.add(pre_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
     // 从 A(5,5) 取 1 个 1x1 移到 B(1,1): B(1,1) 已被 2x2 占据, 返回 TARGET_OCCUPIED
     auto requests = make_group_move(kContainerGuidA, 5, 5, 1, kContainerGuidB, 1, 1);
-    auto checked = group.check_move(config, std::move(requests));
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_MOVE_TARGET_OCCUPIED);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
     // check 不通过时不能执行
@@ -4876,7 +4936,7 @@ CASE_TEST(ItemContainerGroup, check_has_across_containers) {
       set_item_container_guid(item, kContainerGuidB);
       *requests.Add() = item;
     }
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4921,7 +4981,8 @@ CASE_TEST(ItemContainerGroup, check_has_across_containers) {
     grid_b->clear();
     auto item = make_grid_item(kItemTypeId_2x2, 1, 4, 4);
     set_item_container_guid(item, kContainerGuidB);
-    CASE_EXPECT_TRUE(grid_b->load(config, make_load_entry(item), item_algorithm::ItemOperationReason::kReplaceLoad));
+    CASE_EXPECT_TRUE(grid_b->load(config, make_load_entry(item), item_algorithm::ItemOperationSource{},
+                                  item_algorithm::ItemOperationReason::kReplaceLoad));
   }
   // B 被整体换成新列表, A 不受影响
   CASE_EXPECT_EQ(0, count_instances_type(*grid_b, kItemTypeId_1x1));
@@ -4948,7 +5009,7 @@ CASE_TEST(ItemContainerGroup, no_position_container_rejects_move) {
     set_item_container_guid(item, kContainerGuid);
     *requests.Add() = item;
 
-    auto checked = grid.check_add(config, requests);
+    auto checked = grid.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -4967,7 +5028,7 @@ CASE_TEST(ItemContainerGroup, no_position_container_rejects_move) {
     }
   }
 
-  auto checked_move = grid.check_move(config, std::move(move_request));
+  auto checked_move = grid.check_move(config, std::move(move_request), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(checked_move.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   // check 失败后执行也会被挡下, 数据保持不变
   CASE_EXPECT_EQ(grid.move(checked_move).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -5014,7 +5075,7 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
       *requests.Add() = item;
     }
 
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5034,7 +5095,7 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
     set_item_container_guid(item, kContainerGuidA);
     *requests.Add() = item;
 
-    auto checked = group.check_add(config, requests);
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5057,7 +5118,7 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
       *requests.Add() = sub;
     }
 
-    auto checked = group.check_sub(config, requests);
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(group.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5074,7 +5135,7 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
     set_basic_container_guid(sub, kContainerGuidA);
     *requests.Add() = sub;
 
-    auto checked = group.check_sub(config, requests);
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
     CASE_EXPECT_EQ(checked.get_failed_type_id(), kCoinTypeId);
   }
@@ -5117,7 +5178,8 @@ CASE_TEST(ItemContainer, clear_then_reuse_is_consistent_for_all_modes) {
         *add_requests.Add() = big;
       }
 
-      auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+      auto checked =
+          grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
@@ -5167,7 +5229,8 @@ CASE_TEST(ItemContainer, clear_then_reuse_is_consistent_for_all_modes) {
       set_item_container_guid(equip, container_guid);
       *add_requests.Add() = equip;
 
-      auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+      auto checked =
+          grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(grid.get_item_count_debug(kEquipmentTypeId), 1);
@@ -5203,7 +5266,8 @@ CASE_TEST(ItemContainer, clear_then_reuse_is_consistent_for_all_modes) {
       set_item_container_guid(virt, container_guid);
       *add_requests.Add() = virt;
 
-      auto checked = grid.check_add(config, make_item_readable_iterable(add_requests));
+      auto checked =
+          grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
       CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
       CASE_EXPECT_EQ(grid.get_item_count_debug(kCoinTypeId), coin_count);
@@ -5246,7 +5310,7 @@ CASE_TEST(ItemContainer, client_init_from_entry_snapshot) {
     *reqs.Add() = make_equip_item(7001, 0, 0);
     *reqs.Add() = make_grid_item(kItemTypeId_1x1, 30, 1, 0);
     *reqs.Add() = make_grid_item(kItemTypeId_2x2, 1, 2, 0);
-    auto checked = server.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(server.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5272,7 +5336,8 @@ CASE_TEST(ItemContainer, client_init_from_entry_snapshot) {
   client.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
   client.clear();
   ::google::protobuf::RepeatedField<uint64_t> empty_remove_ids;
-  client.apply_entries(config, empty_remove_ids, make_item_readable_iterable(snapshot));
+  client.apply_entries(config, empty_remove_ids, make_item_readable_iterable(snapshot),
+                       item_algorithm::ItemOperationSource{});
 
   CASE_EXPECT_EQ(client.get_entry_count(), server.get_entry_count());
   for (const auto& snapshot_entry : snapshot) {
@@ -5290,13 +5355,15 @@ CASE_TEST(ItemContainer, client_init_from_entry_snapshot) {
   {
     ItemSubRequest sub_reqs;
     *sub_reqs.Add() = make_sub_basic(kItemTypeId_1x1, 10, 1, 0);
-    auto sub_checked = server.check_sub(config, make_item_readable_iterable(sub_reqs));
+    auto sub_checked =
+        server.check_sub(config, make_item_readable_iterable(sub_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(server.sub(sub_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
 
     ItemAddRequest add_reqs;
     *add_reqs.Add() = make_grid_item(kItemTypeId_1x1, 7, 0, 1);
-    auto add_checked = server.check_add(config, make_item_readable_iterable(add_reqs));
+    auto add_checked =
+        server.check_add(config, make_item_readable_iterable(add_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(server.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5339,7 +5406,7 @@ CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
     auto box = make_grid_item(kItemTypeId_2x2, 1, 2, 0);
     set_item_container_guid(box, container_guid);
     *reqs.Add() = box;
-    auto checked = origin.check_add(config, make_item_readable_iterable(reqs));
+    auto checked = origin.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(origin.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5350,7 +5417,8 @@ CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
     auto temp = make_grid_item(kItemTypeId_1x1, 1, 0, 1);
     set_item_container_guid(temp, container_guid);
     *add_reqs.Add() = temp;
-    auto checked = origin.check_add(config, make_item_readable_iterable(add_reqs));
+    auto checked =
+        origin.check_add(config, make_item_readable_iterable(add_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(origin.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5358,7 +5426,8 @@ CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
     ItemSubRequest sub_reqs;
     *sub_reqs.Add() = make_sub_basic(kItemTypeId_1x1, 1, 0, 1);
     set_basic_container_guid(sub_reqs[0], container_guid);
-    auto checked = origin.check_sub(config, make_item_readable_iterable(sub_reqs));
+    auto checked =
+        origin.check_sub(config, make_item_readable_iterable(sub_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(origin.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5386,7 +5455,7 @@ CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
   init_test_container(reload, 10, 10, container_guid, persisted_next_entry_id);
   reload.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
   for (const auto& entry : persisted) {
-    CASE_EXPECT_TRUE(reload.load(config, entry));
+    CASE_EXPECT_TRUE(reload.load(config, entry, item_algorithm::ItemOperationSource{}));
   }
   CASE_EXPECT_EQ(reload.get_entry_count(), static_cast<size_t>(3));
   CASE_EXPECT_EQ(reload.peek_next_entry_id(), persisted_next_entry_id);
@@ -5401,7 +5470,8 @@ CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
     auto extra = make_grid_item(kItemTypeId_1x1, 5, 0, 1);
     set_item_container_guid(extra, container_guid);
     *add_reqs.Add() = extra;
-    auto checked = reload.check_add(config, make_item_readable_iterable(add_reqs));
+    auto checked =
+        reload.check_add(config, make_item_readable_iterable(add_reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(reload.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
@@ -5424,7 +5494,7 @@ CASE_TEST(ItemContainer, entry_id_stable_across_reload) {
   init_test_container(reload2, 10, 10, container_guid, persisted_next_entry_id_again);
   reload2.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
   for (const auto& entry : persisted_again) {
-    CASE_EXPECT_TRUE(reload2.load(config, entry));
+    CASE_EXPECT_TRUE(reload2.load(config, entry, item_algorithm::ItemOperationSource{}));
   }
   CASE_EXPECT_EQ(reload2.get_entry_count(), reload.get_entry_count());
   CASE_EXPECT_EQ(reload2.peek_next_entry_id(), persisted_next_entry_id_again);

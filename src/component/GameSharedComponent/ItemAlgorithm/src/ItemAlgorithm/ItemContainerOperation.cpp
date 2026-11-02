@@ -469,7 +469,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainer::check_has(const excel_conf
 
 ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& config_group,
                                             const PROJECT_NAMESPACE_ID::DItemInstanceEntry& item_entry,
-                                            ItemOperationReason reason, const ItemOperationSource& source) {
+                                            const ItemOperationSource& source, ItemOperationReason reason) {
   if (!is_operation_allowed("ItemContainer::load")) {
     return false;
   }

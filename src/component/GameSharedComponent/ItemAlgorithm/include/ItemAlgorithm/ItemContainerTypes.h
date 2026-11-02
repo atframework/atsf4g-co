@@ -181,7 +181,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemAddCheckedRequest {
   ITEM_ALGORITHM_API ItemAddCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       item_instance_readable_iterable& in_requests, int64_t in_container_guid, int64_t in_operate_id,
-      const ItemOperationSource& in_source = ItemOperationSource{});
+      const ItemOperationSource& in_source);
   ItemAddCheckedRequest(const ItemAddCheckedRequest&) = delete;
   ItemAddCheckedRequest& operator=(const ItemAddCheckedRequest&) = delete;
   ITEM_ALGORITHM_API ItemAddCheckedRequest(ItemAddCheckedRequest&&) noexcept;
@@ -201,7 +201,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemSubCheckedRequest {
   ITEM_ALGORITHM_API ItemSubCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       item_basic_readable_iterable& in_requests, int64_t in_container_guid, int64_t in_operate_id,
-      const ItemOperationSource& in_source = ItemOperationSource{});
+      const ItemOperationSource& in_source);
   ItemSubCheckedRequest(const ItemSubCheckedRequest&) = delete;
   ItemSubCheckedRequest& operator=(const ItemSubCheckedRequest&) = delete;
   ITEM_ALGORITHM_API ItemSubCheckedRequest(ItemSubCheckedRequest&&) noexcept;
@@ -220,7 +220,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemMoveCheckedRequest {
   ITEM_ALGORITHM_API ItemMoveCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       ItemMoveRequest&& in_request, int64_t in_container_guid, int64_t in_operate_id,
-      const ItemOperationSource& in_source = ItemOperationSource{});
+      const ItemOperationSource& in_source);
   ItemMoveCheckedRequest(const ItemMoveCheckedRequest&) = delete;
   ItemMoveCheckedRequest& operator=(const ItemMoveCheckedRequest&) = delete;
   ITEM_ALGORITHM_API ItemMoveCheckedRequest(ItemMoveCheckedRequest&&) noexcept;

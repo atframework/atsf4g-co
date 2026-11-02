@@ -83,9 +83,11 @@ class user_container_item_operation_checked_sub_data : public item_operation_che
 class user_container_item_operation_handler : public item_operation_handler {
  public:
   item_operation_handle_checked_add_request check_add(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const override;
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&,
+      const item_algorithm::ItemOperationSource&) const override;
   item_operation_handle_checked_sub_request check_sub(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const override;
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&,
+      const item_algorithm::ItemOperationSource&) const override;
   item_operation_result check_has(
       rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const override;
 
@@ -142,17 +144,17 @@ class user_item_container_manager : public atfw::util::design_pattern::noncopyab
   // move 收完整的移动请求列表 (组内部按源 / 目标容器拆成 sub + add)。
   item_algorithm::ItemContainerGroupAddCheckedRequest check_add(
       const item_algorithm::item_instance_readable_iterable& requests,
-      const item_algorithm::ItemOperationSource& source = item_algorithm::ItemOperationSource{}) const;
+      const item_algorithm::ItemOperationSource& source) const;
   item_algorithm::ItemOperationResult add(item_algorithm::ItemContainerGroupAddCheckedRequest& checked_request);
 
   item_algorithm::ItemContainerGroupSubCheckedRequest check_sub(
       const item_algorithm::item_basic_readable_iterable& requests,
-      const item_algorithm::ItemOperationSource& source = item_algorithm::ItemOperationSource{}) const;
+      const item_algorithm::ItemOperationSource& source) const;
   item_algorithm::ItemOperationResult sub(item_algorithm::ItemContainerGroupSubCheckedRequest& checked_request);
 
   item_algorithm::ItemContainerGroupMoveCheckedRequest check_move(
       std::vector<item_algorithm::ItemContainerGroupMoveRequest>&& requests,
-      const item_algorithm::ItemOperationSource& source = item_algorithm::ItemOperationSource{}) const;
+      const item_algorithm::ItemOperationSource& source) const;
   item_algorithm::ItemOperationResult move(item_algorithm::ItemContainerGroupMoveCheckedRequest& checked_request);
 
   item_algorithm::ItemOperationResult check_has(const item_algorithm::item_basic_readable_iterable& requests) const;
