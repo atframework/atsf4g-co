@@ -36,11 +36,8 @@
 #include <algorithm>
 #include <list>
 #include <string>
+#include <unordered_map>
 #include <vector>
-
-#ifdef max
-#  undef max
-#endif
 
 namespace atframework {
 namespace mail {
@@ -70,7 +67,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_count {
     }
 
     if (mail_idx < priv_data.mail_content->attachments_size()) {
-      os << priv_data.mail_content->attachments(mail_idx).count();
+      os << priv_data.mail_content->attachments(mail_idx).item_offset().count();
     }
 
     return true;
@@ -94,7 +91,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_name {
     }
 
     if (mail_idx < priv_data.mail_content->attachments_size()) {
-      int32_t item_id = priv_data.mail_content->attachments(mail_idx).type_id();
+      int32_t item_id = priv_data.mail_content->attachments(mail_idx).item_offset().type_id();
       auto item_name = get_item_name(item_id);  // logic_item::get_item_name(item_id);
       if (item_name.empty() || atfw::util::string::trim(item_name.data(), item_name.size()).second == 0) {
         os << "[MISSING NAME:" << item_id << "]";
@@ -180,7 +177,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_list {
             break;
           }
           case fmt_t::type::kName: {
-            int32_t item_id = priv_data.mail_content->attachments(i).type_id();
+            int32_t item_id = priv_data.mail_content->attachments(i).item_offset().type_id();
             auto item_name = get_item_name(item_id);
             if (item_name.empty() || atfw::util::string::trim(item_name.data(), item_name.size()).second == 0) {
               os << "[MISSING NAME:" << item_id << "]";
@@ -190,7 +187,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_list {
             break;
           }
           case fmt_t::type::kCount: {
-            os << priv_data.mail_content->attachments(i).count();
+            os << priv_data.mail_content->attachments(i).item_offset().count();
             break;
           }
           default: {
@@ -677,7 +674,7 @@ LOBBY_RPC_API int32_t mail_render_template(
   if (conf.template_cfg->config().attachments_size() > 0) {
     out.mutable_attachments()->Reserve(conf.template_cfg->config().attachments_size());
     for (const auto& item_cfg : conf.template_cfg->config().attachments()) {
-      if (item_cfg.type_id() <= 0 || item_cfg.count() <= 0) {
+      if (item_cfg.item_offset().type_id() <= 0 || item_cfg.item_offset().count() <= 0) {
         continue;
       }
       auto* unit = out.add_attachments();
@@ -818,8 +815,7 @@ LOBBY_RPC_API int32_t mail_is_valid(rpc::context& ctx, const PROJECT_NAMESPACE_I
   return 0;
 }
 
-LOBBY_RPC_API int32_t mail_is_valid(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMailContent& content,
-                                    std::chrono::system_clock::time_point expired_time) {
+LOBBY_RPC_API int32_t mail_is_valid(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMailContent& content) {
   if (content.mail_id() == 0) {
     return PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_FOUND;
   }
@@ -830,6 +826,7 @@ LOBBY_RPC_API int32_t mail_is_valid(rpc::context& ctx, const PROJECT_NAMESPACE_I
 
   auto now = ctx.logical_now();
   auto time_tolerate = std::chrono::seconds(logic_config::me()->get_const_settings().time_tolerate());
+  auto expired_time = protobuf_to_system_clock(content.expired_time());
   if (now > expired_time + time_tolerate) {
     return PROJECT_NAMESPACE_ID::EN_ERR_MAIL_EXPIRED;
   }
@@ -983,8 +980,6 @@ LOBBY_RPC_API bool mail_is_history_removable(rpc::context& ctx, const PROJECT_NA
 LOBBY_RPC_API void mail_merge_content_and_record(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::DMailContent& out,
                                                  const PROJECT_NAMESPACE_ID::DMailContent& content,
                                                  const PROJECT_NAMESPACE_ID::DMailRecord& record) {
-  using std::max;
-
   if (&out != &content) {
     protobuf_copy_message(out, content);
   }

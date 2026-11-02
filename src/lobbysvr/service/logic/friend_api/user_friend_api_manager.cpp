@@ -54,7 +54,7 @@ user_friend_api_manager::user_friend_api_manager(user &owner)
 
 user_friend_api_manager::~user_friend_api_manager() {}
 
-void user_friend_api_manager::create_init(rpc::context &, uint32_t) {}
+void user_friend_api_manager::create_init(rpc::context &) {}
 
 void user_friend_api_manager::login_init(rpc::context &) {}
 

@@ -24,6 +24,7 @@
 #include <logic/friend_api/user_friend_api_manager.h>
 #include <logic/item/user_item_container_manager.h>
 #include <logic/item/user_item_manager.h>
+#include <logic/mail/user_mail_manager.h>
 #include <logic/matching/user_matching_manager.h>
 #include <logic/orbit/user_orbit_manager.h>
 #include <logic/rank/user_rank_manager.h>
@@ -120,6 +121,7 @@ user::user(fake_constructor &ctor)
       user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this)),
       user_item_manager_(atfw::component::memory::stl::make_strong_rc<user_item_manager>(*this)),
       user_item_container_manager_(atfw::component::memory::stl::make_strong_rc<user_item_container_manager>(*this)),
+      user_mail_manager_(atfw::component::memory::stl::make_strong_rc<user_mail_manager>(*this)),
       user_friend_api_manager_(atfw::component::memory::stl::make_strong_rc<user_friend_api_manager>(*this))
 ////////////////// 业务Manager开始 ////////////////////
 
@@ -190,7 +192,9 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
   user_team_manager_->create_init(ctx);
+  user_friend_api_manager_->create_init(ctx);
   RPC_AWAIT_IGNORE_VOID(user_item_container_manager_->create_init(ctx));
+  user_mail_manager_->create_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
   // TODO(all) init all interval checkpoint
 
@@ -253,6 +257,9 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
   user_friend_api_manager_->login_init(ctx);
 
   user_item_container_manager_->login_init(ctx);
+
+  user_mail_manager_->login_init(ctx);
+
   ////////////////// 业务Manager开始 ////////////////////
 
   set_inited();
@@ -278,6 +285,7 @@ bool user::is_dirty() const {
   USER_CHECK_RET_DIRTY(ret, user_team_manager_->is_dirty());
   USER_CHECK_RET_DIRTY(ret, user_friend_api_manager_->is_dirty());
   // USER_CHECK_RET_DIRTY(ret, user_item_container_manager_->is_dirty());
+  USER_CHECK_RET_DIRTY(ret, user_mail_manager_->is_dirty());
 
 #undef USER_CHECK_RET_DIRTY
 
@@ -293,6 +301,7 @@ void user::clear_dirty() {
   user_team_manager_->clear_dirty();
   user_friend_api_manager_->clear_dirty();
   // user_item_container_manager_->clear_dirty();
+  user_mail_manager_->clear_dirty();
 }
 
 void user::refresh_feature_limit(rpc::context &ctx) {
@@ -313,6 +322,7 @@ void user::refresh_feature_limit(rpc::context &ctx) {
     user_team_manager_->refresh_feature_limit_second(ctx);
     user_matching_manager_->refresh_feature_limit_second(ctx);
     user_friend_api_manager_->refresh_feature_limit_second(ctx);
+    user_mail_manager_->refresh_feature_limit_second(ctx);
 
     ////////////////// 业务Manager开始 ////////////////////
   }
@@ -451,6 +461,10 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_item_container_manager_->init_from_table_data(ctx, tb_user);
   }
 
+  if (tb_user.has_mail_data()) {
+    user_mail_manager_->init_from_table_data(ctx, tb_user);
+  }
+
   ////////////////// 业务Manager开始 ////////////////////
 
   trace.finish({0, {}});
@@ -500,6 +514,12 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
   ret = user_team_manager_->dump(ctx, table);
   if (ret < 0) {
     FWLOGERROR("{} dump user_team_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_mail_manager_->dump(ctx, table);
+  if (ret < 0) {
+    FWLOGERROR("{} dump user_mail_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
@@ -578,6 +598,9 @@ void user::send_all_syn_msg(rpc::context &ctx) {
     }
   }
 
+  // 邮件变更通知
+  user_mail_manager_->send_all_syn_msg(ctx);
+
   // 缓存过期更新
   user_cache_manager_->update_user_cache_info(ctx);
 
@@ -592,6 +615,16 @@ rpc::result_code_type user::await_before_logout_tasks(rpc::context &ctx) {
   }
 
   ret = RPC_AWAIT_CODE_RESULT(user_async_jobs_manager_->wait_for_async_task(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  ret = RPC_AWAIT_CODE_RESULT(user_mail_manager_->wait_for_async_task(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  ret = RPC_AWAIT_CODE_RESULT(user_friend_api_manager_->wait_for_async_task(ctx));
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -626,6 +659,7 @@ void user::clear_dirty_cache(rpc::context &ctx) {
   }
 
   // Other clear actions
+  user_mail_manager_->clear_dirty_cache();
 }
 
 namespace {

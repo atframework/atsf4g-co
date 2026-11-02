@@ -50,6 +50,8 @@
 
 #include "data/user.h"
 #include "logic/chat/user_chat_manager.h"
+#include "logic/mail/global_mail_manager.h"
+#include "logic/mail/task_action_mail_update_global_mails.h"
 #include "logic/orbit/user_orbit_manager.h"
 #include "rpc/rpc_context.h"
 
@@ -132,6 +134,14 @@ class main_service_module : public atfw::atapp::module_impl {
     task_action_ss_req_base::add_prepare_handle(task_action_prepare_for_user_initialization<task_action_ss_req_base>);
     task_action_no_req_base::add_prepare_handle(task_action_prepare_for_user_initialization<task_action_no_req_base>);
 
+    // register special handles
+    task_action_mail_update_global_mails::set_callback([](rpc::context &ctx) -> rpc::result_code_type {
+      if (!global_mail_manager::is_instance_destroyed()) {
+        global_mail_manager::me()->reset_async_jobs_protect(ctx);
+      }
+      RPC_RETURN_CODE(0);
+    });
+
     return 0;
   }
 
@@ -140,8 +150,11 @@ class main_service_module : public atfw::atapp::module_impl {
     int ret = 0;
 
     ret += session_manager::me()->proc();
-    ret += rpc::dtmq::client_subscriber::global_tick(logic_server_get_current_tick_context());
-    ret += user_chat_manager::global_tick(logic_server_get_current_tick_context());
+
+    auto &ctx = logic_server_get_current_tick_context();
+    ret += rpc::dtmq::client_subscriber::global_tick(ctx);
+    ret += user_chat_manager::global_tick(ctx);
+    ret += global_mail_manager::me()->tick(ctx);
 
     return ret;
   }

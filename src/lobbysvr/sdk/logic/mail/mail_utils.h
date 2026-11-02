@@ -69,8 +69,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API int32_t mail_is_valid(rpc::context& c
                                                                  const PROJECT_NAMESPACE_ID::DMailRecord& record);
 
 ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API int32_t mail_is_valid(rpc::context& ctx,
-                                                                 const PROJECT_NAMESPACE_ID::DMailContent& content,
-                                                                 std::chrono::system_clock::time_point expired_time);
+                                                                 const PROJECT_NAMESPACE_ID::DMailContent& content);
 
 ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API bool mail_is_expired_or_removed(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMailRecord& record);

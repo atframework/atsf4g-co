@@ -18,6 +18,7 @@ import "protocol/pbdesc/com.protocol.team.proto";
 import "protocol/pbdesc/com.protocol.user.proto";
 import "protocol/pbdesc/com.protocol.auth.proto";
 import "protocol/pbdesc/com.protocol.match.proto";
+import "protocol/pbdesc/com.protocol.mail.proto";
 import "protocol/pbdesc/com.protocol.friend_api.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -335,6 +336,50 @@ service LobbysvrClientService {
       api_name: "拒绝加入组队申请"
     };
   }
+
+
+  // ================ 邮件RPC ================
+  rpc mail_get_all(CSMailGetAllReq) returns (SCMailGetAllRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "mail"
+      api_name: "拉取邮件"
+    };
+  };
+
+  rpc mail_read(CSMailReadReq) returns (SCMailReadRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "mail"
+      api_name: "邮件标记已读"
+    };
+  };
+
+  rpc mail_read_all(CSMailReadAllReq) returns (SCMailReadAllRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "mail"
+      api_name: "邮件全部标记已读"
+    };
+  };
+
+  rpc mail_receive_attachment(CSMailReceiveAttachmentsReq) returns (SCMailReceiveAttachmentsRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "mail"
+      api_name: "邮件领取附件"
+    };
+  };
+
+  rpc mail_receive_attachment_all(CSMailReceiveAttachmentsAllReq) returns (SCMailReceiveAttachmentsAllRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "mail"
+      api_name: "邮件全部领取附件"
+    };
+  };
+
+  rpc mail_change_sync(google.protobuf.Empty) returns (stream SCMailChangeSync) {
+    option (atframework.rpc_options) = {
+      module_name: "mail"
+      api_name: "邮件变更推送"
+    };
+  };
 
   // ================ 好友RPC ================
   rpc friend_get_all(atframework.friend_api.CSFriendGetAllReq) returns (atframework.friend_api.SCFriendGetAllRsp) {

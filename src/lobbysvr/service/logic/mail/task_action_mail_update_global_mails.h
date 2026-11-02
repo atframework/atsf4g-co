@@ -1,5 +1,5 @@
 // Copyright 2026 atframework
-// @brief Created by owent with mako-generator.py at 2026-10-30 21:17:11
+// @brief Created by owent with mako-generator.py at 2026-11-02 21:09:59
 
 #pragma once
 
@@ -25,11 +25,11 @@ class task_action_mail_update_global_mails
     : public task_action_ss_rpc_base<atframework::shared::SSMailUpdateGlobalMailsSync, google::protobuf::Empty> {
  public:
   using base_type = task_action_ss_rpc_base<atframework::shared::SSMailUpdateGlobalMailsSync, google::protobuf::Empty>;
-  using message_type = base_type::message_type;
-  using msg_ref_type = base_type::msg_ref_type;
-  using msg_cref_type = base_type::msg_cref_type;
-  using rpc_request_type = base_type::rpc_request_type;
-  using rpc_response_type = base_type::rpc_response_type;
+  using base_type::message_type;
+  using base_type::msg_cref_type;
+  using base_type::msg_ref_type;
+  using base_type::rpc_request_type;
+  using base_type::rpc_response_type;
 
   using task_action_ss_req_base::operator();
 
@@ -44,4 +44,7 @@ class task_action_mail_update_global_mails
 
   ATFRAMEWORK_SHARED_LOBBYSVRSERVICE_API int on_success() override;
   ATFRAMEWORK_SHARED_LOBBYSVRSERVICE_API int on_failed() override;
+
+  ATFRAMEWORK_SHARED_LOBBYSVRSERVICE_API static void set_callback(
+      std::function<rpc::result_code_type(::rpc::context&)> fn);
 };

@@ -13,12 +13,14 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 package atframework.shared;
 
 enum EnSystemLimit {
-  // option allow_alias   = true;
+  option allow_alias   = true;
   EN_SL_NONE = 0;
   EN_SL_MAX_SS_MSG_LEN = 262144;
   EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET = 1767542400;  // 2026-01-05 00:00+08:00(Mon)
   EN_SL_USER_ASYNC_JOBS_BATCH_NUMBER = 50;
   EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES = 256;
+  EN_SL_LAZY_SAVE_COUNTER_L1 = 64;  // 如果某些模块为了减少保存次数采用缓写策略，统一采用这个值计数
+  EN_SL_LAZY_SAVE_COUNTER_L2 = 256;  // 如果某些模块为了减少保存次数采用缓写策略，统一采用这个值计数
 }
 
 enum EnGlobalUUIDMajorType {

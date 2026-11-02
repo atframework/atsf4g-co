@@ -37,6 +37,7 @@ class user_matching_manager;
 class user_team_manager;
 class user_item_manager;
 class user_item_container_manager;
+class user_mail_manager;
 class user_friend_api_manager;
 
 ////////////////// 业务Manager开始 ////////////////////
@@ -108,7 +109,7 @@ class user : public user_cache {
   };
 
  public:
-  ptr_t shared_from_this() { return std::static_pointer_cast<user>(base_type::shared_from_this()); }
+  inline ptr_t shared_from_this() { return std::static_pointer_cast<user>(base_type::shared_from_this()); }
 
  public:
   explicit user(fake_constructor &);
@@ -255,6 +256,7 @@ class user : public user_cache {
   REG_USER_MGR_PTR_DEF(user_team_manager)
   REG_USER_MGR_PTR_DEF(user_item_manager)
   REG_USER_MGR_PTR_DEF(user_item_container_manager)
+  REG_USER_MGR_PTR_DEF(user_mail_manager)
   REG_USER_MGR_PTR_DEF(user_friend_api_manager)
 
   ////////////////// 业务Manager开始 ////////////////////

@@ -32,7 +32,7 @@ message DMailContent {
   int32 status = 4;  // 仅传输据给客户端时有效， @see EnMailStatusType
   string title = 5;
   string content = 6;
-  repeated DItemOffset attachments = 7;
+  repeated DItemScopeOffset attachments = 7;
   DMailUserInfo sender = 8;
   int32 flags = 9;  // @see EnMailFlagType
 

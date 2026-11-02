@@ -129,6 +129,7 @@ service LobbysvrService {
   // 通知服务器全服邮件刷新
   rpc mail_update_global_mails(stream SSMailUpdateGlobalMailsSync) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
+      module_name: "mail"
       api_name: "通知服务器全服邮件刷新"
       descriptions: "notify server to update global mails"
       allow_no_wait: true
