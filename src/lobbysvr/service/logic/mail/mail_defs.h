@@ -44,4 +44,6 @@ struct mail_box_t {
 
   inline mail_box_t() noexcept : future_mail_count(0), future_cache_expire(std::chrono::system_clock::from_time_t(0)) {}
 };
+using mail_box_ptr_t = atfw::util::memory::strong_rc_ptr<mail_box_t>;
+using mail_box_const_ptr_t = atfw::util::memory::strong_rc_ptr<const mail_box_t>;
 using mail_record_map_t = atfw::memory::stl::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DMailRecord>;

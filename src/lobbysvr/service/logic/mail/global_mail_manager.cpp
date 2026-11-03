@@ -39,10 +39,58 @@
 
 #include <algorithm>
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "data/user.h"
 #include "logic/mail/task_action_global_mail_async_jobs.h"
+
+struct global_mail_manager::global_mail_box_type_index_cleanup_guard {
+  inline explicit global_mail_box_type_index_cleanup_guard(global_mail_manager &mgr) : lock(&mgr) {}
+
+  ~global_mail_box_type_index_cleanup_guard() {
+    if (lock == nullptr) {
+      return;
+    }
+
+    for (auto &zone_pair : check_map) {
+      uint32_t zone_id = zone_pair.first;
+      auto iter_zone = lock->mail_box_type_index_.find(zone_id);
+      if (iter_zone == lock->mail_box_type_index_.end()) {
+        continue;
+      }
+
+      for (const auto &major_type : zone_pair.second) {
+        auto iter_major_type = iter_zone->second.find(major_type);
+        if (iter_major_type == iter_zone->second.end()) {
+          continue;
+        }
+
+        if (!iter_major_type->second) {
+          iter_zone->second.erase(iter_major_type);
+          continue;
+        }
+
+        if (iter_major_type->second->mails.empty()) {
+          iter_zone->second.erase(iter_major_type);
+          continue;
+        }
+      }
+
+      if (iter_zone->second.empty()) {
+        lock->mail_box_type_index_.erase(iter_zone);
+      }
+    }
+  }
+
+  void insert(uint32_t zone_id, int32_t major_type) { check_map[zone_id].insert(major_type); }
+
+  global_mail_manager *lock;
+
+  std::unordered_map<uint32_t, std::unordered_set<int32_t>> check_map;
+};
 
 global_mail_manager::global_mail_manager()
     : task_next_timepoint_(std::chrono::system_clock::from_time_t(0)),
@@ -142,10 +190,11 @@ void global_mail_manager::reset_async_jobs_protect(rpc::context & /*ctx*/) {
 
 bool global_mail_manager::update_from_db(rpc::context &ctx, uint32_t zone_id, int32_t major_type,
                                          atfw::mail::table_global_mail_blob_data &blob_data, bool rewrite_db_data) {
+  auto type_index_cleanup_guard = make_mail_box_type_index_cleanup_guard();
   bool ret = false;
-  mail_box_t *old_mail_box = global_mail_manager::me()->internal_get_mail_box_by_type(zone_id, major_type);
+  mail_box_ptr_t old_mail_box = global_mail_manager::me()->internal_get_mail_box_by_type(zone_id, major_type);
   std::unordered_set<int64_t> invalid_ids;
-  if (nullptr != old_mail_box) {
+  if (old_mail_box) {
     invalid_ids.reserve(old_mail_box->mails.size());
     for (auto &mail : old_mail_box->mails) {
       invalid_ids.insert(mail.first);
@@ -215,6 +264,10 @@ bool global_mail_manager::update_from_db(rpc::context &ctx, uint32_t zone_id, in
     PROJECT_NAMESPACE_ID::DMailRecord &record = *blob_data.mutable_pending_to_remove(i);
     auto check_iter = check_additional_remove_list.find(record.mail_id());
     if (check_additional_remove_list.end() != check_iter) {
+      // update expired_time if removed
+      if (rewrite_db_data) {
+        protobuf_copy_message(record, *check_iter->second);
+      }
       if (atfw::mail::mail_is_history_removable(ctx, *check_iter->second)) {
         pending_to_remove_.erase(check_iter->first);
         if (rewrite_db_data) {
@@ -222,10 +275,6 @@ bool global_mail_manager::update_from_db(rpc::context &ctx, uint32_t zone_id, in
         }
         FWLOGINFO("[MAIL] global_mail_manager remove mail record ({}, {}) from pending_to_remove set",
                   record.major_type(), check_iter->first);
-      }
-      // update expired_time if removed
-      if (rewrite_db_data) {
-        protobuf_copy_message(record, *check_iter->second);
       }
 
       check_additional_remove_list.erase(check_iter);
@@ -261,13 +310,13 @@ bool global_mail_manager::update_from_db(rpc::context &ctx, uint32_t zone_id, in
 
   for (auto &mail : check_additional_remove_list) {
     if (atfw::mail::mail_is_history_removable(ctx, *mail.second)) {
+      FWLOGINFO(
+          "[MAIL] global_mail_manager remove mail record ({}, {}) from pending_to_remove set and will remove content",
+          mail.second->major_type(), mail.first);
       pending_to_remove_.erase(mail.first);
       if (rewrite_db_data) {
         pending_to_remove_contents_.insert(mail.first);
       }
-      FWLOGINFO(
-          "[MAIL] global_mail_manager remove mail record ({}, {}) from pending_to_remove set and will remove content",
-          mail.second->major_type(), mail.first);
     } else if (rewrite_db_data) {
       // 补全本地的过期队列
       protobuf_copy_message(*blob_data.add_pending_to_remove(), *mail.second);
@@ -411,6 +460,8 @@ int global_mail_manager::add_global_mail(rpc::context &ctx, uint32_t zone_id,
     return 0;
   }
 
+  auto type_index_cleanup_guard = make_mail_box_type_index_cleanup_guard();
+
   global_mail_box_t::iterator mail_box_iter = mail_box_id_index_.find(mail.mail_id());
   auto now = ctx.logical_now();
   if (mail_box_iter != mail_box_id_index_.end()) {
@@ -435,7 +486,11 @@ int global_mail_manager::add_global_mail(rpc::context &ctx, uint32_t zone_id,
     } else if (old_is_future != new_is_future) {
       auto box_iter = mail_box_type_index_[zone_id].find(mail.major_type());
       if (box_iter != mail_box_type_index_[zone_id].end()) {
-        box_iter->second.future_cache_expire = std::chrono::system_clock::from_time_t(0);
+        if (!box_iter->second) {
+          type_index_cleanup_guard->insert(zone_id, mail.major_type());
+        } else {
+          box_iter->second->future_cache_expire = std::chrono::system_clock::from_time_t(0);
+        }
       }
     }
 
@@ -463,15 +518,18 @@ int global_mail_manager::add_global_mail(rpc::context &ctx, uint32_t zone_id,
   if (!mail_data->content) {
     mail_unloaded_index_[mail_data->record->mail_id()] = mail_data;
   }
-  mail_box_t &mail_box_type_index = mail_box_type_index_[zone_id][mail_data->record->major_type()];
-  mail_box_type_index.mails[mail_data->record->mail_id()] = mail_data;
+  mail_box_ptr_t &mail_box_type_index = mail_box_type_index_[zone_id][mail_data->record->major_type()];
+  if (!mail_box_type_index) {
+    mail_box_type_index = atfw::memory::stl::make_strong_rc<mail_box_t>();
+  }
+  mail_box_type_index->mails[mail_data->record->mail_id()] = mail_data;
 
   FWLOGINFO("[MAIL] global_mail_manager add mail_id ({}, {}) success", mail.major_type(), mail.mail_id());
 
   if (protobuf_to_system_clock(mail_data->record->start_time()) > now) {
-    ++mail_box_type_index.future_mail_count;
-    if (protobuf_to_system_clock(mail_data->record->start_time()) < mail_box_type_index.future_cache_expire) {
-      mail_box_type_index.future_cache_expire = protobuf_to_system_clock(mail_data->record->start_time());
+    ++mail_box_type_index->future_mail_count;
+    if (protobuf_to_system_clock(mail_data->record->start_time()) < mail_box_type_index->future_cache_expire) {
+      mail_box_type_index->future_cache_expire = protobuf_to_system_clock(mail_data->record->start_time());
     }
   }
 
@@ -480,20 +538,20 @@ int global_mail_manager::add_global_mail(rpc::context &ctx, uint32_t zone_id,
     remove_global_mail(ctx, mail.mail_id());
   }
 
-  refresh_mail_box_future_cache(ctx, mail_box_type_index);
+  refresh_mail_box_future_cache(ctx, *mail_box_type_index);
 
   int32_t future_reserve_count = excel::get_const_config().global_future_reserve_mail_max_count_per_major_type();
-  if (future_reserve_count > mail_box_type_index.future_mail_count) {
-    future_reserve_count = mail_box_type_index.future_mail_count;
+  if (future_reserve_count > mail_box_type_index->future_mail_count) {
+    future_reserve_count = mail_box_type_index->future_mail_count;
   }
   if (future_reserve_count < 0) {
     future_reserve_count = 0;
   }
 
   int32_t max_mail_count = excel::get_const_config().global_mail_max_count_per_major_type();
-  if (max_mail_count > 0 && mail_box_type_index.mails.size() >
+  if (max_mail_count > 0 && mail_box_type_index->mails.size() >
                                 static_cast<size_t>(max_mail_count) + static_cast<size_t>(future_reserve_count)) {
-    compact_mails(ctx, mail_box_type_index);
+    compact_mails(ctx, *mail_box_type_index);
   }
   return 0;
 }
@@ -531,13 +589,19 @@ bool global_mail_manager::update_global_mail(rpc::context &ctx, uint32_t zone_id
     mail_box_iter->second.second->record->set_fetch_error_count(keep_fetch_error_count);
   }
 
+  auto type_index_cleanup_guard = make_mail_box_type_index_cleanup_guard();
+
   // 如果过期全服邮件则直接进删除队列
   if (atfw::mail::mail_is_history_removable(ctx, mail)) {
     remove_global_mail(ctx, mail.mail_id());
   } else if (old_is_future != new_is_future) {
     auto box_iter = mail_box_type_index_[zone_id].find(mail.major_type());
     if (box_iter != mail_box_type_index_[zone_id].end()) {
-      box_iter->second.future_cache_expire = std::chrono::system_clock::from_time_t(0);
+      if (!box_iter->second) {
+        type_index_cleanup_guard->insert(zone_id, mail.major_type());
+      } else {
+        box_iter->second->future_cache_expire = std::chrono::system_clock::from_time_t(0);
+      }
     }
   }
 
@@ -667,11 +731,12 @@ mail_data_ptr_t global_mail_manager::get_mail_raw(int64_t mail_id) const {
   return iter->second.second;
 }
 
-const mail_box_t *global_mail_manager::get_mail_box_by_type(uint32_t zone_id, int32_t major_type) const {
-  return const_cast<global_mail_manager *>(this)->internal_get_mail_box_by_type(zone_id, major_type);
+mail_box_const_ptr_t global_mail_manager::get_mail_box_by_type(uint32_t zone_id, int32_t major_type) const {
+  return atfw::util::memory::const_pointer_cast<const mail_box_t>(
+      const_cast<global_mail_manager *>(this)->internal_get_mail_box_by_type(zone_id, major_type));
 }
 
-mail_box_t *global_mail_manager::internal_get_mail_box_by_type(uint32_t zone_id, int32_t major_type) {
+mail_box_ptr_t global_mail_manager::internal_get_mail_box_by_type(uint32_t zone_id, int32_t major_type) {
   auto type_zone_iter = mail_box_type_index_.find(zone_id);
   if (type_zone_iter == mail_box_type_index_.end()) {
     return nullptr;
@@ -682,7 +747,7 @@ mail_box_t *global_mail_manager::internal_get_mail_box_by_type(uint32_t zone_id,
     return nullptr;
   }
 
-  return &type_iter->second;
+  return type_iter->second;
 }
 
 void global_mail_manager::remove_global_mail(rpc::context &ctx, int64_t mail_id) {
@@ -699,31 +764,31 @@ void global_mail_manager::remove_global_mail(rpc::context &ctx, int64_t mail_id)
     return;
   }
 
+  auto type_index_cleanup_guard = make_mail_box_type_index_cleanup_guard();
+
   force_users_reload_ = true;
   {
     auto type_zone_iter = mail_box_type_index_.find(zone_id);
     if (type_zone_iter == mail_box_type_index_.end()) {
       FWLOGERROR("[MAIL] global_mail_manager can not find type index of zone {} for mail {}", zone_id, mail_id);
     } else {
-      auto type_iter = type_zone_iter->second.find(id_iter->second.second->record->major_type());
+      auto major_type = id_iter->second.second->record->major_type();
+      auto type_iter = type_zone_iter->second.find(major_type);
       if (type_iter == type_zone_iter->second.end()) {
-        FWLOGERROR("[MAIL] global_mail_manager can not find type index of type {} for mail {}",
-                   id_iter->second.second->record->major_type(), mail_id);
+        FWLOGERROR("[MAIL] global_mail_manager can not find type index of type {} for mail {}", major_type, mail_id);
+      } else if (!type_iter->second) {
+        type_index_cleanup_guard->insert(zone_id, major_type);
       } else {
         // 重置未来邮件缓存
-        if (type_iter->second.future_cache_expire <=
+        if (type_iter->second->future_cache_expire <=
             protobuf_to_system_clock(id_iter->second.second->record->start_time())) {
-          type_iter->second.future_cache_expire = std::chrono::system_clock::from_time_t(0);
+          type_iter->second->future_cache_expire = std::chrono::system_clock::from_time_t(0);
         }
 
-        type_iter->second.mails.erase(mail_id);
-        if (type_iter->second.mails.empty()) {
-          type_zone_iter->second.erase(type_iter);
+        type_iter->second->mails.erase(mail_id);
+        if (type_iter->second->mails.empty()) {
+          type_index_cleanup_guard->insert(zone_id, major_type);
         }
-      }
-
-      if (type_zone_iter->second.empty()) {
-        mail_box_type_index_.erase(type_zone_iter);
       }
     }
   }
@@ -765,6 +830,7 @@ void global_mail_manager::remove_global_mail(rpc::context &ctx, int64_t mail_id)
 
 void global_mail_manager::fetch_all_unloaded_mails(rpc::context &ctx, std::vector<int64_t> &out) {
   std::vector<int64_t> invalid_mail_ids;
+  std::vector<int64_t> pending_to_remove;
   out.reserve(mail_unloaded_index_.size());
 
   // 这里面可能保护全服邮件，如果用户切换gamesvr节点，然后新的gamesvr的全服邮件缓存晚于老的，那么可能刷全服邮件cache的时候没刷进来
@@ -774,7 +840,7 @@ void global_mail_manager::fetch_all_unloaded_mails(rpc::context &ctx, std::vecto
       // 如果是全服邮件的话检查一下是否已经失效
       if (global_mail_manager::is_record_removeable(ctx, *checked.second->record)) {
         invalid_mail_ids.push_back(checked.first);
-        remove_global_mail(ctx, checked.second->record->mail_id());
+        pending_to_remove.push_back(checked.first);
       } else {
         out.push_back(checked.first);
       }
@@ -786,6 +852,10 @@ void global_mail_manager::fetch_all_unloaded_mails(rpc::context &ctx, std::vecto
   for (auto &invalid_mail_id : invalid_mail_ids) {
     mail_unloaded_index_.erase(invalid_mail_id);
   }
+
+  for (auto &mail_id : pending_to_remove) {
+    remove_global_mail(ctx, mail_id);
+  }
 }
 
 void global_mail_manager::set_mail_content_loaded(int64_t mail_id) {
@@ -794,4 +864,19 @@ void global_mail_manager::set_mail_content_loaded(int64_t mail_id) {
     mail_unloaded_index_.erase(iter);
     force_users_reload_ = true;
   }
+}
+
+atfw::util::memory::strong_rc_ptr<global_mail_manager::global_mail_box_type_index_cleanup_guard>
+global_mail_manager::make_mail_box_type_index_cleanup_guard() {
+  atfw::util::memory::strong_rc_ptr<global_mail_manager::global_mail_box_type_index_cleanup_guard> ret;
+  if (!mail_box_type_index_ref_.expired()) {
+    ret = mail_box_type_index_ref_.lock();
+  }
+
+  if (ret) {
+    return ret;
+  }
+
+  ret = atfw::memory::stl::make_strong_rc<global_mail_box_type_index_cleanup_guard>(*this);
+  return ret;
 }
