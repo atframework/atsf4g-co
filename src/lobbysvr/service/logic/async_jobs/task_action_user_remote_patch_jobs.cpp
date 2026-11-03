@@ -37,19 +37,21 @@
 #include <utility>
 #include <vector>
 
-std::unordered_map<int32_t, task_action_user_remote_patch_jobs::sync_callback_type>
-    task_action_user_remote_patch_jobs::sync_callbacks;
-std::unordered_map<int32_t, task_action_user_remote_patch_jobs::async_callback_type>
-    task_action_user_remote_patch_jobs::async_callbacks;
+#include "logic/mail/user_mail_manager.h"
 
-task_action_user_remote_patch_jobs::task_action_user_remote_patch_jobs(ctor_param_t&& param)
-    : task_action_no_req_base(param),
-      param_(param),
-      need_restart_(false),
-      is_writable_(false),
-      patched_job_number_(0) {}
+namespace {
 
-task_action_user_remote_patch_jobs::~task_action_user_remote_patch_jobs() {}
+static std::unordered_map<int32_t, task_action_user_remote_patch_jobs::sync_callback_type>&
+get_async_job_sync_callbacks() {
+  static std::unordered_map<int32_t, task_action_user_remote_patch_jobs::sync_callback_type> ret;
+  return ret;
+}
+
+static std::unordered_map<int32_t, task_action_user_remote_patch_jobs::async_callback_type>&
+get_async_job_async_callbacks() {
+  static std::unordered_map<int32_t, task_action_user_remote_patch_jobs::async_callback_type> ret;
+  return ret;
+}
 
 static rpc::result_code_type save_user_data(rpc::context& ctx, router_user_cache::ptr_t& cache, size_t batch_job_number,
                                             std::vector<uint64_t>& complete_jobs_idx, int job_type, uint64_t user_id,
@@ -89,6 +91,16 @@ static rpc::result_code_type save_user_data(rpc::context& ctx, router_user_cache
 
   RPC_RETURN_CODE(ret);
 }
+}  // namespace
+
+task_action_user_remote_patch_jobs::task_action_user_remote_patch_jobs(ctor_param_t&& param)
+    : task_action_no_req_base(param),
+      param_(param),
+      need_restart_(false),
+      is_writable_(false),
+      patched_job_number_(0) {}
+
+task_action_user_remote_patch_jobs::~task_action_user_remote_patch_jobs() {}
 
 task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jobs::operator()() {
   need_restart_ = false;
@@ -134,8 +146,9 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
 
   int ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   const ::google::protobuf::EnumDescriptor* desc = PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor();
-  for (int pull_jobs_idx = 0; desc && is_writable_ && !pending_to_logout && pull_jobs_idx < desc->value_count() &&
-                              param_.user_inst->is_inited() && false == need_restart_;
+  for (int pull_jobs_idx = 0;
+       desc != nullptr && is_writable_ && !pending_to_logout && pull_jobs_idx < desc->value_count() &&
+       param_.user_inst->is_inited() && false == need_restart_;
        ++pull_jobs_idx) {
     const ::google::protobuf::EnumValueDescriptor* val_desc = desc->value(pull_jobs_idx);
     if (NULL == val_desc) {
@@ -463,7 +476,7 @@ int task_action_user_remote_patch_jobs::on_failed() {
 }
 
 void task_action_user_remote_patch_jobs::register_sync_callbacks(int32_t type, sync_callback_type callback) {
-  if (sync_callbacks.find(type) != sync_callbacks.end()) {
+  if (get_async_job_sync_callbacks().find(type) != get_async_job_sync_callbacks().end()) {
     FWLOGERROR("sync callback for type {} is already registered", type);
     abort();
   }
@@ -471,10 +484,11 @@ void task_action_user_remote_patch_jobs::register_sync_callbacks(int32_t type, s
     FWLOGERROR("sync callback for type {} is null", type);
     abort();
   }
-  sync_callbacks[type] = callback;
+  get_async_job_sync_callbacks()[type] = callback;
 }
+
 void task_action_user_remote_patch_jobs::register_async_callbacks(int32_t type, async_callback_type callback) {
-  if (async_callbacks.find(type) != async_callbacks.end()) {
+  if (get_async_job_async_callbacks().find(type) != get_async_job_async_callbacks().end()) {
     FWLOGERROR("async callback for type {} is already registered", type);
     abort();
   }
@@ -482,7 +496,7 @@ void task_action_user_remote_patch_jobs::register_async_callbacks(int32_t type, 
     FWLOGERROR("async callback for type {} is null", type);
     abort();
   }
-  async_callbacks[type] = callback;
+  get_async_job_async_callbacks()[type] = callback;
 }
 
 int32_t task_action_user_remote_patch_jobs::do_job(int32_t job_type, const async_job_ptr_type& job_data) {
@@ -490,14 +504,14 @@ int32_t task_action_user_remote_patch_jobs::do_job(int32_t job_type, const async
     return 0;
   }
 
-  auto iter_sync = sync_callbacks.find(static_cast<int32_t>(job_data->action_case()));
-  if (iter_sync != sync_callbacks.end() && iter_sync->second) {
+  auto iter_sync = get_async_job_sync_callbacks().find(static_cast<int32_t>(job_data->action_case()));
+  if (iter_sync != get_async_job_sync_callbacks().end() && iter_sync->second != nullptr) {
     return iter_sync->second(get_shared_context(), *param_.user_inst, job_type, job_data);
   }
 
-  auto iter_async = async_callbacks.find(static_cast<int32_t>(job_data->action_case()));
-  if (iter_async != async_callbacks.end() && iter_async->second) {
-    auto fds = PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::descriptor()->FindFieldByNumber(
+  auto iter_async = get_async_job_async_callbacks().find(static_cast<int32_t>(job_data->action_case()));
+  if (iter_async != get_async_job_async_callbacks().end() && iter_async->second != nullptr) {
+    const auto* fds = PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::descriptor()->FindFieldByNumber(
         static_cast<int32_t>(job_data->action_case()));
     std::string sub_job_name;
     if (nullptr == fds) {
@@ -515,10 +529,9 @@ int32_t task_action_user_remote_patch_jobs::do_job(int32_t job_type, const async
 
     if (ret.is_error()) {
       return *ret.get_error();
-    } else {
-      append_sub_task(*ret.get_success());
     }
 
+    append_sub_task(*ret.get_success());
     return 0;
   }
 

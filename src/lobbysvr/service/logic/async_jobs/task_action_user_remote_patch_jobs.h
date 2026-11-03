@@ -59,7 +59,4 @@ class task_action_user_remote_patch_jobs : public task_action_no_req_base {
   size_t patched_job_number_;
 
   std::vector<task_type_trait::task_type> sub_tasks_;
-
-  static std::unordered_map<int32_t, sync_callback_type> sync_callbacks;
-  static std::unordered_map<int32_t, async_callback_type> async_callbacks;
 };

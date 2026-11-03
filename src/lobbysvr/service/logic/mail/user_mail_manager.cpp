@@ -47,15 +47,49 @@
 
 #include "data/user.h"
 // #include "logic/condition/user_condition_manager.h"
+#include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
 #include "logic/item/user_item_manager.h"
 #include "logic/mail/global_mail_manager.h"
+
+namespace {
+static bool init_user_mail_manager_handle() {
+  task_action_user_remote_patch_jobs::register_sync_callbacks(
+      static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kAddMail),
+      [](rpc::context &ctx, user &user_inst, int32_t /*job_type*/,
+         // NOLINTNEXTLINE(performance-unnecessary-value-param)
+         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+        const PROJECT_NAMESPACE_ID::user_async_job_add_mail &add_mail = job_data->add_mail();
+        return user_inst.get_user_mail_manager().add_mail(ctx, add_mail.mail_record());
+      });
+
+  task_action_user_remote_patch_jobs::register_sync_callbacks(
+      static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kRemoveMail),
+      [](rpc::context &ctx, user &user_inst, int32_t /*job_type*/,
+         // NOLINTNEXTLINE(performance-unnecessary-value-param)
+         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+        const PROJECT_NAMESPACE_ID::user_async_job_add_mail &remove_mail = job_data->remove_mail();
+        if (0 == remove_mail.mail_record().mail_id()) {
+          return 0;
+        }
+
+        int32_t ret = user_inst.get_user_mail_manager().remove_mail(ctx, remove_mail.mail_record().mail_id());
+        if (PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_FOUND == ret) {
+          ret = 0;
+        }
+        return ret;
+      });
+  return true;
+}
+}  // namespace
 
 user_mail_manager::user_mail_manager(user &owner)
     : owner_(&owner),
       is_dirty_(false),
       is_global_mails_merged_(false),
       lazy_save_counter_(0),
-      mail_async_task_protect_timepoint_(std::chrono::system_clock::from_time_t(0)) {}
+      mail_async_task_protect_timepoint_(std::chrono::system_clock::from_time_t(0)) {
+  ATFW_EXPLICIT_UNUSED_ATTR static bool init_handle = init_user_mail_manager_handle();
+}
 
 user_mail_manager::~user_mail_manager() {}
 
@@ -590,7 +624,8 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(
           max_diamond_count += item_count;
           continue;
         }
-        if (item_id >= PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_START && item_id < PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_END) {
+        if (item_id >= PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_START &&
+          item_id < PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_END) {
           std::list<random_pool_manager::random_result_t> rewards;
           random_pool_manager::me()->get_pool_max(item_id, rewards, item_count);
           for (auto &item : rewards) {
@@ -699,7 +734,8 @@ rpc::result_code_type user_mail_manager::receive_all(
           max_diamond_count += item_count;
           continue;
         }
-        if (item_id >= PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_START && item_id < PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_END) {
+        if (item_id >= PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_START &&
+          item_id < PROJECT_NAMESPACE_ID::EN_ITEM_RANGE_RANDOM_POOL_END) {
           std::list<random_pool_manager::random_result_t> rewards;
           random_pool_manager::me()->get_pool_max(item_id, rewards, item_count);
           for (auto &item : rewards) {
@@ -823,7 +859,7 @@ void user_mail_manager::send_all_syn_msg(rpc::context &ctx) {
     }
 
     has_data = true;
-    protobuf_copy_message(*sync_msg->add_mails(), dirty_mail.second);
+    protobuf_copy_message(*sync_msg->add_update_mails(), dirty_mail.second);
   }
 
   // 新邮件走另一个字段
@@ -1102,7 +1138,7 @@ void user_mail_manager::compact_mails(rpc::context &ctx, mail_box_t &mail_box) {
 }
 
 void user_mail_manager::scan_and_remove_expired_mails(rpc::context &ctx) {
-  // TODO 这里是全量扫描，控制下调用频率
+  // TODO(any): 这里是全量扫描，控制下调用频率
 
   std::vector<int64_t> remove_ids;
   for (auto &mail : mail_box_id_index_) {

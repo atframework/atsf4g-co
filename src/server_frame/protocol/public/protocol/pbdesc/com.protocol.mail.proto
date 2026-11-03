@@ -62,6 +62,6 @@ message SCMailReceiveAttachmentsAllRsp {
 }
 
 message SCMailChangeSync {
-  repeated DMailRecord mails = 1;       // 邮件变更、删除、已读、已领取通知
+  repeated DMailRecord update_mails = 1;       // 邮件变更、删除、已读、已领取通知
   repeated DMailContent add_mails = 2;  // 新邮件通知
 }

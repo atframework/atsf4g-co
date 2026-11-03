@@ -35,6 +35,8 @@
 #include <logic/cache/global_cache_manager.h>
 #include <logic/cache/user_cache_manager.h>
 #include <logic/chat/user_chat_manager.h>
+#include <logic/mail/mail_utils.h>
+#include <logic/mail/user_mail_manager.h>
 
 #include <memory>
 #include <sstream>
