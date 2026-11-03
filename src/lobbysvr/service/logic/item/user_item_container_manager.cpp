@@ -67,6 +67,15 @@ user_container_item_operation_handler::~user_container_item_operation_handler() 
 item_operation_handle_checked_add_request user_container_item_operation_handler::check_add(
     rpc::context&, user& user_inst, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input,
     const item_algorithm::ItemOperationSource& reason) const {
+  const int64_t virtual_container_guid =
+      user_inst.get_user_item_container_manager().get_virtual_inventory_container_guid();
+  for (auto& item : input) {
+    if (!ItemAlgorithmTypeOption::IsNeedOccupyTheGrid(item.item_basic().type_id()) &&
+        item.item_basic().position().container_guid() == 0) {
+      item.mutable_item_basic()->mutable_position()->set_container_guid(virtual_container_guid);
+    }
+  }
+
   // input 是本函数持有的数据, 视图在 check_add 期间一直有效 (组会把请求拷进各容器分片)
   auto result =
       user_inst.get_user_item_container_manager().check_add(item_algorithm::make_item_readable_iterable(input), reason);
