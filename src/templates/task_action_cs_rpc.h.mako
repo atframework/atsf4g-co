@@ -34,11 +34,11 @@ task_class_name = os.path.splitext(os.path.basename(output_render_path))[0]
 class ${task_class_name} : public task_action_cs_rpc_base<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}> {
  public:
   using base_type = task_action_cs_rpc_base<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}>;
-  using message_type = base_type::message_type;
-  using msg_ref_type = base_type::msg_ref_type;
-  using msg_cref_type = base_type::msg_cref_type;
-  using rpc_request_type  = base_type::rpc_request_type;
-  using rpc_response_type = base_type::rpc_response_type;
+  using base_type::message_type;
+  using base_type::msg_ref_type;
+  using base_type::msg_cref_type;
+  using base_type::rpc_request_type;
+  using base_type::rpc_response_type;
 
   using task_action_cs_req_base::operator();
 
