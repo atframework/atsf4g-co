@@ -54,8 +54,8 @@ func ChatSendTextMessageRpc(action base.TaskActionImpl, user user_data.User, tex
 	}
 	csBody := &public_protocol_pbdesc.CSChatSendMessageReq{
 		ChannelKey: buildChatChannelKey(user, worldPartition, privateUserId),
-		Detail: &public_protocol_pbdesc.DChannelMessageDetail{
-			Command: &public_protocol_pbdesc.DChannelMessageDetail_Text{
+		Content: &public_protocol_pbdesc.DChatMessageContent{
+			ChatType: &public_protocol_pbdesc.DChatMessageContent_Text{
 				Text: text,
 			},
 		},
