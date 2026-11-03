@@ -33,6 +33,7 @@
 #include <logic/logic_server_setup.h>
 
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 #include "logic/mail/global_mail_manager.h"
@@ -185,13 +186,23 @@ rpc::result_code_type task_action_global_mail_async_jobs::fetch_mail_contents() 
 
   int ret =
       RPC_AWAIT_CODE_RESULT(rpc::db::mail_content::batch_get_all(get_shared_context(), mail_id_keys, mail_contents));
+  int32_t first_error = ret < 0 ? ret : 0;
+  int32_t loaded_count = 0;
 
-  for (const auto& pulled_mail : mail_contents) {
+  for (size_t pulled_index = 0; pulled_index < mail_contents.size(); ++pulled_index) {
+    const auto& pulled_mail = mail_contents[pulled_index];
+    int64_t mail_id = mail_unloaded[pulled_index];
+    if (pulled_mail.result < 0 && pulled_mail.result != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+      undo_mails.erase(mail_id);
+      if (first_error == 0) {
+        first_error = pulled_mail.result;
+      }
+      continue;
+    }
     if (!pulled_mail.message) {
       continue;
     }
 
-    auto mail_id = (*pulled_mail.message)->mail_id();
     undo_mails.erase(mail_id);
     global_mail_manager::me()->set_mail_content_loaded(mail_id);
 
@@ -205,9 +216,7 @@ rpc::result_code_type task_action_global_mail_async_jobs::fetch_mail_contents() 
       mail->record->set_fetch_error_count(0);
 
       FCTXLOGDEBUG(get_shared_context(), "global_mail_manager fetch mail content of mail_id {} success", mail_id);
-      if (ret >= 0) {
-        ++ret;
-      }
+      ++loaded_count;
     } else {
       FCTXLOGDEBUG(get_shared_context(),
                    "global_mail_manager fetch mail content of mail_id {} success, but maybe already removed", mail_id);
@@ -219,7 +228,7 @@ rpc::result_code_type task_action_global_mail_async_jobs::fetch_mail_contents() 
   }
 
   if (ret >= 0) {
-    // 如果成功，则要处理一下无效的脏数据
+    // 只有明确不存在的记录才增加容错计数，临时失败不得删除有效全服邮件
     for (const auto& dirty_mail_id : undo_mails) {
       mail_data_ptr_t mail = global_mail_manager::me()->get_mail_raw(dirty_mail_id);
       // 可能已经被移除,如果被移除了，忽略即可
@@ -235,7 +244,10 @@ rpc::result_code_type task_action_global_mail_async_jobs::fetch_mail_contents() 
     }
   }
 
-  RPC_RETURN_CODE(ret);
+  if (first_error < 0) {
+    RPC_RETURN_CODE(first_error);
+  }
+  RPC_RETURN_CODE(loaded_count);
 }
 
 rpc::result_code_type task_action_global_mail_async_jobs::cleanup_removed_mails() {
@@ -257,6 +269,7 @@ rpc::result_code_type task_action_global_mail_async_jobs::cleanup_removed_mails(
     if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       FCTXLOGWARNING(get_shared_context(), "global_mail_manager delete mail content of mail_id {} failed, res: {}({})",
                      del_mail_id, res, protobuf_mini_dumper_get_error_msg(res));
+      ret = res;
       break;
     }
 

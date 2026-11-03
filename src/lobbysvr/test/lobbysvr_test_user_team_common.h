@@ -47,6 +47,7 @@
 #include <atframework/testing/runtime.h>
 
 #include <config/logic_config.h>
+#include <router/router_manager_set.h>
 
 #include <rpc/internal/rpc_template_cs_message.h>
 #include <rpc/rpc_context.h>
@@ -92,10 +93,12 @@ inline void register_lobbysvr_config_loader() {
       });
 }
 
-// Start the fixture runtime with the lobbysvr config loader installed. Team cases use {ss, cs}.
+// Start the fixture runtime with the lobbysvr config loader installed. Team cases use {ss, cs, db, router}.
 inline bool start_team_runtime(atfw::testing::runtime& test, std::vector<atfw::testing::feature> features = {
                                                                  atfw::testing::feature::ss,
                                                                  atfw::testing::feature::cs,
+                                                                 atfw::testing::feature::db,
+                                                                 atfw::testing::feature::router,
                                                              }) {
   atfw::testing::runtime_options options;
   options.features = std::move(features);
@@ -104,6 +107,9 @@ inline bool start_team_runtime(atfw::testing::runtime& test, std::vector<atfw::t
     return 0;
   };
   CASE_EXPECT_EQ(0, test.start(options));
+  if (test.is_running()) {
+    CASE_EXPECT_GE(router_manager_set::me()->tick(), 0);
+  }
   return test.is_running();
 }
 

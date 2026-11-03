@@ -66,7 +66,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_count {
       return false;
     }
 
-    if (mail_idx < priv_data.mail_content->attachments_size()) {
+    if (mail_idx >= 0 && mail_idx < priv_data.mail_content->attachments_size()) {
       os << priv_data.mail_content->attachments(mail_idx).count();
     }
 
@@ -90,7 +90,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_name {
       return false;
     }
 
-    if (mail_idx < priv_data.mail_content->attachments_size()) {
+    if (mail_idx >= 0 && mail_idx < priv_data.mail_content->attachments_size()) {
       int32_t item_id = priv_data.mail_content->attachments(mail_idx).type_id();
       auto item_name = get_item_name(item_id);  // logic_item::get_item_name(item_id);
       if (item_name.empty() || atfw::util::string::trim(item_name.data(), item_name.size()).second == 0) {
@@ -408,7 +408,7 @@ static mail_template_engine_t::getter_fn_t template_getter_creator_for_mail(cons
     return mail_template_render_getter_sender_user_id;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("receiver.profile().user_id", name.c_str())) {
+  if (0 == UTIL_STRFUNC_STRCASE_CMP("receiver.user_id", name.c_str())) {
     return mail_template_render_getter_receiver_user_id;
   }
 
@@ -566,7 +566,7 @@ LOBBY_RPC_API int32_t mail_render_template(
     return PROJECT_NAMESPACE_ID::EN_ERR_MAIL_TEMPLATE_NOT_FOUND;
   }
 
-  if (item_offest != nullptr && item_detail != nullptr) {
+  if (item_detail != nullptr) {
     return PROJECT_NAMESPACE_ID::EN_ERR_MAIL_MAIL_ITEM_INVALID;
   }
 
@@ -642,7 +642,8 @@ LOBBY_RPC_API int32_t mail_render_template(
     std::chrono::system_clock::time_point expired_time{};
     if (conf.template_cfg->config().expired_time().seconds() > 0) {
       expired_time = protobuf_to_system_clock(conf.template_cfg->config().expired_time());
-    } else if (conf.template_cfg->config().expired_duration().seconds() > 0) {
+    } else if (conf.template_cfg->config().expired_duration().seconds() > 0 ||
+               conf.template_cfg->config().expired_duration().nanos() > 0) {
       expired_time = protobuf_to_system_clock(out.start_time()) +
                      protobuf_to_system_clock(conf.template_cfg->config().expired_duration());
       // } else if (current_valid_time != nullptr && current_valid_time->end_time().seconds() > 0) {
@@ -657,7 +658,8 @@ LOBBY_RPC_API int32_t mail_render_template(
     }
     *out.mutable_expired_time() = protobuf_from_system_clock(expired_time);
   }
-  if (conf.template_cfg->config().resolve_expired_time().seconds() > 0) {
+  if (conf.template_cfg->config().resolve_expired_time().seconds() > 0 ||
+      conf.template_cfg->config().resolve_expired_time().nanos() > 0) {
     protobuf_copy_message(*out.mutable_resolve_expired_time(), conf.template_cfg->config().resolve_expired_time());
   }
 
@@ -671,7 +673,17 @@ LOBBY_RPC_API int32_t mail_render_template(
   out.set_mail_template_id(mail_template_id);
 
   // TODO(any): 附件的随机池支持
-  if (conf.template_cfg->config().attachments_size() > 0) {
+  if (item_offest != nullptr) {
+    out.clear_attachments();
+    out.mutable_attachments()->Reserve(item_offest->size());
+    for (const auto& item_cfg : *item_offest) {
+      if (item_cfg.type_id() <= 0 || item_cfg.count() <= 0) {
+        continue;
+      }
+      auto* unit = out.add_attachments();
+      protobuf_copy_message(*unit, item_cfg);
+    }
+  } else if (conf.template_cfg->config().attachments_size() > 0) {
     out.mutable_attachments()->Reserve(conf.template_cfg->config().attachments_size());
     for (const auto& item_cfg : conf.template_cfg->config().attachments()) {
       if (item_cfg.type_id() <= 0 || item_cfg.count() <= 0) {
@@ -897,7 +909,8 @@ LOBBY_RPC_API bool mail_is_removed(rpc::context& ctx, const PROJECT_NAMESPACE_ID
 
   auto now = ctx.logical_now();
   auto time_tolerate = std::chrono::seconds(logic_config::me()->get_const_settings().time_tolerate());
-  if (now > protobuf_to_system_clock(record.remove_time()) + time_tolerate) {
+  if ((record.remove_time().seconds() > 0 || record.remove_time().nanos() > 0) &&
+      now > protobuf_to_system_clock(record.remove_time()) + time_tolerate) {
     return true;
   }
 
@@ -919,7 +932,8 @@ LOBBY_RPC_API bool mail_is_removed(rpc::context& ctx, const PROJECT_NAMESPACE_ID
 
   auto now = ctx.logical_now();
   auto time_tolerate = std::chrono::seconds(logic_config::me()->get_const_settings().time_tolerate());
-  if (now > protobuf_to_system_clock(content.remove_time()) + time_tolerate) {
+  if ((content.remove_time().seconds() > 0 || content.remove_time().nanos() > 0) &&
+      now > protobuf_to_system_clock(content.remove_time()) + time_tolerate) {
     return true;
   }
 
@@ -1011,11 +1025,12 @@ LOBBY_RPC_API std::chrono::system_clock::time_point mail_padding_day_time(std::c
       static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(in.time_since_epoch()).count());
   time_t off_sec = static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(off).count());
   time_t ret = ::atfw::util::time::time_utility::get_any_day_offset(in_unix_sec, off_sec);
-  if (ret < in_unix_sec) {
-    ret += ::atfw::util::time::time_utility::DAY_SECONDS;
+  auto result = std::chrono::system_clock::from_time_t(ret) + (off - std::chrono::seconds(off_sec));
+  if (result < in) {
+    result += std::chrono::seconds(::atfw::util::time::time_utility::DAY_SECONDS);
   }
 
-  return std::chrono::system_clock::from_time_t(ret) + (off - std::chrono::seconds(off_sec));
+  return result;
 }
 
 }  // namespace mail

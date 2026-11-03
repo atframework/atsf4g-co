@@ -32,8 +32,6 @@
 
 #include "rpc/db/db_utils.h"
 #include "rpc/lobby/lobbysvrservice.atfw.gen.h"
-#include "rpc/rpc_macros.h"
-#include "rpc/rpc_utils.h"
 #include "rpc/user/user_basic.h"
 
 #include "rpc/db/uuid.h"
@@ -41,7 +39,7 @@
 namespace rpc {
 namespace async_jobs {
 
-namespace detail {
+namespace {
 // 如果短期内发生太多次针对同一用户得在线表拉取，则直接用缓存。这可以优化短期频繁拉取login表，并且异步任务就算过期也只是回延后触发，不影响逻辑
 static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t user_id,
                                                     shared_message<PROJECT_NAMESPACE_ID::table_login_lock>& rsp,
@@ -72,7 +70,12 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   }
   RPC_RETURN_CODE(ret);
 }
-}  // namespace detail
+}  // namespace
+
+LOBBY_RPC_API std::string make_custom_action_uuid(gsl::string_view type, gsl::string_view suffix) {
+  // 注意选用的算法不要和下面 set_action_uuid 冲突
+  return atfw::util::string::format("J-{}:{}", type, suffix);
+}
 
 LOBBY_RPC_API ::rpc::db::result_type get_jobs(
     rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
@@ -83,7 +86,8 @@ LOBBY_RPC_API ::rpc::db::result_type get_jobs(
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (NULL == PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (nullptr ==
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -99,7 +103,8 @@ LOBBY_RPC_API ::rpc::db::result_type del_jobs(rpc::context& ctx, int32_t jobs_ty
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (NULL == PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (nullptr ==
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
                zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -122,7 +127,8 @@ LOBBY_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_ty
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (NULL == PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (nullptr ==
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -135,10 +141,11 @@ LOBBY_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_ty
   }
 
   if (in->action_uuid().empty()) {
+    // 注意选用的算法不能和上面 make_custom_action_uuid 冲突
     in->set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
-  in->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
-                       atfw::util::time::time_utility::get_now_usec() / 1000);
+  in->set_timepoint_ms((atfw::util::time::time_utility::get_now() * 1000) +
+                       (atfw::util::time::time_utility::get_now_usec() / 1000));
 
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs> input{ctx};
   input->set_job_type(jobs_type);
@@ -160,8 +167,7 @@ LOBBY_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_ty
     shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
     shared_message<PROJECT_NAMESPACE_ID::SSUserAsyncJobsSync> req_body{ctx};
     req_body->set_job_type(jobs_type);
-    auto res =
-        RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
+    auto res = RPC_AWAIT_CODE_RESULT(fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
         FWLOGWARNING("rpc::db::login_lock::get({}) but not found, maybe not created yet", user_id);
@@ -200,7 +206,8 @@ LOBBY_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t 
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (NULL == PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (nullptr ==
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
                zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -209,9 +216,9 @@ LOBBY_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t 
   RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::remove_all(ctx, jobs_type, user_id, zone_id)));
 }
 
-LOBBY_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
+LOBBY_RPC_API ::rpc::db::result_type update_jobs(::rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
                                                  uint32_t zone_id,
-                                                 shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs>& input,
+                                                 shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& input,
                                                  uint64_t record_index, action_options options) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
@@ -219,26 +226,32 @@ LOBBY_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (NULL == PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+  if (nullptr ==
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == input->job_data().action_case()) {
+  if (PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::ACTION_NOT_SET == input->action_case()) {
     FWLOGERROR("{} be called without a action.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type, user_id,
                zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (input->job_data().action_uuid().empty()) {
-    input->mutable_job_data()->set_action_uuid(rpc::db::uuid::generate_short_uuid());
+  if (input->action_uuid().empty()) {
+    input->set_action_uuid(rpc::db::uuid::generate_short_uuid());
   }
 
-  input->mutable_job_data()->set_timepoint_ms(util::time::time_utility::get_now() * 1000 +
-                                              atfw::util::time::time_utility::get_now_usec() / 1000);
+  input->set_timepoint_ms((atfw::util::time::time_utility::get_now() * 1000) +
+                          (atfw::util::time::time_utility::get_now_usec() / 1000));
 
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::update(ctx, record_index, std::move(input)));
+  auto job_record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs>(ctx);
+  job_record->set_job_type(jobs_type);
+  job_record->set_user_id(user_id);
+  job_record->set_zone_id(zone_id);
+  protobuf_copy_message(*job_record->mutable_job_data(), *input);
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::update(ctx, record_index, std::move(job_record)));
   if (0 != ret) {
     RPC_DB_RETURN_CODE(ret);
   }
@@ -252,8 +265,7 @@ LOBBY_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs
     shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
     shared_message<PROJECT_NAMESPACE_ID::SSUserAsyncJobsSync> req_body{ctx};
 
-    auto res =
-        RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
+    auto res = RPC_AWAIT_CODE_RESULT(fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
     if (res < 0) {
       if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
         FWLOGWARNING("rpc::db::login_lock::get({}, {}) but not found, maybe not created yet", user_id, zone_id);

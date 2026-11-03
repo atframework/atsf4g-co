@@ -429,7 +429,7 @@ void global_mail_manager::update_global_mail_record(rpc::context &ctx, PROJECT_N
 
   // 结算首次刷新
   if (dst.delivery_time().seconds() <= 0) {
-    if (src.resolve_expired_time().seconds() <= 0) {
+    if (src.resolve_expired_time().seconds() <= 0 && src.resolve_expired_time().nanos() <= 0) {
       protobuf_copy_message(*dst.mutable_delivery_time(), src.delivery_time());
       protobuf_copy_message(*dst.mutable_expired_time(), src.expired_time());
       protobuf_copy_message(*dst.mutable_remove_time(), src.remove_time());

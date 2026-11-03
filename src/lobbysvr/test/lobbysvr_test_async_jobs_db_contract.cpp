@@ -74,6 +74,20 @@ CASE_TEST(component_lobbysvr, async_jobs_db_contract) {
     CASE_EXPECT_EQ(kUserId, static_cast<uint64_t>((*out[0].message)->user_id()));
     CASE_EXPECT_TRUE(!(*out[0].message)->job_data().action_uuid().empty());
 
+    rpc::shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> updated_job{ctx};
+    updated_job->mutable_debug_message();
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::async_jobs::update_jobs(ctx, kJobsType, kUserId, kZoneId, updated_job, out[0].list_index));
+    CASE_EXPECT_EQ(0, res);
+    out.clear();
+    res = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::get_jobs(ctx, kJobsType, kUserId, kZoneId, out));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(2, static_cast<int>(out.size()));
+    if (out.size() == 2) {
+      CASE_EXPECT_TRUE((*out[0].message)->job_data().has_debug_message());
+      CASE_EXPECT_EQ(2, static_cast<int>(out[1].list_index));
+    }
+
     // Remove the first index; the other survives.
     res = RPC_AWAIT_CODE_RESULT(
         rpc::async_jobs::del_jobs(ctx, kJobsType, kUserId, kZoneId, std::vector<uint64_t>{out[0].list_index}));
@@ -99,11 +113,13 @@ CASE_TEST(component_lobbysvr, async_jobs_db_contract) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  // Engine history: 2 KL adds + 1 remove_by_index + 3 get_all on the async_jobs table.
+  // Engine history: 2 KL adds + 1 update + 1 remove_by_index + 4 get_all on the async_jobs table.
   CASE_EXPECT_EQ(2, static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_add_index)));
   CASE_EXPECT_EQ(1,
+                 static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_update_by_index)));
+  CASE_EXPECT_EQ(1,
                  static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_remove_by_index)));
-  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_get_all)));
+  CASE_EXPECT_EQ(4, static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_get_all)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

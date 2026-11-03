@@ -4,6 +4,7 @@
 
 #include "rpc/mail/global_mail.h"
 
+#include <atframe/atapp_conf.h>
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>
@@ -124,9 +125,9 @@ static void compact_mails(rpc::context &ctx, atfw::mail::table_global_mail_blob_
         compact_time = delivery_time + delivery_time_max_offset;
       }
 
-      if (selected_idx == -1 || delivery_time < select_mail_compact_time) {
+      if (selected_idx == -1 || compact_time < select_mail_compact_time) {
         selected_idx = i;
-        select_mail_compact_time = delivery_time;
+        select_mail_compact_time = compact_time;
       }
     }
 
@@ -205,7 +206,7 @@ LOBBY_RPC_API result_code_type add_global_mail(rpc::context &ctx, PROJECT_NAMESP
   }
 
   // check title/content
-  if (mail.title().empty() || mail.content().empty()) {
+  if (mail.mail_template_id() <= 0 && (mail.title().empty() || mail.content().empty())) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
@@ -236,7 +237,7 @@ LOBBY_RPC_API result_code_type add_global_mail(rpc::context &ctx, PROJECT_NAMESP
                                    protobuf_to_system_clock(::excel::get_const_config().mail_default_expire()));
   }
   if (mail.remove_time().seconds() <= 0) {
-    if (mail.resolve_expired_time().seconds() > 0) {
+    if (mail.resolve_expired_time().seconds() > 0 || mail.resolve_expired_time().nanos() > 0) {
       *mail.mutable_remove_time() = protobuf_from_system_clock(atfw::mail::mail_padding_day_time(
           protobuf_to_system_clock(mail.expired_time()) + protobuf_to_system_clock(mail.resolve_expired_time())));
     } else {
@@ -260,6 +261,22 @@ LOBBY_RPC_API result_code_type add_global_mail(rpc::context &ctx, PROJECT_NAMESP
   protobuf_copy_message(*mail_table->mutable_blob_data()->mutable_mail_content(), mail);
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::mail_content::insert(ctx, mail_table, nullptr));
+  if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
+    auto existing_content = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_mail_content>(ctx);
+    uint64_t existing_version = 0;
+    ret =
+        RPC_AWAIT_CODE_RESULT(rpc::db::mail_content::get_all(ctx, mail.mail_id(), *existing_content, existing_version));
+    if (ret < 0) {
+      RPC_RETURN_CODE(ret);
+    }
+    if (!atfw::atapp::protobuf_equal(existing_content->blob_data().mail_content(),
+                                     mail_table->blob_data().mail_content())) {
+      FCTXLOGERROR(ctx, "task {} add_mail_content({}) for global conflicts with different existing content",
+                   ctx.get_task_context().task_id, mail.mail_id());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS);
+    }
+    ret = 0;
+  }
   if (ret < 0) {
     FCTXLOGERROR(ctx, "task {} add_mail_content({}) for global failed, res: {}({})", ctx.get_task_context().task_id,
                  mail.mail_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
@@ -288,10 +305,19 @@ LOBBY_RPC_API result_code_type add_global_mail(rpc::context &ctx, PROJECT_NAMESP
       continue;
     }
 
-    // 可能时新增数据，强制赋值一下
+    // 可能是新增数据，强制赋值一下
     db_table->set_zone_id(zone_id);
     db_table->set_major_type(mail.major_type());
-    PROJECT_NAMESPACE_ID::DMailRecord *mail_record = db_table->mutable_blob_data()->add_mail_records();
+    PROJECT_NAMESPACE_ID::DMailRecord *mail_record = nullptr;
+    for (int index = 0; index < db_table->blob_data().mail_records_size(); ++index) {
+      if (db_table->blob_data().mail_records(index).mail_id() == mail.mail_id()) {
+        mail_record = db_table->mutable_blob_data()->mutable_mail_records(index);
+        break;
+      }
+    }
+    if (mail_record == nullptr) {
+      mail_record = db_table->mutable_blob_data()->add_mail_records();
+    }
     if (nullptr == mail_record) {
       FCTXLOGERROR(ctx, "get_global_mail({}, {}) failed, malloc failed", zone_id, mail.major_type());
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;

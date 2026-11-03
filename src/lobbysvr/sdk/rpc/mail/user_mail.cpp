@@ -4,8 +4,10 @@
 
 #include "rpc/mail/user_mail.h"
 
+#include <atframe/atapp_conf.h>
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
+#include <string/string_format.h>
 #include <time/time_utility.h>
 
 // clang-format off
@@ -33,6 +35,8 @@
 #include <dispatcher/task_manager.h>
 
 #include <chrono>
+#include <string>
+#include <utility>
 
 #include "rpc/rpc_context.h"
 
@@ -68,16 +72,20 @@ LOBBY_RPC_API result_code_type add_user_mail(rpc::context &ctx, uint64_t user_id
   }
 
   // setup delivery_time,show_time,start_time,expired_time
-  if (mail.delivery_time().seconds() <= 0) {
+  const bool use_default_delivery_time = mail.delivery_time().seconds() <= 0;
+  const bool use_default_show_time = mail.show_time().seconds() <= 0;
+  const bool use_default_start_time = mail.start_time().seconds() <= 0;
+  const bool use_default_expired_time = mail.expired_time().seconds() <= 0;
+  if (use_default_delivery_time) {
     *mail.mutable_delivery_time() = protobuf_from_system_clock(ctx.logical_now());
   }
-  if (mail.show_time().seconds() <= 0) {
+  if (use_default_show_time) {
     protobuf_copy_message(*mail.mutable_show_time(), mail.delivery_time());
   }
-  if (mail.start_time().seconds() <= 0) {
+  if (use_default_start_time) {
     protobuf_copy_message(*mail.mutable_start_time(), mail.delivery_time());
   }
-  if (mail.expired_time().seconds() <= 0) {
+  if (use_default_expired_time) {
     auto expired_time = protobuf_to_system_clock(mail.start_time()) +
                         protobuf_to_system_clock(::excel::get_const_config().mail_default_expire());
     *mail.mutable_expired_time() = protobuf_from_system_clock(expired_time);
@@ -141,9 +149,66 @@ LOBBY_RPC_API result_code_type add_user_mail(rpc::context &ctx, uint64_t user_id
   }
 
   auto mail_table = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_mail_content>(ctx);
+  mail_table->set_mail_id(mail_record->mail_id());
+  mail_table->mutable_blob_data()->mutable_receiver()->set_user_id(user_id);
+  mail_table->mutable_blob_data()->mutable_receiver()->set_zone_id(zone_id);
   protobuf_move_message(*mail_table->mutable_blob_data()->mutable_mail_content(), std::move(mail));
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::mail_content::insert(ctx, mail_table, nullptr));
+
+  if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
+    auto existing_content = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_mail_content>(ctx);
+    uint64_t existing_version = 0;
+    ret = RPC_AWAIT_CODE_RESULT(
+        rpc::db::mail_content::get_all(ctx, mail_table->mail_id(), *existing_content, existing_version));
+    if (ret < 0) {
+      RPC_RETURN_CODE(ret);
+    }
+    if (existing_content->blob_data().receiver().user_id() != user_id ||
+        existing_content->blob_data().receiver().zone_id() != zone_id) {
+      FCTXLOGERROR(ctx, "task {} add_mail_content({}) for user {} conflicts with a different receiver",
+                   ctx.get_task_context().task_id, mail_record->mail_id(), user_id);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS);
+    }
+
+    auto *normalized_content = mail_table->mutable_blob_data()->mutable_mail_content();
+    if (use_default_delivery_time) {
+      protobuf_copy_message(*normalized_content->mutable_delivery_time(),
+                            existing_content->blob_data().mail_content().delivery_time());
+    }
+    if (use_default_show_time) {
+      protobuf_copy_message(*normalized_content->mutable_show_time(),
+                            existing_content->blob_data().mail_content().show_time());
+    }
+    if (use_default_start_time) {
+      protobuf_copy_message(*normalized_content->mutable_start_time(),
+                            existing_content->blob_data().mail_content().start_time());
+    }
+    if (use_default_expired_time) {
+      protobuf_copy_message(*normalized_content->mutable_expired_time(),
+                            existing_content->blob_data().mail_content().expired_time());
+    }
+
+    if (!atfw::atapp::protobuf_equal(existing_content->blob_data().mail_content(),
+                                     mail_table->blob_data().mail_content())) {
+      FCTXLOGERROR(ctx, "task {} add_mail_content({}) for user {} conflicts with different existing content",
+                   ctx.get_task_context().task_id, mail_record->mail_id(), user_id);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS);
+    }
+
+    protobuf_copy_message(*mail_record->mutable_delivery_time(), normalized_content->delivery_time());
+    protobuf_copy_message(*mail_record->mutable_show_time(), normalized_content->show_time());
+    protobuf_copy_message(*mail_record->mutable_start_time(), normalized_content->start_time());
+    protobuf_copy_message(*mail_record->mutable_expired_time(), normalized_content->expired_time());
+    ttl_second = PROJECT_NAMESPACE_ID::EN_CL_MAIL_GLOBAL_LEAK_CHECK_TIMEOUT;
+    timeout = static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                      protobuf_to_system_clock(normalized_content->expired_time()) - ctx.logical_now())
+                                      .count());
+    if (timeout > 0) {
+      ttl_second += static_cast<uint64_t>(timeout);
+    }
+    ret = 0;
+  }
 
   if (ret < 0) {
     FCTXLOGERROR(ctx, "task {} add_mail_content({}) for user {} failed, res: {}({})", ctx.get_task_context().task_id,
@@ -162,6 +227,7 @@ LOBBY_RPC_API result_code_type add_user_mail(rpc::context &ctx, uint64_t user_id
   FCTXLOGINFO(ctx, "task {} add_mail_content({}) for user {} success", ctx.get_task_context().task_id,
               mail_record->mail_id(), user_id);
 
+  async_job->set_action_uuid(rpc::async_jobs::make_custom_action_uuid("mail", mail_record->mail_id()));
   ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::add_jobs(ctx, jobs_type, user_id, zone_id, async_job));
   RPC_RETURN_CODE(ret);
 }

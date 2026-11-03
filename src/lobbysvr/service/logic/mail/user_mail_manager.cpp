@@ -57,6 +57,26 @@
 
 namespace {
 
+static int32_t mail_is_valid_with_record(rpc::context &ctx, const mail_data_t &mail) {
+  if (!mail.record || !mail.content) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_FOUND;
+  }
+
+  auto time_tolerate = std::chrono::seconds(logic_config::me()->get_const_settings().time_tolerate());
+  if (ctx.logical_now() + time_tolerate < protobuf_to_system_clock(mail.record->start_time())) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_START;
+  }
+  return atfw::mail::mail_is_valid(ctx, *mail.record);
+}
+
+static bool mail_should_remove_after_attachment(const mail_data_t &mail, bool need_remove) {
+  if (!need_remove || !mail.content) {
+    return false;
+  }
+  // NOLINTNEXTLINE(bugprone-signed-bitwise)
+  return 0 == (mail.content->flags() & PROJECT_NAMESPACE_ID::EN_MAIL_FLAG_KEEP_AFTER_TAKE_ATTACHMENTS);
+}
+
 static void global_mail_gm_add_global_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
                                            const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
                                            atfw::util::cli::cmd_option_list &params) {
@@ -294,7 +314,7 @@ int user_mail_manager::dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user 
   scan_and_remove_expired_mails(ctx);
 
   PROJECT_NAMESPACE_ID::user_mail_data *mail_data = user.mutable_mail_data();
-  if (NULL == mail_data) {
+  if (nullptr == mail_data) {
     FWLOGERROR("{} malloc user_mail_data failed", *owner_);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
@@ -441,7 +461,7 @@ int user_mail_manager::add_mail(rpc::context &ctx, const PROJECT_NAMESPACE_ID::D
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
-  if (NULL != content) {
+  if (nullptr != content) {
     mail_data->content = gsl::make_unique<PROJECT_NAMESPACE_ID::DMailContent>();
     if (mail_data->content) {
       protobuf_copy_message(*mail_data->content, *content);
@@ -584,17 +604,12 @@ int user_mail_manager::read_mail(rpc::context &ctx, int64_t mail_id,
   mail_data_ptr_t mail = get_mail_raw(mail_id);
   do {
     if (!mail || !mail->content || !mail->record) {
-      if (!need_remove) {
-        ret = PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_FOUND;
-      }
+      ret = PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_FOUND;
       break;
     }
 
-    ret = atfw::mail::mail_is_valid(ctx, *mail->content);
+    ret = mail_is_valid_with_record(ctx, *mail);
     if (ret < 0) {
-      if (ret == PROJECT_NAMESPACE_ID::EN_ERR_MAIL_NOT_FOUND && need_remove) {
-        ret = 0;
-      }
       break;
     }
 
@@ -653,7 +668,7 @@ int user_mail_manager::read_all(
       continue;
     }
 
-    if (0 != atfw::mail::mail_is_valid(ctx, *mail.second->content)) {
+    if (0 != mail_is_valid_with_record(ctx, *mail.second)) {
       continue;
     }
 
@@ -724,7 +739,7 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(
       break;
     }
 
-    ret = atfw::mail::mail_is_valid(ctx, *mail->content);
+    ret = mail_is_valid_with_record(ctx, *mail);
     if (ret < 0) {
       break;
     }
@@ -772,13 +787,15 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(
     if (0 == (mail->record->status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT)) {
       ret = RPC_AWAIT_CODE_RESULT(receive_mail_attachments(ctx, *mail, need_remove));
 
-      if (need_remove) {
-        remove_user_mail(ctx, mail_id);
-      } else {
-        mutable_dirty_mail(*mail->record);
+      if (ret >= 0) {
+        if (mail_should_remove_after_attachment(*mail, need_remove)) {
+          remove_user_mail(ctx, mail_id);
+        } else {
+          mutable_dirty_mail(*mail->record);
+        }
       }
     } else {
-      if (need_remove) {
+      if (mail_should_remove_after_attachment(*mail, need_remove)) {
         remove_user_mail(ctx, mail_id);
       }
       ret = PROJECT_NAMESPACE_ID::EN_ERR_MAIL_ALREADY_RECEIVED;
@@ -818,7 +835,7 @@ rpc::result_code_type user_mail_manager::receive_all(
       continue;
     }
 
-    if (0 != atfw::mail::mail_is_valid(ctx, *mail.second->content)) {
+    if (0 != mail_is_valid_with_record(ctx, *mail.second)) {
       continue;
     }
 
@@ -883,15 +900,19 @@ rpc::result_code_type user_mail_manager::receive_all(
 
   int ret = 0;
   for (auto &mail : mail_box) {
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
+    bool already_received = 0 != (mail->record->status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT);
     int res = RPC_AWAIT_CODE_RESULT(receive_mail_attachments(ctx, *mail, need_remove));
     if (res < 0) {
       ret = res;
     }
 
-    if (need_remove) {
-      remove_user_mail(ctx, mail->record->mail_id());
-    } else {
-      mutable_dirty_mail(*mail->record);
+    if (res >= 0 && (!already_received || mail_should_remove_after_attachment(*mail, need_remove))) {
+      if (mail_should_remove_after_attachment(*mail, need_remove)) {
+        remove_user_mail(ctx, mail->record->mail_id());
+      } else {
+        mutable_dirty_mail(*mail->record);
+      }
     }
 
     if (nullptr != out) {
@@ -955,7 +976,18 @@ bool user_mail_manager::is_mail_shown(rpc::context &ctx, const PROJECT_NAMESPACE
 }
 
 bool user_mail_manager::is_mail_shown(rpc::context &ctx, const mail_data_ptr_t &mail) {
-  return mail && mail->record && mail->content && is_mail_shown(ctx, *mail->content);
+  if (!mail || !mail->record || !mail->content) {
+    return false;
+  }
+
+  // NOLINTNEXTLINE(bugprone-signed-bitwise)
+  if (0 != (mail->record->status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_REMOVED)) {
+    return false;
+  }
+
+  auto now = ctx.logical_now();
+  return now >= protobuf_to_system_clock(mail->record->show_time()) &&
+         now < protobuf_to_system_clock(mail->record->expired_time());
 }
 
 void user_mail_manager::send_all_syn_msg(rpc::context &ctx) {
@@ -1013,7 +1045,7 @@ void user_mail_manager::send_all_syn_msg(rpc::context &ctx) {
     }
 
     PROJECT_NAMESPACE_ID::DMailContent *added_mail = sync_msg->add_add_mails();
-    if (NULL != added_mail) {
+    if (nullptr != added_mail) {
       dirty_cache_.new_mails.erase(mail_id);
       atfw::mail::mail_merge_content_and_record(ctx, *added_mail, *id_iter->second->content, *id_iter->second->record);
       has_data = true;
@@ -1022,10 +1054,8 @@ void user_mail_manager::send_all_syn_msg(rpc::context &ctx) {
 
   // 没有数据则放弃发送
   if (has_data) {
-    // 直接清理，否则如果又要启动异步任务的话会导致这里数据被重复下发
     clear_dirty_cache();
-
-    rpc::lobbysvrclientservice::send_mail_change_sync(ctx, *sync_msg, *sess);
+    rpc::lobbysvrclientservice::send_mail_change_sync(ctx, *sync_msg, *sess).unwrap();
   }
 
   // 存在未拉取的全服邮件
@@ -1440,24 +1470,47 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
       FCTXLOGERROR(ctx, "receive attachments of mail {} failed, res: {}({})", *owner_, mail.record->mail_id(), res,
                    protobuf_mini_dumper_get_error_msg(res));
       ret = res;
+      break;
     }
 
     if (out_instances.empty()) {
       break;
     }
-    auto check_add_res =
+
+    auto checked_add_request =
         owner_->get_user_item_manager().check_add(ctx, std::move(out_instances),
                                                   {
                                                       PROJECT_NAMESPACE_ID::EN_ITEM_CHANGE_MAJOR_TYPE_MAIL_ATTACHMENT,
                                                       mail.content->minor_type(),
                                                       mail.content->mail_id(),
                                                   });
-    if (check_add_res.get_check_result().error_code < 0) {
-      ret = check_add_res.get_check_result().error_code;
+    auto check_result = checked_add_request.get_check_result();
+    if (check_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      ret = check_result.error_code;
       FCTXLOGERROR(ctx, "receive attachments of mail {} failed, res: {}({})", *owner_, mail.record->mail_id(), ret,
                    protobuf_mini_dumper_get_error_msg(ret));
+      break;
+    }
+
+    auto add_result = checked_add_request.do_operation(ctx);
+    if (add_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      ret = add_result.error_code;
+      // do_operation 跨处理器可能部分提交且无法回滚。提交失败必须保留已领取状态，防止重试重复发奖。
+      // NOLINTNEXTLINE(bugprone-signed-bitwise)
+      mail.record->set_status(mail.record->status() | PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT);
+      mutable_dirty_mail(*mail.record);
+      FCTXLOGERROR(ctx,
+                   "receive attachments of mail {} failed after possible partial commit, res: {}({}), "
+                   "failed_type_id={}",
+                   *owner_, mail.record->mail_id(), ret, protobuf_mini_dumper_get_error_msg(ret),
+                   add_result.failed_type_id);
+      break;
     }
   } while (false);
+
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
 
   // NOLINTNEXTLINE(bugprone-signed-bitwise)
   mail.record->set_status(mail.record->status() | PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT);
@@ -1491,6 +1544,7 @@ void user_mail_manager::fetch_all_unloaded_mails(rpc::context &ctx, std::vector<
       if (checked.second->record->is_global_mail() &&
           global_mail_manager::is_record_removeable(ctx, *checked.second->record)) {
         invalid_mail_ids.push_back(checked.first);
+        pending_to_remove.push_back(checked.first);
       } else {
         out.push_back(checked.first);
       }

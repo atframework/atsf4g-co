@@ -152,7 +152,9 @@ int task_action_mail_async_jobs::on_success() {
   }
 
   // 数据变更推送
-  param_.user_inst->send_all_syn_msg(get_shared_context());
+  if (param_.user_inst) {
+    param_.user_inst->send_all_syn_msg(get_shared_context());
+  }
 
   // 先推送再重启，否则邮件脏数据不会下发
   if (is_writable_ && need_restart_ && param_.user_inst) {
@@ -190,7 +192,9 @@ int task_action_mail_async_jobs::on_failed() {
   }
 
   // 数据变更推送
-  param_.user_inst->send_all_syn_msg(get_shared_context());
+  if (param_.user_inst) {
+    param_.user_inst->send_all_syn_msg(get_shared_context());
+  }
 
   // 先推送再重启，否则邮件脏数据不会下发
   if (is_writable_ && need_restart_ && param_.user_inst) {
@@ -222,13 +226,23 @@ rpc::result_code_type task_action_mail_async_jobs::fetch_mail_contents(user &use
 
   int ret =
       RPC_AWAIT_CODE_RESULT(rpc::db::mail_content::batch_get_all(get_shared_context(), mail_id_keys, mail_contents));
+  int32_t first_error = ret < 0 ? ret : 0;
+  int32_t loaded_count = 0;
 
-  for (auto &pulled_mail : mail_contents) {
+  for (size_t pulled_index = 0; pulled_index < mail_contents.size(); ++pulled_index) {
+    auto &pulled_mail = mail_contents[pulled_index];
+    int64_t mail_id = mail_unloaded[pulled_index];
+    if (pulled_mail.result < 0 && pulled_mail.result != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+      undo_mails.erase(mail_id);
+      if (first_error == 0) {
+        first_error = pulled_mail.result;
+      }
+      continue;
+    }
     if (!pulled_mail.message) {
       continue;
     }
 
-    auto mail_id = (*pulled_mail.message)->mail_id();
     undo_mails.erase(mail_id);
 
     mail_data_ptr_t mail = user_inst.get_user_mail_manager().get_mail_raw(mail_id);
@@ -241,9 +255,7 @@ rpc::result_code_type task_action_mail_async_jobs::fetch_mail_contents(user &use
       mail->record->set_fetch_error_count(0);
 
       FCTXLOGDEBUG(get_shared_context(), "{} fetch mail content of mail_id {} success", user_inst, mail_id);
-      if (ret >= 0) {
-        ++ret;
-      }
+      ++loaded_count;
     } else {
       FCTXLOGDEBUG(get_shared_context(), "{} fetch mail content of mail_id {} success, but maybe already removed",
                    user_inst, mail_id);
@@ -257,10 +269,8 @@ rpc::result_code_type task_action_mail_async_jobs::fetch_mail_contents(user &use
   }
 
   if (ret >= 0) {
-    // 如果成功，则要处理一下无效的脏数据
+    // 只有明确不存在的记录才增加容错计数，临时失败保留待加载索引以等待重试
     for (const auto &dirty_mail_id : undo_mails) {
-      user_inst.get_user_mail_manager().set_mail_content_loaded(dirty_mail_id);
-
       mail_data_ptr_t mail = user_inst.get_user_mail_manager().get_mail_raw(dirty_mail_id);
       // 可能已经被移除,如果被移除了，忽略即可
       // 可能是邮件内容被删除了，这时候要清理一下索引，这里设置错误容忍值是为了适应万一数据库短期故障
@@ -275,7 +285,10 @@ rpc::result_code_type task_action_mail_async_jobs::fetch_mail_contents(user &use
     }
   }
 
-  RPC_RETURN_CODE(ret);
+  if (first_error < 0) {
+    RPC_RETURN_CODE(first_error);
+  }
+  RPC_RETURN_CODE(loaded_count);
 }
 
 rpc::result_code_type task_action_mail_async_jobs::cleanup_removed_mails(user &user_inst, router_user_cache &cache) {
@@ -296,6 +309,7 @@ rpc::result_code_type task_action_mail_async_jobs::cleanup_removed_mails(user &u
     if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       FCTXLOGWARNING(get_shared_context(), "delete mail content of mail_id {} failed, res: {}({})", user_inst,
                      del_mail_id, res, protobuf_mini_dumper_get_error_msg(res));
+      ret = res;
       break;
     }
 

@@ -25,7 +25,9 @@
 
 #include <rpc/rpc_context.h>
 
+#include <algorithm>
 #include <utility>
+#include <vector>
 
 #include "data/user.h"
 #include "logic/mail/user_mail_manager.h"
@@ -56,6 +58,10 @@ task_action_mail_get_all::operator()() {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_MAIL_INVALID_MAJOR_TYPE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
+  if (req_body.page_no() < 0 || req_body.page_count() < 0) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
 
   rsp_body.set_page_count(req_body.page_count());
   rsp_body.set_page_no(req_body.page_no());
@@ -74,39 +80,50 @@ task_action_mail_get_all::operator()() {
   }
 
   int64_t skip_count = 0;
-  if (req_body.page_count() > 0) {
-    if (req_body.page_no() > 0) {
-      skip_count = (req_body.page_no() - 1) * req_body.page_count();
-    }
+  if (req_body.page_count() > 0 && req_body.page_no() > 1) {
+    skip_count = (static_cast<int64_t>(req_body.page_no()) - 1) * req_body.page_count();
   }
 
+  std::vector<mail_data_ptr_t> visible_mails;
   auto mail_box = user_inst->get_user_mail_manager().get_mail_box_by_major_type(req_body.major_type());
-  int32_t mail_count = 0;
   if (mail_box) {
+    visible_mails.reserve(mail_box->mails.size());
     for (auto& mail : mail_box->mails) {
       if (user_mail_manager::is_mail_shown(get_shared_context(), mail.second)) {
-        ++mail_count;
-        if (req_body.page_count() && rsp_body.mails_size() >= req_body.page_count()) {
-          continue;
-        }
-
-        if (skip_count > 0) {
-          --skip_count;
-          continue;
-        }
-
-        PROJECT_NAMESPACE_ID::DMailContent* out = rsp_body.add_mails();
-        if (out == nullptr) {
-          break;
-        }
-
-        atfw::mail::mail_merge_content_and_record(get_shared_context(), *out, *mail.second->content,
-                                                  *mail.second->record);
+        visible_mails.push_back(mail.second);
       }
     }
   }
+  std::sort(visible_mails.begin(), visible_mails.end(), [](const mail_data_ptr_t& left, const mail_data_ptr_t& right) {
+    auto left_delivery_time = protobuf_to_system_clock(left->record->delivery_time());
+    auto right_delivery_time = protobuf_to_system_clock(right->record->delivery_time());
+    if (left_delivery_time != right_delivery_time) {
+      return left_delivery_time > right_delivery_time;
+    }
+    return left->record->mail_id() > right->record->mail_id();
+  });
 
-  rsp_body.set_mail_count(mail_count);
+  rsp_body.set_mail_count(static_cast<int32_t>(visible_mails.size()));
+  size_t start_index = 0;
+  if (skip_count > 0) {
+    if (static_cast<uint64_t>(skip_count) >= visible_mails.size()) {
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+    start_index = static_cast<size_t>(skip_count);
+  }
+  for (size_t index = start_index; index < visible_mails.size(); ++index) {
+    if (req_body.page_count() > 0 && rsp_body.mails_size() >= req_body.page_count()) {
+      break;
+    }
+
+    PROJECT_NAMESPACE_ID::DMailContent* out = rsp_body.add_mails();
+    if (out == nullptr) {
+      break;
+    }
+
+    atfw::mail::mail_merge_content_and_record(get_shared_context(), *out, *visible_mails[index]->content,
+                                              *visible_mails[index]->record);
+  }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

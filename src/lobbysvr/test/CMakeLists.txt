@@ -31,6 +31,7 @@ project_add_rpc_unit_test(
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_matching_sync.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_contract.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_async_jobs_db_contract.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_mail_manager.cpp"
   LINK_LIBRARIES
   service::lobbysvr::private
   FEATURES

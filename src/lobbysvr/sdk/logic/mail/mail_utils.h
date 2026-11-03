@@ -53,7 +53,7 @@ LOBBY_RPC_API int mail_setup_template_engine(::excel::config_group_t& group);
  * @param extensions 客户端渲染的格外信息
  * @param render_by_client 模板是否由客户端渲染
  * @param item_offest 附件道具（offest结构，如果填写了此字段将不会再填充模板中的附件
- * @param item_detail 附件道具（Ditem结构）包含道具所有详细信息，如果填写了此字段将不会再填充模板中的附件
+ * @param item_detail 当前协议不支持详细道具附件；非空时返回 EN_ERR_MAIL_MAIL_ITEM_INVALID
  * @return 0或错误码
  */
 ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API int32_t mail_render_template(

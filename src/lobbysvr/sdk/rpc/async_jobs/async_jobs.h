@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include <gsl/select-gsl.h>
+#include <nostd/type_traits.h>
+#include <string/string_format.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -17,6 +21,8 @@
 #include <config/server_frame_build_feature.h>
 
 #include <cstdint>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 #include "rpc/db/db_utils.h"
@@ -45,6 +51,27 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
       : notify_user(in_notify_user)  // NOLINT: explicit
   {}
 };
+
+/**
+ * @brief 生成自定义的异步任务的UUID，以便业务侧实现幂等性
+ *
+ * @param type 类型名
+ * @param suffix 后缀，用于生成唯一的UUID
+ * @return 自定义的异步任务的UUID
+ */
+LOBBY_RPC_API std::string make_custom_action_uuid(gsl::string_view type, gsl::string_view suffix);
+
+/**
+ * @brief 生成自定义的异步任务的UUID，以便业务侧实现幂等性
+ *
+ * @param type 类型名
+ * @param suffix 后缀，用于生成唯一的UUID
+ * @return 自定义的异步任务的UUID
+ */
+template <class T, class = atfw::util::nostd::enable_if_t<!std::is_convertible<T, gsl::string_view>::value>>
+ATFW_UTIL_FORCEINLINE std::string make_custom_action_uuid(gsl::string_view type, T &&suffix) {
+  return make_custom_action_uuid(type, atfw::util::string::format("{}", std::forward<T>(suffix)));
+}
 
 /**
  * @brief 获取用户异步任务表所有数据的rpc操作

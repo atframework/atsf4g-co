@@ -1799,8 +1799,18 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
       }
     }
   }
-  // 推送本身不在本地直接改缓存或下发脏数据(等 room 权威广播)
-  CASE_EXPECT_EQ(1, static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()));
+  // 本地关卡选择独立推送一次；队伍缓存和队伍通知仍等待 Room 权威广播
+  {
+    auto pushes = team_test::collect_dirty_sync_pushes(test, kSessionId);
+    CASE_EXPECT_EQ(2, static_cast<int>(pushes.size()));
+    if (pushes.size() == 2) {
+      const auto& level_push = pushes.back();
+      CASE_EXPECT_TRUE(level_push.has_dirty_matching_chg());
+      CASE_EXPECT_TRUE(level_push.dirty_team().empty());
+      CASE_EXPECT_EQ(level_req.data().SerializeAsString(),
+                     level_push.dirty_matching_chg().user_level_select().SerializeAsString());
+    }
+  }
 
   // delivery: room 把接受的 team_update 广播回队伍频道 -> 缓存按 key 合并, 客户端恰好收到一次 team_increase
   {
@@ -1821,7 +1831,7 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_01_captain_pushes_level_d
     }));
   }
   CASE_EXPECT_TRUE(team_test::pump_until(
-      test, [&] { return 2 == static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()); }));
+      test, [&] { return 3 == static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()); }));
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));
@@ -1909,7 +1919,18 @@ CASE_TEST(lobbysvr_user_team, cs_matching_level_select_02_non_captain_no_push) {
     CASE_EXPECT_TRUE(
         user_team_battle_library_function::get_matching_level_select_data(*team_ptr).SerializeAsString().empty());
   }
-  CASE_EXPECT_EQ(1, static_cast<int>(team_test::collect_dirty_sync_pushes(test, kSessionId).size()));
+  // 非队长不同步队伍数据，但本地关卡选择仍按匹配协议推送一次
+  {
+    auto pushes = team_test::collect_dirty_sync_pushes(test, kSessionId);
+    CASE_EXPECT_EQ(2, static_cast<int>(pushes.size()));
+    if (pushes.size() == 2) {
+      const auto& level_push = pushes.back();
+      CASE_EXPECT_TRUE(level_push.has_dirty_matching_chg());
+      CASE_EXPECT_TRUE(level_push.dirty_team().empty());
+      CASE_EXPECT_EQ(level_req.data().SerializeAsString(),
+                     level_push.dirty_matching_chg().user_level_select().SerializeAsString());
+    }
+  }
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));
