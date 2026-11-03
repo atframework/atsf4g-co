@@ -254,16 +254,13 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   return 0;
 }
 
-int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                            int64_t end_join_timepoint) {
+int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key) {
   if (is_orbit_room_exist()) {
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
     return PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM;
   }
   // 容忍时间 需要10秒处理状态
-  if (end_join_timepoint == 0) {
-    end_join_timepoint = atfw::util::time::time_utility::get_now() + 10;
-  }
+  int64_t end_join_timepoint = atfw::util::time::time_utility::get_now() + 10;
   // expired_timepoint 这里用 end_join_timepoint
   int32_t ret = create_room(ctx, room_key, end_join_timepoint, end_join_timepoint);
   if (ret != 0) {

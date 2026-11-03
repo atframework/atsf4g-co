@@ -44,8 +44,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   // 开始匹配前需要确认是否还存在房间
   bool is_orbit_room_exist() const;
   // Orbitsvr已经创建并塞入了User 开始真正进入Orbitsvr
-  int32_t join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                          int64_t end_join_timepoint);
+  int32_t join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key);
   // 收到结算消息
   rpc::result_void_type receive_orbit_settlement(rpc::context& ctx,
                                                  PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
