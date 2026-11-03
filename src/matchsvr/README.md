@@ -29,17 +29,17 @@ Matchsvr 以 Unit 为最小匹配单位。单人和队伍都使用同一条匹�
 
 `orbit_room_ready` 完成初始用户初始化、发布初始 Unit 的完成事件，并在满足条件时登记等待室。回调不立即搬运其他排队 Unit；后续 tick 先处理等待室，再处理普通成局和迁移。
 
-新 Unit 仍由 `create_matching` 按原有创建路径即时接纳，并优先选择等待室。确认、初始化发送及异步返回时仍检查绝对截止，不依赖下一次 tick 才拒绝过期操作。
+新 Unit 仍由 `create_matching` 按原有创建路径即时接纳，并优先选择等待室。确认、初始化发送及异步返回时检查房间是否已关闭、Unit 状态及事件关联，不依赖下一次 tick 才拒绝失效操作。
 
 ### 模块接口的校验职责
 
-| 接口所属对象 | 负责的校验与操作 |
-| --- | --- |
-| Manager 请求入口 | 请求格式、操作者属于指定 Unit、重复匹配占用、订阅路由合法性；组织候选评估和提交 |
-| Logic 规则评估 | 当前配置下的匹配资格、屏蔽关系、关卡兼容和 faction 落点；不修改 Room 或发布事件 |
-| Room 写入接口 | 成员唯一性、固定 faction 容量、预留人数和关卡交集；写入后同步更新计数及成员关系 |
-| Unit 确认与订阅接口 | 只更新该 Unit 的成员确认、订阅路由、ACK 和 WAL；确认不会遍历其他 Unit |
-| 异步回调 | 等待前后分别检查当前归属、状态、事件 ID 和绝对截止时间，拒绝已经失效的结果 |
+| 接口所属对象        | 负责的校验与操作                                                                |
+| ------------------- | ------------------------------------------------------------------------------- |
+| Manager 请求入口    | 请求格式、操作者属于指定 Unit、重复匹配占用、订阅路由合法性；组织候选评估和提交 |
+| Logic 规则评估      | 当前配置下的匹配资格、屏蔽关系、关卡兼容和 faction 落点；不修改 Room 或发布事件 |
+| Room 写入接口       | 成员唯一性、固定 faction 容量、预留人数和关卡交集；写入后同步更新计数及成员关系 |
+| Unit 确认与订阅接口 | 只更新该 Unit 的成员确认、订阅路由、ACK 和 WAL；确认不会遍历其他 Unit           |
+| 异步回调            | 等待前后分别检查当前归属、状态和事件 ID，拒绝关闭后的结果                       |
 
 创建流程先用 `prepare_subscribers` 校验并保存临时路由结果，再在原有绑定和视图更新时点调用 `initialize_subscribers`。准备阶段不发送消息；初始化会立即发送当前 Unit 视图，不能为减少校验而提前发送默认视图。准备结果只能用于生成它的 Unit，独立订阅请求仍完整校验输入。
 
@@ -67,9 +67,9 @@ SEARCHING -> CONFIRMING -> CREATING_BATTLE -> FINISHED
 
 已有 faction 的 ID、容量和已有成员归属保持不变。允许新增 faction，新 faction 的 ID 单调分配，不因撤销而复用。
 
-| 加入方式 | 确认范围 | 有成员拒绝或确认超时时 |
-| --- | --- | --- |
-| 补入已有未满 faction | 当前 Unit 独立确认 | 整个 Unit 退出；其他 Unit 不受影响 |
+| 加入方式                   | 确认范围                                              | 有成员拒绝或确认超时时                                         |
+| -------------------------- | ----------------------------------------------------- | -------------------------------------------------------------- |
+| 补入已有未满 faction       | 当前 Unit 独立确认                                    | 整个 Unit 退出；其他 Unit 不受影响                             |
 | 多个 Unit 共同新增 faction | 固定该 faction 的创建成员，全部确认后才分别提交初始化 | 拒绝或超时 Unit 退出；其余创建 Unit 恢复搜索；撤销该次 faction |
 
 新 faction 共同确认期间不再追加创建成员。创建确认释放后，后续补入按已有 faction 的独立 Unit 规则处理。后补 Unit 初始化失败会关闭整个等待室，不再继续接纳；已经成功的其他 Unit 不回退。
@@ -80,11 +80,12 @@ SEARCHING -> CONFIRMING -> CREATING_BATTLE -> FINISHED
 
 ## 容量与退出
 
-等待室同时维护成功人数和预留人数：
+等待室区分当前在场人数、预留人数和历史成功人数：
 
 ```text
-房间成功人数 + 未完成 Unit 预留人数 <= 匹配池的战斗房间人数上限
-faction 成功人数 + 未完成 Unit 预留人数 <= faction 固定容量
+当前在场人数 + 未完成 Unit 预留人数 <= max_user_cout_limit
+历史玩家集合大小 + 未完成 Unit 预留人数 <= waiting_room_max_join_user_count
+faction 在场人数 + 预留人数 + 不返还的离场占用 <= faction 固定容量
 ```
 
 预留占满时不再接纳，但不会仅因预留占满而永久关闭。截止前 Unit 拒绝会释放其本地预留；初始化失败释放对应预留并关闭等待室。成功人数达到上限时等待室永久关闭。
@@ -93,19 +94,13 @@ faction 成功人数 + 未完成 Unit 预留人数 <= faction 固定容量
 
 等待室按已接纳 Unit ID 和成功玩家身份拒绝重入。其他新玩家仍须满足等待室规则、剩余容量和截止时间，并按新 Unit 预留人数，成功后增加成功人数。成功成员数据继续参与规则比较和旧房重入检查，但不作为其他匹配的玩家重复占用；尚未完成入场的 Unit 仍禁止玩家重复加入。Match 不检查玩家实际退出 DS 的状态。
 
-## 绝对截止时间
+## 关闭与回收
 
-等待室直接使用 `SSMatchingOrbitRoomReadyReq.end_join_timepoint`。它是绝对时间，不是持续秒数，也不从初始初始化成功时重新起算。
+等待室没有加入截止时间，初始满员仍进入 WAITING，后续满员只暂停接纳。历史额度按整个 Unit 预留，失败或拒绝归还预留，不拆分 Unit。
 
-进入候选、接纳、确认、初始化发送、重试及 await 返回后提交结果，都要求 `now < end_join_timepoint`。`now == end_join_timepoint` 已经到期。
+`orbit_room_end_join`（含 Orbit 结算侧的停止接纳通知）永久关闭等待室；历史成功人数达到上限也关闭。未完成 Unit 按 CANCELLED 和 `EN_ERR_MATCHING_WAITING_ROOM_CLOSED` 结束，不自动重排。后补初始化最终失败仍关闭整个等待室，未完成 Unit 保持 FAILED 及真实失败码。已完成 Unit 的 FINISHED 视图不变。
 
-截止时所有尚未完成的后补 Unit 按超时结束，不再确认、提交或重试。已经发出的 RPC 无法由 Match 撤回；截止后返回的成功结果不会复活 Unit、增加成功人数或发布 `BATTLE_READY`。远端如何处理已经收到的数据归 Orbit。
-
-tick 负责扫描并记录等待室超时；确认和初始化入口也会在执行操作前处理已到期房间。截止后、这些入口尚未执行时，心跳可以返回此前的状态，但不能据此继续入场。
-
-例如截止为 12:00:30，后补请求在 12:00:29 发送、12:00:31 才成功返回，Match 将该 Unit 作为超时处理。若已经在 12:00:29 完成成功提交，后续截止不影响其完成状态。
-
-后补确认期限取池确认超时和等待室截止的较小值。初始创建仍使用原创建超时；初始初始化成功时已到截止，则不开放等待室。
+关闭先摘除候选、结束未完成 Unit 并发布 WAL，再删除 Room。Unit 的终态/WAL 按原保留时间独立回收，迟到 RPC 不能复活 Room 或 Unit。初始初始化期间收到关闭通知，也不再开启等待室。确认、普通搜索、创建 DS 和 RPC 超时继续保留。
 
 ## 配置
 
@@ -113,33 +108,34 @@ tick 负责扫描并记录等待室超时；确认和初始化入口也会在执
 
 ### 匹配池
 
-| 字段 | 用途 |
-| --- | --- |
-| `is_has_waiting_room` | 启用等待室；默认 false |
-| `waiting_room_rule_id` | 引用一条 `ExcelMatchingWaitingRoomRule` |
-| `is_waiting_room_faction_can_joined` | 是否允许向已有未满 faction 补 Unit |
-| `max_user_cout_limit` | 战斗房间成功与预留人数的总上限 |
-| `max_faction_cout_limit` | faction 数量限制 |
-| `unit_max_size` | 单 Unit 人数上限 |
-| `faction_user_max_size` | 可拼队 faction 的固定容量 |
-| `confirm_timeout_seconds` | 确认超时；实际确认截止不晚于等待室截止 |
+| 字段                                 | 用途                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| `is_has_waiting_room`                | 启用等待室；默认 false                                               |
+| `waiting_room_rule_id`               | 引用一条 `ExcelMatchingWaitingRoomRule`                              |
+| `is_waiting_room_faction_can_joined` | 是否允许向已有未满 faction 补 Unit                                   |
+| `max_user_cout_limit`                | 当前在场与预留人数的总上限                                           |
+| `waiting_room_max_join_user_count`   | 历史成功加入人数上限，退出不返还；启用时必须为正且不小于同时人数上限 |
+| `max_faction_cout_limit`             | faction 数量限制                                                     |
+| `unit_max_size`                      | 单 Unit 人数上限                                                     |
+| `faction_user_max_size`              | 可拼队 faction 的固定容量                                            |
+| `confirm_timeout_seconds`            | Unit 独立确认超时                                                    |
 
 ### 等待室加人规则
 
 `等待室加人规则` 工作表独立导出 `matching_waiting_room_rule.bytes` 和 JSON，由 `ExcelMatchingWaitingRoomRule` loader 加载。
 
-| 字段 | 用途 |
-| --- | --- |
-| `id` | 单条规则 ID |
-| `faction_add_rule` | faction 容量关系限制 |
-| `region_limits` | 允许的地区 |
-| `rules` | 段位、角色等级等已有基础规则条件 |
+| 字段               | 用途                             |
+| ------------------ | -------------------------------- |
+| `id`               | 单条规则 ID                      |
+| `faction_add_rule` | faction 容量关系限制             |
+| `region_limits`    | 允许的地区                       |
+| `rules`            | 段位、角色等级等已有基础规则条件 |
 
-每个池引用单条规则，不把该表解释为按人口选择的规则组。等待室规则不配置相对时间窗口，入场时间只受 `SSMatchingOrbitRoomReadyReq.end_join_timepoint` 的绝对截止时间限制。不满足规则时不退回普通撮合规则，也不自动切换相邻 ID。
+每个池引用单条规则，不把该表解释为按人口选择的规则组。等待室规则不配置相对时间窗口，接纳期由 EndJoin/结算通知或历史人数上限结束，不设加入截止时间。不满足规则时不退回普通撮合规则，也不自动切换相邻 ID。
 
 [`get_matching_waiting_room_rule()`](../server_frame/config/include/config/excel_config_matching_index.h) 在配置无效时记录错误并返回空。启用状态下的空规则必须拒绝等待室接纳，不能按无限制规则处理。关闭开关的池沿用普通匹配流程。
 
-当前等待室规则和池限制通过当前配置组读取；已有 faction 容量仍固定。热更新时不得假设存量 Room 已保存全部旧配置，修改开关、规则或房间上限前应考虑存量等待室。
+历史人数上限和退出席位回收开关在打开等待室时固定；已有 faction 容量仍固定。等待室规则和其他池限制通过当前配置组读取，热更新时不得假设存量 Room 已保存全部旧配置。
 
 ## Unit 身份、WAL 与 Room 生命周期
 
@@ -147,11 +143,11 @@ tick 负责扫描并记录等待室超时；确认和初始化入口也会在执
 
 `last_event_id` 表示 Unit 最新的 WAL 事件 ID。处于 `CONFIRMING` 时，它就是当前 `CONFIRM_REQUIRED` 的事件 ID：部分玩家确认不会发布新事件；重新搜索或开始初始化时先退出确认状态，再发布状态变化。完整快照可由确认状态和该 ID 恢复确认操作，不另存确认事件字段或计数器。
 
-`SSMatchingConfirmReq.last_event_id` 保存发出请求时确认态视图的事件 ID。Match 要求仍处于确认状态，且请求 ID 非零并等于 Unit 当前 `last_event_id`，普通匹配与等待室一致。`acknowledge_event_id` 仍表示已完成业务消费的最大连续事件，不能代替正在执行的确认事件 ID。等待室初始化任务保存发布初始化事件后的 `last_event_id`，提交前核对该 ID、Room 和 Unit 归属、状态及截止。部署时需要同步更新 Match 和 Lobby 的匹配协议及消费者。
+`SSMatchingConfirmReq.last_event_id` 保存发出请求时确认态视图的事件 ID。Match 要求仍处于确认状态，且请求 ID 非零并等于 Unit 当前 `last_event_id`，普通匹配与等待室一致。`acknowledge_event_id` 仍表示已完成业务消费的最大连续事件，不能代替正在执行的确认事件 ID。等待室初始化任务保存发布初始化事件后的 `last_event_id`，提交前核对该 ID、Room 和 Unit 归属及状态。部署时需要同步更新 Match 和 Lobby 的匹配协议及消费者。
 
 Unit 成功后从 Room 活动集合和活动玩家索引移除，按自身终态时间保留最终视图与 WAL。Room 保存已成功成员摘要、faction 和人数，用于继续匹配；这些信息不依赖已完成 Unit 的 WAL 一直存在。
 
-Room 到期或满员后结束本地未完成 Unit，进入终态保留。Room 回收不能再次清理已经释放的玩家索引，也不能影响玩家新一轮匹配。
+等待室收到 EndJoin、达到历史人数上限或后补初始化最终失败后，结束本地未完成 Unit 并删除 Room；当前满员不触发关闭。普通撮合房间仍按原终态保留规则回收。Room 回收不能再次清理已经释放的玩家索引，也不能影响玩家新一轮匹配。
 
 Lobby 对 `CONFIRM_REQUIRED` 执行当前 Unit 的确认，对 `BATTLE_READY` 执行现有 Orbit 订阅。业务副作用完成后才推进 ACK；增量丢失或压缩后的完整视图仍能恢复副作用。Team 的匹配标志按 Unit 的结果结束，不等待 Room 关闭。
 
@@ -167,14 +163,14 @@ Match 复用 `SSMatchingOrbitRoomReadyReq.end_join_timepoint`、`SSOrbitUserInit
 
 ## 实现入口与验证
 
-| 文件 | 主要职责 |
-| --- | --- |
-| [`matching_manager.cpp`](service/logic/matching/matching_manager.cpp) | 候选优先级、索引、确认、Orbit 初始化、截止和回收 |
-| [`matching_logic.cpp`](service/logic/matching/matching_logic.cpp) | 普通与等待室的规则判断、增量放置 |
-| [`matching_room.cpp`](service/logic/matching/matching_room.cpp) | 固定关卡/faction、成功与预留人数、确认范围 |
-| [`matching_unit.cpp`](service/logic/matching/matching_unit.cpp) | Unit 生命周期、确认事件关联、WAL 和最终视图 |
-| [`matching_logic_test.cpp`](test/matching_logic_test.cpp) | 受控时间和 RPC mock 场景 |
-| [`matching_waiting_rule_test.cpp`](test/matching_waiting_rule_test.cpp) | 独立配置、时间窗、固定 faction、人数预留与完成摘要 |
+| 文件                                                                    | 主要职责                                               |
+| ----------------------------------------------------------------------- | ------------------------------------------------------ |
+| [`matching_manager.cpp`](service/logic/matching/matching_manager.cpp)   | 候选优先级、索引、确认、Orbit 初始化、退出、关闭和回收 |
+| [`matching_logic.cpp`](service/logic/matching/matching_logic.cpp)       | 普通与等待室的规则判断、增量放置                       |
+| [`matching_room.cpp`](service/logic/matching/matching_room.cpp)         | 固定关卡/faction、当前成员、历史身份、预留和确认范围   |
+| [`matching_unit.cpp`](service/logic/matching/matching_unit.cpp)         | Unit 生命周期、确认事件关联、WAL 和最终视图            |
+| [`matching_logic_test.cpp`](test/matching_logic_test.cpp)               | 受控时间和 RPC mock 场景                               |
+| [`matching_waiting_rule_test.cpp`](test/matching_waiting_rule_test.cpp) | 独立配置、固定 faction、退出补位、历史额度和入场后退出 |
 
 修改时至少验证开关关闭、初始失败、后补初始化失败关闭等待室、绝对截止相等及跨 await 到期、新请求和已有搜索候选优先级、两类 faction 拒绝范围、最后名额竞争、成功玩家重新匹配且不能重入旧等待室、Unit 完成后 Room 继续存在、WAL 回收和旧消息隔离。通知验证需要同时检查内容与实际投递次数。
 

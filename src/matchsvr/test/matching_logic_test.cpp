@@ -15,6 +15,9 @@
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/raw_transport.h>
 #include <atframework/testing/runtime.h>
+#include <atframework/testing/ss_action.h>
+#include <logic/action/task_action_orbit_room_end_join.h>
+#include <logic/action/task_action_orbit_room_user_quit.h>
 
 #include <logic/matching/matching_logic.h>
 #include <logic/matching/matching_manager.h>
@@ -25,6 +28,7 @@
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
 #include <logic/logic_server_setup.h>
+#include <rpc/orbit/orbitsvrmatchsvrservice.atfw.gen.h>
 #include <rpc/orbit/orbitsvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
 
@@ -701,15 +705,16 @@ class waiting_test_fixture {
 
   bool start(bool allow_existing_faction_fill = true, bool allow_incomplete_factions = false,
              PROJECT_NAMESPACE_ID::config::EnMatchingFactionFillPolicy faction_fill_policy =
-                 PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY) {
+                 PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY,
+             int32_t historical_limit = 8, int32_t current_limit = 8) {
     atframework::testing::runtime_options options;
     options.features = {atframework::testing::feature::resource, atframework::testing::feature::ss};
-    options.setup_callback = [allow_existing_faction_fill, allow_incomplete_factions,
-                              faction_fill_policy](atframework::testing::runtime& test) {
+    options.setup_callback = [allow_existing_faction_fill, allow_incomplete_factions, faction_fill_policy,
+                              historical_limit, current_limit](atframework::testing::runtime& test) {
       seed_matching_tables(test.resource());
       PROJECT_NAMESPACE_ID::config::ExcelMatchingPool pool;
       pool.set_id(1);
-      pool.set_max_user_cout_limit(8);
+      pool.set_max_user_cout_limit(current_limit);
       pool.set_max_faction_cout_limit(4);
       pool.set_unit_max_size(2);
       pool.set_faction_user_max_size(2);
@@ -718,6 +723,7 @@ class waiting_test_fixture {
       pool.set_search_timeout_seconds(120);
       pool.set_confirm_timeout_seconds(15);
       pool.set_is_has_waiting_room(true);
+      pool.set_waiting_room_max_join_user_count(historical_limit);
       pool.set_is_waiting_room_faction_can_joined(allow_existing_faction_fill);
       pool.set_waiting_room_rule_id(9100);
       pool.set_allow_incomplete_factions(allow_incomplete_factions);
@@ -743,7 +749,9 @@ class waiting_test_fixture {
       const std::string version = allow_incomplete_factions     ? "matchsvr-waiting-incomplete-faction-v1"
                                   : allow_existing_faction_fill ? "matchsvr-waiting-fill-enabled-v1"
                                                                 : "matchsvr-waiting-fill-disabled-v1";
-      test.resource().set_version(version + "-policy-" + std::to_string(static_cast<int>(faction_fill_policy)));
+      test.resource().set_version(version + "-policy-" + std::to_string(static_cast<int>(faction_fill_policy)) +
+                                  "-history-" + std::to_string(historical_limit) + "-current-" +
+                                  std::to_string(current_limit));
       return 0;
     };
     const int32_t started = runtime.start(options);
@@ -843,7 +851,6 @@ class waiting_test_fixture {
     PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq request;
     request.set_matching_id(matching_id);
     request.set_start_success(true);
-    request.set_end_join_timepoint(end_timepoint);
     request.set_expired_timepoint(end_timepoint + 300);
     auto response = std::make_shared<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp>();
     auto manager = matching_manager::me();
@@ -946,7 +953,189 @@ class waiting_test_fixture {
   rpc::unit_test::mock_rule_handle initialize_rule_;
 };
 constexpr uint64_t waiting_test_fixture::kOrbitServerId;
+
+template <class TAction>
+static void invoke_waiting_notification(waiting_test_fixture& fixture, typename TAction::rpc_request_type request,
+                                        gsl::string_view rpc_name, uint64_t source) {
+  const std::string name{rpc_name.data(), rpc_name.size()};
+  auto task = fixture.runtime.run_task(
+      "waiting.notification", std::chrono::seconds{2},
+      [request, name, source](rpc::context& ctx) -> rpc::result_code_type {
+        atframework::testing::ss_action_invoke_options options{name};
+        options.source.node_id = source;
+        options.source.node_name = "waiting-room-orbit";
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<TAction>(ctx, request, options)));
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    const auto result = fixture.runtime.wait(task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_FALSE(result.hard_timed_out);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+}
 }  // namespace
+
+CASE_TEST(matchsvr_waiting_room, full_room_reopens_capacity_after_quit_without_changing_old_unit_views) {
+  waiting_test_fixture fixture;
+  if (!fixture.start(true, false, PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY, 12) ||
+      !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  for (uint64_t index = 0; index < 2; ++index) {
+    const auto extra = fixture.request(90001 + index, 30001 + index * 10, 2);
+    PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+    CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, extra, snapshot));
+    CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+    fixture.confirm(extra, true);
+    CASE_EXPECT_TRUE(fixture.wait_for_status(extra, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED));
+  }
+  CASE_EXPECT_EQ(1, manager->get_room_count());
+  const auto before = fixture.check(fixture.initial_first).snapshot();
+  PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomUserQuitReq quit;
+  quit.set_matching_id(fixture.matching_id);
+  protobuf_copy_message(*quit.mutable_user_key()->mutable_user_key(), fixture.initial_first.operator_user());
+  invoke_waiting_notification<task_action_orbit_room_user_quit>(
+      fixture, quit, rpc::orbit::packer::get_full_name_of_orbit_room_user_quit(), waiting_test_fixture::kOrbitServerId);
+  invoke_waiting_notification<task_action_orbit_room_user_quit>(
+      fixture, quit, rpc::orbit::packer::get_full_name_of_orbit_room_user_quit(), waiting_test_fixture::kOrbitServerId);
+  const auto fresh = fixture.request(90003, 30101);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, fresh, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  CASE_EXPECT_EQ(before.faction_id(), snapshot.snapshot().faction_id());
+  CASE_EXPECT_EQ(before.SerializeAsString(), fixture.check(fixture.initial_first).snapshot().SerializeAsString());
+  const auto overflow = fixture.request(90004, 30201);
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, overflow, snapshot));
+  CASE_EXPECT_NE(fixture.matching_id, snapshot.matching_id());
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, departed_users_still_count_toward_historical_close_limit) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  auto manager = matching_manager::me();
+  for (const auto& player : fixture.initial_first.unit().users()) {
+    CASE_EXPECT_EQ(0, manager->orbit_room_user_quit(fixture.context, fixture.matching_id, player.user_key(),
+                                                    waiting_test_fixture::kOrbitServerId));
+  }
+  for (uint64_t index = 0; index < 2; ++index) {
+    const auto extra = fixture.request(90101 + index, 31001 + index * 10, 2);
+    PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+    CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, extra, snapshot));
+    CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+    fixture.confirm(extra, true);
+    CASE_EXPECT_TRUE(fixture.wait_for_status(extra, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED));
+  }
+  CASE_EXPECT_EQ(0, manager->get_room_count());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED,
+                 fixture.check(fixture.initial_first).snapshot().status());
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, initial_full_room_retains_admission_until_explicit_close) {
+  waiting_test_fixture fixture;
+  if (!fixture.start(true, false, PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY, 8, 4) ||
+      !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  CASE_EXPECT_EQ(1, matching_manager::me()->get_room_count());
+  CASE_EXPECT_EQ(1, fixture.control->initializations.size());
+  if (!fixture.control->initializations.empty()) {
+    CASE_EXPECT_FALSE(fixture.control->initializations.front().is_last_one());
+  }
+  CASE_EXPECT_EQ(0, matching_manager::me()->orbit_room_user_quit(fixture.context, fixture.matching_id,
+                                                                 fixture.initial_first.operator_user(),
+                                                                 waiting_test_fixture::kOrbitServerId));
+  const auto fresh = fixture.request(90150, 31501);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  CASE_EXPECT_EQ(0, matching_manager::me()->create_matching(fixture.context, fresh, snapshot));
+  CASE_EXPECT_EQ(fixture.matching_id, snapshot.matching_id());
+  fixture.confirm(fresh, true);
+  CASE_EXPECT_TRUE(fixture.wait_for_status(fresh, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED));
+  CASE_EXPECT_EQ(1, matching_manager::me()->get_room_count());
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, old_room_quit_keeps_players_new_matching_index) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  auto retry = fixture.initial_first;
+  retry.mutable_unit()->set_unit_id(90160);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto manager = matching_manager::me();
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, retry, snapshot));
+  CASE_EXPECT_NE(fixture.matching_id, snapshot.matching_id());
+  const auto searching = snapshot;
+  CASE_EXPECT_EQ(0, manager->orbit_room_user_quit(fixture.context, fixture.matching_id, retry.operator_user(),
+                                                  waiting_test_fixture::kOrbitServerId));
+  CASE_EXPECT_EQ(searching.SerializeAsString(), fixture.check(retry).SerializeAsString());
+  retry.mutable_unit()->set_unit_id(90161);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_USER_ALREADY_IN_MATCHING,
+                 manager->create_matching(fixture.context, retry, snapshot));
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, end_join_action_authenticates_source_and_preserves_terminal_wal) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
+    return;
+  }
+  const auto pending = fixture.request(90201, 32001);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot snapshot;
+  auto manager = matching_manager::me();
+  CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, pending, snapshot));
+  const auto confirming = snapshot.snapshot();
+  PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomEndJoinReq end;
+  end.set_matching_id(fixture.matching_id);
+  invoke_waiting_notification<task_action_orbit_room_end_join>(
+      fixture, end, rpc::orbit::packer::get_full_name_of_orbit_room_end_join(),
+      waiting_test_fixture::kOrbitServerId + 1);
+  CASE_EXPECT_EQ(confirming.SerializeAsString(), fixture.check(pending).snapshot().SerializeAsString());
+  const size_t notifications = fixture.runtime.transport().outbound_count();
+  invoke_waiting_notification<task_action_orbit_room_end_join>(
+      fixture, end, rpc::orbit::packer::get_full_name_of_orbit_room_end_join(), waiting_test_fixture::kOrbitServerId);
+  // 在主动心跳补收 WAL 之前检查关闭动作本身的推送次数。
+  const auto pushes = fixture.notifications_since(notifications, pending.unit().unit_id());
+  const auto terminal = fixture.check(pending).snapshot();
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED, terminal.status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED, terminal.result());
+  CASE_EXPECT_GT(terminal.last_event_id(), confirming.last_event_id());
+  CASE_EXPECT_EQ(0, manager->get_room_count());
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
+  CASE_EXPECT_EQ(1, pushes.size());
+  if (pushes.size() == 1) {
+    CASE_EXPECT_EQ(terminal.SerializeAsString(), pushes.front().SerializeAsString());
+  }
+  const size_t before_repeat = fixture.runtime.transport().outbound_count();
+  invoke_waiting_notification<task_action_orbit_room_end_join>(
+      fixture, end, rpc::orbit::packer::get_full_name_of_orbit_room_end_join(), waiting_test_fixture::kOrbitServerId);
+  CASE_EXPECT_TRUE(fixture.notifications_since(before_repeat, pending.unit().unit_id()).empty());
+  fixture.stop();
+}
+
+CASE_TEST(matchsvr_waiting_room, end_join_during_initial_initialization_does_not_open_waiting_room) {
+  waiting_test_fixture fixture;
+  if (!fixture.start() || !fixture.prepare_initial()) {
+    return;
+  }
+  fixture.control->before_initialize_response = [&fixture](const PROJECT_NAMESPACE_ID::SSOrbitUserInitReq&) {
+    CASE_EXPECT_EQ(0, matching_manager::me()->orbit_room_end_join(fixture.context, fixture.matching_id,
+                                                                  waiting_test_fixture::kOrbitServerId));
+  };
+  CASE_EXPECT_TRUE(fixture.ready(60, PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED));
+  CASE_EXPECT_EQ(0, matching_manager::me()->get_room_count());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED,
+                 fixture.check(fixture.initial_first).snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED,
+                 fixture.check(fixture.initial_second).snapshot().status());
+  fixture.stop();
+}
 
 CASE_TEST(matchsvr_waiting_room, incomplete_initial_faction_starts_and_fills_in_same_orbit_room) {
   waiting_test_fixture fixture;
@@ -1295,7 +1484,7 @@ CASE_TEST(matchsvr_waiting_room, refuses_only_the_unit_filling_an_existing_facti
   fixture.stop();
 }
 
-CASE_TEST(matchsvr_waiting_room, hard_deadline_ends_pending_units_and_ignores_late_initialize_success) {
+CASE_TEST(matchsvr_waiting_room, end_join_ends_pending_units_and_ignores_late_initialize_success) {
   waiting_test_fixture fixture;
   if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
     return;
@@ -1307,17 +1496,18 @@ CASE_TEST(matchsvr_waiting_room, hard_deadline_ends_pending_units_and_ignores_la
   CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, initializing, snapshot));
   CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, confirming, snapshot));
   fixture.control->before_initialize_response = [&fixture](const PROJECT_NAMESPACE_ID::SSOrbitUserInitReq&) {
-    fixture.advance_to(fixture.end_timepoint);
+    CASE_EXPECT_EQ(0, matching_manager::me()->orbit_room_end_join(fixture.context, fixture.matching_id,
+                                                                  waiting_test_fixture::kOrbitServerId));
   };
   fixture.confirm(initializing, true);
   CASE_EXPECT_TRUE(
-      fixture.wait_for_status(initializing, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT,
+      fixture.wait_for_status(initializing, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED,
                  fixture.check(confirming).snapshot().status());
   const auto initializations = fixture.control->initializations.size();
   manager->tick();
   CASE_EXPECT_EQ(initializations, fixture.control->initializations.size());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT,
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED,
                  fixture.check(initializing).snapshot().status());
   auto next = fixture.request(9503, 23301);
   CASE_EXPECT_EQ(0, manager->create_matching(fixture.context, next, snapshot));
@@ -1392,7 +1582,7 @@ CASE_TEST(matchsvr_waiting_room, initialize_rpc_failure_closes_waiting_room_afte
   fixture.stop();
 }
 
-CASE_TEST(matchsvr_waiting_room, successful_full_room_stays_closed) {
+CASE_TEST(matchsvr_waiting_room, historical_join_limit_closes_room) {
   waiting_test_fixture fixture;
   if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
     return;
@@ -1461,7 +1651,7 @@ CASE_TEST(matchsvr_waiting_room, initial_initialize_failure_never_opens_waiting_
   fixture.stop();
 }
 
-CASE_TEST(matchsvr_waiting_room, repeated_ready_preserves_original_deadline_and_initialization) {
+CASE_TEST(matchsvr_waiting_room, repeated_ready_preserves_unit_confirmation_deadline_and_initialization) {
   waiting_test_fixture fixture;
   if (!fixture.start() || !fixture.prepare_initial() || !fixture.ready()) {
     return;

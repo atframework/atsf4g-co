@@ -25,6 +25,8 @@
 
 #include <utility>
 
+#include "logic/matching/matching_manager.h"
+
 ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API task_action_orbit_room_user_quit::task_action_orbit_room_user_quit(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -37,8 +39,9 @@ ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API const char* task_action_orbit_roo
 
 ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API task_action_orbit_room_user_quit::result_type
 task_action_orbit_room_user_quit::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  const auto& request = get_request_body();
+  get_response_body().set_result(matching_manager::me()->orbit_room_user_quit(
+      get_shared_context(), request.matching_id(), request.user_key().user_key(), get_request_node_id()));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -44,7 +44,7 @@
 namespace {
 static bool init_user_matching_manager_gm_handle() {
   task_action_user_gm_cmd_nomsg::register_gm_command("matching_start", user_matching_manager::on_gm_cmd_start_matching,
-                                             "matching_start <level_id> <region>");
+                                                     "matching_start <level_id> <region>");
   return true;
 }
 

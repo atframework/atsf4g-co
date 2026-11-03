@@ -15,24 +15,25 @@
 ## 配置与覆盖
 
 测试关卡位于 `Level.xlsx`，池和规则位于 `Matching.xlsx`。四池普通成局条件均为 2 人、2 个 faction；
-总人数上限 4、faction 容量 2、最多 4 个 faction，普通和等待室规则不限制 faction 容量关系。
+当前人数上限 4、历史成功加入人数上限 8、faction 容量 2、最多 4 个 faction，普通和等待室规则不限制 faction 容量关系。
 初始两个单人禁止填充，分别建立容量 1 的完整 faction。
 四个关卡使用已有的 DedicatedServer 模板 `1002`（map2，`remote_start=false`），由 Orbit 启动 DS。
 模板 `1` 需要客户端处理远程启动通知，当前 robot 不提供该能力，不能用于本组用例。
 
 | 用例 | 关卡 / 池 | 等待室设置 | 核心断言 |
 | --- | --- | --- | --- |
-| `matching_waiting_fill.conf` | 999904 / 999990401 | 开启，允许补已有 faction | 后补 Unit 新建容量 2 faction 后独立入场；下一 Unit 补相同 faction；4 人成功后，新用户进入另一 DS |
+| `matching_waiting_fill.conf` | 999904 / 999990401 | 开启，允许补已有 faction | 后补 Unit 新建容量 2 faction 后独立入场；下一 Unit 补相同 faction；当前 4 人占满时，新用户进入另一 DS，原等待室仍保留 |
 | `matching_waiting_no_fill.conf` | 999905 / 999990402 | 开启，禁止补已有 faction | 两个后补 Unit 分别新建 faction，进入同一 DS；原用户 faction 和 Unit ID 不变 |
 | `matching_waiting_disabled.conf` | 999906 / 999990403 | 关闭 | 第一对用户完成后，下一单人继续搜索，后续一对进入不同 DS |
-| `matching_waiting_deadline_setup.conf` + `matching_waiting_deadline_verify.conf` | 999907 / 999990404 | 开启，2 个初始用户 + 1 个后补用户 | 先证明该房接纳后补，再使用实际绝对截止时间；未满房间到期后，新用户进入不同 DS |
+| `matching_waiting_end_join_setup.conf` + `matching_waiting_end_join_verify.conf` | 999907 / 999990404 | 开启，2 个初始用户 + 1 个后补用户 | 真实 EndJoin/结算后，新用户进入另一 DS；不依赖加入截止 |
+| `matching_waiting_quit_setup.conf` + `matching_waiting_quit_verify.conf` | 999904 / 999990401 | 开启，允许回收名额 | 初始玩家真实退出后，新玩家进入记录中的同一房间并补入相同新 faction |
 
 `matching_assert_admission` 对当前用户和参考用户都重新执行 `matching_check` 和 `user_get_info`，与首次入场保存的
 Unit ID、room key、faction 和关卡比较，再检查两者的房间、faction 关系。因此不是仅比较客户端缓存或仅看 FINISHED。
 `matching_assert_searching` 要求当前状态为 SEARCHING 且没有 Orbit 房间。
 
 满员场景验证外部可见的“不再接纳、后续用户进入另一 DS”。CS 不暴露 Room 状态，不能仅凭这些断言区分
-“Room 已关闭”和“仍在 WAITING 但因容量拒绝”；内部关闭状态应结合 Match 日志检查。退出后不重开还需真实 DS 退出动作。
+“Room 已关闭”和“仍在 WAITING 但因容量拒绝”；内部状态由 Match 单元测试和日志验证。退出后能否补位由名额回收配置决定。
 
 ## 执行
 
@@ -67,8 +68,8 @@ run-case-file "D:/DB/server/src/robot/case_config/matching_waiting_disabled.conf
 ### 全新账号前缀
 
 现有文件使用固定前缀：`fill` 为 `wrfill`、`no_fill` 为 `wrnofill`、`disabled` 为 `wrdisabled`，
-截止两个阶段均为 `wrdeadline`。重复执行前，把所选文件的这一前缀精确替换为新值；相同文本也出现在参考用户
-完整 OpenID 中，须一起替换。截止两个文件须使用同一个新前缀。
+EndJoin 两个阶段均为 `wrendjoin`，退出两个阶段均为 `wrquit`。重复执行前，把所选文件的这一前缀精确替换为新值；相同文本也出现在参考用户
+完整 OpenID 中，须一起替换。同一通知用例的两个文件须使用同一个新前缀。
 
 也可以只在 `<BUILD_DIR>/_agent_tmp/` 创建变量模板，利用 robot 现有的 `-set` 替换功能，不改仓库用例：
 
@@ -84,18 +85,17 @@ $runPrefix = 'wrfill' + (Get-Date -Format 'yyyyMMddHHmmss')
 
 这个示例在 `robot/bin` 运行。固定前缀文件没有 `${WAITING_PREFIX}`，仅传 `-set` 不会改变其账号。
 
-### 绝对截止
+### EndJoin 与玩家退出
 
-1. 在同一 robot 进程运行 `matching_waiting_deadline_setup.conf`，保持账号在线。
-2. 按该轮输出的 room key，在真实 Orbit → Match `SSMatchingOrbitRoomReadyReq` 日志中找到 `end_join_timepoint`。
-3. 将 `matching_waiting_deadline_verify.conf` 的 `__END_JOIN_TIMEPOINT__` 替换成上述 Unix 秒，副本存到
-   `<BUILD_DIR>/_agent_tmp/`，然后在同一 robot 进程执行副本。
+等待室不再有 EndJoinTime，也不再因当前满员关闭。两个通知场景都必须在同一个 Robot 进程中执行 setup 和 verify，不能用两次独立的非交互进程代替。
 
-不要分别用两次非交互 `-case_file` 启动这两个阶段：第一次结束会退出 robot，第二次没有已登录用户和入场记录。
+- EndJoin：先执行 `matching_waiting_end_join_setup.conf`，保持账号在线，通过实际入口发送该房间的 EndJoin/结算通知，确认完成后执行 `matching_waiting_end_join_verify.conf`。初始房间留有空位，避免把容量不足误判为成功关闭。
+- 退出：执行 `matching_waiting_quit_setup.conf` 后，通过真实 DS/Orbit 流程让 `wrquit1` 退出，再执行 `matching_waiting_quit_verify.conf`。verify 会先等待 Orbit 退出状态，然后验证后补玩家进入原房间。
+- `matching_assert_recorded_room <reference_open_id> <same|different>` 读取当前玩家的实时匹配与 Orbit 状态，并和参考玩家此前已验证的房间标识比较；参考玩家可以已退出或已结算。普通 `matching_assert_admission` 仍要求双方实时状态保持不变。
 
-CS 没有提供 `end_join_timepoint`。不要从房间创建时间加一个猜测的等待时长，也不要用等待规则时间上限代替该截止。
-`matching_wait_until` 仅安排后续操作的时间，不证明任何匹配行为；其后的 SEARCHING、另一 DS 和原用户不变断言才是验收。
-如果 DS 在截止之前主动结束或房间数据清除，此场景前置条件不成立，应查明 DS 行为，而不是删除“原用户不变”断言。
+不使用 `logout` 或 `matching_cancel` 冒充 Orbit 退出/关闭通知。每组执行完须通过真实 EndJoin/结算关闭房间，换新账号前缀本身不能清除仍有容量的旧等待室。
+
+历史上限的集成验收可在同一进程分批加入新玩家并触发真实退出，直到历史成功人数达到 8。退出不返还历史额度；后续新 Unit 应进入另一房间。历史额度、并发预留和退出回收关闭分支已有 Match RPC/Room 单元测试覆盖，真实服务验证仍需实际通知入口。
 
 ### 退出后重匹配
 

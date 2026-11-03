@@ -85,7 +85,7 @@ bool matching_unit::refresh_view_from_room(const matching_room& room) {
   next.set_status(waiting ? view_.status() : convert_room_status(room.get_status()));
   protobuf_copy_message(*next.mutable_unit(), data_);
   next.set_result(waiting ? view_.result() : room.get_result());
-  next.set_expire_time(waiting ? room.get_waiting_end_timepoint() : room.get_expire_time());
+  next.set_expire_time(waiting ? 0 : room.get_expire_time());
   next.set_last_event_id(last_event_id_);
   next.set_confirm_expire_time(waiting ? view_.confirm_expire_time() : room.get_confirm_expire_time());
   protobuf_copy_message(*next.mutable_orbit_room_key(), room.get_orbit_room_key());

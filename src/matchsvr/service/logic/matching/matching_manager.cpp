@@ -322,8 +322,7 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
         !selected_room->add_waiting_units(
             {runtime_unit}, room_selection.waiting_evaluation.faction_id,
             room_selection.waiting_evaluation.faction_capacity, room_selection.waiting_evaluation.creates_faction, now,
-            (std::min)(selected_room->get_waiting_end_timepoint(),
-                       now + matching_logic::get_confirm_timeout_seconds(scope.matching_pool_id())))) {
+            now + matching_logic::get_confirm_timeout_seconds(scope.matching_pool_id()))) {
       response.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT);
       return response.result();
     }
@@ -334,11 +333,11 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
     runtime_unit->publish(ctx, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED);
     FCTXLOGINFO(ctx,
                 "waiting room admitted Unit, matching_id={}, unit_id={}, faction_id={}, unit_event_id={}, users={}, "
-                "creates_faction={}, faction_capacity={}, confirm_expire_time={}, end_join_timepoint={}",
+                "creates_faction={}, faction_capacity={}, confirm_expire_time={}, historical_users={}",
                 selected_room->get_matching_id(), unit.unit_id(), runtime_unit->get_view().faction_id(),
                 runtime_unit->get_last_event_id(), selected_room->get_user_count(),
                 room_selection.waiting_evaluation.creates_faction, room_selection.waiting_evaluation.faction_capacity,
-                runtime_unit->get_view().confirm_expire_time(), selected_room->get_waiting_end_timepoint());
+                runtime_unit->get_view().confirm_expire_time(), selected_room->get_joined_user_count());
     response.set_matching_id(selected_room->get_matching_id());
     protobuf_copy_message(*response.mutable_snapshot(), runtime_unit->get_view());
     return 0;
@@ -625,14 +624,56 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
   return response.result();
 }
 
+int32_t matching_manager::orbit_room_end_join(rpc::context& ctx, const std::string& matching_id,
+                                              uint64_t source_server_id) {
+  auto found = rooms_.find(matching_id);
+  if (found == rooms_.end() || !found->second) {
+    return 0;
+  }
+  auto room = found->second;
+  if (source_server_id == 0 || source_server_id != room->get_orbit_server_id()) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_SOURCE_SERVER_ID_NOT_FOUND;
+  }
+  const int64_t now = atfw::util::time::time_utility::get_now();
+  FCTXLOGINFO(ctx, "Orbit stopped waiting admission, matching_id={}, source={:#x}, status={}", matching_id,
+              source_server_id, static_cast<int>(room->get_status()));
+  if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_WAITING) {
+    close_waiting_room(ctx, room, now, PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED);
+  } else if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
+    mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, now,
+                       PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED);
+    PROJECT_NAMESPACE_ID::DMatchingEventLog event;
+    event.set_failed(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED);
+    publish_room_event(ctx, room, std::move(event));
+    rooms_.erase(matching_id);
+  }
+  return 0;
+}
+
+int32_t matching_manager::orbit_room_user_quit(rpc::context& ctx, const std::string& matching_id,
+                                               const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                               uint64_t source_server_id) {
+  auto found = rooms_.find(matching_id);
+  if (found == rooms_.end() || !found->second) {
+    return 0;
+  }
+  auto room = found->second;
+  int32_t result = 0;
+  if (source_server_id == 0 || source_server_id != room->get_orbit_server_id()) {
+    result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_SOURCE_SERVER_ID_NOT_FOUND;
+  } else if (!room->quit_waiting_user(user_key)) {
+    result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_FOUND;
+  }
+  FCTXLOGINFO(ctx, "Orbit waiting player quit, matching_id={}, user={}:{}, result={}", matching_id, user_key.user_id(),
+              user_key.zone_id(), result);
+  return result;
+}
+
 rpc::result_code_type matching_manager::orbit_room_ready(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq& request,
     PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp& response, uint64_t source_server_id) {
-  FCTXLOGDEBUG(ctx,
-               "orbit room ready, matching_id={}, source={:#x}, start_success={}, expired_timepoint={}, "
-               "end_join_timepoint={}",
-               request.matching_id(), source_server_id, request.start_success(), request.expired_timepoint(),
-               request.end_join_timepoint());
+  FCTXLOGDEBUG(ctx, "orbit room ready, matching_id={}, source={:#x}, start_success={}, expired_timepoint={}",
+               request.matching_id(), source_server_id, request.start_success(), request.expired_timepoint());
   response.set_result(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_NOT_FOUND);
   auto room_iter = rooms_.find(request.matching_id());
   if (room_iter == rooms_.end() || !room_iter->second) {
@@ -699,16 +740,13 @@ rpc::result_code_type matching_manager::orbit_room_ready(
   protobuf_copy_message(*init_request->mutable_room_key(), room->get_orbit_room_key());
   const auto waiting_rule = excel::get_matching_waiting_room_rule(room->get_scope().matching_pool_id());
   const auto initial_pool = excel::get_ExcelMatchingPool_by_id(room->get_scope().matching_pool_id());
-  const bool waiting_enabled = waiting_rule && initial_pool &&
-                               room->get_user_count() < static_cast<size_t>(initial_pool->max_user_cout_limit()) &&
-                               request.end_join_timepoint() > atfw::util::time::time_utility::get_now();
+  const bool waiting_enabled = waiting_rule && initial_pool;
   init_request->set_is_last_one(!waiting_enabled);
   FCTXLOGINFO(ctx,
               "initial matching users initialization started, matching_id={}, orbit_room_id={}, orbitsvr_id={:#x}, "
-              "units={}, users={}, waiting_enabled={}, end_join_timepoint={}, battle_create_expire_time={}",
+              "units={}, users={}, waiting_enabled={}, battle_create_expire_time={}",
               room->get_matching_id(), room->get_orbit_room_key().client_id(), room->get_orbit_server_id(),
-              room->get_units().size(), room->get_user_count(), waiting_enabled, request.end_join_timepoint(),
-              room->get_battle_create_expire_time());
+              room->get_units().size(), room->get_user_count(), waiting_enabled, room->get_battle_create_expire_time());
 
   std::set<uint64_t> notified_lobbysvrs;
   size_t skipped_notify_user_count = 0;
@@ -787,12 +825,11 @@ rpc::result_code_type matching_manager::orbit_room_ready(
   room->set_orbit_expired_timepoint(request.expired_timepoint());
   const int64_t completed_time = atfw::util::time::time_utility::get_now();
   const auto pool = excel::get_ExcelMatchingPool_by_id(room->get_scope().matching_pool_id());
-  if (waiting_enabled && pool && request.end_join_timepoint() > completed_time &&
-      room->get_user_count() < static_cast<size_t>(pool->max_user_cout_limit())) {
+  if (waiting_enabled && pool) {
     const auto initial_units = room->get_units();
-    if (room->open_waiting_room(completed_time, request.end_join_timepoint())) {
-      FCTXLOGINFO(ctx, "opened waiting room, matching_id={}, users={}, end_join_timepoint={}", room->get_matching_id(),
-                  room->get_successful_user_count(), request.end_join_timepoint());
+    if (room->open_waiting_room(completed_time)) {
+      FCTXLOGINFO(ctx, "opened waiting room, matching_id={}, users={}, historical_users={}", room->get_matching_id(),
+                  room->get_successful_user_count(), room->get_joined_user_count());
       waiting_rooms_by_bucket_[make_bucket_key(room->get_scope())].insert(
           queue_entry{room->get_created_time(), room->get_matching_id()});
       for (const auto& value : initial_units) {
@@ -803,6 +840,7 @@ rpc::result_code_type matching_manager::orbit_room_ready(
         value.second->unbind_room();
         value.second->publish(ctx, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_BATTLE_READY);
       }
+      advance_waiting_room(ctx, room, completed_time);
       response.set_result(0);
       RPC_RETURN_CODE(0);
     }
@@ -812,16 +850,10 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     waiting_unavailable_reason = "waiting_disabled_or_unconfigured";
   } else if (!pool) {
     waiting_unavailable_reason = "pool_unavailable";
-  } else if (request.end_join_timepoint() <= completed_time) {
-    waiting_unavailable_reason = "join_deadline";
-  } else if (room->get_user_count() >= static_cast<size_t>(pool->max_user_cout_limit())) {
-    waiting_unavailable_reason = "room_full";
   }
   FCTXLOGINFO(ctx,
-              "initial matching admission completed without waiting room, reason={}, matching_id={}, users={}, "
-              "end_join_timepoint={}, now={}",
-              waiting_unavailable_reason, room->get_matching_id(), room->get_user_count(), request.end_join_timepoint(),
-              completed_time);
+              "initial matching admission completed without waiting room, reason={}, matching_id={}, users={}, now={}",
+              waiting_unavailable_reason, room->get_matching_id(), room->get_user_count(), completed_time);
   mark_room_terminal(*room, PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED, completed_time);
   PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
   auto matched_event = event_log.mutable_matched();
@@ -1117,8 +1149,7 @@ bool matching_manager::move_to_waiting_room(rpc::context& ctx, const matching_ro
   }
   if (!target->add_waiting_units(
           units, evaluation.faction_id, evaluation.faction_capacity, evaluation.creates_faction, now,
-          (std::min)(target->get_waiting_end_timepoint(),
-                     now + matching_logic::get_confirm_timeout_seconds(target->get_scope().matching_pool_id())))) {
+          now + matching_logic::get_confirm_timeout_seconds(target->get_scope().matching_pool_id()))) {
     return false;
   }
   // 从来源 Room 收集成员到这里没有 await 或成员修改，直接提交同一批 Unit。
@@ -1131,10 +1162,10 @@ bool matching_manager::move_to_waiting_room(rpc::context& ctx, const matching_ro
     FCTXLOGINFO(ctx,
                 "matching Unit moved to waiting room, source_matching_id={}, target_matching_id={}, unit_id={}, "
                 "faction_id={}, creates_faction={}, faction_capacity={}, cohort_units={}, unit_event_id={}, "
-                "end_join_timepoint={}",
+                "historical_users={}",
                 source->get_matching_id(), target->get_matching_id(), unit->get_unit_id(),
                 unit->get_view().faction_id(), evaluation.creates_faction, evaluation.faction_capacity, units.size(),
-                unit->get_last_event_id(), target->get_waiting_end_timepoint());
+                unit->get_last_event_id(), target->get_joined_user_count());
   }
   refresh_searching_room_user_count(*source);
   if (source->get_units().empty()) {
@@ -1156,12 +1187,12 @@ int32_t matching_manager::confirm_waiting_unit(rpc::context& ctx, const matching
     FCTXLOGINFO(ctx,
                 "waiting confirmation rejected, matching_id={}, unit_id={}, user_id={}, zone_id={}, room_status={}, "
                 "unit_status={}, member_present={}, request_event_id={}, unit_event_id={}, acknowledge_event_id={}, "
-                "end_join_timepoint={}, now={}, result={}",
+                "historical_users={}, now={}, result={}",
                 room->get_matching_id(), unit->get_unit_id(), request.operator_user().user_id(),
                 request.operator_user().zone_id(), PROJECT_NAMESPACE_ID::EnMatchingRoomStatus_Name(room->get_status()),
                 PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus_Name(unit->get_view().status()),
                 room->has_unit(unit->get_unit_id()), request.last_event_id(), unit->get_last_event_id(),
-                request.acknowledge_event_id(), room->get_waiting_end_timepoint(), now, response.result());
+                request.acknowledge_event_id(), room->get_joined_user_count(), now, response.result());
     protobuf_copy_message(*response.mutable_snapshot(), unit->get_view());
     return response.result();
   }
@@ -1226,10 +1257,10 @@ void matching_manager::start_waiting_unit(rpc::context& ctx, const matching_room
   FCTXLOGINFO(
       ctx,
       "waiting Unit initialization started, matching_id={}, unit_id={}, faction_id={}, initializing_event_id={}, "
-      "orbit_room_id={}, orbitsvr_id={:#x}, users={}, end_join_timepoint={}",
+      "orbit_room_id={}, orbitsvr_id={:#x}, users={}, historical_users={}",
       room->get_matching_id(), unit->get_unit_id(), unit->get_view().faction_id(), initializing_event_id,
       room->get_orbit_room_key().client_id(), room->get_orbit_server_id(), unit->get_data().users_size(),
-      room->get_waiting_end_timepoint());
+      room->get_joined_user_count());
   auto invoked = rpc::async_invoke(
       ctx, "matching_manager.waiting_init_user",
       [this, room, unit, initializing_event_id](rpc::context& child_ctx) -> rpc::result_code_type {
@@ -1252,8 +1283,8 @@ void matching_manager::start_waiting_unit(rpc::context& ctx, const matching_room
             FCTXLOGINFO(
                 child_ctx,
                 "waiting Unit initialization stopped, reason=room_closed_before_rpc, matching_id={}, unit_id={}, "
-                "initializing_event_id={}, end_join_timepoint={}, now={}",
-                room->get_matching_id(), unit->get_unit_id(), initializing_event_id, room->get_waiting_end_timepoint(),
+                "initializing_event_id={}, historical_users={}, now={}",
+                room->get_matching_id(), unit->get_unit_id(), initializing_event_id, room->get_joined_user_count(),
                 before);
             close_waiting_room(child_ctx, room, before);
             RPC_RETURN_CODE(0);
@@ -1278,15 +1309,15 @@ void matching_manager::start_waiting_unit(rpc::context& ctx, const matching_room
               child_ctx,
               "waiting Unit initialization RPC returned, matching_id={}, unit_id={}, initializing_event_id={}, "
               "attempt={}, rpc_result={}, business_result={}, business_result_available={}, "
-              "end_join_timepoint={}, now={}",
+              "historical_users={}, now={}",
               room->get_matching_id(), unit->get_unit_id(), initializing_event_id, retry + 1, result,
-              response->result_code(), result == 0, room->get_waiting_end_timepoint(), after);
+              response->result_code(), result == 0, room->get_joined_user_count(), after);
           if (!room->is_waiting_open(after)) {
             FCTXLOGINFO(child_ctx,
                         "waiting Unit initialization result ignored, reason=room_closed_after_rpc, matching_id={}, "
-                        "unit_id={}, initializing_event_id={}, end_join_timepoint={}, now={}",
+                        "unit_id={}, initializing_event_id={}, historical_users={}, now={}",
                         room->get_matching_id(), unit->get_unit_id(), initializing_event_id,
-                        room->get_waiting_end_timepoint(), after);
+                        room->get_joined_user_count(), after);
             close_waiting_room(child_ctx, room, after);
             RPC_RETURN_CODE(0);
           }
@@ -1332,7 +1363,8 @@ void matching_manager::start_waiting_unit(rpc::context& ctx, const matching_room
               room->get_matching_id(), unit->get_unit_id(), initializing_event_id, unit->get_last_event_id(),
               PROJECT_NAMESPACE_ID::EnMatchingRoomStatus_Name(room->get_status()),
               PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus_Name(unit->get_view().status()));
-          close_waiting_room(child_ctx, room, completed);
+          close_waiting_room(child_ctx, room, completed,
+                             PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_BATTLE_START_FAILED);
         }
         RPC_RETURN_CODE(0);
       });
@@ -1430,15 +1462,7 @@ void matching_manager::advance_waiting_room(rpc::context& ctx, const matching_ro
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_WAITING) {
     return;
   }
-  const auto pool = excel::get_ExcelMatchingPool_by_id(room->get_scope().matching_pool_id());
-  if (now >= room->get_waiting_end_timepoint() ||
-      (pool && room->get_successful_user_count() >= static_cast<size_t>(pool->max_user_cout_limit()))) {
-    FCTXLOGINFO(ctx,
-                "waiting room closing, reason={}, matching_id={}, successful_users={}, reserved_users={}, "
-                "max_users={}, end_join_timepoint={}, now={}",
-                now >= room->get_waiting_end_timepoint() ? "join_deadline" : "room_full", room->get_matching_id(),
-                room->get_successful_user_count(), room->get_reserved_user_count(),
-                pool ? pool->max_user_cout_limit() : 0, room->get_waiting_end_timepoint(), now);
+  if (room->get_joined_user_count() >= room->get_max_join_user_count()) {
     close_waiting_room(ctx, room, now);
     return;
   }
@@ -1473,19 +1497,29 @@ void matching_manager::close_waiting_room(rpc::context& ctx, const matching_room
     }
   }
   const auto pending = room->get_units();
-  FCTXLOGINFO(ctx,
-              "closing waiting room, matching_id={}, successful_users={}, pending_units={}, deadline={}, now={}, "
-              "reason={}",
-              room->get_matching_id(), room->get_successful_user_count(), pending.size(),
-              room->get_waiting_end_timepoint(), now, reason);
-  const auto pending_status = reason == 0 ? PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT
-                                          : PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED;
+  FCTXLOGINFO(
+      ctx,
+      "closing waiting room, matching_id={}, successful_users={}, pending_units={}, historical_users={}, now={}, "
+      "reason={}, trigger={}, historical_limit={}",
+      room->get_matching_id(), room->get_successful_user_count(), pending.size(), room->get_joined_user_count(), now,
+      reason,
+      reason == 0                                                           ? "historical_limit"
+      : reason == PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED ? "orbit_end_join"
+                                                                            : "initialization_failed",
+      room->get_max_join_user_count());
+  const bool normal_close = reason == 0 || reason == PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED;
+  const auto pending_status = normal_close ? PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED
+                                           : PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED;
+  if (reason == 0) {
+    reason = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_WAITING_ROOM_CLOSED;
+  }
   for (const auto& value : pending) {
     if (value.second) {
       remove_waiting_unit(ctx, room, value.second, pending_status, reason, now);
     }
   }
   room->mark_waiting_closed(now);
+  rooms_.erase(room->get_matching_id());
 }
 
 size_t matching_manager::rebalance_room(rpc::context& ctx, const matching_room::ptr_t& target_room, int64_t now,

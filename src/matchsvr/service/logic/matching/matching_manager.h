@@ -102,6 +102,11 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_room_ready(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq& request,
       PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp& response, uint64_t source_server_id);
+  // 停止指定 Orbit 房间接纳，返回业务结果码；协议响应由 Action 填充。
+  int32_t orbit_room_end_join(rpc::context& ctx, const std::string& matching_id, uint64_t source_server_id);
+  // 按玩家身份更新旧房间成员，不操作其新一轮匹配。
+  int32_t orbit_room_user_quit(rpc::context& ctx, const std::string& matching_id,
+                               const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t source_server_id);
 
   // 返回当前处于搜索阶段的玩家总数，用于选择规则组。
   int32_t get_total_matching_user_count() const noexcept;

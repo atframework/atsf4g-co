@@ -780,6 +780,11 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
     result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL;
     return result;
   }
+  if (room.get_joined_user_count() + room.get_reserved_user_count() + incoming_user_count >
+      room.get_max_join_user_count()) {
+    result.result = PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL;
+    return result;
+  }
   const size_t fill_capacity = excel::get_matching_pool_faction_capacity(pool->id());
   const size_t incoming_capacity =
       complete_faction_capacity > 0 ? complete_faction_capacity : (fill_enabled ? fill_capacity : incoming_user_count);
@@ -831,14 +836,15 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
   const auto& waiting_factions = room.get_waiting_factions();
   const bool can_create_faction = waiting_factions.size() < static_cast<size_t>(pool->max_faction_cout_limit());
   const bool balanced = pool->faction_fill_policy() == PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_BALANCED;
-  if (complete_faction_capacity == 0 && fill_enabled && pool->is_waiting_room_faction_can_joined() &&
+  if (complete_faction_capacity == 0 && fill_enabled && room.can_refill_waiting_factions() &&
       (!balanced || !can_create_faction)) {
     size_t minimum_user_count = std::numeric_limits<size_t>::max();
     size_t second_minimum_user_count = minimum_user_count;
     size_t maximum_user_count = 0;
     if (balanced) {
       for (const auto& value : waiting_factions) {
-        const size_t occupied = value.second.successful_user_count + value.second.reserved_user_count;
+        const size_t occupied =
+            value.second.successful_user_count + value.second.reserved_user_count + value.second.retired_user_count;
         if (occupied < minimum_user_count) {
           second_minimum_user_count = minimum_user_count;
           minimum_user_count = occupied;
@@ -854,7 +860,7 @@ matching_logic::waiting_join_result matching_logic::check_waiting_units_can_join
       placement_candidate candidate;
       candidate.position = position++;
       const auto& faction = value.second;
-      const size_t occupied = faction.successful_user_count + faction.reserved_user_count;
+      const size_t occupied = faction.successful_user_count + faction.reserved_user_count + faction.retired_user_count;
       if (faction.confirming_creation || !faction.fill_enabled || faction.user_capacity != incoming_capacity ||
           occupied + incoming_user_count > faction.user_capacity) {
         continue;

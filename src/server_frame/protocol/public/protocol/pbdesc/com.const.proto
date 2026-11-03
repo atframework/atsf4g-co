@@ -373,6 +373,8 @@ enum EnErrorCode {
   [(error_code.description) = "匹配ds启动失败"];
   EN_ERR_MATCHING_ORBIT_AGENT_OVERLOAD = -922
   [(error_code.description) = "Orbit代理过载"];
+  EN_ERR_MATCHING_WAITING_ROOM_CLOSED = -923
+  [(error_code.description) = "等待室已停止接纳"];
   // 关卡模块[1001-1100]
   EN_ERR_LEVEL_CFG_NOT_FOUND = -1001
   [(error_code.description) = "关卡配置未找到"];

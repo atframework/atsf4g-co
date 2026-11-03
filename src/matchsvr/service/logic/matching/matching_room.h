@@ -16,6 +16,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace rpc {
@@ -36,8 +37,11 @@ class matching_room {
     uint32_t user_capacity = 0;
     size_t successful_user_count = 0;
     size_t reserved_user_count = 0;
+    size_t retired_user_count = 0;
     bool fill_enabled = false;
     bool confirming_creation = false;
+    // 已有玩家成功入场的 faction 清空后仍保留 ID 和容量。
+    bool established = false;
     std::vector<uint64_t> unit_ids;
   };
   using waiting_faction_map_t = std::map<int32_t, waiting_faction>;
@@ -135,8 +139,12 @@ class matching_room {
   bool finalize_faction_ids();
   int32_t get_unit_faction_id(uint64_t unit_id) const noexcept;
   // 初始 user_init 成功后转为等待室，完成 Unit 只留下规则数据，不保留订阅对象。
-  bool open_waiting_room(int64_t now, int64_t end_timepoint);
-  int64_t get_waiting_end_timepoint() const noexcept { return waiting_end_timepoint_; }
+  bool open_waiting_room(int64_t now);
+  size_t get_joined_user_count() const noexcept { return joined_users_.size(); }
+  size_t get_max_join_user_count() const noexcept { return max_join_user_count_; }
+  bool can_refill_waiting_factions() const noexcept { return refill_waiting_factions_; }
+  // 处理已成功入场成员的 Orbit 退出，归还当前占用并保留历史身份。
+  bool quit_waiting_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   size_t get_successful_user_count() const noexcept { return successful_user_count_; }
   size_t get_reserved_user_count() const noexcept { return user_count_ - successful_user_count_; }
   bool is_waiting_open(int64_t now) const noexcept;
@@ -220,7 +228,9 @@ class matching_room {
   admitted_unit_map_t admitted_units_;
   size_t successful_user_count_ = 0;
   int32_t next_waiting_faction_id_ = 1001;
-  int64_t waiting_end_timepoint_ = 0;
+  size_t max_join_user_count_ = 0;
+  bool refill_waiting_factions_ = false;
+  std::set<std::pair<uint64_t, uint32_t>> joined_users_;
 
   // 创建时间，同时作为老房间优先的排序时间。
   int64_t created_time_;

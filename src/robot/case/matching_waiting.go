@@ -24,6 +24,7 @@ type matchingAdmission struct {
 func init() {
 	robot_case.RegisterCase("matching_wait_admitted", MatchingWaitAdmittedCase, 5*time.Minute)
 	robot_case.RegisterCase("matching_assert_admission", MatchingAssertAdmissionCase, 30*time.Second)
+	robot_case.RegisterCase("matching_assert_recorded_room", MatchingAssertRecordedRoomCase, 30*time.Second)
 	robot_case.RegisterCase("matching_assert_unchanged", MatchingAssertUnchangedCase, 30*time.Second)
 	robot_case.RegisterCase("matching_assert_searching", MatchingAssertSearchingCase, 30*time.Second)
 	robot_case.RegisterCase("matching_assert_new_unit", MatchingAssertNewUnitCase, 30*time.Second)
@@ -237,6 +238,34 @@ func MatchingAssertUnchangedCase(action *robot_case.TaskActionCase, holder *user
 	return err
 }
 
+// Compare a fresh current admission with a verified historical room, even after the reference player has left.
+func MatchingAssertRecordedRoomCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("need reference_open_id room_relation")
+	}
+	user, err := requireCaseUser(holder)
+	if err != nil {
+		return err
+	}
+	referenceHolder := user_data.UserContainerTryGetUser(args[0])
+	if referenceHolder == nil || referenceHolder.GetUser() == nil {
+		return fmt.Errorf("reference user %q does not exist", args[0])
+	}
+	reference, err := savedMatchingAdmission(referenceHolder.GetUser())
+	if err != nil {
+		return err
+	}
+	actual, err := assertMatchingAdmissionUnchanged(action, user)
+	if err != nil {
+		return err
+	}
+	if err := compareMatchingAdmissions(actual, reference, args[1], "any"); err != nil {
+		return err
+	}
+	action.Log("recorded room verified: actual=%+v reference=%+v relation=%s", actual, reference, args[1])
+	return nil
+}
+
 func MatchingAssertSearchingCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("matching_assert_searching accepts no arguments")
@@ -315,10 +344,10 @@ func MatchingWaitOrbitLeftCase(action *robot_case.TaskActionCase, holder *user_d
 }
 
 // This schedules a boundary action only; later admission assertions determine the business outcome.
-// Supply the actual end_join_timepoint from room_ready, not an estimated room lifetime.
+// The timestamp only schedules an action; it is not a waiting-room lifetime or closing condition.
 func MatchingWaitUntilCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("need actual end_join_timepoint as Unix seconds")
+		return fmt.Errorf("need target Unix timestamp")
 	}
 	seconds, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil || seconds <= 0 {
@@ -340,6 +369,6 @@ func MatchingWaitUntilCase(action *robot_case.TaskActionCase, holder *user_data.
 	if err := action.AfterYield(); err != nil {
 		return err
 	}
-	action.Log("actual waiting-room deadline reached: %d", seconds)
+	action.Log("scheduled timestamp reached: %d", seconds)
 	return nil
 }

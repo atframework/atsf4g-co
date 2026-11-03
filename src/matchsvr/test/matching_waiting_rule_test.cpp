@@ -43,6 +43,7 @@ class waiting_rule_fixture {
     pool.set_faction_fill_policy(PROJECT_NAMESPACE_ID::config::EN_MATCHING_FACTION_FILL_PRIORITY);
     pool.add_rule_group_ids(10);
     pool.set_is_has_waiting_room(true);
+    pool.set_waiting_room_max_join_user_count(12);
     pool.set_waiting_room_rule_id(9100);
     pool.set_is_waiting_room_faction_can_joined(true);
     rule.set_id(9100);
@@ -150,7 +151,7 @@ static matching_room::ptr_t ordinary_room(const PROJECT_NAMESPACE_ID::DMatchingU
   return assigned ? room : nullptr;
 }
 
-static bool open_waiting(matching_room& room, int64_t end = 200) {
+static bool open_waiting(matching_room& room) {
   const auto ready = matching_logic::check_room_ready(room, 100, static_cast<int32_t>(room.get_user_count()));
   CASE_EXPECT_TRUE(ready.ready());
   if (!ready.ready()) {
@@ -169,7 +170,7 @@ static bool open_waiting(matching_room& room, int64_t end = 200) {
     return false;
   }
   room.mark_creating_battle(0x180081, 150);
-  const bool opened = room.open_waiting_room(100, end);
+  const bool opened = room.open_waiting_room(100);
   CASE_EXPECT_TRUE(opened);
   return opened;
 }
@@ -427,7 +428,7 @@ CASE_TEST(matchsvr_waiting_rule, balanced_policy_does_not_override_disabled_exis
   CASE_EXPECT_EQ(2, room->get_user_count());
 }
 
-CASE_TEST(matchsvr_waiting_rule, absolute_room_deadline_rejects_new_and_pending_units) {
+CASE_TEST(matchsvr_waiting_rule, waiting_room_has_no_join_deadline) {
   waiting_rule_fixture fixture;
   if (!fixture.start()) {
     return;
@@ -442,16 +443,16 @@ CASE_TEST(matchsvr_waiting_rule, absolute_room_deadline_rejects_new_and_pending_
   if (!add_waiting(*room, {candidate}, 0, 199)) {
     return;
   }
-  CASE_EXPECT_EQ(200, candidate->get_view().confirm_expire_time());
+  CASE_EXPECT_EQ(214, candidate->get_view().confirm_expire_time());
   accept_unit(candidate);
   CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(2) == std::vector<uint64_t>{2}));
   candidate->mark_initializing();
-  CASE_EXPECT_FALSE(room->complete_waiting_unit(2, 200));
-  CASE_EXPECT_EQ(2, room->get_successful_user_count());
-  CASE_EXPECT_EQ(1, room->get_reserved_user_count());
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 200));
+  CASE_EXPECT_EQ(3, room->get_successful_user_count());
+  CASE_EXPECT_EQ(0, room->get_reserved_user_count());
   const auto later = waiting_unit(3, 3001);
-  CASE_EXPECT_FALSE(matching_logic::check_waiting_units_can_join(*room, {&later}, 0, 200).can_join);
-  CASE_EXPECT_FALSE(matching_logic::check_waiting_units_can_join(*room, {&later}, 0, 201).can_join);
+  CASE_EXPECT_TRUE(matching_logic::check_waiting_units_can_join(*room, {&later}, 0, 200).can_join);
+  CASE_EXPECT_TRUE(matching_logic::check_waiting_units_can_join(*room, {&later}, 0, 201).can_join);
 }
 
 CASE_TEST(matchsvr_waiting_rule, missing_reference_does_not_admit_units) {
@@ -619,6 +620,208 @@ CASE_TEST(matchsvr_waiting_rule, completed_snapshot_releases_runtime_and_blocks_
   CASE_EXPECT_EQ(admitted_before, room->get_admitted_units().at(1).SerializeAsString());
   CASE_EXPECT_EQ(candidate->get_data().SerializeAsString(), room->get_admitted_units().at(4).SerializeAsString());
   CASE_EXPECT_EQ(initial_faction_id, room->get_unit_faction_id(1));
+}
+
+CASE_TEST(matchsvr_waiting_rule, quit_reclaims_membership_but_retains_history_and_partial_unit) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_max_faction_cout_limit(1);
+  if (!fixture.start()) {
+    return;
+  }
+  auto initial = waiting_unit(1, 1001, 2);
+  auto room = ordinary_room(initial);
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  const int32_t original_faction = room->get_unit_faction_id(1);
+  CASE_EXPECT_TRUE(room->quit_waiting_user(initial.users(0).user_key()));
+  CASE_EXPECT_TRUE(room->quit_waiting_user(initial.users(0).user_key()));
+  CASE_EXPECT_EQ(1, room->get_user_count());
+  CASE_EXPECT_EQ(2, room->get_joined_user_count());
+  CASE_EXPECT_EQ(1, room->get_admitted_units().at(1).users_size());
+  CASE_EXPECT_EQ(1002, room->get_admitted_units().at(1).users(0).user_key().user_id());
+  CASE_EXPECT_EQ(original_faction, room->get_unit_faction_id(1));
+  initial.set_unit_id(2);
+  const auto replay = matching_logic::check_waiting_units_can_join(*room, {&initial}, 0, 101);
+  CASE_EXPECT_FALSE(replay.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT, replay.result);
+  CASE_EXPECT_TRUE(room->quit_waiting_user(initial.users(1).user_key()));
+  CASE_EXPECT_EQ(0, room->get_admitted_units().size());
+  CASE_EXPECT_EQ(1, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(0, room->get_user_count());
+  CASE_EXPECT_EQ(2, room->get_joined_user_count());
+  const auto preserved = room->get_waiting_factions().find(original_faction);
+  CASE_EXPECT_TRUE(preserved != room->get_waiting_factions().end());
+  if (preserved == room->get_waiting_factions().end()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(preserved->second.unit_ids.empty());
+  CASE_EXPECT_EQ(2, preserved->second.user_capacity);
+  CASE_EXPECT_EQ(0, preserved->second.successful_user_count);
+  CASE_EXPECT_EQ(0, preserved->second.reserved_user_count);
+  CASE_EXPECT_EQ(0, preserved->second.retired_user_count);
+  CASE_EXPECT_EQ(0, room->get_faction_assignments().Get(0).assigned_user_count());
+  auto fresh_data = waiting_unit(3, 3001);
+  fresh_data.mutable_parameter()->set_rank_level(23);
+  auto fresh = std::make_shared<matching_unit>(fresh_data);
+  if (!add_waiting(*room, {fresh})) {
+    return;
+  }
+  CASE_EXPECT_EQ(original_faction, room->get_unit_faction_id(3));
+  CASE_EXPECT_TRUE(room->remove_waiting_unit(3));
+  CASE_EXPECT_EQ(1, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(0, room->get_user_count());
+  auto replacement = std::make_shared<matching_unit>(waiting_unit(4, 4001));
+  if (!add_waiting(*room, {replacement})) {
+    return;
+  }
+  CASE_EXPECT_EQ(original_faction, room->get_unit_faction_id(4));
+  accept_unit(replacement);
+  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(4) == std::vector<uint64_t>{4}));
+  replacement->mark_initializing();
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(4, 102));
+  CASE_EXPECT_EQ(1, room->get_successful_user_count());
+  CASE_EXPECT_EQ(3, room->get_joined_user_count());
+}
+
+CASE_TEST(matchsvr_waiting_rule, admitted_new_faction_survives_all_quits_and_refill_cancellation) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_max_faction_cout_limit(2);
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001, 2));
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  auto added = std::make_shared<matching_unit>(waiting_unit(2, 2001, 2));
+  if (!add_waiting(*room, {added})) {
+    return;
+  }
+  const int32_t faction_id = room->get_unit_faction_id(2);
+  accept_unit(added);
+  CASE_EXPECT_TRUE((room->release_waiting_confirmation_cohort(2) == std::vector<uint64_t>{2}));
+  added->mark_initializing();
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 102));
+  for (const auto& user : added->get_data().users()) {
+    CASE_EXPECT_TRUE(room->quit_waiting_user(user.user_key()));
+  }
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().size());
+  CASE_EXPECT_EQ(2, room->get_user_count());
+  CASE_EXPECT_EQ(4, room->get_joined_user_count());
+  auto replacement = std::make_shared<matching_unit>(waiting_unit(3, 3001));
+  if (!add_waiting(*room, {replacement})) {
+    return;
+  }
+  CASE_EXPECT_EQ(faction_id, room->get_unit_faction_id(3));
+  CASE_EXPECT_TRUE(room->remove_waiting_unit(3));
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().size());
+  const auto retried = waiting_unit(4, 4001);
+  const auto evaluation = matching_logic::check_waiting_units_can_join(*room, {&retried}, 0, 103);
+  CASE_EXPECT_TRUE(evaluation.can_join);
+  CASE_EXPECT_FALSE(evaluation.creates_faction);
+  CASE_EXPECT_EQ(faction_id, evaluation.faction_id);
+}
+
+CASE_TEST(matchsvr_waiting_rule, disabled_refill_retains_seats_without_retaining_player_details) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_is_waiting_room_faction_can_joined(false);
+  fixture.pool.set_max_faction_cout_limit(1);
+  if (!fixture.start()) {
+    return;
+  }
+  const auto initial = waiting_unit(1, 1001, 2);
+  auto room = ordinary_room(initial);
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  const auto faction_id = room->get_unit_faction_id(1);
+  for (const auto& player : initial.users()) {
+    CASE_EXPECT_TRUE(room->quit_waiting_user(player.user_key()));
+  }
+  CASE_EXPECT_EQ(0, room->get_admitted_units().size());
+  CASE_EXPECT_EQ(0, room->get_user_count());
+  CASE_EXPECT_EQ(2, room->get_joined_user_count());
+  CASE_EXPECT_EQ(2, room->get_waiting_factions().at(faction_id).retired_user_count);
+  const auto fresh = waiting_unit(2, 2001);
+  const auto rejected = matching_logic::check_waiting_units_can_join(*room, {&fresh}, 0, 101);
+  CASE_EXPECT_FALSE(rejected.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL, rejected.result);
+}
+
+CASE_TEST(matchsvr_waiting_rule, history_quota_reserves_whole_units_and_releases_rejected_reservations) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_waiting_room_max_join_user_count(6);
+  if (!fixture.start()) {
+    return;
+  }
+  const auto initial = waiting_unit(1, 1001, 2);
+  auto room = ordinary_room(initial);
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  for (const auto& user : initial.users()) {
+    CASE_EXPECT_TRUE(room->quit_waiting_user(user.user_key()));
+  }
+  auto first = std::make_shared<matching_unit>(waiting_unit(2, 2001, 2));
+  auto second = std::make_shared<matching_unit>(waiting_unit(3, 3001, 2));
+  if (!add_waiting(*room, {first}) || !add_waiting(*room, {second})) {
+    return;
+  }
+  const auto overflow = waiting_unit(4, 4001);
+  const auto rejected = matching_logic::check_waiting_units_can_join(*room, {&overflow}, 0, 101);
+  CASE_EXPECT_FALSE(rejected.can_join);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_ROOM_FULL, rejected.result);
+  CASE_EXPECT_FALSE(room->add_waiting_units({std::make_shared<matching_unit>(overflow)}, 0, 2, true, 101, 116));
+  CASE_EXPECT_TRUE(room->remove_waiting_unit(3));
+  CASE_EXPECT_EQ(2, room->get_joined_user_count());
+  CASE_EXPECT_EQ(2, room->get_reserved_user_count());
+  CASE_EXPECT_TRUE(matching_logic::check_waiting_units_can_join(*room, {&overflow}, 0, 101).can_join);
+}
+
+CASE_TEST(matchsvr_waiting_rule, quit_only_updates_successfully_admitted_members) {
+  waiting_rule_fixture fixture;
+  if (!fixture.start()) {
+    return;
+  }
+  auto room = ordinary_room(waiting_unit(1, 1001, 2));
+  if (!room || !open_waiting(*room)) {
+    return;
+  }
+  auto candidate = std::make_shared<matching_unit>(waiting_unit(2, 2001, 2));
+  if (!add_waiting(*room, {candidate})) {
+    return;
+  }
+  accept_unit(candidate);
+  CASE_EXPECT_EQ(1, room->release_waiting_confirmation_cohort(2).size());
+  candidate->mark_initializing();
+  const auto departing = candidate->get_data().users(0).user_key();
+  // 未入场的玩家不属于 Orbit 退出流程，不能缓存一次待生效的退出。
+  CASE_EXPECT_FALSE(room->quit_waiting_user(departing));
+  CASE_EXPECT_EQ(2, room->get_successful_user_count());
+  CASE_EXPECT_EQ(2, room->get_reserved_user_count());
+  CASE_EXPECT_TRUE(room->complete_waiting_unit(2, 102));
+  CASE_EXPECT_EQ(4, room->get_user_count());
+  CASE_EXPECT_EQ(4, room->get_successful_user_count());
+  CASE_EXPECT_EQ(2, room->get_admitted_units().at(2).users_size());
+  CASE_EXPECT_TRUE(room->quit_waiting_user(departing));
+  CASE_EXPECT_TRUE(room->quit_waiting_user(departing));
+  CASE_EXPECT_EQ(3, room->get_user_count());
+  CASE_EXPECT_EQ(3, room->get_successful_user_count());
+  CASE_EXPECT_EQ(4, room->get_joined_user_count());
+  CASE_EXPECT_EQ(0, room->get_reserved_user_count());
+  CASE_EXPECT_EQ(1, room->get_admitted_units().at(2).users_size());
+  CASE_EXPECT_EQ(2002, room->get_admitted_units().at(2).users(0).user_key().user_id());
+  CASE_EXPECT_TRUE(room->has_user(departing));
+}
+
+CASE_TEST(matchsvr_waiting_rule, invalid_history_limit_does_not_enable_waiting_room) {
+  waiting_rule_fixture fixture;
+  fixture.pool.set_waiting_room_max_join_user_count(5);
+  if (!fixture.start()) {
+    return;
+  }
+  CASE_EXPECT_FALSE(!!excel::get_matching_waiting_room_rule(1));
 }
 
 CASE_TEST(matchsvr_waiting_rule, reservations_and_faction_ids_survive_partial_initialization_failure) {

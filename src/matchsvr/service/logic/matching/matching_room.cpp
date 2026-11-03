@@ -9,6 +9,7 @@
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
+#include <config/excel/config_easy_api.h>
 #include <rpc/rpc_context.h>
 #include <utility/protobuf_mini_dumper.h>
 
@@ -34,12 +35,12 @@ static void log_room_status_change(const matching_room& room, PROJECT_NAMESPACE_
       "matching Room state changed, matching_id={}, pool_id={}, state_from={}, state_to={}, reason={}, "
       "level_id={}, units={}, users={}, factions={}, result={}, room_internal_event_id={}, "
       "expire_time={}, confirm_expire_time={}, battle_expire_time={}, previous_battle_expire_time={}, "
-      "waiting_end_timepoint={}, successful_users={}, terminal_time={}",
+      "historical_users={}, successful_users={}, terminal_time={}",
       room.get_matching_id(), room.get_scope().matching_pool_id(), static_cast<int>(from),
       static_cast<int>(room.get_status()), reason, room.get_selected_level_id(), room.get_units().size(),
       room.get_user_count(), room.get_faction_assignments().size(), room.get_result(), room.get_last_event_id(),
       room.get_expire_time(), room.get_confirm_expire_time(), room.get_battle_create_expire_time(),
-      previous_battle_expire_time, room.get_waiting_end_timepoint(), room.get_successful_user_count(),
+      previous_battle_expire_time, room.get_joined_user_count(), room.get_successful_user_count(),
       room.get_terminal_time());
 }
 }  // namespace
@@ -158,12 +159,8 @@ bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) c
       }
     }
   }
-  for (const auto& unit : admitted_units_) {
-    for (const auto& user : unit.second.users()) {
-      if (matching_utility::same_user(user.user_key(), user_key)) {
-        return true;
-      }
-    }
+  if (joined_users_.find(std::make_pair(user_key.user_id(), user_key.zone_id())) != joined_users_.end()) {
+    return true;
   }
 
   return false;
@@ -424,10 +421,17 @@ int32_t matching_room::get_unit_faction_id(uint64_t unit_id) const noexcept {
   return faction_iter == finalized_unit_faction_ids_.end() ? 0 : faction_iter->second;
 }
 
-bool matching_room::open_waiting_room(int64_t now, int64_t end_timepoint) {
+bool matching_room::open_waiting_room(int64_t now) {
   if (status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE || !faction_ids_finalized_) {
     return false;
   }
+  const auto pool = excel::get_ExcelMatchingPool_by_id(scope_.matching_pool_id());
+  if (!pool || pool->waiting_room_max_join_user_count() < pool->max_user_cout_limit() ||
+      pool->waiting_room_max_join_user_count() <= 0) {
+    return false;
+  }
+  max_join_user_count_ = static_cast<size_t>(pool->waiting_room_max_join_user_count());
+  refill_waiting_factions_ = pool->is_waiting_room_faction_can_joined();
   const auto previous_status = status_;
   const int64_t previous_battle_expire_time = battle_create_expire_time_;
   waiting_faction_map_t factions;
@@ -441,6 +445,7 @@ bool matching_room::open_waiting_room(int64_t now, int64_t end_timepoint) {
     }
     auto& faction = factions[faction_id];
     faction.user_capacity = assignment.user_capacity();
+    faction.established = true;
     faction.successful_user_count = assignment.assigned_user_count();
     faction.unit_ids.assign(assignment.unit_ids().begin(), assignment.unit_ids().end());
     for (uint64_t unit_id : faction.unit_ids) {
@@ -456,6 +461,9 @@ bool matching_room::open_waiting_room(int64_t now, int64_t end_timepoint) {
     value.second->refresh_view_from_room(*this);
     value.second->mark_terminal(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, 0, now);
     protobuf_copy_message(admitted_units_[value.first], value.second->get_data());
+    for (const auto& user : value.second->get_data().users()) {
+      joined_users_.emplace(user.user_key().user_id(), user.user_key().zone_id());
+    }
   }
   units_.clear();
   orbit_users_init_detail_.clear();
@@ -464,8 +472,7 @@ bool matching_room::open_waiting_room(int64_t now, int64_t end_timepoint) {
     next_waiting_faction_id_ = waiting_factions_.rbegin()->first + 1;
   }
   successful_user_count_ = user_count_;
-  waiting_end_timepoint_ = end_timepoint;
-  expire_time_ = end_timepoint;
+  expire_time_ = 0;
   confirm_expire_time_ = 0;
   battle_create_expire_time_ = 0;
   terminal_time_ = 0;
@@ -475,8 +482,8 @@ bool matching_room::open_waiting_room(int64_t now, int64_t end_timepoint) {
   return true;
 }
 
-bool matching_room::is_waiting_open(int64_t now) const noexcept {
-  return status_ == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_WAITING && now < waiting_end_timepoint_;
+bool matching_room::is_waiting_open(int64_t) const noexcept {
+  return status_ == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_WAITING;
 }
 
 bool matching_room::add_waiting_units(const std::vector<unit_ptr_t>& units, int32_t faction_id,
@@ -492,8 +499,9 @@ bool matching_room::add_waiting_units(const std::vector<unit_ptr_t>& units, int3
     }
   } else {
     faction_iter = waiting_factions_.find(faction_id);
-    if (faction_iter == waiting_factions_.end() || faction_iter->second.confirming_creation ||
-        faction_iter->second.user_capacity != faction_capacity || !faction_iter->second.fill_enabled) {
+    if (!refill_waiting_factions_ || faction_iter == waiting_factions_.end() ||
+        faction_iter->second.confirming_creation || faction_iter->second.user_capacity != faction_capacity ||
+        !faction_iter->second.fill_enabled) {
       return false;
     }
   }
@@ -527,8 +535,20 @@ bool matching_room::add_waiting_units(const std::vector<unit_ptr_t>& units, int3
       }
     }
   }
-  const size_t occupied_users =
-      creates_faction ? 0 : faction_iter->second.successful_user_count + faction_iter->second.reserved_user_count;
+  if (get_joined_user_count() + get_reserved_user_count() + incoming_users > max_join_user_count_) {
+    return false;
+  }
+  const auto pool = excel::get_ExcelMatchingPool_by_id(scope_.matching_pool_id());
+  if (!pool || user_count_ + incoming_users > static_cast<size_t>(pool->max_user_cout_limit())) {
+    return false;
+  }
+  if (creates_faction && waiting_factions_.size() >= static_cast<size_t>(pool->max_faction_cout_limit())) {
+    return false;
+  }
+  const size_t occupied_users = creates_faction ? 0
+                                                : faction_iter->second.successful_user_count +
+                                                      faction_iter->second.reserved_user_count +
+                                                      faction_iter->second.retired_user_count;
   if (occupied_users + incoming_users > faction_capacity ||
       (creates_faction && units.size() > 1 && incoming_users != faction_capacity)) {
     return false;
@@ -550,7 +570,7 @@ bool matching_room::add_waiting_units(const std::vector<unit_ptr_t>& units, int3
       unit_size_counts_.resize(unit_size + 1, 0);
     }
     ++unit_size_counts_[unit_size];
-    unit->begin_confirmation(std::min(confirm_expire_time, waiting_end_timepoint_));
+    unit->begin_confirmation(confirm_expire_time);
     unit->refresh_view_from_room(*this);
   }
   faction_iter->second.reserved_user_count += incoming_users;
@@ -560,10 +580,10 @@ bool matching_room::add_waiting_units(const std::vector<unit_ptr_t>& units, int3
     FWLOGINFO(
         "waiting Room Unit admitted, matching_id={}, unit_id={}, faction_id={}, creates_faction={}, "
         "faction_capacity={}, unit_users={}, users={}, successful_users={}, reserved_users={}, "
-        "confirm_expire_time={}, waiting_end_timepoint={}, unit_wal_event_id={}",
+        "confirm_expire_time={}, historical_users={}, unit_wal_event_id={}",
         matching_id_, unit->get_unit_id(), faction_id, creates_faction, faction_capacity, unit->get_data().users_size(),
         user_count_, successful_user_count_, get_reserved_user_count(), unit->get_view().confirm_expire_time(),
-        waiting_end_timepoint_, unit->get_last_event_id());
+        get_joined_user_count(), unit->get_last_event_id());
   }
   return true;
 }
@@ -618,7 +638,7 @@ bool matching_room::remove_waiting_unit(uint64_t unit_id) {
   faction_iter->second.reserved_user_count -= unit_size;
   auto& membership = faction_iter->second.unit_ids;
   membership.erase(std::remove(membership.begin(), membership.end(), unit_id), membership.end());
-  if (membership.empty()) {
+  if (membership.empty() && !faction_iter->second.established && faction_iter->second.retired_user_count == 0) {
     waiting_factions_.erase(faction_iter);
   }
   units_.erase(unit_iter);
@@ -630,9 +650,9 @@ bool matching_room::remove_waiting_unit(uint64_t unit_id) {
   refresh_waiting_faction_assignments();
   FWLOGINFO(
       "waiting Room Unit removed, matching_id={}, unit_id={}, faction_id={}, unit_users={}, users={}, "
-      "successful_users={}, reserved_users={}, waiting_end_timepoint={}",
+      "successful_users={}, reserved_users={}, historical_users={}",
       matching_id_, unit_id, removed_faction_id, unit_size, user_count_, successful_user_count_,
-      get_reserved_user_count(), waiting_end_timepoint_);
+      get_reserved_user_count(), get_joined_user_count());
   return true;
 }
 
@@ -645,6 +665,7 @@ bool matching_room::complete_waiting_unit(uint64_t unit_id, int64_t now) {
       faction_iter == waiting_factions_.end()) {
     return false;
   }
+  const int32_t completed_faction_id = faction_iter->first;
   const size_t unit_size = static_cast<size_t>(unit_iter->second->get_data().users_size());
   unit_iter->second->refresh_view_from_room(*this);
   unit_iter->second->mark_terminal(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, 0, now);
@@ -652,14 +673,55 @@ bool matching_room::complete_waiting_unit(uint64_t unit_id, int64_t now) {
   erase_orbit_user_init_details(unit_iter->second->get_data());
   faction_iter->second.reserved_user_count -= unit_size;
   faction_iter->second.successful_user_count += unit_size;
+  faction_iter->second.established = true;
   successful_user_count_ += unit_size;
+  for (const auto& user : unit_iter->second->get_data().users()) {
+    joined_users_.emplace(user.user_key().user_id(), user.user_key().zone_id());
+  }
   units_.erase(unit_iter);
   FWLOGINFO(
       "waiting Room Unit completed, matching_id={}, unit_id={}, faction_id={}, unit_users={}, users={}, "
-      "successful_users={}, reserved_users={}, waiting_end_timepoint={}, now={}",
-      matching_id_, unit_id, faction_iter->first, unit_size, user_count_, successful_user_count_,
-      get_reserved_user_count(), waiting_end_timepoint_, now);
+      "successful_users={}, reserved_users={}, historical_users={}, now={}",
+      matching_id_, unit_id, completed_faction_id, unit_size, user_count_, successful_user_count_,
+      get_reserved_user_count(), get_joined_user_count(), now);
   return true;
+}
+
+bool matching_room::quit_waiting_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+  if (status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_WAITING) {
+    return false;
+  }
+  const auto key = std::make_pair(user_key.user_id(), user_key.zone_id());
+  for (auto unit = admitted_units_.begin(); unit != admitted_units_.end(); ++unit) {
+    for (int index = 0; index < unit->second.users_size(); ++index) {
+      if (!matching_utility::same_user(unit->second.users(index).user_key(), user_key)) {
+        continue;
+      }
+      auto faction = waiting_factions_.find(get_unit_faction_id(unit->first));
+      if (faction == waiting_factions_.end()) {
+        return false;
+      }
+      unit->second.mutable_users()->DeleteSubrange(index, 1);
+      --successful_user_count_;
+      --user_count_;
+      --faction->second.successful_user_count;
+      if (!refill_waiting_factions_) {
+        ++faction->second.retired_user_count;
+      }
+      if (unit->second.users().empty()) {
+        auto& membership = faction->second.unit_ids;
+        membership.erase(std::remove(membership.begin(), membership.end(), unit->first), membership.end());
+        finalized_unit_faction_ids_.erase(unit->first);
+        admitted_units_.erase(unit);
+      }
+      refresh_waiting_faction_assignments();
+      FWLOGINFO("waiting player quit, matching_id={}, user={}:{}, current_users={}, historical_users={}, refill={}",
+                matching_id_, user_key.user_id(), user_key.zone_id(), successful_user_count_, joined_users_.size(),
+                refill_waiting_factions_);
+      return true;
+    }
+  }
+  return joined_users_.find(key) != joined_users_.end();
 }
 
 void matching_room::mark_waiting_closed(int64_t now) {
@@ -676,7 +738,7 @@ void matching_room::refresh_waiting_faction_assignments() {
   pending_faction_user_count_ = 0;
   for (const auto& value : waiting_factions_) {
     const auto& faction = value.second;
-    const size_t users = faction.successful_user_count + faction.reserved_user_count;
+    const size_t users = faction.successful_user_count + faction.reserved_user_count + faction.retired_user_count;
     auto* assignment = faction_assignments_.Add();
     assignment->set_user_capacity(faction.user_capacity);
     assignment->set_assigned_user_count(static_cast<uint32_t>(users));

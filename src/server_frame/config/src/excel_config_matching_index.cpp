@@ -22,6 +22,12 @@ find_waiting_room_rule(config_group_t& group, const ::PROJECT_NAMESPACE_ID::conf
   if (!pool.is_has_waiting_room()) {
     return nullptr;
   }
+  if (pool.waiting_room_max_join_user_count() <= 0 ||
+      pool.waiting_room_max_join_user_count() < pool.max_user_cout_limit()) {
+    FWLOGERROR("[EXCEL] invalid waiting historical capacity, pool_id={}, historical_limit={}, current_limit={}",
+               pool.id(), pool.waiting_room_max_join_user_count(), pool.max_user_cout_limit());
+    return nullptr;
+  }
   if (pool.waiting_room_rule_id() <= 0) {
     FWLOGERROR("[EXCEL] enabled waiting room has invalid rule reference, pool_id={}, rule_id={}", pool.id(),
                pool.waiting_room_rule_id());

@@ -250,3 +250,54 @@ func TestWaitingCaseConfigsAreExecutableAndCheckEveryUser(t *testing.T) {
 		})
 	}
 }
+
+func TestWaitingNotificationPhaseConfigsUseLoggedInUsersAndRecordedRooms(t *testing.T) {
+	registered := make(map[string]bool)
+	for _, name := range robot_case.AutoCompleteCaseName("") {
+		registered[name] = true
+	}
+	for _, scenario := range []string{"quit", "end_join"} {
+		t.Run(scenario, func(t *testing.T) {
+			var login robot_case.Params
+			for _, phase := range []string{"setup", "verify"} {
+				name := "matching_waiting_" + scenario + "_" + phase + ".conf"
+				content, err := os.ReadFile(filepath.Join("..", "case_config", name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				lines, err := robot_case.ParseCaseFileContent(string(content))
+				if err != nil || len(lines) == 0 {
+					t.Fatalf("parse %s: lines=%d error=%v", name, len(lines), err)
+				}
+				if phase == "setup" {
+					login = lines[0].Stress
+					if login.CaseName != "login" {
+						t.Fatal("setup must initialize the scenario users")
+					}
+				}
+				checkedRecord := false
+				for _, line := range lines {
+					params := line.Stress
+					if line.IsControl || line.BackgroundRunning || !registered[params.CaseName] || !params.ErrorBreak ||
+						params.OpenIDPrefix != login.OpenIDPrefix || params.OpenIDStart < login.OpenIDStart ||
+						params.OpenIDEnd > login.OpenIDEnd || params.OpenIDStart >= params.OpenIDEnd {
+						t.Fatalf("invalid sequential notification scenario action: %+v", params)
+					}
+					if params.CaseName == "matching_assert_recorded_room" {
+						checkedRecord = true
+						expectedRelation := "same"
+						if scenario == "end_join" {
+							expectedRelation = "different"
+						}
+						if len(params.ExtraArgs) != 2 || params.ExtraArgs[1] != expectedRelation {
+							t.Fatalf("wrong room assertion after %s: %v", scenario, params.ExtraArgs)
+						}
+					}
+				}
+				if phase == "verify" && !checkedRecord {
+					t.Fatal("verification must compare against the recorded original room")
+				}
+			}
+		})
+	}
+}
