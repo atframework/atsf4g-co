@@ -8,7 +8,13 @@ listen:
   {{- if or (dig "configure" "topology" "rule" "allow_direct_connection" false .Values.atapp.atbus ) ( eq .Values.type_name "atproxy" ) }}
   - "atcp://{{ $atapp_external_ip }}:{{ $service_port }}"
   {{- else if (eq .Values.atdtool_running_platform "windows") }}
+  {{- if eq .Values.type_name "orbit-agent" }}
+  {{- /* atapp control commands prefer the local pipe. Orbit clients use the TCP listener. */}}
+  - {{ printf "pipe://\\\\.\\pipe\\%s-%s_%s.sock" .Values.atapp.deployment.project_name (include "libapp.name" .) $bus_addr | quote }}
+  - "atcp://:::{{ $service_port }}"
+  {{- else }}
   - "atcp://127.0.0.1:{{ $service_port }}"
+  {{- end }}
   {{- else }}
   - "unix:///tmp/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- if eq .Values.type_name "orbit-agent" }}
