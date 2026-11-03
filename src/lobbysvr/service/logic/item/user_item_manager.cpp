@@ -180,7 +180,7 @@ item_operation_checked_sub_request user_item_manager::check_sub(
 }
 
 item_operation_checked_sub_request user_item_manager::check_sub(
-    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& input,
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>& input,
     const item_algorithm::ItemOperationSource& source, int32_t multiple) const {
   if (multiple <= 0) {
     return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0);
@@ -188,12 +188,12 @@ item_operation_checked_sub_request user_item_manager::check_sub(
   // 只支持虚拟仓库
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basic_input;
   for (auto& item : input) {
-    if (ItemAlgorithmTypeOption::IsNeedOccupyTheGrid(static_cast<int32_t>(item.item_offset().type_id()))) {
+    if (ItemAlgorithmTypeOption::IsNeedOccupyTheGrid(static_cast<int32_t>(item.type_id()))) {
       return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0);
     }
     auto& basic = *basic_input.Add();
-    basic.set_type_id(item.item_offset().type_id());
-    basic.set_count(item.item_offset().count() * multiple);
+    basic.set_type_id(item.type_id());
+    basic.set_count(item.count() * multiple);
     basic.mutable_position()->set_container_guid(
         owner_->get_user_item_container_manager().get_virtual_inventory_container_guid());
     basic.mutable_position()->mutable_grid_position()->set_virtual_inventory(true);
@@ -252,7 +252,7 @@ int64_t user_item_manager::get_count(rpc::context& ctx, int32_t type_id) {
 }
 
 rpc::result_code_type user_item_manager::generate_item_from_offset_cfg(
-    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>& offset_cfg,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out_instances, int32_t multiple) const {
   if (multiple <= 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -264,7 +264,7 @@ rpc::result_code_type user_item_manager::generate_item_from_offset_cfg(
     PROJECT_NAMESPACE_ID::battle_utility::item_initialize::ItemInitializeArgs args;
     if (!PROJECT_NAMESPACE_ID::battle_utility::item_initialize::CreateItem(
             excel::get_current_config_group(), PROJECT_NAMESPACE_ID::battle_utility::random::GetRandomGenerator(),
-            offset.item_offset().type_id(), offset.item_offset().count() * multiple, args, out_instances)) {
+            offset.type_id(), offset.count() * multiple, args, out_instances)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     }
   }
@@ -316,7 +316,7 @@ rpc::rpc_result<int64_t> user_item_manager::generate_item_guid(rpc::context& ctx
 }
 
 bool user_item_manager::check_offset_instance_match(
-    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
+    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>& offset_cfg,
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& instances, int32_t multiple) {
   if (multiple <= 0) {
     return false;
@@ -324,7 +324,7 @@ bool user_item_manager::check_offset_instance_match(
   // 仅检查数量
   std::unordered_map<int32_t, int64_t> offset_count;
   for (auto& offset : offset_cfg) {
-    offset_count[offset.item_offset().type_id()] += offset.item_offset().count() * multiple;
+    offset_count[offset.type_id()] += offset.count() * multiple;
   }
   for (auto& instance : instances) {
     if (instance.item_basic().count() <= 0) {
@@ -385,11 +385,11 @@ void user_item_manager::on_gm_cmd_add_item(const std::shared_ptr<rpc::context>& 
       [user_inst, rsp, item_requests](rpc::context& child_ctx) -> rpc::result_code_type {
         auto& item_manager = user_inst->get_user_item_manager();
 
-        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset> offset_cfg;
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset> offset_cfg;
         for (const auto& request : item_requests) {
           auto* offset = offset_cfg.Add();
-          offset->mutable_item_offset()->set_type_id(request.first);
-          offset->mutable_item_offset()->set_count(request.second);
+          offset->set_type_id(request.first);
+          offset->set_count(request.second);
         }
 
         google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> item_instances;

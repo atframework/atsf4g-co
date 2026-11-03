@@ -63,6 +63,6 @@ message DMailTemplate {
   bool is_padding_expired_time = 10;                                           // 过期时间对齐到天
   google.protobuf.Duration resolve_expired_time = 11;                          // 按实际接收时间重算有效期
 
-  repeated DItemScopeOffset attachments = 21;  // 附件
+  repeated DItemOffset attachments = 21;  // 附件
   bool keep_after_take_attachments = 22;  // 领取附件后保留
 }

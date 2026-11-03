@@ -219,7 +219,7 @@ class user_friend_api_manager {
   void update_sns_share(bool daily_reset, bool weekly_reset);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_sns_share(rpc::context& ctx, int32_t share_type,
                     int32_t sub_type, atfw::friend_api::SNSShareRecord*& out,
-                    ::google::protobuf::RepeatedPtrField<atfw::friend_api::DItemOffset>* out_reward_items = nullptr);
+                    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>* out_reward_items = nullptr);
   atfw::friend_api::SNSShareRecord* ATFW_UTIL_MACRO_NULLABLE mutable_sns_share(int32_t share_type);
   void clear_sns_share(int32_t share_type = 0);
   void dump_sns_share(atfw::friend_api::UserSNSData& out, int32_t share_type = 0);

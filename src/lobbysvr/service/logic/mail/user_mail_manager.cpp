@@ -1426,7 +1426,7 @@ int user_mail_manager::merge_global_mails(rpc::context &ctx) {
 rpc::result_code_type user_mail_manager::add_reward_by_mail(
     rpc::context &ctx, int64_t mail_id, int32_t mail_template_id, std::chrono::system_clock::time_point delivery_time,
     std::chrono::system_clock::time_point expired_time, PROJECT_NAMESPACE_ID::EnItemChgMajorType /*main_type*/,
-    const ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset> &reward_items,
+    const ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset> &reward_items,
     const mail_render_extension_type *ATFW_UTIL_MACRO_NULLABLE extension) const {
   rpc::shared_message<PROJECT_NAMESPACE_ID::DMailContent> mail{ctx};
 
@@ -1443,7 +1443,7 @@ rpc::result_code_type user_mail_manager::add_reward_by_mail(
   owner_->get_user_mail_manager().pack_mail_user(*user_info);
 
   for (const auto &item : reward_items) {
-    if (item.item_offset().type_id() <= 0 || item.item_offset().count() <= 0) {
+    if (item.type_id() <= 0 || item.count() <= 0) {
       continue;
     }
 

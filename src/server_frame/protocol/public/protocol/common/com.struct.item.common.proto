@@ -53,8 +53,6 @@ message DItemPosition {
   // Container guid
   int64 container_guid = 1;
   DItemGridPosition grid_position = 2;
-  // 所属沙箱Scope（赛季信息等）
-  DIsolationScope scope = 3;
 }
 
 message DItemBasic {
@@ -94,17 +92,7 @@ message DUserItemManagerData {
 // 道具数据(增量,用于奖励等)
 message DItemOffset {
   int32 type_id = 1 [(org.xresloader.validator) = "ExcelItemType_type_id"];
-  int64 count = 2;
-
-  // 有效期，0表示永久生效
-  int64 expire_offset = 11 [(org.xresloader.field_allow_missing_in_plain_mode) = true];
-}
-
-// 道具数据(增量,限定Scope,用于奖励等)
-message DItemScopeOffset {
-  DItemOffset item_offset = 1 [(org.xresloader.validator) = "ExcelItemType_type_id"];
-  // 所属沙箱Scope（赛季信息等）
-  DIsolationScope scope = 2;
+  int64 count = 2 [(org.xresloader.validator) = ">0"];
 }
 
 message DItemUseAction {

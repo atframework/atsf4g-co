@@ -58,7 +58,7 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
                                                const item_algorithm::ItemOperationSource& source) const;
   // 只支持虚拟仓库道具
   item_operation_checked_sub_request check_sub(
-      rpc::context&, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>&,
+      rpc::context&, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>&,
       const item_algorithm::ItemOperationSource& source, int32_t multiple = 1) const;
   item_operation_result check_has(rpc::context&,
                                   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&);
@@ -68,7 +68,7 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
 
  public:
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type generate_item_from_offset_cfg(
-      rpc::context&, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
+      rpc::context&, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>& offset_cfg,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out_instances,
       int32_t multiple = 1) const;
 
@@ -78,7 +78,7 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::rpc_result<int64_t> generate_item_guid(rpc::context& ctx) const;
 
   static bool check_offset_instance_match(
-      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemOffset>& offset_cfg,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& instances, int32_t multiple = 1);
 
   // GM: add_item <type_id> <count> [<type_id> <count> ...]，按 type_id count 成对读取

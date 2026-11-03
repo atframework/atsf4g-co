@@ -67,7 +67,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_count {
     }
 
     if (mail_idx < priv_data.mail_content->attachments_size()) {
-      os << priv_data.mail_content->attachments(mail_idx).item_offset().count();
+      os << priv_data.mail_content->attachments(mail_idx).count();
     }
 
     return true;
@@ -91,7 +91,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_name {
     }
 
     if (mail_idx < priv_data.mail_content->attachments_size()) {
-      int32_t item_id = priv_data.mail_content->attachments(mail_idx).item_offset().type_id();
+      int32_t item_id = priv_data.mail_content->attachments(mail_idx).type_id();
       auto item_name = get_item_name(item_id);  // logic_item::get_item_name(item_id);
       if (item_name.empty() || atfw::util::string::trim(item_name.data(), item_name.size()).second == 0) {
         os << "[MISSING NAME:" << item_id << "]";
@@ -177,7 +177,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_list {
             break;
           }
           case fmt_t::type::kName: {
-            int32_t item_id = priv_data.mail_content->attachments(i).item_offset().type_id();
+            int32_t item_id = priv_data.mail_content->attachments(i).type_id();
             auto item_name = get_item_name(item_id);
             if (item_name.empty() || atfw::util::string::trim(item_name.data(), item_name.size()).second == 0) {
               os << "[MISSING NAME:" << item_id << "]";
@@ -187,7 +187,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL mail_template_render_call_attachments_list {
             break;
           }
           case fmt_t::type::kCount: {
-            os << priv_data.mail_content->attachments(i).item_offset().count();
+            os << priv_data.mail_content->attachments(i).count();
             break;
           }
           default: {
@@ -674,7 +674,7 @@ LOBBY_RPC_API int32_t mail_render_template(
   if (conf.template_cfg->config().attachments_size() > 0) {
     out.mutable_attachments()->Reserve(conf.template_cfg->config().attachments_size());
     for (const auto& item_cfg : conf.template_cfg->config().attachments()) {
-      if (item_cfg.item_offset().type_id() <= 0 || item_cfg.item_offset().count() <= 0) {
+      if (item_cfg.type_id() <= 0 || item_cfg.count() <= 0) {
         continue;
       }
       auto* unit = out.add_attachments();
