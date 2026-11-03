@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     Forcefully kill all deployed service processes.
@@ -59,15 +60,28 @@ if ($TargetPaths.Count -eq 0) {
 $TargetSet = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
 $TargetPaths | ForEach-Object { [void]$TargetSet.Add($_) }
 
-$Processes = @(
-    Get-CimInstance Win32_Process | Where-Object {
-        $_.ExecutablePath -and $TargetSet.Contains([System.IO.Path]::GetFullPath($_.ExecutablePath))
+$Failed = $false
+foreach ($Process in Get-Process) {
+    if (-not $Process.Path -or -not $TargetSet.Contains([IO.Path]::GetFullPath($Process.Path))) {
+        continue
     }
-)
-foreach ($Process in $Processes) {
-    Write-Host ('[INFO] Killing {0} (pid {1})' -f $Process.ExecutablePath, $Process.ProcessId)
-    taskkill.exe /F /T /PID $Process.ProcessId *> $null
+
+    Write-Host ('[INFO] Killing {0} (pid {1})' -f $Process.Path, $Process.Id)
+    try {
+        $Process.Kill($true)
+        if (-not $Process.WaitForExit(5000)) {
+            throw 'Process did not exit.'
+        }
+    } catch {
+        if (-not $Process.HasExited) {
+            Write-Host "[ERROR] Failed to kill PID $($Process.Id). $_"
+            $Failed = $true
+        }
+    }
 }
 
+if ($Failed) {
+    exit 1
+}
 Write-Host '[INFO] Kill all completed.'
 exit 0

@@ -1,38 +1,37 @@
+#Requires -Version 7.0
 $ErrorActionPreference = 'Stop'
-$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+$PSNativeCommandUseErrorActionPreference = $false
 
-Set-Location -LiteralPath $PSScriptRoot
-
-# helm is installed by the CMake build into <build>/tools/helm, next to the deploy tree (<build>/publish).
-# Probe that location first, then the legacy in-tree <publish>/tools/helm for older build trees.
-$HelmDirCandidates = @(
-    (Join-Path $PSScriptRoot '..\..\..\tools\helm'),
-    (Join-Path $PSScriptRoot '..\..\tools\helm')
-)
-foreach ($HelmDirCandidate in $HelmDirCandidates) {
-    if (Test-Path -LiteralPath $HelmDirCandidate -PathType Container) {
-        $env:PATH = "$HelmDirCandidate;$env:PATH"
+$PublishDir = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$HelmName = if ($IsWindows) { 'helm.exe' } else { 'helm' }
+$HelmExecutable = $null
+foreach ($Directory in @((Join-Path $PublishDir '../tools/helm'), (Join-Path $PublishDir 'tools/helm'))) {
+    $Candidate = Join-Path $Directory $HelmName
+    if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
+        $HelmExecutable = $Candidate
         break
     }
 }
-
-if (-not (Get-Command helm -ErrorAction SilentlyContinue)) {
-    Write-Host '[ERROR] helm not found. Expected under <build>/tools/helm or on PATH.'
-    exit 1
+if (-not $HelmExecutable) {
+    $HelmExecutable = (Get-Command $HelmName -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1).Source
+}
+if (-not $HelmExecutable) {
+    throw 'Helm was not found under <build>/tools/helm, <publish>/tools/helm, or on PATH.'
 }
 
 $Failed = $false
-Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..\..\cloud-native\charts') -Directory |
-    ForEach-Object {
-        if ($_.Name -ne 'libapp' -and $_.Name -ne 'app') {
-            Write-Host $_.FullName
-            helm dependency update $_.FullName
-            if ($LASTEXITCODE -ne 0) {
-                $Failed = $true
-            }
-        }
+foreach ($Chart in Get-ChildItem -LiteralPath (Join-Path $PublishDir 'cloud-native/charts') -Directory) {
+    if ($Chart.Name -in 'libapp', 'app' -or
+        -not (Test-Path -LiteralPath (Join-Path $Chart.FullName 'Chart.yaml') -PathType Leaf)) {
+        continue
     }
 
-if ($Failed) {
-    exit 1
+    Write-Host $Chart.FullName
+    & $HelmExecutable dependency update $Chart.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Helm dependency update failed for $($Chart.Name) (exit $LASTEXITCODE)."
+        $Failed = $true
+    }
 }
+exit [int]$Failed

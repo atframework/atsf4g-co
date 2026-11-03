@@ -45,6 +45,8 @@ if ([string]::IsNullOrEmpty($WorkDir)) {
   }
 }
 
+$WorkDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorkDir)
+
 $ExeSuffix = ""
 if ($IsWindowsHost) {
   $ExeSuffix = ".exe"
@@ -68,6 +70,9 @@ function Get-RunningProcess {
   }
   $proc = Get-Process -Id $pidInt -ErrorAction SilentlyContinue
   if ($null -eq $proc -or $proc.HasExited) {
+    return $null
+  }
+  if ($IsWindowsHost -and $proc.Path -ne [IO.Path]::GetFullPath($ETCD_EXE)) {
     return $null
   }
   return $proc
@@ -181,7 +186,7 @@ function Invoke-Download {
 }
 
 function Invoke-Start {
-  if (!(Test-Path -LiteralPath $ETCD_EXE)) {
+  if (!(Test-Path -LiteralPath $ETCD_EXE) -or !(Test-Path -LiteralPath $ETCDCTL_EXE)) {
     Write-Host "etcd binary not found. Downloading first..."
     Invoke-Download
   }
@@ -203,18 +208,19 @@ function Invoke-Start {
   Write-Host "Starting etcd on client port $ClientPort, peer port $PeerPort..."
 
   $etcdArgs = @(
-    "--data-dir", $DATA_DIR,
+    "--data-dir", ('"{0}"' -f $DATA_DIR),
     "--listen-client-urls", "http://127.0.0.1:${ClientPort}",
     "--advertise-client-urls", "http://127.0.0.1:${ClientPort}",
     "--listen-peer-urls", "http://127.0.0.1:${PeerPort}",
     "--initial-advertise-peer-urls", "http://127.0.0.1:${PeerPort}",
     "--initial-cluster", "default=http://127.0.0.1:${PeerPort}",
-    "--log-outputs", $LOG_FILE
+    "--log-outputs", ('"{0}"' -f $LOG_FILE)
   )
 
   # Redirect both stdout and stderr: Start-Process on Unix hosts requires the streams to be
   # consumed when the child outlives the caller.
-  $proc = Start-Process -FilePath $ETCD_EXE -ArgumentList $etcdArgs -PassThru -NoNewWindow `
+  $WindowOptions = if ($IsWindowsHost) { @{ WindowStyle = 'Hidden' } } else { @{ NoNewWindow = $true } }
+  $proc = Start-Process -FilePath $ETCD_EXE -ArgumentList $etcdArgs -PassThru @WindowOptions `
     -RedirectStandardOutput (Join-Path $WorkDir "etcd-stdout.log") `
     -RedirectStandardError (Join-Path $WorkDir "etcd-stderr.log")
 
@@ -234,7 +240,7 @@ function Invoke-Start {
 
     try {
       $result = & $ETCDCTL_EXE --endpoints="http://127.0.0.1:${ClientPort}" endpoint health 2>&1
-      if ($LASTEXITCODE -eq 0) {
+      if ($LASTEXITCODE -eq 0 -and -not $proc.HasExited) {
         $healthy = $true
         break
       }
@@ -255,8 +261,8 @@ function Invoke-Start {
     Write-Host "etcd is healthy and ready on http://127.0.0.1:${ClientPort}"
   }
   else {
-    Write-Error "etcd failed to become healthy within ${maxRetries}s. Check $LOG_FILE for details."
     Invoke-Stop
+    Write-Error "etcd failed to become healthy within ${maxRetries}s. Check $LOG_FILE for details."
     exit 1
   }
 }

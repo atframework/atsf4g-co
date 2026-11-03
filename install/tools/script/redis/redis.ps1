@@ -52,6 +52,8 @@ if ([string]::IsNullOrEmpty($WorkDir)) {
 }
 
 # Windows (native) paths
+$WorkDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorkDir)
+
 $ExeSuffix = ""
 if ($IsWindowsHost) {
   $ExeSuffix = ".exe"
@@ -86,6 +88,9 @@ function Get-RunningProcess {
   }
   $proc = Get-Process -Id $pidInt -ErrorAction SilentlyContinue
   if ($null -eq $proc -or $proc.HasExited) {
+    return $null
+  }
+  if ($IsWindowsHost -and $proc.Path -ne [IO.Path]::GetFullPath($REDIS_SERVER_EXE)) {
     return $null
   }
   return $proc
@@ -216,7 +221,7 @@ function Invoke-Download {
 }
 
 function Invoke-StartWindows {
-  if (!(Test-Path -LiteralPath $REDIS_SERVER_EXE)) {
+  if (!(Test-Path -LiteralPath $REDIS_SERVER_EXE) -or !(Test-Path -LiteralPath $REDIS_CLI_EXE)) {
     Write-Host "Redis binary not found. Downloading first..."
     Invoke-DownloadWindows
   }
@@ -240,11 +245,11 @@ function Invoke-StartWindows {
   # Build the argument list dynamically; --dir keeps rdb/aof files inside WorkDir
   $redisArgs = @()
   if (Test-Path -LiteralPath $REDIS_CONF) {
-    $redisArgs += $REDIS_CONF
+    $redisArgs += '"{0}"' -f $REDIS_CONF
   }
-  $redisArgs += @("--port", "$ClientPort", "--dir", $WorkDir, "--logfile", $LOG_FILE)
+  $redisArgs += @("--port", "$ClientPort", "--dir", ('"{0}"' -f $WorkDir), "--logfile", ('"{0}"' -f $LOG_FILE))
 
-  $proc = Start-Process -FilePath $REDIS_SERVER_EXE -ArgumentList $redisArgs -PassThru -NoNewWindow `
+  $proc = Start-Process -FilePath $REDIS_SERVER_EXE -ArgumentList $redisArgs -PassThru -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $WorkDir "redis-stdout.log") `
     -RedirectStandardError (Join-Path $WorkDir "redis-stderr.log")
 
@@ -264,7 +269,7 @@ function Invoke-StartWindows {
     try {
       # Send PING via redis-cli; a PONG reply means the server is ready
       $result = & $REDIS_CLI_EXE -p $ClientPort PING 2>&1
-      if ("$result" -eq "PONG") {
+      if ($LASTEXITCODE -eq 0 -and "$result" -eq "PONG" -and -not $proc.HasExited) {
         $healthy = $true
         break
       }
@@ -285,8 +290,8 @@ function Invoke-StartWindows {
     Write-Host "Redis is healthy and ready on 127.0.0.1:${ClientPort}"
   }
   else {
-    Write-Error "Redis failed to respond to PING within ${maxRetries}s. Check $LOG_FILE for details."
     Invoke-StopWindows
+    Write-Error "Redis failed to respond to PING within ${maxRetries}s. Check $LOG_FILE for details."
     exit 1
   }
 }
@@ -394,7 +399,10 @@ function Invoke-StopWindows {
   # Try a graceful shutdown through redis-cli first
   if (Test-Path -LiteralPath $REDIS_CLI_EXE) {
     try {
-      & $REDIS_CLI_EXE -p $ClientPort shutdown 2>&1 | Out-Null
+      $serverInfo = & $REDIS_CLI_EXE -p $ClientPort INFO server 2>&1
+      if ($LASTEXITCODE -eq 0 -and $serverInfo -contains "process_id:$redisPid") {
+        & $REDIS_CLI_EXE -p $ClientPort shutdown 2>&1 | Out-Null
+      }
     }
     catch {
       # The server may already be gone; fall through to the wait/kill logic.

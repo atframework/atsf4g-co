@@ -1,3 +1,9 @@
+param (
+    [ValidateRange(1, 65535)][int]$EtcdClientPort = 12379,
+    [ValidateRange(1, 65535)][int]$EtcdPeerPort = 12380,
+    [ValidateRange(1, 65535)][int]$RedisPort = 6379
+)
+
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 
@@ -58,7 +64,8 @@ function Get-PwshExecutable {
 function Invoke-PwshScript {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [Parameter(Mandatory = $true)][string]$Command
+        [Parameter(Mandatory = $true)][string]$Command,
+        [string[]]$ScriptArguments
     )
 
     # -File guarantees deterministic behavior across subprocess environments (cmd.exe, batch
@@ -68,7 +75,7 @@ function Invoke-PwshScript {
     # collapses every nonzero exit code to 1.
     # -ExecutionPolicy Bypass keeps the child runnable under a Restricted machine policy;
     # it is ignored on non-Windows platforms.
-    & $script:PwshExecutable -NoProfile -ExecutionPolicy Bypass -File $ScriptPath $Command
+    & $script:PwshExecutable -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ScriptPath $Command @ScriptArguments
     if ($LASTEXITCODE -ne 0) {
         Write-Host ('[ERROR] {0} failed with exit code {1}' -f $ScriptPath, $LASTEXITCODE)
         exit $LASTEXITCODE
@@ -77,7 +84,7 @@ function Invoke-PwshScript {
 
 $script:PwshExecutable = Get-PwshExecutable
 
-Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'etcd/setup-etcd.ps1') -Command 'stop'
-Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'redis/redis.ps1') -Command 'stop'
+Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'etcd/setup-etcd.ps1') -Command 'stop' -ScriptArguments @('-ClientPort', $EtcdClientPort, '-PeerPort', $EtcdPeerPort)
+Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'redis/redis.ps1') -Command 'stop' -ScriptArguments @('-ClientPort', $RedisPort)
 
 exit 0

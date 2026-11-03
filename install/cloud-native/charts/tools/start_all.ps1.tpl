@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     Start all service batches generated from the tools chart.
@@ -35,14 +36,6 @@ function Show-Help {
     Write-Host 'Batches run in group order; entries in the same batch start in parallel.'
 }
 
-function Get-ScriptHostExecutable {
-    $PwshCommand = Get-Command 'pwsh' -ErrorAction SilentlyContinue
-    if ($null -ne $PwshCommand) {
-        return $PwshCommand.Source
-    }
-    return (Get-Command 'powershell' -ErrorAction Stop).Source
-}
-
 function Invoke-ScriptsInParallel {
     param (
         [string[]]$ScriptPaths,
@@ -54,12 +47,12 @@ function Invoke-ScriptsInParallel {
         return $false
     }
 
-    $ScriptHostExecutable = Get-ScriptHostExecutable
+    $ScriptHostExecutable = Join-Path $PSHOME 'pwsh.exe'
     $Jobs = @()
     foreach ($ScriptPath in $ScriptPaths) {
         Write-Host ('[INFO] {0} {1}' -f $ActionLabel, $ScriptPath)
         $Process = Start-Process -FilePath $ScriptHostExecutable `
-            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) `
+            -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $ScriptPath)) `
             -WorkingDirectory (Split-Path -Parent $ScriptPath) -PassThru -NoNewWindow
         if ($null -eq $Process) {
             Write-Host ('[ERROR] Failed to start {0}.' -f $ScriptPath)
