@@ -128,8 +128,7 @@ message DOrbitRoomInit {
 }
 
 message DOrbitRoomReady {
-  int64 end_join_timepoint = 1;
-  string client_address = 2;
+  string client_address = 1;
 }
 
 message DOrbitUserInit {

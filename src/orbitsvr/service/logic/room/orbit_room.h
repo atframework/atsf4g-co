@@ -70,6 +70,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   int32_t on_user_finish(
       rpc::context& ctx,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);
+  int32_t on_room_end_join(rpc::context& ctx);
   int32_t on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
   rpc::result_code_type on_remote_start_client(rpc::context& ctx,
                                                const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
@@ -84,6 +85,8 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
 
   int32_t room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason);
   void async_user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);
+  void send_room_end_join_to_match(rpc::context& ctx);
+  void send_room_user_quit_to_match(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserKey& user_key);
   rpc::result_code_type user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);
 
   uint64_t match_server_id_ = 0;
@@ -93,15 +96,17 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   int64_t create_timepoint_ = 0;
   std::string client_address_;
   int64_t expired_timepoint_ = 0;
-  int64_t join_end_timepoint_ = 0;
   int64_t loading_timeout_ = 0;
-  uint32_t end_join_sec_config_ = 0;
+  int64_t join_end_timepoint_ = 0;    // TODO(yousongyang) 删除
+  uint32_t end_join_sec_config_ = 0;  // TODO(yousongyang) 删除
 
   PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_FINISH;
   bool client_end_ = false;
   bool init_user_finish_ = false;
   bool init_finish_notified_ = false;  // 是否已补发过仅置位 init_finish 的 user_init
   bool need_retry_settlement_ = false;
+  bool end_join_ = false;  // DS退出或者DS通知EndJoin
+  bool end_join_send_ = false;
   size_t init_to_client_finish_count_ = 0;
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t, user_key_equal_t>
       user_data_index_;

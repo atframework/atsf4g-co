@@ -56,6 +56,7 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
   rpc::result_code_type on_user_finish(
       rpc::context& ctx, const std::string& client_id,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);
+  rpc::result_code_type on_room_end_join(rpc::context& ctx, const std::string& client_id);
 
   static bool is_client_template_exist(int32_t client_template_id);
 

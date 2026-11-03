@@ -53,11 +53,28 @@ service OrbitsvrService {
 message SSMatchingOrbitRoomReadyReq {
   string matching_id = 1;
   bool start_success = 2;
-  int64 end_join_timepoint = 3;
-  int64 expired_timepoint = 4;
+  int64 expired_timepoint = 3;
+  int64 end_join_timepoint = 4; // TODO(yousongyang) 删除
 }
 
 message SSMatchingOrbitRoomReadyRsp {
+  int32 result = 1;
+}
+
+message SSMatchingOrbitRoomEndJoinReq {
+  string matching_id = 1;
+}
+
+message SSMatchingOrbitRoomEndJoinRsp {
+  int32 result = 1;
+}
+
+message SSMatchingOrbitRoomUserQuitReq {
+  string matching_id = 1;
+  DOrbitUserKey user_key = 2;
+}
+
+message SSMatchingOrbitRoomUserQuitRsp {
   int32 result = 1;
 }
 
@@ -69,6 +86,18 @@ service OrbitsvrMatchsvrService {
   rpc orbit_room_ready(SSMatchingOrbitRoomReadyReq) returns (SSMatchingOrbitRoomReadyRsp) {
     option (atframework.rpc_options) = {
       api_name: "Orbit房间初始化完成"
+    };
+  };
+
+  rpc orbit_room_end_join(SSMatchingOrbitRoomEndJoinReq) returns (SSMatchingOrbitRoomEndJoinRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Orbit房间结束加入"
+    };
+  };
+
+  rpc orbit_room_user_quit(SSMatchingOrbitRoomUserQuitReq) returns (SSMatchingOrbitRoomUserQuitRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Orbit房间用户退出"
     };
   };
 }

@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-08-04 19:28:41
 
-#include "task_action_user_finish.h"
+#include "logic/orbit_action/task_action_user_finish.h"
 
 #include <std/explicit_declare.h>
 
@@ -20,8 +20,10 @@
 
 #include <logic/room/orbit_room_manager.h>
 
-task_action_user_finish::task_action_user_finish(dispatcher_start_data_type &&param)
-    : base_type(std::move(param)) {}
+#include <string>
+#include <utility>
+
+task_action_user_finish::task_action_user_finish(dispatcher_start_data_type &&param) : base_type(std::move(param)) {}
 
 task_action_user_finish::~task_action_user_finish() {}
 

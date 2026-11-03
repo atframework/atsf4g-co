@@ -186,6 +186,16 @@ rpc::result_code_type orbit_room_manager::on_user_finish(
   RPC_RETURN_CODE(room->on_user_finish(ctx, results));
 }
 
+rpc::result_code_type orbit_room_manager::on_room_end_join(rpc::context& ctx, const std::string& client_id) {
+  FWLOGINFO("orbit_room_manager on_room_end_join, client_id: {}", client_id);
+  auto room = get_room(client_id);
+  if (!room) {
+    FWLOGWARNING("orbit_room_manager on_room_end_join, room {} not found", client_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  RPC_RETURN_CODE(room->on_room_end_join(ctx));
+}
+
 bool orbit_room_manager::is_client_template_exist(int32_t client_template_id) {
   return excel::get_ExcelOrbitClientTemplate_by_client_template_id(client_template_id) != nullptr;
 }

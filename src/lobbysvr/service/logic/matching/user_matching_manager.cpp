@@ -181,8 +181,8 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
       if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE ||
           data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING ||
           data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED) {
-        const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(
-            ctx, data_.view().orbit_room_key(), atfw::util::time::time_utility::get_now());
+        const int32_t join_result =
+            owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key(), 0);
         if (join_result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
           FWLOGERROR("{} recover missing matching Unit through Orbit failed, unit_id={}, result={}({})", *owner_,
                      get_current_unit_id(), join_result, protobuf_mini_dumper_get_error_msg(join_result));
@@ -202,8 +202,8 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
     if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE ||
         data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING ||
         data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED) {
-      const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(
-          ctx, data_.view().orbit_room_key(), atfw::util::time::time_utility::get_now());
+      const int32_t join_result =
+          owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key(), 0);
       if (join_result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
         FWLOGERROR("{} recover missing matching Unit through Orbit failed, unit_id={}, result={}({})", *owner_,
                    get_current_unit_id(), join_result, protobuf_mini_dumper_get_error_msg(join_result));

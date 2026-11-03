@@ -1,0 +1,49 @@
+// Copyright 2026 atframework
+// @brief Created by yousongyang with mako-generator.py at 2026-11-02 15:22:21
+
+#pragma once
+
+#include <config/compile_optimize.h>
+
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <rpc/orbit/orbitsvrmatchsvrservice.atfw.gen.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <dispatcher/task_action_ss_req_base.h>
+
+#ifndef ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API
+#  define ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
+#endif
+
+class task_action_orbit_room_user_quit
+    : public task_action_ss_rpc_base<atframework::shared::SSMatchingOrbitRoomUserQuitReq,
+                                     atframework::shared::SSMatchingOrbitRoomUserQuitRsp> {
+ public:
+  using base_type = task_action_ss_rpc_base<atframework::shared::SSMatchingOrbitRoomUserQuitReq,
+                                            atframework::shared::SSMatchingOrbitRoomUserQuitRsp>;
+  using message_type = base_type::message_type;
+  using msg_ref_type = base_type::msg_ref_type;
+  using msg_cref_type = base_type::msg_cref_type;
+  using rpc_request_type = base_type::rpc_request_type;
+  using rpc_response_type = base_type::rpc_response_type;
+
+  using task_action_ss_req_base::operator();
+
+ public:
+  ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API explicit task_action_orbit_room_user_quit(
+      dispatcher_start_data_type&& param);
+  ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API ~task_action_orbit_room_user_quit() override;
+
+  ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API const char* name() const override;
+
+  ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API result_type operator()() override;
+
+  ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API int on_success() override;
+  ATFRAMEWORK_SHARED_ORBITSVRMATCHSVRSERVICE_API int on_failed() override;
+};

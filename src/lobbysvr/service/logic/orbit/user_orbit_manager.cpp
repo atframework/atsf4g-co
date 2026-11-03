@@ -204,14 +204,14 @@ void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserDat
 
 void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   room_key_ = user_table.orbit_room_data().room_key();
-  end_join_timepoint_ = user_table.orbit_room_data().end_join_timepoint();
+  end_join_timepoint_ = user_table.orbit_room_data().user_end_join_timepoint();
   expired_timepoint_ = user_table.orbit_room_data().expired_timepoint();
 }
 
 int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
   *user_table.mutable_orbit_room_data()->mutable_room_key() = room_key_;
   user_table.mutable_orbit_room_data()->set_expired_timepoint(expired_timepoint_);
-  user_table.mutable_orbit_room_data()->set_end_join_timepoint(end_join_timepoint_);
+  user_table.mutable_orbit_room_data()->set_user_end_join_timepoint(end_join_timepoint_);
   return 0;
 }
 
@@ -260,8 +260,11 @@ int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAM
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
     return PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM;
   }
-  // 容忍时间
-  end_join_timepoint += 10;
+  // 容忍时间 需要10秒处理状态
+  if (end_join_timepoint == 0) {
+    end_join_timepoint = atfw::util::time::time_utility::get_now() + 10;
+  }
+  // expired_timepoint 这里用 end_join_timepoint
   int32_t ret = create_room(ctx, room_key, end_join_timepoint, end_join_timepoint);
   if (ret != 0) {
     FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key.client_id());
