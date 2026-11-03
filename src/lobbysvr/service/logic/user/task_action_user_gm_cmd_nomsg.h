@@ -25,6 +25,10 @@ class task_action_user_gm_cmd_nomsg : public task_action_no_req_base {
     std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body;
   };
 
+  using gm_command_handler_t = void (*)(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
+                                        const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp,
+                                        ::util::cli::cmd_option_list& params);
+
  public:
   using task_action_no_req_base::operator();
 
@@ -41,11 +45,8 @@ class task_action_user_gm_cmd_nomsg : public task_action_no_req_base {
 
   // 管理Manager注册GM接口
   static bool check_params_number(::util::cli::cmd_option_list& params, size_t param_num);
-  static void init_gm_cmd(const std::string& cmd_name,
-                          void (*handler)(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
-                                          const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp,
-                                          ::util::cli::cmd_option_list& params),
-                          const std::string& help_msg = std::string());
+  static void register_gm_command(const std::string& cmd_name, gm_command_handler_t handler,
+                                  const std::string& help_msg = std::string());
 
  private:
   void run_cmd();

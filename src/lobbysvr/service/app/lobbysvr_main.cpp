@@ -17,6 +17,7 @@
 #include <dispatcher/task_action_no_req_base.h>
 #include <dispatcher/task_action_ss_req_base.h>
 
+#include <config/excel_config_wrapper.h>
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_macro.h>
@@ -38,6 +39,8 @@
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
+
+#include <logic/mail/mail_utils.h>
 
 #include <memory>
 #include <string>
@@ -111,6 +114,13 @@ class main_service_module : public atfw::atapp::module_impl {
   }
 
  public:
+  int setup(atapp::app_conf &) override {
+    excel_add_on_group_loaded_callback(
+        [](excel::config_group_t &group) { atfw::mail::mail_setup_template_engine(group); });
+
+    return 0;
+  }
+
   int init() override {
     {
       // register all router managers

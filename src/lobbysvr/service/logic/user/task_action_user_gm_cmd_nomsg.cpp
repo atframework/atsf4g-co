@@ -14,6 +14,7 @@
 #include <cli/cmd_option.h>
 #include <common/file_system.h>
 #include <log/log_wrapper.h>
+#include <string/utf8_char_t.h>
 
 #include <data/user.h>
 #include <data/user_cache.h>
@@ -42,8 +43,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#define DECLARE_UTF8_LITERATE(X) ((const char *)u8##X)
 
 namespace {
 static ::util::cli::cmd_option_ci::ptr_type &get_task_action_user_gm_cmd_cmd_set() {
@@ -121,13 +120,13 @@ void task_action_user_gm_cmd_nomsg::create_cmd_set() {
   ::util::cli::cmd_option_ci::ptr_type cmd_set = get_task_action_user_gm_cmd_cmd_set();
   cmd_set->set_help_cmd_style(0);
   cmd_set->set_help_description_style(0);
-  init_gm_cmd("@OnError", task_action_user_gm_cmd_nomsg::on_gm_cmd_invalid);
-  init_gm_cmd("help", task_action_user_gm_cmd_nomsg::on_gm_cmd_help,
-              // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-              DECLARE_UTF8_LITERATE("help Display help information, angle brackets in the following "
-                                    "commands are "
-                                    "<required> parameters, and square brackets are [optional] "
-                                    "parameters.."));
+  register_gm_command("@OnError", task_action_user_gm_cmd_nomsg::on_gm_cmd_invalid);
+  register_gm_command("help", task_action_user_gm_cmd_nomsg::on_gm_cmd_help,
+                      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+                      ATFW_UTIL_MACRO_UTF8_TO_ZSTRING("help Display help information, angle brackets in the following "
+                                                      "commands are "
+                                                      "<required> parameters, and square brackets are [optional] "
+                                                      "parameters.."));
 }
 
 bool task_action_user_gm_cmd_nomsg::check_params_number(::util::cli::cmd_option_list &params, size_t param_num) {
@@ -154,12 +153,8 @@ bool task_action_user_gm_cmd_nomsg::check_params_number(::util::cli::cmd_option_
   return true;
 }
 
-void task_action_user_gm_cmd_nomsg::init_gm_cmd(
-    const std::string &cmd_name,
-    void (*handler)(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
-                    const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp,
-                    ::util::cli::cmd_option_list &params),
-    const std::string &help_msg) {
+void task_action_user_gm_cmd_nomsg::register_gm_command(const std::string &cmd_name, gm_command_handler_t handler,
+                                                        const std::string &help_msg) {
   create_cmd_set();
   auto result =
       get_task_action_user_gm_cmd_cmd_set()->bind_cmd(cmd_name, [handler](::util::cli::cmd_option_list &params) {

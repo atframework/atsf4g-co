@@ -135,7 +135,7 @@ class user_mail_manager {
   mail_index_t mail_box_unloaded_index_;
 
   mail_record_map_t pending_to_remove_;
-  mail_record_map_t reveived_global_mails_;
+  mail_record_map_t received_global_mails_;
 
   mutable task_type_trait::task_type mail_async_task_;
   std::chrono::system_clock::time_point mail_async_task_protect_timepoint_;

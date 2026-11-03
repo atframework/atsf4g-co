@@ -6,6 +6,7 @@
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
+#include <string/utf8_char_t.h>
 #include <time/time_utility.h>
 
 // clang-format off
@@ -27,11 +28,13 @@
 
 #include <config/excel/config_easy_api.h>
 #include <config/excel_config_const_index.h>
+#include <config/excel_config_wrapper.h>
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 #include <logic/mail/mail_utils.h>
 
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
+#include <rpc/mail/global_mail.h>
 #include <rpc/mail/user_mail.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
@@ -50,8 +53,125 @@
 #include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
 #include "logic/item/user_item_manager.h"
 #include "logic/mail/global_mail_manager.h"
+#include "logic/user/task_action_user_gm_cmd_nomsg.h"
 
 namespace {
+
+static void global_mail_gm_add_global_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
+                                           const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
+                                           atfw::util::cli::cmd_option_list &params) {
+  if (!user_inst) {
+    rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    return;
+  }
+  if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 1)) {
+    return;
+  }
+
+  uint32_t zone_id = user_inst->get_zone_id();
+  if (params.get_params_number() > 1) {
+    zone_id = params[1]->to_uint32();
+  }
+
+  bool render_by_client = true;
+
+  excel_config_block_report_t block_cfg_error;
+  int32_t mail_template_id = params[0]->to_int32();
+  auto async_get_ret = rpc::async_invoke(
+      *ctx, "global_mail_gm.add_global_mail",
+      [zone_id, mail_template_id, render_by_client](rpc::context &child_ctx) -> rpc::result_code_type {
+        int32_t ret = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_global_mail_with_template(
+            child_ctx, mail_template_id, nullptr, zone_id, render_by_client));
+        if (ret != 0) {
+          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_global_mail failed res {}, mail_template_id {}, zone_id{} ", ret,
+                       mail_template_id, zone_id);
+        }
+        RPC_RETURN_CODE(ret);
+      });
+  if (async_get_ret.is_error()) {
+    FCTXLOGERROR(*ctx, "{} async_invoke a task to add global mail failed.res: {}({})", *user_inst,
+                 *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
+    rsp_body->set_result_code(::PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
+  }
+}
+
+static void global_mail_gm_remove_global_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
+                                              const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
+                                              atfw::util::cli::cmd_option_list &params) {
+  if (!user_inst) {
+    rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    return;
+  }
+  if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 2)) {
+    return;
+  }
+
+  uint32_t zone_id = params[0]->to_uint32();
+  int64_t mail_id = params[1]->to_int64();
+
+  auto async_get_ret = rpc::async_invoke(
+      *ctx, "global_mail_gm.remove_global_mail", [zone_id, mail_id](rpc::context &child_ctx) -> rpc::result_code_type {
+        int32_t ret = RPC_AWAIT_CODE_RESULT(::rpc::mail::remove_global_mail(child_ctx, zone_id, mail_id));
+        RPC_RETURN_CODE(ret);
+      });
+  if (async_get_ret.is_error()) {
+    FCTXLOGERROR(*ctx, "{} async_invoke a task to remove global mail failed.res: {}({})", *user_inst,
+                 *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
+    rsp_body->set_result_code(::PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
+  }
+}
+
+static void user_mail_gm_add_user_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
+                                       const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
+                                       atfw::util::cli::cmd_option_list &params) {
+  if (!user_inst) {
+    rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    return;
+  }
+  if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 1)) {
+    return;
+  }
+
+  int32_t mail_template_id = params[0]->to_int32();
+  auto async_get_ret = rpc::async_invoke(
+      *ctx, "user_mail_gm.add_user_mail",
+      [user_inst, mail_template_id](rpc::context &child_ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::DMailUserInfo *receiver = child_ctx.create<PROJECT_NAMESPACE_ID::DMailUserInfo>();
+        PROJECT_NAMESPACE_ID::DMailUserInfo local_receiver;
+        if (nullptr == receiver) {
+          receiver = &local_receiver;
+        }
+        user_inst->get_user_mail_manager().pack_mail_user(*receiver);
+        int32_t res = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_user_mail_with_template(
+            child_ctx, mail_template_id, user_inst->get_zone_id(), *receiver, nullptr, true));
+        if (res != 0) {
+          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed res {}", res);
+        }
+        RPC_RETURN_CODE(res);
+      });
+  if (async_get_ret.is_error()) {
+    FCTXLOGERROR(*ctx, "{} async_invoke a task to send user mail failed.res: {}({})", *user_inst,
+                 *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
+    rsp_body->set_result_code(::PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
+  }
+}
+
+static void init_user_mail_manager_gm_handle() {
+  task_action_user_gm_cmd_nomsg::register_gm_command(
+      "add-global-mail", global_mail_gm_add_global_mail,
+      ATFW_UTIL_MACRO_UTF8_TO_ZSTRING(
+          "add-global-mail <mail template ID> [zone ID]                      Send global mail."));
+  task_action_user_gm_cmd_nomsg::register_gm_command(
+      "remove-global-mail", global_mail_gm_remove_global_mail,
+      ATFW_UTIL_MACRO_UTF8_TO_ZSTRING(
+          "remove-global-mail <zone ID> <mail ID>                            Remove global mail."));
+
+  task_action_user_gm_cmd_nomsg::register_gm_command(
+      "add-user-mail", user_mail_gm_add_user_mail,
+      ATFW_UTIL_MACRO_UTF8_TO_ZSTRING(
+          "add-user-mail <mail template ID>                                  Send user mail."));
+}
+
 static bool init_user_mail_manager_handle() {
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kAddMail),
@@ -78,6 +198,8 @@ static bool init_user_mail_manager_handle() {
         }
         return ret;
       });
+
+  init_user_mail_manager_gm_handle();
   return true;
 }
 }  // namespace
@@ -110,7 +232,7 @@ void user_mail_manager::init_from_table_data(rpc::context &ctx, const PROJECT_NA
     mail_box_type_index_.clear();
     pending_to_remove_.clear();
     mail_box_unloaded_index_.clear();
-    reveived_global_mails_.clear();
+    received_global_mails_.clear();
 
     mail_box_id_index_.reserve(static_cast<size_t>(mail_data.mail_box_size()));
     mail_box_unloaded_index_.reserve(static_cast<size_t>(mail_data.mail_box_size()));
@@ -151,10 +273,10 @@ void user_mail_manager::init_from_table_data(rpc::context &ctx, const PROJECT_NA
                             mail_data.pending_to_remove(i));
     }
 
-    reveived_global_mails_.reserve(static_cast<size_t>(mail_data.reveived_global_mails().size()));
-    for (int i = 0; i < mail_data.reveived_global_mails().size(); ++i) {
-      protobuf_copy_message(reveived_global_mails_[mail_data.reveived_global_mails(i).mail_id()],
-                            mail_data.reveived_global_mails(i));
+    received_global_mails_.reserve(static_cast<size_t>(mail_data.received_global_mails().size()));
+    for (int i = 0; i < mail_data.received_global_mails().size(); ++i) {
+      protobuf_copy_message(received_global_mails_[mail_data.received_global_mails(i).mail_id()],
+                            mail_data.received_global_mails(i));
     }
 
     is_dirty_ = false;
@@ -179,7 +301,7 @@ int user_mail_manager::dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user 
 
   mail_data->clear_mail_box();
   mail_data->clear_pending_to_remove();
-  mail_data->clear_reveived_global_mails();
+  mail_data->clear_received_global_mails();
 
   for (auto &mail : mail_box_id_index_) {
     if (mail.second && mail.second->record) {
@@ -191,8 +313,8 @@ int user_mail_manager::dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user 
     protobuf_copy_message(*mail_data->add_pending_to_remove(), mail.second);
   }
 
-  for (auto &mail : reveived_global_mails_) {
-    protobuf_copy_message(*mail_data->add_reveived_global_mails(), mail.second);
+  for (auto &mail : received_global_mails_) {
+    protobuf_copy_message(*mail_data->add_received_global_mails(), mail.second);
   }
 
   return 0;
@@ -400,8 +522,8 @@ int user_mail_manager::add_global_mail(rpc::context &ctx, const PROJECT_NAMESPAC
     return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
   }
 
-  mail_record_map_t::iterator global_iter = reveived_global_mails_.find(mail.mail_id());
-  if (reveived_global_mails_.end() != global_iter) {
+  mail_record_map_t::iterator global_iter = received_global_mails_.find(mail.mail_id());
+  if (received_global_mails_.end() != global_iter) {
     // 已存在则刷新数据
     global_mail_manager::update_global_mail_record(ctx, global_iter->second, mail);
 
@@ -427,7 +549,7 @@ int user_mail_manager::add_global_mail(rpc::context &ctx, const PROJECT_NAMESPAC
     return ret;
   }
 
-  reveived_global_mails_[mail.mail_id()] = mail;
+  received_global_mails_[mail.mail_id()] = mail;
 
   // FIXME: OSS Log
   return ret;
@@ -1037,7 +1159,7 @@ void user_mail_manager::compact_mails(rpc::context &ctx, mail_box_t &mail_box) {
           continue;
         }
 
-        // 全服邮件在失效时就可以移除邮件内容但保留reveived_global_mails_
+        // 全服邮件在失效时就可以移除邮件内容但保留received_global_mails_
         if (mail.second->record->is_global_mail()) {
           if (global_mail_manager::is_record_removeable(ctx, *mail.second->record) ||
               atfw::mail::mail_is_expired_or_removed(ctx, *mail.second->record)) {
@@ -1081,7 +1203,7 @@ void user_mail_manager::compact_mails(rpc::context &ctx, mail_box_t &mail_box) {
         continue;
       }
 
-      // 全服邮件在失效时就可以移除邮件内容但保留reveived_global_mails_
+      // 全服邮件在失效时就可以移除邮件内容但保留received_global_mails_
       if (mail.second->record->is_global_mail()) {
         if (global_mail_manager::is_record_removeable(ctx, *mail.second->record) ||
             atfw::mail::mail_is_expired_or_removed(ctx, *mail.second->record)) {
@@ -1158,16 +1280,16 @@ void user_mail_manager::scan_and_remove_expired_mails(rpc::context &ctx) {
     remove_user_mail(ctx, mail_id);
   }
 
-  // 移除过期的全服邮件记录 - reveived_global_mails_
+  // 移除过期的全服邮件记录 - received_global_mails_
   remove_ids.clear();
-  for (auto &mail : reveived_global_mails_) {
+  for (auto &mail : received_global_mails_) {
     if (global_mail_manager::is_history_removeable(ctx, mail.second)) {
       remove_ids.push_back(mail.first);
     }
   }
 
   for (auto &mail_id : remove_ids) {
-    reveived_global_mails_.erase(mail_id);
+    received_global_mails_.erase(mail_id);
     remove_user_mail(ctx, mail_id);
   }
 

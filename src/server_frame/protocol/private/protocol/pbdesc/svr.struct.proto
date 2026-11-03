@@ -73,7 +73,7 @@ message user_option_public_data {
 message user_mail_data {
   repeated DMailRecord mail_box = 1;
   repeated DMailRecord pending_to_remove = 2;
-  repeated DMailRecord reveived_global_mails = 3;
+  repeated DMailRecord received_global_mails = 3;
 }
 
 message user_async_job_debug_message {

@@ -6,11 +6,11 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <cstdint>
-
 #include <std/explicit_declare.h>
 
 #include <rpc/rpc_utils.h>
+
+#include <cstdint>
 
 PROJECT_NAMESPACE_BEGIN
 class DMailContent;
@@ -24,15 +24,14 @@ namespace mail {
  */
 ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API result_code_type add_global_mail(::rpc::context &ctx,
                                                                             PROJECT_NAMESPACE_ID::DMailContent &mail,
-                                                                            uint32_t zone_id, int32_t channel,
-                                                                            int64_t channel_param);
+                                                                            uint32_t zone_id);
 
 /**
  * @param zone_id 0则是跨区服全服邮件
  */
 ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API result_code_type add_global_mail_with_template(
     ::rpc::context &ctx, int32_t mail_template_id, const PROJECT_NAMESPACE_ID::DMailUserInfo *sender, uint32_t zone_id,
-    int32_t channel, int64_t channel_param, bool render_by_client);
+    bool render_by_client);
 
 /**
  * @param zone_id 必须正确填大区ID，0则是跨区服全服邮件

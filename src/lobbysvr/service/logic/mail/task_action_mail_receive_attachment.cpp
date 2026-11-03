@@ -27,13 +27,14 @@
 #include <utility>
 
 #include "data/user.h"
+#include "logic/mail/user_mail_manager.h"
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_mail_receive_attachment::task_action_mail_receive_attachment(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API
-    task_action_mail_receive_attachment::~task_action_mail_receive_attachment() {}
+task_action_mail_receive_attachment::~task_action_mail_receive_attachment() {}
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_mail_receive_attachment::name() const {
   return "task_action_mail_receive_attachment";
@@ -41,8 +42,8 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_mail_receiv
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_mail_receive_attachment::result_type
 task_action_mail_receive_attachment::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
   if (!user_inst) {
@@ -51,7 +52,35 @@ task_action_mail_receive_attachment::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  if (req_body.mail_ids_size() == 0) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  int res = RPC_AWAIT_CODE_RESULT(user_inst->get_user_mail_manager().wait_for_async_task(get_shared_context()));
+  if (res < 0) {
+    FCTXLOGERROR(get_shared_context(), "{} wait for async mail task failed, res: {}({})", *user_inst, res,
+                 protobuf_mini_dumper_get_error_msg(res));
+    if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT) {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TIMEOUT);
+    } else {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+    }
+    TASK_ACTION_RETURN_CODE(res);
+  }
+
+  for (int i = 0; i < req_body.mail_ids_size(); ++i) {
+    PROJECT_NAMESPACE_ID::DMailOperationResult* result = rsp_body.add_mails();
+    if (nullptr == result) {
+      continue;
+    }
+
+    res = RPC_AWAIT_CODE_RESULT(user_inst->get_user_mail_manager().receive_mail_attachments(
+        get_shared_context(), req_body.mail_ids(i), result, req_body.need_remove()));
+    if (res < 0) {
+      set_response_code(res);
+    }
+  }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

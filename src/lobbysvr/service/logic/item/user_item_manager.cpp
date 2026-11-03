@@ -41,7 +41,7 @@ std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_han
 
 namespace {
 static bool init_user_item_manager_gm_handle() {
-  task_action_user_gm_cmd_nomsg::init_gm_cmd("add_item", user_item_manager::on_gm_cmd_add_item,
+  task_action_user_gm_cmd_nomsg::register_gm_command("add_item", user_item_manager::on_gm_cmd_add_item,
                                              "add_item <type_id> <count> [<type_id> <count> ...]");
   return true;
 }
