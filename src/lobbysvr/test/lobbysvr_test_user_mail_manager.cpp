@@ -170,9 +170,14 @@ CASE_TEST(lobbysvr_user_mail, receive_attachment_commits_items_once) {
     auto& item_manager = player.get_user_item_manager();
     const int64_t initial_count = item_manager.get_count(ctx, 1001);
     PROJECT_NAMESPACE_ID::DMailOperationResult operation_result;
+    mail_manager.clear_dirty();
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_SUCCESS, mail_manager.read_mail(ctx, 1001, &operation_result, false));
+    CASE_EXPECT_TRUE(mail_manager.is_dirty());
+    mail_manager.clear_dirty();
     result = RPC_AWAIT_CODE_RESULT(mail_manager.receive_mail_attachments(ctx, 1001, &operation_result, false));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_SUCCESS, result);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_SUCCESS, operation_result.result());
+    CASE_EXPECT_TRUE(mail_manager.is_dirty());
     CASE_EXPECT_EQ(initial_count + 7, item_manager.get_count(ctx, 1001));
 
     auto stored_mail = mail_manager.get_mail_raw(1001);
@@ -181,8 +186,11 @@ CASE_TEST(lobbysvr_user_mail, receive_attachment_commits_items_once) {
       CASE_EXPECT_NE(0, stored_mail->record->status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT);
     }
 
+    // 重放投递任务只携带初始记录，不能重置已领取状态。
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_SUCCESS, mail_manager.add_mail(ctx, mail.record));
     result = RPC_AWAIT_CODE_RESULT(mail_manager.receive_mail_attachments(ctx, 1001, &operation_result, false));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MAIL_ALREADY_RECEIVED, result);
+    CASE_EXPECT_NE(0, operation_result.record().status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_READ);
     CASE_EXPECT_EQ(initial_count + 7, item_manager.get_count(ctx, 1001));
 
     auto empty_mail = make_mail(ctx, 1002, 1001, 0);

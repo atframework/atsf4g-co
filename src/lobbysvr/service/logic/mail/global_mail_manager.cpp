@@ -255,7 +255,7 @@ bool global_mail_manager::update_from_db(rpc::context &ctx, uint32_t zone_id, in
   std::unordered_map<int64_t, const PROJECT_NAMESPACE_ID::DMailRecord *> check_additional_remove_list;
   check_additional_remove_list.reserve(pending_to_remove_.size());
   for (auto &mail : pending_to_remove_) {
-    if (mail.second.first == zone_id) {
+    if (mail.second.first == zone_id && mail.second.second.major_type() == major_type) {
       check_additional_remove_list[mail.first] = &mail.second.second;
     }
   }

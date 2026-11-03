@@ -411,7 +411,11 @@ int user_mail_manager::add_mail(rpc::context &ctx, const PROJECT_NAMESPACE_ID::D
       if (mail.is_global_mail()) {
         global_mail_manager::update_global_mail_record(ctx, *iter->second->record, mail);
       } else {
+        // 投递任务可能重放，保留玩家已更新的邮件状态。
+        const auto status = iter->second->record->status();
         protobuf_copy_message(*iter->second->record, mail);
+        // NOLINTNEXTLINE(bugprone-signed-bitwise)
+        iter->second->record->set_status(status | mail.status());
       }
       iter->second->record->set_fetch_error_count(keep_fetch_error_count);
     }
@@ -617,6 +621,7 @@ int user_mail_manager::read_mail(rpc::context &ctx, int64_t mail_id,
     if (0 == (mail->record->status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_READ)) {
       // NOLINTNEXTLINE(bugprone-signed-bitwise)
       mail->record->set_status(mail->record->status() | PROJECT_NAMESPACE_ID::EN_MAIL_ST_READ);
+      is_dirty_ = true;
 
       if (need_remove) {
         remove_user_mail(ctx, mail_id);
@@ -697,6 +702,7 @@ int user_mail_manager::read_all(
   for (auto &mail : mail_box) {
     // NOLINTNEXTLINE(bugprone-signed-bitwise)
     mail->record->set_status(mail->record->status() | PROJECT_NAMESPACE_ID::EN_MAIL_ST_READ);
+    is_dirty_ = true;
 
     if (need_remove) {
       remove_user_mail(ctx, mail->record->mail_id());
@@ -1473,6 +1479,16 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
       break;
     }
 
+    // 生成道具 GUID 可能挂起，提交前重新检查邮件和领取状态。
+    res = mail_is_valid_with_record(ctx, mail);
+    if (res < 0) {
+      RPC_RETURN_CODE(res);
+    }
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
+    if (0 != (mail.record->status() & PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT)) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAIL_ALREADY_RECEIVED);
+    }
+
     if (out_instances.empty()) {
       break;
     }
@@ -1498,6 +1514,7 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
       // do_operation 跨处理器可能部分提交且无法回滚。提交失败必须保留已领取状态，防止重试重复发奖。
       // NOLINTNEXTLINE(bugprone-signed-bitwise)
       mail.record->set_status(mail.record->status() | PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT);
+      is_dirty_ = true;
       mutable_dirty_mail(*mail.record);
       FCTXLOGERROR(ctx,
                    "receive attachments of mail {} failed after possible partial commit, res: {}({}), "
@@ -1514,6 +1531,7 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
 
   // NOLINTNEXTLINE(bugprone-signed-bitwise)
   mail.record->set_status(mail.record->status() | PROJECT_NAMESPACE_ID::EN_MAIL_ST_TOKEN_ATTACHMENT);
+  is_dirty_ = true;
 
   // FIXME OSS log
   // MAILUSERTAKEATTACHMENTFLOW tdr{};

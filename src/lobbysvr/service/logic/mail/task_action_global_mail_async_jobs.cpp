@@ -89,9 +89,9 @@ task_action_global_mail_async_jobs::result_type task_action_global_mail_async_jo
   }
 
   // 拉取邮件记录
-  uint32_t zone_ids[] = {0, logic_config::me()->get_local_zone_id()};
+  const uint32_t zone_ids[] = {0, self_zone_id};
   auto major_types_ref = excel::mail::get_all_global_mail_major_types();
-  for (auto& zone_id : zone_ids) {
+  for (uint32_t zone_id : zone_ids) {
     if (ret < 0) {
       break;
     }
@@ -112,9 +112,9 @@ task_action_global_mail_async_jobs::result_type task_action_global_mail_async_jo
         break;
       }
 
-      bool need_update = global_mail_manager::me()->update_from_db(
-          get_shared_context(), zone_id, major_type, *db_data->mutable_blob_data(),
-          (zone_id == 0 && is_global_master) || is_zone_master);
+      bool need_update = global_mail_manager::me()->update_from_db(get_shared_context(), zone_id, major_type,
+                                                                   *db_data->mutable_blob_data(),
+                                                                   zone_id == 0 ? is_global_master : is_zone_master);
       // 主节点更新删除无效数据
       if (need_update) {
         res = RPC_AWAIT_CODE_RESULT(rpc::db::mail_global_index::replace(get_shared_context(), db_data, db_version));
@@ -132,6 +132,9 @@ task_action_global_mail_async_jobs::result_type task_action_global_mail_async_jo
           FWLOGINFO("task_action_global_mail_async_jobs replace_global_mail({}, {}) success", zone_id, major_type);
         }
       }
+    }
+    if (self_zone_id == 0) {
+      break;
     }
   }
 
