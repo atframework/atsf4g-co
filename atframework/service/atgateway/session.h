@@ -180,8 +180,8 @@ formatter<atframework::gateway::session, CharT> : formatter<basic_string_view<Ch
   template <class FormatContext>
   auto format(const atframework::gateway::session &sess, FormatContext &ctx) const {
     return atfw::util::string::format_to(ctx.out(), "session {}@{}({}:{})", sess.get_id(),
-                                         reinterpret_cast<const void *>(&sess), sess.get_peer_host(),
-                                         sess.get_peer_port());
+                                         reinterpret_cast<const void *>(sess.get_protocol_handle()),
+                                         sess.get_peer_host(), sess.get_peer_port());
   }
 };
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

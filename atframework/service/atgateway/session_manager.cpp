@@ -107,7 +107,7 @@ int session_manager::listen_all() {
   for (const auto &listen_address : conf_.origin_conf.listen().address()) {
     int res = listen(listen_address.c_str());
     if (0 != res) {
-      FWLOGERROR("try to listen {} failed, res: {}", listen_address, res);
+      FWLOGERROR("try to listen {} failed, result code: {}", listen_address, res);
     } else {
       FWLOGDEBUG("listen to {} success", listen_address);
       ++ret;
@@ -141,7 +141,7 @@ int session_manager::listen(const char *address) {
 
       libuv_res = uv_tcp_init(evloop_, tcp_handle);
       if (0 != libuv_res) {
-        FWLOGERROR("init listen to {} failed, libuv_res: {}({})", address, libuv_res, uv_strerror(libuv_res));
+        FWLOGERROR("init listen to {} failed, libuv_result code: {}({})", address, libuv_res, uv_strerror(libuv_res));
         ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
@@ -151,7 +151,7 @@ int session_manager::listen(const char *address) {
         uv_ip4_addr(addr.host.c_str(), addr.port, &sock_addr);
         libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
         if (0 != libuv_res) {
-          FWLOGERROR("bind sock to tcp/ip v4 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+          FWLOGERROR("bind sock to tcp/ip v4 {}:{} failed, libuv_result code: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
           ret = static_cast<int>(error_code_t::kNetwork);
           break;
@@ -159,7 +159,7 @@ int session_manager::listen(const char *address) {
 
         libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_tcp);
         if (0 != libuv_res) {
-          FWLOGERROR("listen to tcp/ip v4 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+          FWLOGERROR("listen to tcp/ip v4 {}:{} failed, libuv_result code: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
           ret = static_cast<int>(error_code_t::kNetwork);
           break;
@@ -171,7 +171,7 @@ int session_manager::listen(const char *address) {
         uv_ip6_addr(addr.host.c_str(), addr.port, &sock_addr);
         libuv_res = uv_tcp_bind(tcp_handle, reinterpret_cast<const sockaddr *>(&sock_addr), 0);
         if (0 != libuv_res) {
-          FWLOGERROR("bind sock to tcp/ip v6 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+          FWLOGERROR("bind sock to tcp/ip v6 {}:{} failed, libuv_result code: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
           ret = static_cast<int>(error_code_t::kNetwork);
           break;
@@ -179,7 +179,7 @@ int session_manager::listen(const char *address) {
 
         libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_tcp);
         if (0 != libuv_res) {
-          FWLOGERROR("listen to tcp/ip v6 {}:{} failed, libuv_res: {}({})", addr.host, addr.port, libuv_res,
+          FWLOGERROR("listen to tcp/ip v6 {}:{} failed, libuv_result code: {}({})", addr.host, addr.port, libuv_res,
                      uv_strerror(libuv_res));
           ret = static_cast<int>(error_code_t::kNetwork);
           break;
@@ -200,7 +200,7 @@ int session_manager::listen(const char *address) {
 
       libuv_res = uv_pipe_init(evloop_, pipe_handle, 1);
       if (0 != libuv_res) {
-        FWLOGERROR("init listen to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res,
+        FWLOGERROR("init listen to unix sock {} failed, libuv_result code: {}({})", addr.host, libuv_res,
                    uv_strerror(libuv_res));
         ret = static_cast<int>(error_code_t::kNetwork);
         break;
@@ -208,14 +208,16 @@ int session_manager::listen(const char *address) {
 
       libuv_res = uv_pipe_bind(pipe_handle, addr.host.c_str());
       if (0 != libuv_res) {
-        FWLOGERROR("bind pipe to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res, uv_strerror(libuv_res));
+        FWLOGERROR("bind pipe to unix sock {} failed, libuv_result code: {}({})", addr.host, libuv_res,
+                   uv_strerror(libuv_res));
         ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
 
       libuv_res = uv_listen(res.get(), conf_.origin_conf.listen().backlog(), on_evt_accept_pipe);
       if (0 != libuv_res) {
-        FWLOGERROR("listen to unix sock {} failed, libuv_res: {}({})", addr.host, libuv_res, uv_strerror(libuv_res));
+        FWLOGERROR("listen to unix sock {} failed, libuv_result code: {}({})", addr.host, libuv_res,
+                   uv_strerror(libuv_res));
         ret = static_cast<int>(error_code_t::kNetwork);
         break;
       }
@@ -599,7 +601,7 @@ int session_manager::broadcast_data(gsl::span<const unsigned char> data) {
     if (iter->second->check_flag(session::flag_t::kRegistered)) {
       int res = iter->second->send_to_client(data);
       if (0 != res) {
-        FWLOGERROR("broadcast data to session {} failed, res: {}", iter->first, res);
+        FWLOGERROR("broadcast data to session {} failed, result code: {}", iter->first, res);
       }
 
       if (0 != ret) {
@@ -711,9 +713,6 @@ int session_manager::active_session(session::ptr_t sess) {
   actived_sessions_.insert_key_value(sess->get_id(), sess);
   remove_force_closed_session(sess.get());
   remove_session_first_idle(sess.get());
-
-  // setup default router
-  assign_default_router(*sess);
   return 0;
 }
 

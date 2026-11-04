@@ -514,14 +514,14 @@ class gateway_module : public ::atfw::atapp::module_impl {
     if (0 != res) {
       if (static_cast<int>(::atframework::gateway::error_code_t::kSessionNotFound) != res &&
           static_cast<int>(::atframework::gateway::error_code_t::kRefuseReconnect) != res) {
-        FWLOGERROR("reconnect session {}({}) from {} failed, res: {}", sess_holder->get_id(),
+        FWLOGERROR("reconnect session {}({}) from {} failed, result code: {}", sess_holder->get_id(),
                    reinterpret_cast<const void *>(sess), sess_id, res);
       } else {
-        FWLOGINFO("reconnect session {}({})  from {} failed, res: {}", sess_holder->get_id(),
+        FWLOGINFO("reconnect session {}({}) from {} failed, result code: {}", sess_holder->get_id(),
                   reinterpret_cast<const void *>(sess), sess_id, res);
       }
     } else {
-      FWLOGINFO("reconnect session {}({})  success", sess_holder->get_id(), reinterpret_cast<const void *>(sess));
+      FWLOGINFO("reconnect session {}({}) success", sess_holder->get_id(), reinterpret_cast<const void *>(sess));
     }
     return res;
   }
@@ -586,16 +586,16 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
       int res = gw_mgr_.active_session(sess_holder);
       if (0 != res) {
-        FWLOGERROR("{} send new session to router server failed, res: {}", *sess_holder, res);
+        FWLOGERROR("{} send new session to router server failed, result code: {}", *sess_holder, res);
         return -1;
       }
     } else {
       ::atframework::gateway::session *sess =
           reinterpret_cast<::atframework::gateway::session *>(proto->get_private_data());
       if (nullptr == sess) {
-        FWLOGERROR("session NONE handshake failed,res: {}\n{}", status, proto->get_info());
+        FWLOGERROR("session NONE handshake failed,result code: {}\n{}", status, proto->get_info());
       } else {
-        FWLOGERROR("{} handshake failed,res: {},\n{}", *sess, status, proto->get_info());
+        FWLOGERROR("{} handshake failed,result code: {},\n{}", *sess, status, proto->get_info());
       }
     }
     return 0;
@@ -612,9 +612,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
       }
     } else {
       if (nullptr == sess) {
-        FWLOGERROR("session NONE handshake update failed,res: {}\n{}", status, proto->get_info());
+        FWLOGERROR("session NONE handshake update failed,result code: {}\n{}", status, proto->get_info());
       } else {
-        FWLOGERROR("{} handshake update failed,res: {},\n{}", *sess, status, proto->get_info());
+        FWLOGERROR("{} handshake update failed,result code: {},\n{}", *sess, status, proto->get_info());
       }
     }
     return 0;
@@ -661,7 +661,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
     // do not allow reconnect
     int res = gw_mgr_.close(sess_id, reason, sub_reason, message, false);
     if (0 != res) {
-      FWLOGERROR("command kickoff session {} failed, res: {}", sess_id, res);
+      FWLOGERROR("command kickoff session {} failed, result code: {}", sess_id, res);
     } else {
       FWLOGINFO("command kickoff session {} success", sess_id);
     }
@@ -696,7 +696,7 @@ class gateway_module : public ::atfw::atapp::module_impl {
     // do not allow reconnect
     int res = gw_mgr_.close(sess_id, reason, sub_reason, message, true);
     if (0 != res) {
-      FWLOGERROR("command disconnect session {} failed, res: {}", sess_id, res);
+      FWLOGERROR("command disconnect session {} failed, result code: {}", sess_id, res);
     } else {
       FWLOGINFO("command disconnect session {} success", sess_id);
     }
@@ -751,8 +751,12 @@ struct app_handle_on_recv {
                   reinterpret_cast<const unsigned char *>(server_message->body().post().content().data()),
                   server_message->body().post().content().size()});
           if (0 != res) {
-            FWLOGERROR("from server {}: session {} push data failed, res: {}", source.id,
-                       server_message->head().session_id(), res);
+            if (res == static_cast<int>(::atframework::gateway::error_code_t::kSessionNotFound)) {
+              FWLOGINFO("from server {}: session {} not found", source.id, server_message->head().session_id());
+            } else {
+              FWLOGERROR("from server {}: session {} push data failed, result code: {}", source.id,
+                         server_message->head().session_id(), res);
+            }
 
             // session not found, maybe gateway has restarted or server cache expired without remove
             // notify to remove the expired session
@@ -762,7 +766,7 @@ struct app_handle_on_recv {
               response_message.mutable_body()->mutable_remove_session();
               res = mod_.get().get_session_manager().post_data(source.id, response_message);
               if (0 != res) {
-                FWLOGERROR("send remove notify to server {} failed, res: {}", source.id, res);
+                FWLOGERROR("send remove notify to server {} failed, result code: {}", source.id, res);
               }
             }
           }
@@ -771,7 +775,11 @@ struct app_handle_on_recv {
               reinterpret_cast<const unsigned char *>(server_message->body().post().content().data()),
               server_message->body().post().content().size()});
           if (0 != res) {
-            FWLOGERROR("from server {}: broadcast data failed, res: {}", source.id, res);
+            if (res == static_cast<int>(::atframework::gateway::error_code_t::kSessionNotFound)) {
+              FWLOGINFO("from server {}: no active session found for broadcast", source.id);
+            } else {
+              FWLOGERROR("from server {}: broadcast data failed, result code: {}", source.id, res);
+            }
           }
         } else {  // multicast to more than one client
           for (int i = 0; i < server_message->body().post().session_ids_size(); ++i) {
@@ -781,8 +789,13 @@ struct app_handle_on_recv {
                     reinterpret_cast<const unsigned char *>(server_message->body().post().content().data()),
                     server_message->body().post().content().size()});
             if (0 != res) {
-              FWLOGERROR("from server {}: session {} push data failed, res: {}", source.id,
-                         server_message->body().post().session_ids(i), res);
+              if (res == static_cast<int>(::atframework::gateway::error_code_t::kSessionNotFound)) {
+                FWLOGINFO("from server {}: session {} not found", source.id,
+                          server_message->body().post().session_ids(i));
+              } else {
+                FWLOGERROR("from server {}: session {} push data failed, result code: {}", source.id,
+                           server_message->body().post().session_ids(i), res);
+              }
             }
           }
         }
@@ -791,29 +804,25 @@ struct app_handle_on_recv {
       case ::atframework::gateway::server_message_body::kKickoffSession: {
         atfw::util::nostd::string_view kickoff_message{server_message->body().kickoff_session().message().data(),
                                                        server_message->body().kickoff_session().message().size()};
-        FWLOGWARNING("from server {}: session {} kickoff by server, reason: {}, {}, {}", source.id,
-                     server_message->head().session_id(),
-                     static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound),
-                     server_message->body().kickoff_session().reason(), kickoff_message);
-        if (0 == server_message->head().error_code()) {
-          mod_.get().get_session_manager().close(server_message->head().session_id(),
-                                                 static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff),
-                                                 server_message->body().kickoff_session().reason(), kickoff_message);
-        } else {
-          bool allow_reconnect = server_message->head().error_code() > 0 &&
-                                 server_message->head().error_code() <
-                                     static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound);
-          mod_.get().get_session_manager().close(
-              server_message->head().session_id(), server_message->head().error_code(),
-              server_message->body().kickoff_session().reason(), kickoff_message, allow_reconnect);
+        int32_t reason = server_message->head().error_code();
+        if (reason == 0) {
+          reason = static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff);
         }
+        FWLOGWARNING("from server {}: session {} kickoff by server, reason: {}, {}, {}", source.id,
+                     server_message->head().session_id(), reason, server_message->body().kickoff_session().reason(),
+                     kickoff_message);
+        bool allow_reconnect =
+            reason > 0 && reason < static_cast<int32_t>(::atframework::gateway::close_reason_t::kReconnectBound);
+        mod_.get().get_session_manager().close(server_message->head().session_id(), reason,
+                                               server_message->body().kickoff_session().reason(), kickoff_message,
+                                               allow_reconnect);
         break;
       }
       case ::atframework::gateway::server_message_body::kSetRouterReq: {
         int res = mod_.get().get_session_manager().set_session_router(
             server_message->head().session_id(), server_message->body().set_router_req().target_service_id(),
             server_message->body().set_router_req().target_service_name());
-        FWLOGINFO("from server {}: session {} set router to {}({}) by server, res: {}", source.id,
+        FWLOGINFO("from server {}: session {} set router to {}({}) by server, result code: {}", source.id,
                   server_message->head().session_id(), server_message->body().set_router_req().target_service_id(),
                   server_message->body().set_router_req().target_service_name(), res);
 
@@ -824,7 +833,7 @@ struct app_handle_on_recv {
 
         res = mod_.get().get_session_manager().post_data(source.id, response_message);
         if (0 != res) {
-          FWLOGERROR("send set router response to server {} failed, res: {}", source.id, res);
+          FWLOGERROR("send set router response to server {} failed, result code: {}", source.id, res);
         }
         break;
       }

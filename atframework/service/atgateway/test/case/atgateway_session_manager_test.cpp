@@ -4,6 +4,7 @@
 // and asynchronous cleanup of replaced connections.
 
 #include <atframe/atapp.h>
+#include <atframe/modules/service_discovery_module.h>
 #include <time/time_utility.h>
 #include <uv.h>
 
@@ -24,6 +25,7 @@
 #include "algorithm/crypto_cipher.h"
 #include "atgateway/protocol/v2/libatgw_protocol_sdk.h"
 #include "frame/test_macros.h"
+#include "memory/rc_ptr.h"
 #include "session.h"          // NOLINT(build/include_subdir)
 #include "session_manager.h"  // NOLINT(build/include_subdir)
 
@@ -259,6 +261,7 @@ struct reconnect_fixture {
   uv_loop_t loop{};
   uv_tcp_t listener{};
   std::vector<std::unique_ptr<reconnect_connection>> connections;
+  atfw::atapp::app app;
   ::atframework::gateway::session_manager manager;
   std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> server_context;
   std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> client_context;
@@ -278,7 +281,15 @@ struct reconnect_fixture {
     server_context = libatgw_protocol_sdk::create_shared_context(config);
     client_context = libatgw_protocol_sdk::create_shared_context(client_config);
     CASE_EXPECT_TRUE(server_context != nullptr && client_context != nullptr);
+    atfw::atapp::protocol::atapp_discovery default_router;
+    default_router.set_id(0x4321);
+    default_router.set_name("default-router");
+    auto node = atfw::util::memory::make_strong_rc<atfw::atapp::etcd_discovery_node>();
+    node->copy_from(default_router, atfw::atapp::etcd_discovery_node::node_version(), 0);
+    app.get_service_discovery_module()->get_global_discovery().add_node(node);
+    CASE_EXPECT_EQ(0, manager.init(&app, [this] { return std::make_unique<libatgw_protocol_sdk>(server_context); }));
     manager.get_conf().origin_conf.set_echo_server(true);
+    manager.get_conf().origin_conf.mutable_client()->mutable_default_router()->set_node_id(default_router.id());
     manager.get_conf().origin_conf.mutable_client()->mutable_reconnect_timeout()->set_seconds(180);
     manager.get_conf().origin_conf.mutable_client()->mutable_shutdown_timeout()->set_seconds(5);
     CASE_EXPECT_EQ(0, uv_loop_init(&loop));
@@ -331,9 +342,10 @@ struct reconnect_fixture {
       *done = true;
       return 0;
     };
-    connection.server_callbacks.new_session_fn = [&connection](libatgw_protocol_api *, uint64_t &id) {
+    connection.server_callbacks.new_session_fn = [this, &connection](libatgw_protocol_api *, uint64_t &id) {
       int result = connection.server->init_new_session();
       id = connection.server->get_id();
+      manager.assign_default_router(*connection.server);
       return result;
     };
     connection.server_callbacks.reconnect_fn = [this, &connection](libatgw_protocol_api *, uint64_t id) {
@@ -426,6 +438,8 @@ static void check_replace_connection(bool cached, bool cache_enabled) {
   if (!reconnect_fixture::start(previous)) {
     return;
   }
+  CASE_EXPECT_EQ(static_cast<uint64_t>(0x4321), previous.server->get_router_id());
+  CASE_EXPECT_EQ(std::string("default-router"), previous.server->get_router_name());
   const auto id = previous.server->get_id();
   int private_value = 42;
   previous.server->set_private_data(&private_value);

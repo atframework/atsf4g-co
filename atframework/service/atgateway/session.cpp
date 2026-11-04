@@ -381,9 +381,12 @@ int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::
     }
     owner_ = nullptr;
 
+    uv_os_fd_t fd{};
+    uv_fileno(&raw_handle_, &fd);
+
     // if writing, wait all data written an then shutdown it
     if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {
-      FWLOGINFO("{} start to shutdown system fd", *this);
+      FWLOGINFO("{} start to shutdown system fd {}", *this, fd);
 
       set_flag(flag_t::kShutdownFd, true);
       if (uv_shutdown(&shutdown_req_, &stream_handle_, on_evt_shutdown) < 0) {
@@ -417,7 +420,10 @@ int session::force_close_fd() {
   }
 
   if (check_flag(flag_t::kHasFd)) {
-    FWLOGINFO("{} start to close system fd", *this);
+    uv_os_fd_t fd{};
+    uv_fileno(&raw_handle_, &fd);
+
+    FWLOGINFO("{} start to close system fd {}", *this, fd);
     uv_close(&raw_handle_, on_evt_closed);
   } else {
     set_flag(flag_t::kShouldShutdownFd, false);
@@ -551,16 +557,13 @@ void session::on_evt_closed(uv_handle_t *handle) {
     return;
   }
 
-  uv_os_fd_t fd{};
-  uv_fileno(handle, &fd);
-
   session *self = reinterpret_cast<session *>(handle->data);
   assert(self);
   self->set_flag(flag_t::kHasFd, false);
   self->set_flag(flag_t::kShouldShutdownFd, false);
   self->set_flag(flag_t::kClosingFd, false);
 
-  FWLOGINFO("{} system fd {} closed", *self, fd);
+  FWLOGINFO("{} system fd closed", *self);
 
   // free session object
   ptr_t *holder = reinterpret_cast<ptr_t *>(self->shutdown_req_.data);
