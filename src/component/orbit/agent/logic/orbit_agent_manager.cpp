@@ -541,8 +541,8 @@ int orbit_agent_manager::stop() {
       // 保留给 cleanup 处理
       continue;
     }
-    delete_client(record);
     async_notify_client_exit(record);
+    delete_client(record);
   }
   return ret;
 }
@@ -1523,8 +1523,8 @@ void orbit_agent_manager::process_spawn_completion(const spawn_completion_t& com
   record->process_id = completion.process_id;
   record->process_handle_main_thread = completion.process_handle;
   if (completion.uv_result < 0) {
-    delete_client(record);
     async_notify_client_exit(record);
+    delete_client(record);
     return;
   }
   // 启动成功
@@ -1666,6 +1666,7 @@ void orbit_agent_manager::on_client_process_exit(const orbit_agent_client_record
   record->exit_reason = atfw::orbit::EN_CLIENT_EXIT_REASON_CRASH;
   record->exit_code = static_cast<int32_t>(exit_status);
   // 统一删除 这边进程确定退出了
+  async_notify_client_exit(record);
   delete_client(record);
   if (record->seed_process) {
     if (!stoped_) {
@@ -1675,7 +1676,6 @@ void orbit_agent_manager::on_client_process_exit(const orbit_agent_client_record
     }
     return;
   }
-  async_notify_client_exit(record);
 }
 
 void orbit_agent_manager::async_notify_client_exit(const orbit_agent_client_record_ptr& record) {
@@ -1689,6 +1689,9 @@ void orbit_agent_manager::async_notify_client_exit(const orbit_agent_client_reco
   if (record->notify_client_exit) {
     return;
   }
+  if (record->seed_process) {
+    return;
+  }
   record->notify_client_exit = true;
 
   auto controller_server_id = record->get_controller_server_id();
@@ -1699,7 +1702,7 @@ void orbit_agent_manager::async_notify_client_exit(const orbit_agent_client_reco
 
   const auto* server_identity_ptr = find_server_identity(record->server_unique_id);
   if (server_identity_ptr == nullptr) {
-    FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+    FWLOGERROR("orbit agent client_exit failed for {}: server_unique_id {:#x} not found in server identities",
                record->client_id, record->server_unique_id);
     return;
   }
@@ -2214,8 +2217,8 @@ void orbit_agent_manager::check_client_force_kill(time_t now) {
       FWLOGWARNING("orbit agent client {} cleanup kill returned {}, continue cleanup", client_instance_id, kill_result);
     }
     // kill后直接删除
-    delete_client(record);
     async_notify_client_exit(record);
+    delete_client(record);
   }
 }
 

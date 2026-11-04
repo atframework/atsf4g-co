@@ -108,9 +108,10 @@ class main_service_module : public atfw::atapp::module_impl {
   }
 
   int stop() override {
-    orbit_room_manager::me()->stop();
+    // 房间的 send_destroy 没跑完时返回 >0，让 atapp 继续驱动事件循环并再次调用 stop
+    int ret = orbit_room_manager::me()->stop();
     orbit_server_manager::me()->stop();
-    return 0;
+    return ret;
   }
 
   int tick() override {

@@ -47,12 +47,14 @@ int orbit_room_manager::tick() {
   for (auto iter = room_index_by_client_id_.begin(); iter != room_index_by_client_id_.end();) {
     iter->second->tick();
     if (iter->second->ready_to_destroy()) {
-      iter->second->on_destroy();
+      begin_destroy_room(iter->second);
       iter = room_index_by_client_id_.erase(iter);
     } else {
       ++iter;
     }
   }
+
+  prune_destroying_rooms();
   return 0;
 }
 
@@ -60,12 +62,46 @@ int orbit_room_manager::stop() {
   if (!is_inited_) {
     return 0;
   }
-  is_closing_ = true;
-  // TODO(yousongyang) 关注所有房间的退出状态，等待所有房间退出
-  if (!room_index_by_client_id_.empty()) {
-    FWLOGINFO("orbit_room_manager stop, waiting for {} rooms to exit", room_index_by_client_id_.size());
+
+  if (!is_closing_) {
+    is_closing_ = true;
+    // 停止时所有房间都要走 on_destroy，把 dtmq 频道清理干净
+    FWLOGINFO("orbit_room_manager stop, begin destroy {} rooms", room_index_by_client_id_.size());
+    for (auto& kv : room_index_by_client_id_) {
+      begin_destroy_room(kv.second);
+    }
+    room_index_by_client_id_.clear();
+  }
+
+  size_t waiting_count = prune_destroying_rooms();
+  if (waiting_count > 0) {
+    FWLOGINFO("orbit_room_manager stop, waiting for {} rooms to finish send_destroy", waiting_count);
+    // >0 表示还没停完，atapp 会继续驱动事件循环并再次调用 stop
+    return 1;
   }
   return 0;
+}
+
+void orbit_room_manager::begin_destroy_room(const atfw::util::memory::strong_rc_ptr<orbit_room>& room) {
+  if (!room) {
+    return;
+  }
+
+  room->on_destroy();
+  if (!room->is_destroy_finished()) {
+    destroying_rooms_.push_back(room);
+  }
+}
+
+size_t orbit_room_manager::prune_destroying_rooms() {
+  for (auto iter = destroying_rooms_.begin(); iter != destroying_rooms_.end();) {
+    if (!*iter || (*iter)->is_destroy_finished()) {
+      iter = destroying_rooms_.erase(iter);
+    } else {
+      ++iter;
+    }
+  }
+  return destroying_rooms_.size();
 }
 
 atfw::util::memory::strong_rc_ptr<orbit_room> orbit_room_manager::get_room(const std::string& client_id) noexcept {

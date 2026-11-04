@@ -154,23 +154,38 @@ int32_t orbit_room::set_status(PROJECT_NAMESPACE_ID::EnOrbitRoomStatus v) {
 bool orbit_room::ready_to_destroy() const { return room_status_ == PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_EXIT; }
 
 void orbit_room::on_destroy() {
-  // 回收资源 通知清理频道
-  if (subscriber_) {
-    auto room_ptr = shared_from_this();
-    auto invoke_result = rpc::async_invoke(
-        logic_server_get_current_tick_context(), "orbit_room.notify_dtmq_destroy",
-        [room_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-          int32_t ret = RPC_AWAIT_CODE_RESULT(room_ptr->subscriber_->send_destroy(child_ctx, nullptr, true));
-          if (ret != 0) {
-            FWLOGERROR("orbit_room {} notify_dtmq_destroy failed, ret: {}", room_ptr->get_client_id(), ret);
-          }
-          RPC_RETURN_CODE(ret);
-        });
-    if (invoke_result.is_error()) {
-      FWLOGERROR("orbit_room {} invoke notify_dtmq_destroy failed, result: {}", room_ptr->get_client_id(),
-                 *invoke_result.get_error());
-    }
+  if (destroy_started_) {
+    return;
   }
+  destroy_started_ = true;
+
+  // 回收资源 通知清理频道
+  if (!subscriber_) {
+    destroy_finished_ = true;
+    FWLOGINFO("orbit_room {} on_destroy, no subscriber", get_client_id());
+    return;
+  }
+
+  auto room_ptr = shared_from_this();
+  auto subscriber = subscriber_;
+  auto invoke_result = rpc::async_invoke(
+      logic_server_get_current_tick_context(), "orbit_room.notify_dtmq_destroy",
+      [room_ptr, subscriber](rpc::context& child_ctx) -> rpc::result_code_type {
+        int32_t ret = RPC_AWAIT_CODE_RESULT(subscriber->send_destroy(child_ctx, nullptr, true));
+        if (ret != 0) {
+          FWLOGERROR("orbit_room {} notify_dtmq_destroy failed, ret: {}", room_ptr->get_client_id(), ret);
+        }
+        room_ptr->destroy_finished_ = true;
+        RPC_RETURN_CODE(ret);
+      });
+  if (invoke_result.is_error()) {
+    FWLOGERROR("orbit_room {} invoke notify_dtmq_destroy failed, result: {}", get_client_id(),
+               *invoke_result.get_error());
+    // 任务没排上就不会再有回调，直接标记完成，避免 stop 一直等待
+    destroy_finished_ = true;
+    return;
+  }
+
   FWLOGINFO("orbit_room {} on_destroy", get_client_id());
 }
 

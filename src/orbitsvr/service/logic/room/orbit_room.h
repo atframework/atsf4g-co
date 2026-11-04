@@ -76,7 +76,10 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
                                                const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
 
   bool ready_to_destroy() const;
+  // 触发销毁：通知 dtmq 清理频道。重复调用只会真正发送一次
   void on_destroy();
+  // send_destroy 是否已完成（没有订阅者时视为已完成）
+  bool is_destroy_finished() const noexcept { return destroy_finished_; }
 
  private:
   int32_t add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log);
@@ -112,6 +115,9 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   size_t init_to_client_finish_count_ = 0;
   bool has_user_joined_ = false;               // 是否已有玩家注册成功，房间心跳从此时开始
   int64_t next_room_heartbeat_timepoint_ = 0;  // 下一次房间心跳的时间点
+
+  bool destroy_started_ = false;   // 是否已经开始销毁（send_destroy 只发一次）
+  bool destroy_finished_ = false;  // send_destroy 是否已经完成
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t, user_key_equal_t>
       user_data_index_;
   task_type_trait::task_type init_to_client_task_;

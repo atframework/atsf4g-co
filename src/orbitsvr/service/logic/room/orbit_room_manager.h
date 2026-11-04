@@ -27,6 +27,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "logic/room/orbit_room.h"
 
@@ -62,9 +63,15 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
 
  private:
   atfw::util::memory::strong_rc_ptr<orbit_room> get_room(const std::string& client_id) noexcept;
+  // 触发房间销毁，并在 send_destroy 未完成时挂到销毁列表里等待
+  void begin_destroy_room(const atfw::util::memory::strong_rc_ptr<orbit_room>& room);
+  // 移除已完成的销毁项，返回仍在等待的数量
+  size_t prune_destroying_rooms();
 
   bool is_inited_ = false;
   bool is_closing_ = false;
 
   std::unordered_map<std::string, atfw::util::memory::strong_rc_ptr<orbit_room>> room_index_by_client_id_;
+  // 已触发销毁但 send_destroy 还没完成的房间
+  std::vector<atfw::util::memory::strong_rc_ptr<orbit_room>> destroying_rooms_;
 };
