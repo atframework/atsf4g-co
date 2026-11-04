@@ -173,7 +173,7 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
         } else if (now - last_heartbeat_timepoint_ >= kOrbitRoomHeartbeatTimeoutSec) {
           int64_t next_expired_timepoint = now + kOrbitRoomExpireDelaySec;
           if (expired_timepoint_ <= 0 || expired_timepoint_ > next_expired_timepoint) {
-            FWLOGERROR(
+            FWLOGWARNING(
                 "{} user_orbit_manager orbit room heartbeat timeout, last_heartbeat_timepoint: {}, expired_timepoint: "
                 "{} -> {}",
                 *owner_, last_heartbeat_timepoint_, expired_timepoint_, next_expired_timepoint);
@@ -413,6 +413,7 @@ void user_orbit_manager::on_channel_destroyed(rpc::context&, const rpc::dtmq::cl
   // 过期时间设置为当前时间加容忍值
   subscriber_ready_ = true;
   expired_timepoint_ = atfw::util::time::time_utility::get_now() + kOrbitRoomExpireDelaySec;
+  FWLOGWARNING("{} user_orbit_manager on_channel_destroyed room {}", *owner_, room_key_.client_id());
 }
 
 int32_t user_orbit_manager::dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& /*init_data*/) {
