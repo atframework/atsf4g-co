@@ -14,7 +14,7 @@ endif()
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(
-  atf4g-co
+  atsf4g-co
   VERSION "0.11.0"
   HOMEPAGE_URL "https://github.com/atframework/atsf4g-co"
   LANGUAGES C CXX)
