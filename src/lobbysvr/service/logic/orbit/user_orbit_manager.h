@@ -55,6 +55,8 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   // 收到事件消息
   void on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                         const ::atfw::dtmq::DChannelMessage& data);
+  // Channel销毁
+  void on_channel_destroyed(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber);
 
   int32_t dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& init_data);
 
@@ -83,6 +85,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   PROJECT_NAMESPACE_ID::DOrbitRoomKey room_key_;
   int64_t end_join_timepoint_ = 0;
   int64_t expired_timepoint_ = 0;
+  int64_t last_heartbeat_timepoint_ = 0;  // 最近一次收到房间心跳的时间点
   bool subscriber_ready_ = false;
   rpc::dtmq::client_subscriber::ptr_t subscriber_;
   orbit_room_data_ptr room_data_;

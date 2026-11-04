@@ -147,16 +147,21 @@ message DOrbitClientExit {
   DOrbitRoomExitInfo exit_info = 1;
 }
 
+message DOrbitRoomHeartbeat {
+  int64 timepoint = 1;  // 心跳时间点
+}
+
 message DOrbitRoomEventLog {
   EnOrbitRoomStatus orbit_room_status = 1;  // 战斗房间状态
   DOrbitRoomKey room_key = 2;               // 房间key
 
   oneof event {
-    DOrbitRoomInit room_init = 100;          // 房间创建
-    DOrbitRoomReady ready_data = 101;        // 房间准备就绪
-    DOrbitUserInit user_init_success = 102;  // 用户初始化成功
-    DOrbitUserFinish user_finish = 103;      // 用户完成
-    DOrbitClientExit client_exit = 104;      // Client退出
+    DOrbitRoomInit room_init = 100;            // 房间创建
+    DOrbitRoomReady ready_data = 101;          // 房间准备就绪
+    DOrbitUserInit user_init_success = 102;    // 用户初始化成功
+    DOrbitUserFinish user_finish = 103;        // 用户完成
+    DOrbitClientExit client_exit = 104;        // Client退出
+    DOrbitRoomHeartbeat room_heartbeat = 105;  // 房间心跳
   }
 }
 

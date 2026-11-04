@@ -1387,8 +1387,17 @@ int32_t orbit_agent_manager::spawn_client_async(uint64_t client_instance_id, std
     options.file = launch_argv[0];
     options.args = launch_argv.data();
     options.exit_cb = on_uv_process_exit_callback;
+    // 独立进程不继承 Agent 的 stdin/stdout/stderr：Agent 退出后这些管道会关闭，
+    // 子进程继续往控制台写日志会收到 SIGPIPE，Linux 下默认直接终止进程（无任何日志）
+    uv_stdio_container_t child_stdio[3];
+    std::memset(child_stdio, 0, sizeof(child_stdio));
     if (detached) {
       options.flags = UV_PROCESS_DETACHED;
+      child_stdio[0].flags = UV_IGNORE;
+      child_stdio[1].flags = UV_IGNORE;
+      child_stdio[2].flags = UV_IGNORE;
+      options.stdio = child_stdio;
+      options.stdio_count = 3;
     }
 
     FWLOGINFO("orbit agent spawning client {} by command {}", client_instance_id, command_line_str);

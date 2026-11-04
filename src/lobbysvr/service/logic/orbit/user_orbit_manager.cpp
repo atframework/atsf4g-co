@@ -43,6 +43,11 @@
 #include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
 
 namespace {
+// 超过该秒数没有收到 orbitsvr 的房间心跳，认为房间已经不存在
+constexpr int64_t kOrbitRoomHeartbeatTimeoutSec = 120;
+// 判定房间过期后，留给结算/清理流程的容忍时间
+constexpr int64_t kOrbitRoomExpireDelaySec = 30;
+
 static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit_channel_event_callback_set() {
   rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret =
       rpc::dtmq::client_subscriber::create_event_callback_set();
@@ -77,6 +82,23 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
           return;
         }
         orbit_mgr->on_receive_event(ctx, subscriber, data);
+        orbit_mgr->get_owner().send_all_syn_msg(logic_server_get_current_tick_context());
+      });
+
+  rpc::dtmq::client_subscriber::set_event_callback_on_destroyed(
+      *ret, [](rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber, int64_t,
+               std::chrono::system_clock::time_point) {
+        auto local_private_data = subscriber->get_local_private_data();
+        if (local_private_data.empty()) {
+          FWLOGERROR("user_orbit_manager on_destroyed callback missing local_private_data");
+          return;
+        }
+        user_orbit_manager* orbit_mgr = reinterpret_cast<user_orbit_manager*>(local_private_data[0]);
+        if (!orbit_mgr) {
+          FWLOGERROR("user_orbit_manager on_destroyed callback missing orbit_mgr");
+          return;
+        }
+        orbit_mgr->on_channel_destroyed(ctx, subscriber);
         orbit_mgr->get_owner().send_all_syn_msg(logic_server_get_current_tick_context());
       });
   return ret;
@@ -123,12 +145,11 @@ user_orbit_manager::user_orbit_manager(user& owner) : owner_(&owner) {
 
 void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
   do {
+    if (!subscriber_ready_) {
+      // 等subscriber ready
+      break;
+    }
     if (end_join_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= end_join_timepoint_) {
-      // 结束加入时间点到了
-      if (!subscriber_ready_) {
-        // 等subscriber ready
-        break;
-      }
       // 结束加入时间点到了 但是没有收到加入消息
       FWLOGERROR(
           "{} user_orbit_manager refresh_feature_limit_second orbit room end join timepoint reached but no join "
@@ -138,14 +159,35 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
       break;
     }
 
+    // 两分钟没收到房间心跳，认为房间已经不存在：把过期时间设到 30 秒后，交给下面的过期流程结算/清理
+    if (is_orbit_room_exist()) {
+      bool room_finished =
+          room_data_ &&
+          (room_data_->finish_event_ || PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH == room_data_->room_status_ ||
+           PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_EXIT == room_data_->room_status_);
+      if (!room_finished) {
+        int64_t now = atfw::util::time::time_utility::get_now();
+        if (last_heartbeat_timepoint_ <= 0) {
+          // 恢复房间数据后从当前时间开始算
+          last_heartbeat_timepoint_ = now;
+        } else if (now - last_heartbeat_timepoint_ >= kOrbitRoomHeartbeatTimeoutSec) {
+          int64_t next_expired_timepoint = now + kOrbitRoomExpireDelaySec;
+          if (expired_timepoint_ <= 0 || expired_timepoint_ > next_expired_timepoint) {
+            FWLOGERROR(
+                "{} user_orbit_manager orbit room heartbeat timeout, last_heartbeat_timepoint: {}, expired_timepoint: "
+                "{} -> {}",
+                *owner_, last_heartbeat_timepoint_, expired_timepoint_, next_expired_timepoint);
+            expired_timepoint_ = next_expired_timepoint;
+            mark_dirty();
+          }
+        }
+      }
+    }
+
     if (expired_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= expired_timepoint_) {
       // 过期了
       if (owner_->get_user_async_jobs_manager().is_async_jobs_task_running()) {
         // 等异步任务完成
-        break;
-      }
-      if (!subscriber_ready_) {
-        // 等subscriber ready
         break;
       }
       if (room_data_) {
@@ -223,10 +265,12 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   room_key_ = room_key;
   end_join_timepoint_ = end_join_timepoint;
   expired_timepoint_ = expired_timepoint;
+  last_heartbeat_timepoint_ = atfw::util::time::time_utility::get_now();
 
   // 创建subscriber并订阅频道
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
+  subscribe_options.auto_create_channel = false;
   atfw::dtmq::DChannelIdKey channel_key;
   channel_key.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
   channel_key.set_channel_id(
@@ -357,6 +401,20 @@ void user_orbit_manager::on_receive_event(rpc::context& ctx, const rpc::dtmq::cl
   on_receive_event(ctx, event_log);
 }
 
+void user_orbit_manager::on_channel_destroyed(rpc::context&, const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
+  if (!subscriber) {
+    FWLOGERROR("user_orbit_manager on_channel_destroyed missing subscriber");
+    return;
+  }
+  if (subscriber != subscriber_) {
+    FWLOGERROR("user_orbit_manager on_channel_destroyed subscriber mismatch");
+    return;
+  }
+  // 过期时间设置为当前时间加容忍值
+  subscriber_ready_ = true;
+  expired_timepoint_ = atfw::util::time::time_utility::get_now() + kOrbitRoomExpireDelaySec;
+}
+
 int32_t user_orbit_manager::dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& /*init_data*/) {
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
@@ -393,6 +451,9 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kClientExit:
       room_data_->exit_info_ = event_log.client_exit().exit_info();
       break;
+    case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kRoomHeartbeat:
+      last_heartbeat_timepoint_ = atfw::util::time::time_utility::get_now();
+      break;
     default:
       break;
   }
@@ -404,6 +465,7 @@ void user_orbit_manager::clear_orbit_room_data() {
   room_data_ = nullptr;
   end_join_timepoint_ = 0;
   expired_timepoint_ = 0;
+  last_heartbeat_timepoint_ = 0;
   subscriber_ready_ = false;
   mark_dirty();
 }

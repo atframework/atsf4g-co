@@ -82,6 +82,8 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   int32_t add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log);
   int32_t set_status(PROJECT_NAMESPACE_ID::EnOrbitRoomStatus v);
   int32_t init_user_to_client(rpc::context& ctx);
+  // 房间心跳：第一个玩家加入后每分钟一次，直到房间结束
+  void tick_room_heartbeat(rpc::context& ctx, int64_t now);
 
   int32_t room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason);
   void async_user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);
@@ -108,6 +110,8 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   bool end_join_ = false;  // DS退出或者DS通知EndJoin
   bool end_join_send_ = false;
   size_t init_to_client_finish_count_ = 0;
+  bool has_user_joined_ = false;               // 是否已有玩家注册成功，房间心跳从此时开始
+  int64_t next_room_heartbeat_timepoint_ = 0;  // 下一次房间心跳的时间点
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t, user_key_equal_t>
       user_data_index_;
   task_type_trait::task_type init_to_client_task_;

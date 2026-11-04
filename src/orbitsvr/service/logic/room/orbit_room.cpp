@@ -45,6 +45,11 @@
 #include <unordered_set>
 #include <utility>
 
+namespace {
+// 房间心跳间隔：第一个玩家加入后每分钟一次，Lobby 据此判定房间是否还存活
+constexpr int64_t kOrbitRoomHeartbeatIntervalSec = 60;
+}  // namespace
+
 orbit_room::orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
                        const PROJECT_NAMESPACE_ID::DOrbitRoomInitData& room_data)
     : room_key_(room_key), room_data_(room_data) {
@@ -80,6 +85,10 @@ void orbit_room::tick() {
   }
 
   auto now = util::time::time_utility::get_now();
+
+  // 房间心跳
+  tick_room_heartbeat(logic_server_get_current_tick_context(), now);
+
   if (expired_timepoint_ > 0 && now > expired_timepoint_) {
     // 超时
     room_finish(logic_server_get_current_tick_context(), PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT);
@@ -107,6 +116,32 @@ void orbit_room::tick() {
       set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_EXIT);
     }
   }
+}
+
+void orbit_room::tick_room_heartbeat(rpc::context& ctx, int64_t now) {
+  if (!has_user_joined_) {
+    return;
+  }
+  // 房间结束后不再发心跳，此时 Lobby 侧已按结束事件/结算流程处理
+  if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH == room_status_ ||
+      PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_EXIT == room_status_) {
+    return;
+  }
+
+  if (0 == next_room_heartbeat_timepoint_) {
+    // 第一个玩家加入时先发一次，之后按间隔发送
+    next_room_heartbeat_timepoint_ = now;
+  }
+  if (now < next_room_heartbeat_timepoint_) {
+    return;
+  }
+  next_room_heartbeat_timepoint_ = now + kOrbitRoomHeartbeatIntervalSec;
+
+  PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
+  event_log.set_orbit_room_status(room_status_);
+  *event_log.mutable_room_key() = room_key_;
+  event_log.mutable_room_heartbeat()->set_timepoint(now);
+  add_event_log(ctx, std::move(event_log));
 }
 
 const std::string& orbit_room::get_client_id() const noexcept { return room_key_.client_id(); }
@@ -407,6 +442,7 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
           user_ptr->init_result_ = data;
           user_ptr->init_ = true;
           room_ptr->init_to_client_finish_count_++;
+          room_ptr->has_user_joined_ = true;
 
           PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
           event_log.set_orbit_room_status(room_ptr->room_status_);
