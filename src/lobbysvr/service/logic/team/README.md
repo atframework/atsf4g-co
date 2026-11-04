@@ -90,8 +90,8 @@ start_matching 的队伍上行被 room 以负数 client_result 否决时，失�
 复用工作区构建目录、生成器、配置和并行度。在已初始化 MSVC 环境的 PowerShell 7 中执行：
 
 ```powershell
-cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 7
-ctest --test-dir build_jobs_cmake_tools -V -R '^atf4g-co-lobbysvr-unit-test\.unit$' --output-on-failure --no-tests=error
+cmake --build build_jobs_cmake_tools --target atsf4g-co-lobbysvr-unit-test --parallel 7
+ctest --test-dir build_jobs_cmake_tools -V -R '^atsf4g-co-lobbysvr-unit-test\.unit$' --output-on-failure --no-tests=error
 ```
 
 直接运行可执行程序时，先复用 CTest 的工作目录、`RPC_UNIT_TEST_WORKDIR` 和 DLL PATH，再使用

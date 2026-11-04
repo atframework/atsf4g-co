@@ -313,10 +313,10 @@ runtime 引擎驱动。
 
 ```powershell
 # 构建自测
-cmake --build build_jobs_cmake_tools --target atf4g-co-rpc-unit-test-selftest --parallel 12
+cmake --build build_jobs_cmake_tools --target atsf4g-co-rpc-unit-test-selftest --parallel 12
 # 按 label 运行
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
 ctest --test-dir build_jobs_cmake_tools -L "sdk:server-frame" --output-on-failure
 # 过滤单 case（atframe_utils 私有框架；可执行文件位于 PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY，默认 <BUILD_DIR>/test）
-build_jobs_cmake_tools/test/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.combined_dns_ss_db_smoke"
+build_jobs_cmake_tools/test/atsf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.combined_dns_ss_db_smoke"
 ```

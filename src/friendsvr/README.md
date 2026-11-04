@@ -32,7 +32,7 @@ SDK 的 `force_commit` 选项沿用事务组件的 best-effort 语义，不提�
 这些测试不代表真实 Redis、协调者和多节点网络的部署验收。
 
 ```powershell
-cmake --build <BUILD_DIR> --target atf4g-co-friendsvr-management-unit-test --parallel <JOBS>
+cmake --build <BUILD_DIR> --target atsf4g-co-friendsvr-management-unit-test --parallel <JOBS>
 ctest --test-dir <BUILD_DIR> -R friendsvr-management --output-on-failure -V
 ```
 

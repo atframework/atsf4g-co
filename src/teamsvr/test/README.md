@@ -1,6 +1,6 @@
 # Team Room 单元测试
 
-测试入口为 `atf4g-co-teamsvr-room-unit-test`，通过 `project_add_rpc_unit_test` 注册。
+测试入口为 `atsf4g-co-teamsvr-room-unit-test`，通过 `project_add_rpc_unit_test` 注册。
 测试使用真实 Room、manager 和 action，使用离线 RPC fixture 控制外部服务响应、频道事件和时间。
 
 ## 测试范围
@@ -69,8 +69,8 @@ Room 移除后，原实例的挂起维护任务不得发送旧通知、重新设
 复用工作区已配置的生成器、工具链和并行度。在已初始化 MSVC 环境的 PowerShell 7 中执行：
 
 ```powershell
-cmake --build build_jobs_cmake_tools --target atf4g-co-teamsvr-room-unit-test atf4g-co-lobbysvr-unit-test --parallel 7
-ctest --test-dir build_jobs_cmake_tools -V -R '^atf4g-co-(teamsvr-room|lobbysvr)-unit-test\.unit$' --output-on-failure --no-tests=error
+cmake --build build_jobs_cmake_tools --target atsf4g-co-teamsvr-room-unit-test atsf4g-co-lobbysvr-unit-test --parallel 7
+ctest --test-dir build_jobs_cmake_tools -V -R '^atsf4g-co-(teamsvr-room|lobbysvr)-unit-test\.unit$' --output-on-failure --no-tests=error
 ```
 
 其他工作区将 `build_jobs_cmake_tools` 替换为其实际构建目录，并使用该目录的并行度设置。
