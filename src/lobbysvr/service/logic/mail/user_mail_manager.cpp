@@ -1493,6 +1493,10 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
       break;
     }
 
+    if (!owner_->get_user_item_manager().find_position(ctx, out_instances)) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NO_EMPTY_POSITION);
+    }
+
     auto checked_add_request =
         owner_->get_user_item_manager().check_add(ctx, std::move(out_instances),
                                                   {
