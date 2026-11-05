@@ -186,6 +186,13 @@ set(SteamworksSDK_DIR
 find_package(SteamworksSDK REQUIRED)
 
 # The SDK is a prebuilt package instead of a port, so copy its redistributable libraries into the install directory to
-# let the deploy tree collect them together with the other shared libraries
+# let the deploy tree collect them together with the other shared libraries.
+#
+if (WIN32)
+  set(_STEAMWORKS_SDK_RUNTIME_INSTALL_SUBDIR "${CMAKE_INSTALL_BINDIR}")
+else ()
+  set(_STEAMWORKS_SDK_RUNTIME_INSTALL_SUBDIR "${CMAKE_INSTALL_LIBDIR}")
+endif ()
 project_link_or_copy_files(${SteamworksSDK_RUNTIME_LIBRARIES}
-                           "${PROJECT_THIRD_PARTY_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}")
+                           "${PROJECT_THIRD_PARTY_INSTALL_DIR}/${_STEAMWORKS_SDK_RUNTIME_INSTALL_SUBDIR}")
+unset(_STEAMWORKS_SDK_RUNTIME_INSTALL_SUBDIR)

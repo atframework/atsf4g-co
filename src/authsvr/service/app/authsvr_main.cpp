@@ -29,13 +29,20 @@
 
 #include <memory/object_allocator.h>
 
+#include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_context.h>
+
 #include <service_discovery_index/discovery_index.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
+#include <utility>
 
 #include "app/authsvr_helper.h"
 #include "app/handle_cs_rpc_authsvrclientservice.atfw.gen.h"
+#include "logic/algorithm/auth_account_generator.h"
 
 namespace {
 class main_service_module;
@@ -89,6 +96,74 @@ class main_service_module : public atfw::atapp::module_impl {
   }
 
   const char *name() const override { return "main_service_module"; }
+
+  // 自定义指令：预生成一批内部鉴权账号写入 login_auth 表，关闭注册后也能用预置账号密码登录
+  static int cmd_gen_accounts(atfw::util::cli::callback_param params) {
+    constexpr const char *kUsage =
+        "auth-gen-accounts <count> <open-id prefix> [start index]  pre-generate internal auth "
+        "accounts (default: prefix=devacc, start index=1)";
+
+    if (params.get_params_number() < 2) {
+      ::atfw::atapp::app::add_custom_command_rsp(params, kUsage);
+      return 0;
+    }
+
+    int64_t count = params[0]->to_int64();
+    if (count <= 0 || count > 10000) {
+      ::atfw::atapp::app::add_custom_command_rsp(params, "count must be in range [1, 10000]");
+      return 0;
+    }
+
+    std::string open_id_prefix = params[1]->to_cpp_string();
+
+    int64_t start_index = 1;
+    if (params.get_params_number() >= 3) {
+      start_index = params[2]->to_int64();
+      if (start_index <= 0) {
+        ::atfw::atapp::app::add_custom_command_rsp(params, "start index must be positive");
+        return 0;
+      }
+    }
+
+    uint32_t account_type = static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_ATI_ACCOUNT_INTERNAL);
+
+    const auto &server_cfg =
+        logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::authsvr_cfg>();
+    if (!server_cfg.internal_auth().enable()) {
+      FWLOGWARNING(
+          "auth-gen-accounts: internal_auth is disabled, generated accounts can not login before it is enabled");
+    }
+
+    // 指令回调是同步的，DB 写入必须异步执行；指令本身只回报“已调度”，账号明细写入日志
+    rpc::context ctx{rpc::context::create_without_task()};
+    auto invoke_result = rpc::async_invoke(
+        ctx, "authsvr.generate_accounts",
+        [count, open_id_prefix = std::move(open_id_prefix), start_index,
+         account_type](rpc::context &child_ctx) -> rpc::result_code_type {
+          std::vector<auth_generated_account> generated;
+          int res = RPC_AWAIT_CODE_RESULT(auth_generate_accounts(child_ctx, account_type, open_id_prefix,
+                                                                 static_cast<uint64_t>(start_index),
+                                                                 static_cast<uint32_t>(count), generated));
+          if (res < 0) {
+            FWLOGERROR("auth-gen-accounts stopped with error code {}, {} accounts created before failure", res,
+                       generated.size());
+            RPC_RETURN_CODE(res);
+          }
+
+          FWLOGINFO("auth-gen-accounts created {} accounts, open_id and password are logged above", generated.size());
+          RPC_RETURN_CODE(0);
+        });
+
+    if (invoke_result.is_error()) {
+      FWLOGERROR("auth-gen-accounts failed to schedule async task, error code: {}", *invoke_result.get_error());
+      ::atfw::atapp::app::add_custom_command_rsp(params, "auth-gen-accounts failed to schedule async task");
+      return 0;
+    }
+
+    ::atfw::atapp::app::add_custom_command_rsp(
+        params, "auth-gen-accounts scheduled, see service log for generated open_id and password");
+    return 0;
+  }
 
   const atfw::component::service_discovery_index::ptr_t &get_discovery_index() const noexcept {
     return discovery_index_;
@@ -163,6 +238,13 @@ int main(int argc, char *argv[]) {
   app.add_module(ss_msg_dispatcher::me());
   app.add_module(db_msg_dispatcher::me());
   app.add_module(std::make_shared<main_service_module>());
+
+  // 自定义指令注册示例：handler 为 static 成员函数，指令通过 atapp 的控制台/管理通道下发
+  app.get_command_manager()
+      ->bind_cmd("auth-gen-accounts", &main_service_module::cmd_gen_accounts)
+      ->set_help_msg(
+          "auth-gen-accounts <count> [open-id prefix] [start index] [account type]    pre-generate internal auth "
+          "accounts");
 
   // run
   return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
