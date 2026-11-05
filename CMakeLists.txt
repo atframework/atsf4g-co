@@ -25,23 +25,7 @@ if(BUILD_TESTING OR PROJECT_ENABLE_UNITTEST)
   include(CTest)
 endif()
 
-include(MaybePopulateSubmodule)
-include("${CMAKE_CURRENT_LIST_DIR}/third_party/Repository.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/third_party/AfterFramework.cmake")
-if(BUILD_TESTING OR PROJECT_ENABLE_UNITTEST)
-  include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectTestTools.cmake")
-endif()
-
 # installer directory
-if(NOT PROJECT_INSTALL_BAS_DIR)
-  set(PROJECT_INSTALL_BAS_DIR "${PROJECT_BINARY_DIR}/${PROJECT_BUILD_NAME}")
-endif()
-if(NOT EXISTS ${PROJECT_INSTALL_BAS_DIR})
-  file(MAKE_DIRECTORY ${PROJECT_INSTALL_BAS_DIR})
-  message(STATUS "create ${PROJECT_INSTALL_BAS_DIR} for build target.")
-endif()
-
 set(PROJECT_INSTALL_RES_DIR "${PROJECT_INSTALL_BAS_DIR}/resource")
 set(PROJECT_INSTALL_TOOLS_DIR "${PROJECT_INSTALL_BAS_DIR}/tools")
 set(PROJECT_INSTALL_SHARED_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
@@ -58,6 +42,14 @@ file(MAKE_DIRECTORY "${PROJECT_BUILD_TOOLS_DIR}")
 
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_SHARED_DIR})
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
+
+include(MaybePopulateSubmodule)
+include("${CMAKE_CURRENT_LIST_DIR}/third_party/Repository.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/third_party/AfterFramework.cmake")
+if(BUILD_TESTING OR PROJECT_ENABLE_UNITTEST)
+  include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectTestTools.cmake")
+endif()
 
 set(PROJECT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/_generated")
 set(PROJECT_GENERATED_PBD_DIR "${PROJECT_GENERATED_DIR}/pbdesc")
