@@ -32,7 +32,7 @@ class simple_template_core {
   using code_block_fn_t = std::function<bool(std::ostream&, std::ostream&, void*)>;
   using code_block_fn_ptr_t = std::shared_ptr<code_block_fn_t>;
 
-  struct config_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE config_t {
     getter_creator_fn_t getter_fn_creator;
     call_creator_fn_t call_creator_fn;
 
@@ -40,53 +40,30 @@ class simple_template_core {
     std::unordered_map<std::string, code_block_fn_ptr_t> var_getter_cache;
     std::unordered_map<std::string, code_block_fn_ptr_t> func_call_cache;
 
-    SERVER_FRAME_CONFIG_API config_t();
+    EXCEL_CONFIG_LOADER_API config_t();
 
-    SERVER_FRAME_CONFIG_API void clear_cache();
+    EXCEL_CONFIG_LOADER_API void clear_cache();
 
-    UTIL_DESIGN_PATTERN_NOCOPYABLE(config_t)
-    UTIL_DESIGN_PATTERN_NOMOVABLE(config_t)
+    ATFW_UTIL_DESIGN_PATTERN_NOCOPYABLE(config_t)
+    ATFW_UTIL_DESIGN_PATTERN_NOMOVABLE(config_t)
   };
 
-  UTIL_DESIGN_PATTERN_NOCOPYABLE(simple_template_core)
-  UTIL_DESIGN_PATTERN_NOMOVABLE(simple_template_core)
+  ATFW_UTIL_DESIGN_PATTERN_NOCOPYABLE(simple_template_core)
+  ATFW_UTIL_DESIGN_PATTERN_NOMOVABLE(simple_template_core)
 
  private:
   simple_template_core();
 
  public:
-  SERVER_FRAME_CONFIG_API bool render(void* priv_data, std::string& output, std::string* errmsg = nullptr);
+  EXCEL_CONFIG_LOADER_API bool render(void* priv_data, std::string& output, std::string* errmsg = nullptr);
 
-  SERVER_FRAME_CONFIG_API static ptr_t compile(const char* const in, const size_t insz, config_t& conf,
+  EXCEL_CONFIG_LOADER_API static ptr_t compile(const char* const in, const size_t insz, config_t& conf,
                                                std::string* errmsg = nullptr);
 
  private:
-  struct print_const_string {
-    print_const_string(const std::string&, size_t, size_t, const std::string&);
-    bool operator()(std::ostream&, std::ostream&, void*);
-    std::string raw_block;
-    size_t line;
-    size_t col;
-    std::string data;
-  };
-
-  struct getter_fn_wrapper {
-    getter_fn_wrapper(const std::string&, size_t, size_t, getter_fn_t);
-    bool operator()(std::ostream&, std::ostream&, void*);
-    std::string raw_block;
-    size_t line;
-    size_t col;
-    getter_fn_t fn;
-  };
-
-  struct call_fn_wrapper {
-    call_fn_wrapper(const std::string&, size_t, size_t, call_fn_t);
-    bool operator()(std::ostream&, std::ostream&, void*);
-    std::string raw_block;
-    size_t line;
-    size_t col;
-    call_fn_t fn;
-  };
+  struct ATFW_UTIL_SYMBOL_LOCAL print_const_string;
+  struct ATFW_UTIL_SYMBOL_LOCAL getter_fn_wrapper;
+  struct ATFW_UTIL_SYMBOL_LOCAL call_fn_wrapper;
 
   std::list<code_block_fn_ptr_t> blocks_;
 };
@@ -105,7 +82,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE simple_template {
   using call_creator_fn_t = std::function<call_fn_t(const std::string&, const std::vector<std::string>&, const char*,
                                                     const char*)>; /** name, parameters, token start, token end **/
 
-  struct config_t {
+  struct ATFW_UTIL_SYMBOL_VISIBLE config_t {
     getter_creator_fn_t getter_fn_creator;
     call_creator_fn_t call_creator_fn;
 
@@ -117,7 +94,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE simple_template {
  private:
   simple_template() {}
 
-  struct getter_fn_t_wrapper {
+  struct ATFW_UTIL_SYMBOL_VISIBLE getter_fn_t_wrapper {
     explicit getter_fn_t_wrapper(getter_fn_t f) : fn(f) {}
     getter_fn_t fn;
 
@@ -130,7 +107,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE simple_template {
     }
   };
 
-  struct call_fn_t_wrapper {
+  struct ATFW_UTIL_SYMBOL_VISIBLE call_fn_t_wrapper {
     explicit call_fn_t_wrapper(call_fn_t f) : fn(f) {}
     call_fn_t fn;
 
@@ -143,7 +120,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE simple_template {
     }
   };
 
-  struct getter_creator_fn_t_wrapper {
+  struct ATFW_UTIL_SYMBOL_VISIBLE getter_creator_fn_t_wrapper {
     explicit getter_creator_fn_t_wrapper(getter_creator_fn_t f) : fn(f) {}
     getter_creator_fn_t fn;
 
@@ -162,7 +139,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE simple_template {
     }
   };
 
-  struct call_creator_fn_t_wrapper {
+  struct ATFW_UTIL_SYMBOL_VISIBLE call_creator_fn_t_wrapper {
     explicit call_creator_fn_t_wrapper(call_creator_fn_t f) : fn(f) {}
     call_creator_fn_t fn;
 

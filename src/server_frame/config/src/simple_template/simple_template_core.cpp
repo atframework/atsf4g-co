@@ -9,38 +9,40 @@
 #include <memory/object_allocator.h>
 
 #include <sstream>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace excel {
 
-namespace details {
-struct token_data_t {
+namespace {
+struct ATFW_UTIL_SYMBOL_LOCAL token_data_t {
   size_t line;
   size_t column;
   const char* block_begin;
   const char* block_end;
 };
 
-static bool is_eol(const char& c) { return c == '\r' || c == '\n'; }
+static bool is_eol(char c) { return c == '\r' || c == '\n'; }
 
-static bool is_blank(const char& c) { return c == ' ' || c == '\t' || is_eol(c); }
+static bool is_blank(char c) { return c == ' ' || c == '\t' || is_eol(c); }
 
-static bool is_ascii_identify(const char& c) {
-  return c && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$');
+static bool is_ascii_identify(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$';
 }
 
-static bool is_sub_identify(const char& c) { return c && c == '.'; }
+static bool is_sub_identify(char c) { return c == '.'; }
 
-static bool is_function_begin(const char& c) { return c && c == '('; }
+static bool is_function_begin(char c) { return c == '('; }
 
-static bool is_function_end(const char& c) { return c && c == ')'; }
+static bool is_function_end(char c) { return c == ')'; }
 
-static bool is_function_param_split(const char& c) { return c && c == ','; }
+static bool is_function_param_split(char c) { return c == ','; }
 
 static const char* take_blanks(const char* start, token_data_t& out) {
   char prechar = 0;
   out.block_begin = start;
-  while (start && *start && is_blank(*start)) {
+  while (start != nullptr && *start && is_blank(*start)) {
     if (is_eol(*start)) {
       // 兼容Windows换行符
       if (!(prechar == '\r' && *start == '\n')) {
@@ -60,12 +62,15 @@ static const char* take_blanks(const char* start, token_data_t& out) {
 }
 
 static std::pair<bool, const char*> take_utf8_char(const char* start, size_t sz) {
-  if (!start || !*start) {
+  if (nullptr == start) {
+    return std::make_pair(false, start);
+  }
+  if (0 == *start) {
     if (sz > 0) {
       return std::make_pair(false, start + 1);
-    } else {
-      return std::make_pair(false, start);
     }
+
+    return std::make_pair(false, start);
   }
 
   size_t len = atfw::util::string::utf8_char_t::length(start);
@@ -129,14 +134,14 @@ static std::string make_identify(const char* begin, const char* end) {
     return ret;
   }
 
-  return std::string(begin, end);
+  return {begin, end};
 }
 
 static std::pair<bool, const char*> take_identify(const char* const start, size_t sz, token_data_t& out) {
   bool ret = true;
   out.block_begin = start;
   out.block_end = start;
-  if (start && (*start == '\'' || *start == '"')) {
+  if (start != nullptr && (*start == '\'' || *start == '"')) {
     char strclose = *start;
     char prechar = *start;
     bool is_convert = false;
@@ -172,7 +177,7 @@ static std::pair<bool, const char*> take_identify(const char* const start, size_
       ret = false;
     }
   } else {
-    while (out.block_end && *out.block_end) {
+    while (out.block_end != nullptr && 0 != *out.block_end) {
       std::pair<bool, const char*> cres =
           take_utf8_char(out.block_end, sz - static_cast<size_t>(out.block_end - start));
       if (!cres.first) {
@@ -201,7 +206,7 @@ static std::pair<bool, const char*> take_identify(const char* const start, size_
 
 static const char* take_block(const char* const start, size_t sz, std::string& expression,
                               std::vector<std::string>& params, bool& is_func, token_data_t& out, std::ostream& errs) {
-  if (!start || !*start || sz == 0) {
+  if (start == nullptr || 0 == *start || sz == 0) {
     return start;
   }
 
@@ -219,7 +224,7 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
         take_identify(next_token, sz - static_cast<size_t>(next_token - start), segment);
     if (!ident_res.first || next_token >= ident_res.second) {
       errs << "Identify " << next_token << " end at line: " << segment.line << ", column: " << segment.column
-           << " is not a valid" << std::endl;
+           << " is not a valid\n";
     } else {
       if (!first_ident) {
         expr_ss << ".";
@@ -257,7 +262,7 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
           take_identify(next_token, sz - static_cast<size_t>(next_token - start), segment);
       if (!ident_res.first || next_token >= ident_res.second) {
         errs << "Parameter " << next_token << " end at line: " << segment.line << ", column: " << segment.column
-             << " is not a valid UTF-8 string" << std::endl;
+             << " is not a valid UTF-8 string\n";
       } else {
         params.push_back(make_identify(next_token, ident_res.second));
       }
@@ -284,7 +289,7 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
       next_token = take_blanks(next_token, segment);
     } else {
       errs << "Function " << expression << " end at line: " << segment.line << ", column: " << segment.column
-           << " missing closing \')\'" << std::endl;
+           << " missing closing \')\'\n";
     }
   } else {
     is_func = false;
@@ -296,18 +301,45 @@ static const char* take_block(const char* const start, size_t sz, std::string& e
 
   return next_token;
 }
-}  // namespace details
+}  // namespace
 
-SERVER_FRAME_CONFIG_API simple_template_core::config_t::config_t() : enable_share_functions(true) {}
+struct ATFW_UTIL_SYMBOL_LOCAL simple_template_core::call_fn_wrapper {
+  call_fn_wrapper(std::string, size_t, size_t, call_fn_t);
+  bool operator()(std::ostream&, std::ostream&, void*);
+  std::string raw_block;
+  size_t line;
+  size_t col;
+  call_fn_t fn;
+};
 
-SERVER_FRAME_CONFIG_API void simple_template_core::config_t::clear_cache() {
+struct ATFW_UTIL_SYMBOL_LOCAL simple_template_core::getter_fn_wrapper {
+  getter_fn_wrapper(std::string, size_t, size_t, getter_fn_t);
+  bool operator()(std::ostream&, std::ostream&, void*);
+  std::string raw_block;
+  size_t line;
+  size_t col;
+  getter_fn_t fn;
+};
+
+struct ATFW_UTIL_SYMBOL_LOCAL simple_template_core::print_const_string {
+  print_const_string(std::string, size_t, size_t, std::string);
+  bool operator()(std::ostream&, std::ostream&, void*);
+  std::string raw_block;
+  size_t line;
+  size_t col;
+  std::string data;
+};
+
+EXCEL_CONFIG_LOADER_API simple_template_core::config_t::config_t() : enable_share_functions(true) {}
+
+EXCEL_CONFIG_LOADER_API void simple_template_core::config_t::clear_cache() {
   var_getter_cache.clear();
   func_call_cache.clear();
 }
 
 simple_template_core::simple_template_core() {}
 
-SERVER_FRAME_CONFIG_API bool simple_template_core::render(void* priv_data, std::string& output, std::string* errmsg) {
+EXCEL_CONFIG_LOADER_API bool simple_template_core::render(void* priv_data, std::string& output, std::string* errmsg) {
   bool ret = true;
   std::stringstream output_ss;
   std::stringstream errmsg_ss;
@@ -324,7 +356,7 @@ SERVER_FRAME_CONFIG_API bool simple_template_core::render(void* priv_data, std::
   return ret;
 }
 
-SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compile(const char* const in,
+EXCEL_CONFIG_LOADER_API simple_template_core::ptr_t simple_template_core::compile(const char* const in,
                                                                                   const size_t insz, config_t& conf,
                                                                                   std::string* errmsg) {
   std::stringstream errmsg_ss;
@@ -335,7 +367,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
       return ret;
     }
 
-    details::token_data_t token_position;
+    token_data_t token_position{};
     token_position.block_begin = in;
     token_position.block_end = in;
     token_position.line = 1;
@@ -344,15 +376,15 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
     size_t previous_block_column = token_position.column;
     char prechar = 0;
     const char* next_token = in;
+    // NOLINTNEXTLINE(modernize-use-integer-sign-comparison)
     while (static_cast<size_t>(next_token - in) < insz) {
-      std::pair<bool, const char*> cres =
-          details::take_utf8_char(next_token, insz - static_cast<size_t>(next_token - in));
+      std::pair<bool, const char*> cres = take_utf8_char(next_token, insz - static_cast<size_t>(next_token - in));
       if (!cres.first) {
         errmsg_ss << "Character " << next_token << " at line: " << token_position.line
-                  << ", column: " << token_position.column << " is not a valid UTF-8 charater." << std::endl;
+                  << ", column: " << token_position.column << " is not a valid UTF-8 charater.\n";
       }
 
-      if (details::is_eol(*next_token)) {
+      if (is_eol(*next_token)) {
         // 兼容Windows换行符
         if (!(prechar == '\r' && *next_token == '\n')) {
           token_position.column = 1;
@@ -415,7 +447,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
 
             if (!conf.call_creator_fn) {
               errmsg_ss << "Function creator is undefined, we just use the code \"" << code
-                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
+                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << '\n';
               ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
@@ -425,7 +457,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
             if (!fn) {
               errmsg_ss << "Function \"" << expression
                         << "\" is not supported by now, we just use the raw data for fallback with code \"" << code
-                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
+                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << '\n';
               ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
@@ -450,7 +482,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
 
             if (!conf.getter_fn_creator) {
               errmsg_ss << "Variable getter creator is undefined, we just use the code \"" << code
-                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
+                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << '\n';
               ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
@@ -460,7 +492,7 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
             if (!fn) {
               errmsg_ss << "Variable getter \"" << expression
                         << "\" is not supported by now, we just use the raw data for fallback with code \"" << code
-                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << std::endl;
+                        << "\" at line: " << previous_block_line << ", column: " << previous_block_column << '\n';
               ret->blocks_.push_back(atfw::memory::stl::make_shared<code_block_fn_t>(
                   print_const_string(code, previous_block_line, previous_block_column, code)));
               break;
@@ -477,18 +509,21 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
         } while (false);
 
         // tail }} identify
-        next_token = details::take_blanks(next_token, token_position);
-        if (*next_token && '}' == *next_token && '}' == *(next_token + 1)) {
+        next_token = take_blanks(next_token, token_position);
+        // NOLINTNEXTLINE(misc-redundant-expression)
+        if (*next_token != '\0' && '}' == *next_token && '}' == *(next_token + 1)) {
           next_token += 2;
           token_position.column += 2;
           prechar = '}';  // reset block status
         } else {
           if (*next_token) {
+            // NOLINTNEXTLINE(modernize-raw-string-literal)
             errmsg_ss << "Expect \"}}\" in code \"" << expression << "\" at line: " << token_position.line
-                      << ", column: " << token_position.column << ", but we got \"" << *next_token << "\"" << std::endl;
+                      << ", column: " << token_position.column << ", but we got \"" << *next_token << "\"\n";
           } else {
+            // NOLINTNEXTLINE(modernize-raw-string-literal)
             errmsg_ss << "Expect \"}}\" in code \"" << expression << "\" at line: " << token_position.line
-                      << ", column: " << token_position.column << ", but we got nullptr" << std::endl;
+                      << ", column: " << token_position.column << ", but we got nullptr\n";
           }
           prechar = *next_token;  // reset block status
         }
@@ -516,22 +551,20 @@ SERVER_FRAME_CONFIG_API simple_template_core::ptr_t simple_template_core::compil
   return ret;
 }
 
-simple_template_core::print_const_string::print_const_string(const std::string& r, size_t l, size_t c,
-                                                             const std::string& s)
-    : raw_block(r), line(l), col(c), data(s) {}
+simple_template_core::print_const_string::print_const_string(std::string r, size_t l, size_t c, std::string s)
+    : raw_block(std::move(r)), line(l), col(c), data(std::move(s)) {}
 
 bool simple_template_core::print_const_string::operator()(std::ostream& os, std::ostream& /*es*/, void*) {
   os.write(data.c_str(), static_cast<std::streamsize>(data.size()));
   return true;
 }
 
-simple_template_core::getter_fn_wrapper::getter_fn_wrapper(const std::string& r, size_t l, size_t c, getter_fn_t f)
-    : raw_block(r), line(l), col(c), fn(f) {}
+simple_template_core::getter_fn_wrapper::getter_fn_wrapper(std::string r, size_t l, size_t c, getter_fn_t f)
+    : raw_block(std::move(r)), line(l), col(c), fn(std::move(f)) {}
 
 bool simple_template_core::getter_fn_wrapper::operator()(std::ostream& os, std::ostream& es, void* priv_data) {
   if (!fn) {
-    es << "variable block at line: " << line << ", column: " << col << " is not valid, code: " << raw_block
-       << std::endl;
+    es << "variable block at line: " << line << ", column: " << col << " is not valid, code: " << raw_block << '\n';
     return false;
   }
 
@@ -539,17 +572,16 @@ bool simple_template_core::getter_fn_wrapper::operator()(std::ostream& os, std::
     return true;
   }
 
-  es << "get variable block at line: " << line << ", column: " << col << " failed, code: " << raw_block << std::endl;
+  es << "get variable block at line: " << line << ", column: " << col << " failed, code: " << raw_block << '\n';
   return false;
 }
 
-simple_template_core::call_fn_wrapper::call_fn_wrapper(const std::string& r, size_t l, size_t c, call_fn_t f)
-    : raw_block(r), line(l), col(c), fn(f) {}
+simple_template_core::call_fn_wrapper::call_fn_wrapper(std::string r, size_t l, size_t c, call_fn_t f)
+    : raw_block(std::move(r)), line(l), col(c), fn(std::move(f)) {}
 
 bool simple_template_core::call_fn_wrapper::operator()(std::ostream& os, std::ostream& es, void* priv_data) {
   if (!fn) {
-    es << "function block at line: " << line << ", column: " << col << " is not valid, code: " << raw_block
-       << std::endl;
+    es << "function block at line: " << line << ", column: " << col << " is not valid, code: " << raw_block << '\n';
     return false;
   }
 
@@ -557,8 +589,7 @@ bool simple_template_core::call_fn_wrapper::operator()(std::ostream& os, std::os
     return true;
   }
 
-  es << "run function block at line: " << line << ", column: " << col << " with error, code: " << raw_block
-     << std::endl;
+  es << "run function block at line: " << line << ", column: " << col << " with error, code: " << raw_block << '\n';
   return false;
 }
 
