@@ -368,51 +368,51 @@ static bool mail_template_render_getter_delivery_time(std::ostream& os, mail_ren
 static mail_template_engine_t::getter_fn_t template_getter_creator_for_mail(const std::string& name, const char*,
                                                                             const char*) {
   // TODO(owentou): 以后可以优化下直接静态索引
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("sender.nick_name", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("sender.nick_name", name.c_str())) {
     return mail_template_render_getter_sender_nick_name;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("receiver.nick_name", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("receiver.nick_name", name.c_str())) {
     return mail_template_render_getter_receiver_nick_name;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("show_time", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("show_time", name.c_str())) {
     return mail_template_render_getter_show_time;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("start_time", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("start_time", name.c_str())) {
     return mail_template_render_getter_start_time;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("expired_time", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("expired_time", name.c_str())) {
     return mail_template_render_getter_expired_time;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("delivery_time", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("delivery_time", name.c_str())) {
     return mail_template_render_getter_delivery_time;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("title", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("title", name.c_str())) {
     return mail_template_render_getter_title;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("sender.logo_url", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("sender.logo_url", name.c_str())) {
     return mail_template_render_getter_sender_logo_url;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("receiver.logo_url", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("receiver.logo_url", name.c_str())) {
     return mail_template_render_getter_receiver_logo_url;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("sender.user_id", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("sender.user_id", name.c_str())) {
     return mail_template_render_getter_sender_user_id;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("receiver.user_id", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("receiver.user_id", name.c_str())) {
     return mail_template_render_getter_receiver_user_id;
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("attachments.count", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("attachments.count", name.c_str())) {
     return mail_template_render_getter_attachments_number;
   }
 
@@ -422,7 +422,7 @@ static mail_template_engine_t::getter_fn_t template_getter_creator_for_mail(cons
 static mail_template_engine_t::call_fn_t template_call_creator_for_mail(const std::string& name,
                                                                         const std::vector<std::string>& params,
                                                                         const char*, const char*) {
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("i18n", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("i18n", name.c_str())) {
     if (params.empty()) {
       FWLOGERROR("i18n(KEY) can not be called without parameter");
       return nullptr;
@@ -431,7 +431,7 @@ static mail_template_engine_t::call_fn_t template_call_creator_for_mail(const st
     return mail_template_render_call_i18n(params[0]);
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("attachments.count", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("attachments.count", name.c_str())) {
     if (params.empty()) {
       FWLOGERROR("attachments.count(N) can not be called without parameter");
       return nullptr;
@@ -440,7 +440,7 @@ static mail_template_engine_t::call_fn_t template_call_creator_for_mail(const st
     return mail_template_render_call_attachments_count(params[0]);
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("attachments.name", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("attachments.name", name.c_str())) {
     if (params.empty()) {
       FWLOGERROR("attachments.name(N) can not be called without parameter");
       return nullptr;
@@ -449,7 +449,7 @@ static mail_template_engine_t::call_fn_t template_call_creator_for_mail(const st
     return mail_template_render_call_attachments_name(params[0]);
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("attachments.list", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("attachments.list", name.c_str())) {
     if (params.size() < 2) {
       FWLOGERROR("attachments.list(SEP, FMT) require 2 parameters");
       return nullptr;
@@ -458,7 +458,7 @@ static mail_template_engine_t::call_fn_t template_call_creator_for_mail(const st
     return mail_template_render_call_attachments_list(params[0], params[1]);
   }
 
-  if (0 == UTIL_STRFUNC_STRCASE_CMP("extension", name.c_str())) {
+  if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("extension", name.c_str())) {
     if (params.empty()) {
       FWLOGERROR("extension(NAME) can not be called without parameter");
       return nullptr;

@@ -26,7 +26,8 @@ if(EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}")
   endif()
 endif()
 
-if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/win64/bin/xresloader-dump-bin.exe")
+if((CMAKE_SYSTEM_NAME MATCHES "Windows|MSYS|WindowsStore" OR CMAKE_HOST_SYSTEM_NAME MATCHES "Windows|MSYS|WindowsStore")
+   AND (NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/win64/bin/xresloader-dump-bin.exe"))
   file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/win64")
   findconfigurepackagedownloadfile(
     "${PROJECT_THIRD_PARTY_XRESLOADER_DUMP_BIN_WINDOWS_URL}"
@@ -35,7 +36,9 @@ if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/wi
                             "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/win64")
 endif()
 
-if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos/bin/xresloader-dump-bin")
+if((CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS|iPhoneSimulator" OR CMAKE_HOST_SYSTEM_NAME MATCHES
+                                                              "Darwin|iOS|iPhoneSimulator")
+   AND (NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos/bin/xresloader-dump-bin"))
   file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos")
   findconfigurepackagedownloadfile(
     "${PROJECT_THIRD_PARTY_XRESLOADER_DUMP_BIN_MACOS_URL}"
@@ -44,7 +47,8 @@ if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/ma
                             "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos")
 endif()
 
-if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/linux/bin/xresloader-dump-bin")
+if((CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_HOST_SYSTEM_NAME MATCHES "Linux")
+   AND (NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/linux/bin/xresloader-dump-bin"))
   file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/linux")
   findconfigurepackagedownloadfile(
     "${PROJECT_THIRD_PARTY_XRESLOADER_LINUX_URL}"
@@ -55,8 +59,22 @@ if(NOT EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/li
 endif()
 
 if(EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/win64/bin/xresloader-dump-bin.exe"
-   AND EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos/bin/xresloader-dump-bin"
-   AND EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/linux/bin/xresloader-dump-bin")
+   OR EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos/bin/xresloader-dump-bin"
+   OR EXISTS "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/linux/bin/xresloader-dump-bin")
   file(WRITE "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin.version"
        "${PROJECT_THIRD_PARTY_XRESLOADER_DUMP_BIN_VERSION}")
+endif()
+
+if(CMAKE_SYSTEM_NAME MATCHES "Windows|MSYS|WindowsStore")
+  project_link_or_copy_files(
+    "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/win64/bin/xresloader-dump-bin.exe"
+    "${PROJECT_INSTALL_TOOLS_DIR}/xresloader-dump-bin")
+elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin|iOS|iPhoneSimulator")
+  project_link_or_copy_files(
+    "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/macos/bin/xresloader-dump-bin"
+    "${PROJECT_INSTALL_TOOLS_DIR}/xresloader-dump-bin")
+elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  project_link_or_copy_files(
+    "${PROJECT_THIRD_PARTY_XRESLOADER_ROOT_DIR}/xresloader-dump-bin/linux/bin/xresloader-dump-bin"
+    "${PROJECT_INSTALL_TOOLS_DIR}/xresloader-dump-bin")
 endif()
