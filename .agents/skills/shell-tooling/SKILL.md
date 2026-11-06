@@ -1,6 +1,6 @@
 ---
 name: shell-tooling
-description: "Use when: running terminal commands, writing or debugging shell/PowerShell scripts, choosing or installing CLI tools, or diagnosing command failures, quoting/escaping errors, or garbled output. Do not use for project build, test, or CI configuration covered by other skills."
+description: "Use when: running terminal commands, writing or debugging shell/PowerShell scripts, selecting available CLI tools, or diagnosing command failures, quoting/escaping errors, or garbled output. Do not use for project build, test, or CI configuration covered by other skills."
 ---
 
 # Shell and Tooling

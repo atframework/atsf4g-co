@@ -84,9 +84,10 @@ each player need not establish a separate cross-service WAL connection.
 ## Persistence and Ownership Transfer
 
 The WAL algorithm library connects load/dump and transport through callbacks without a disk-flush protocol.
-dtmq saves channel records to Redis through `mq_channel` IO tasks and schedules saves using dirty versions.
-WAL's `on_log_added` and `on_log_removed` callbacks mark the channel dirty, so successful log synchronization
-does not mean Redis persistence has completed.
+Non-`memory_only` dtmq channels save records to Redis through `mq_channel` IO tasks and schedule saves using dirty
+versions; `memory_only` channels skip DB saves. WAL's `on_log_added` and `on_log_removed` callbacks mark the channel
+dirty, so successful log synchronization does not mean Redis persistence has completed. Memory-only channels gain no
+restart recovery from this path.
 
 dtmq calculates replica distribution from discovery and HPA Target/Ready sets. Migration uses channel snapshots,
 subscriber merging, and request forwarding. Its `mq_channel` / `mq_channel_manager` do not use the generic router

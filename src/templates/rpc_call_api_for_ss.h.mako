@@ -132,9 +132,9 @@ ${ns}
             rpc_unicast_params_docs.append('__wait_later        set not nullptr if caller want to wait this RPC later, and receive rpc sequence to wait here')
     if rpc_allow_ignore_discovery:
         rpc_unicast_params_decl.append('bool __ignore_discovery = false')
-        rpc_unicast_params_docs.append('__ignore_discovery  set true if not need to wait response')
+        rpc_unicast_params_docs.append('__ignore_discovery  set true to bypass service-discovery availability checks for the supplied destination')
         rpc_nowait_params_decl.append('bool __ignore_discovery = false')
-        rpc_nowait_params_docs.append('__ignore_discovery  set true if not need to wait response')
+        rpc_nowait_params_docs.append('__ignore_discovery  set true to bypass service-discovery availability checks for the supplied destination')
     if not rpc_is_router_api and rpc_is_stream_mode:
         rpc_return_type = 'rpc::always_ready_code_type'
     else:

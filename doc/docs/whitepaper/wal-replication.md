@@ -76,8 +76,9 @@ dtmq 已提供进程内订阅 SDK，不要求每个玩家直接建立独立的�
 ## 持久化与所有者迁移
 
 WAL 算法库通过回调接入 load/dump 和传输，不自带磁盘刷写协议。
-dtmq 通过 `mq_channel` 的 IO 任务将频道记录保存到 Redis，并使用脏版本安排后续保存；
-WAL 的 `on_log_added`、`on_log_removed` 回调会标记频道脏状态。因此日志同步成功不等于 Redis 已保存完成。
+非 `memory_only` 的 dtmq 频道通过 `mq_channel` 的 IO 任务将记录保存到 Redis，并使用脏版本安排后续保存；
+`memory_only` 频道跳过 DB 保存。WAL 的 `on_log_added`、`on_log_removed` 回调会标记频道脏状态。
+因此日志同步成功不等于 Redis 已保存完成，内存频道也不能据此获得重启恢复能力。
 
 dtmq 按服务发现和 HPA Target/Ready 集合计算频道副本分布，使用频道快照、订阅者合并和请求转发完成迁移。
 它有自己的 `mq_channel` / `mq_channel_manager`，不使用通用 router 对象的归属交接流程。

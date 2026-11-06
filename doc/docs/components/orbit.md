@@ -24,6 +24,23 @@ Orbit 的 client 是被管理进程的角色，可用于 UE DS，不等同于玩
    agent 和被管理进程应使用匹配的身份及通信配置。
    仅修改进程路径、启动参数和已有模板数据时，使用配置入口即可。
 
+`OrbitAutoClient` 是位于 `src/component/GameSharedComponent/Orbit/AutoClient/` 的 C++14 示例客户端，
+日志路径使用 `atfw::util::file_system`，不需要 `std::filesystem`。
+
+## 房间与用户流程
+
+1. Match 通过 `orbit_room_create` 创建初始房间；房间启动后通过 `room_ready` 回传连接信息、玩家 token 和
+   绝对 `end_join_timepoint`。等待室后补使用 `orbit_user_join` 向已有房间初始化用户，并由
+   `is_last_one` 标记是否最后一批。
+2. DS 与 Orbit server 之间通过 `user_init`、`remote_start_client`、`room_status`、`client_event`、心跳、
+   `end_join` 和 `user_quit` 等入口推进状态。所有异步回调都需要校验房间、用户和当前生命周期。
+3. 房间通过 DTMQ `EN_ORBIT_CHANNEL_TYPE_ROOM=101` 发布 `DOrbitRoomEventLog`。Lobby 的
+   `user_get_info(need_user_orbit_room)` 返回 room key、地址、token 和 init 等信息。
+4. Orbit 聊天类型 102 目前只有配置和协议预留，不等于房间聊天链路已完成；详见[聊天](chat)。
+
+Match 的 EndJoin/UserQuit action 当前仍是返回成功的占位实现，Lobby 的结算结果处理也仍有 TODO。
+因此房间创建、用户初始化和退出通知不能被描述为已经完成匹配侧结算闭环。
+
 ## 定制与详细设计
 
 ### 组成

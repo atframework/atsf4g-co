@@ -199,19 +199,19 @@ auto err = test.dns().mock_error("broken.unit-test.local");                     
 
 ### DB
 
-默认即完整 presence-aware 内存 backend（field merge/CAS/KL/TTL，语义对齐 Redis/Lua），无需注册任何规则：
+默认提供 presence-aware 内存 backend（field merge/CAS/KL/TTL），无需注册任何规则。当前生产 KV `set/insert`
+已改为全字段覆盖，而 `mock_db.cpp` 与脚本契约测试仍保留旧的 presence merge；不要用该 backend 验证生产的
+全字段覆盖语义，需先单独修正 mock/测试分歧：
 
 ```cpp
 test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();  // 每个用到的表类型注册一次
 ```
 
-写路径的权威契约是 `src/server_frame/dispatcher/db_msg_dispatcher.cpp` 内嵌的 Lua 脚本；
-`src/server_frame/test/server_frame_test_db_script_contract.cpp` 在嵌入式 Lua 里**真实执行这些脚本**（redis.call
-模拟器，KEYS/ARGV 按 `pack_message` 布局构造），并以行为用例固化同一契约（CAS 读写版本一致、期望版本 0 = 忽略
-版本比较强制覆盖且新版本仍按真实版本 +1；insert 仅接受无版本记录，冲突返回 `EN_DB_KEY_EXISTS`；所有写路径按
-HSET 语义只合并 present 字段；KL 索引 1 起单调不复用，达到 `max_list_length` 时按最小索引淘汰一条，
-`max_list_length` 0 仅保留一条）。修改脚本时必须同步更新 mock_db 与这些用例；引擎级等价语义由
-`test/rpc_unit_test_db.cpp` 固化。
+写路径应同时核对 `src/server_frame/dispatcher/db_msg_dispatcher.cpp` 内嵌 Lua 和
+`src/server_frame/rpc/db/hash_table.cpp` 当前生产写入流程。`server_frame_test_db_script_contract.cpp` 会真实执行
+内嵌 Lua，但当前仍把“只合并 present 字段”固化为旧契约；这与生产 `set/insert` 的全字段覆盖不一致。
+CAS 版本 0 强制覆盖、insert 冲突、KL 索引和 TTL 等其余规则仍以当前脚本及测试为准。修改写路径时必须同步
+修正 mock_db 与契约测试，不能把测试通过当作生产全字段覆盖已被验证。
 
 生成层 per-table typed handler（SS 风格，每个生成表接口一个注册函数）：
 

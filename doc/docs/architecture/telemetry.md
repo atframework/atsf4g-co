@@ -59,4 +59,5 @@ daemon / systemd 两种模式）。
 - 框架日志走 `atframe_utils` 日志模块（libatapp 日志 sink 配置在 atapp YAML）；
 - 结构化日志协议：`protocol/private/protocol/log/`（`svr.mon.log.proto` 监控日志、`svr.oss.log.proto`
   OSS 日志）；
-- 部署侧由 vector（K8s）或本地文件采集，`modules/vector.yaml` 配置。
+- 部署侧由 vector（K8s）或本地文件采集，`install/cloud-native/modules/vector.yaml` 和 `otelcol.yaml` 的当前
+  文件输出使用 `.jsonl`；具体 OSS 事件仍需对应业务发射点，协议定义本身不代表已经产出。

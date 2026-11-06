@@ -13,10 +13,15 @@ title: 组件总览
 | --- | --- | --- |
 | [消息队列](dtmq) | `src/component/dtmq/`，`dtmq-proxysvr` | `USE_COMPONENTS "dtmq-proxy-sdk"` |
 | [分布式事务](distributed-transaction) | `src/component/distributed_transaction/`，`dtcoordsvr` | `USE_COMPONENTS "distributed-transaction-sdk"` |
+| [合规文本过滤](compliance) | `src/component/compliance/`，`compliance-svr` | `USE_COMPONENTS "compliance-sdk"` |
+| [聊天](chat) | `src/lobbysvr/service/logic/chat/`，DTMQ | Lobby 内置；`USE_COMPONENTS "dtmq-proxy-sdk"` |
+| [邮件](mail) | `src/lobbysvr/service/logic/mail/`，`src/lobbysvr/sdk/rpc/mail/` | `USE_SERVICE_SDK "lobbysvr-sdk"` |
+| [道具操作与来源](item) | `src/component/GameSharedComponent/ItemAlgorithm/`，Lobby item 模块 | `USE_COMPONENTS "ItemAlgorithmSDK"` |
 | [排行榜](rank) | `src/component/rank/`，`rank_board_svr` | `USE_COMPONENTS "rank-board-svr-sdk" "rank-logic-sdk"` |
 | [好友](friend) | `src/friendsvr/`，管理与推荐服务 | `USE_SERVICE_SDK "friend-sdk-management"` |
 | [匹配与组队](matching-team) | `src/matchsvr/`、`src/teamsvr/` | `USE_SERVICE_SDK "matchsvr-sdk" "team-common-sdk" "team-sdk-room"` |
 | [UE DS 管理（Orbit）](orbit) | `src/component/orbit/`，controller / agent / server / client | 按进程角色选择对应 SDK，见 Orbit 上手 |
+| 用户与 Router 接入 | `src/component/user/sdk/` | `USE_COMPONENTS "user-sdk"` |
 | 共享算法 | `src/component/GameSharedComponent/` | `USE_COMPONENTS "ItemAlgorithmSDK" "BattleUtilitySDK"` |
 
 这些参数追加到已有服务声明，所需 API 决定具体依赖；无需为每个功能重建服务目标。

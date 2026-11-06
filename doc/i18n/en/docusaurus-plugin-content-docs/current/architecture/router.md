@@ -22,7 +22,7 @@ users or teams) are routed by key to their owning instance, cached in memory, an
 | `router_object_base` / `router_object<T>` | `src/server_frame/router/` | Router object base: `pull_object`/`save_object` (coroutine RPCs), TTL, degradation |
 | `router_manager_base` / `router_manager<TCache, TObj, TPrivData>` | `router/router_manager.h` | Object manager: `mutable_cache`/`mutable_object`, event callbacks |
 | `router_manager_set` | `router/router_manager_set.h` | Singleton: manages managers by type_id, periodic saves, idle cleanup, shutdown tasks, and metrics |
-| `router_user_cache` / `router_user_manager` | `router/router_user_*` | User routing specialization (`user_cache` object, `pull_online_server`) |
+| `router_user_cache` / `router_user_manager` | `src/component/user/sdk/router/router_user_*` | User routing specialization (`user_cache` object, `pull_online_server`) |
 
 Object key = `type_id + zone_id + object_id`.
 

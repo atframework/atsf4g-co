@@ -30,6 +30,9 @@ title: 数据层
 | KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`；索引单调递增，按数量裁剪（内嵌 Lua） |
 | TTL | 键过期管理 |
 
+当前 KV `set` / `insert` 写路径序列化并覆盖全部字段；未设置字段写成空值或默认值，不是 presence merge。
+需要部分更新时使用对应的显式字段操作，并确认生成接口是否提供该语义。
+
 ### 生成的 DB 接口
 
 由 `svr.local.table.proto` / `svr.global.table.proto` + `svr.database.extension.proto` 的表/索引扩展，经
@@ -47,6 +50,10 @@ uint64_t version = 0;
 int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account_type, open_id, row, version));
 ```
 
+当前生成模板用 `:` 连接 Redis key 的各字段，不再使用旧的 `.` 分隔符。`login_auth` 同时从单字段 key 改为
+`(account_type, open_id)` 复合 key。读取没有旧 key 回退，仓库也没有自动迁移脚本；升级时必须迁移全部受影响
+表的 key 和登录复合键，并协调读写版本，不能假定并行运行的新旧版本看到同一记录。
+
 ### UUID
 
 `src/server_frame/rpc/db/uuid.{h,cpp}` 提供 ID 生成：`standard` / `short` / `global_increase`（DB 自增）/
@@ -54,6 +61,6 @@ int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account
 
 ### 会话与用户缓存
 
-- `src/server_frame/data/session.{h,cpp}`：网关会话，key = `(gateway_node_id, session_id)`，负责下行发送；
-- `src/server_frame/data/user_cache.{h,cpp}`：用户数据缓存基类，脏标记、初始化 task 等待；
-- `src/server_frame/logic/session_manager.*` / `user_manager.*`：对应管理单例。
+- `src/component/user/sdk/data/session.{h,cpp}`：网关会话，key = `(gateway_node_id, session_id)`，负责下行发送；
+- `src/component/user/sdk/data/user_cache.{h,cpp}`：用户数据缓存基类，脏标记、初始化 task 等待；
+- `src/component/user/sdk/logic/session_manager.*` / `user_manager.*`：对应管理单例。

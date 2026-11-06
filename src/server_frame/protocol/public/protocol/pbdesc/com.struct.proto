@@ -58,7 +58,7 @@ message DAppleGameCenter {
 // 平台信息
 message DAccountData {
   uint32 account_type = 1;  // 平台类型 EnAccountTypeID
-  bytes access = 2;         // 授权凭证：内部账号密码 hash、OAuth token 或 Steam 原始 Encrypted App Ticket
+  bytes access = 2;         // 授权凭证：内部账号原始密码、OAuth token 或 Steam 原始 Encrypted App Ticket
   uint32 channel_id = 3;    // 渠道ID（某些平台需要区分认证体系以外的渠道号） @see EnPlatformChannelID
 }
 

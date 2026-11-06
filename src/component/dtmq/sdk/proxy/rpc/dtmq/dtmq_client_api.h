@@ -201,7 +201,6 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock
  *
  * @param ctx RPC上下文
  * @param req 请求体(目标服务器从其 channel_key 字段提取)
- * @param rsp 响应体
  * @param no_wait 是否不等待
  * @return rpc::result_code_type 发送结果
  */

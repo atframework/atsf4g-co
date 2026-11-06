@@ -18,13 +18,13 @@ title: 项目简介
   task action 骨架、数据库接口和 Excel 配置加载代码。日常扩展只需填写声明配置并实现业务逻辑。
 - **跨平台基础设施**：atgateway 提供客户端接入，atproxy 提供跨服通信；内置服务发现、
   路由对象缓存、Redis 数据层和 OpenTelemetry 可观测性。
-- **可复用组件与服务**：分布式消息队列（dtmq）、分布式事务、排行榜、好友服务、匹配服务、
-  组队服务及其 SDK。
+- **可复用组件与服务**：分布式消息队列（dtmq）、分布式事务、排行榜、合规文本过滤、好友、匹配、
+  组队及其 SDK；大厅提供聊天、邮件和道具背包模块。
 - **Orbit**：针对 Unreal Engine（UE）的 Dedicated Server（DS）管理解决方案，通过
   controller / agent / server / client 管理进程生命周期、心跳和通信。
 - **部署工具**：使用 atdtool 和 values 配置生成 Kubernetes、Docker 或裸机/本地运行所需的资源与脚本。
 
-项目代码的 C++14 要求与第三方依赖的工具链要求分别核对；选用较新依赖版本时，构建可能采用更高的语言标准。
+各 target 的语言标准与第三方依赖的工具链要求分别核对；选用较新依赖版本时，构建可能采用更高的语言标准。
 参见[环境准备](getting-started/prerequisites)和[协程后端切换](getting-started/build#coroutine-backend)。
 
 ## 从哪里开始
@@ -49,7 +49,7 @@ atsf4g-co/
 ├── src/
 │   ├── server_frame/   # 公共配置、协议、dispatcher、router、RPC、数据层
 │   ├── *svr/           # 大厅、认证、缓存、好友、匹配、组队等服务
-│   ├── component/      # dtmq、distributed_transaction、rank、orbit、共享算法
+│   ├── component/      # dtmq、distributed_transaction、rank、orbit、compliance、共享算法
 │   ├── templates/      # 框架维护者使用的代码生成模板
 │   ├── tools/          # 代码生成器与离线 RPC 测试工具
 │   └── robot/          # Go 压测与模拟客户端

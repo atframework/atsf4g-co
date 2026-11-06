@@ -10,8 +10,8 @@
 第三方依赖的版本与工具链要求需单独核对。
 
 提供客户端网关 atgateway、跨服代理 atproxy、服务发现、Redis 数据层、路由缓存与 OpenTelemetry。
-可复用组件和服务包括 **DTMQ、分布式事务、排行榜、好友、匹配、组队**。
-**Orbit 是针对 Unreal Engine（UE）的 Dedicated Server（DS）管理解决方案**。
+可复用组件和服务包括 **DTMQ、分布式事务、排行榜、合规文本过滤、好友、匹配、组队**。
+大厅模块覆盖 **聊天、邮件和道具背包**。**Orbit 是针对 Unreal Engine（UE）的 Dedicated Server（DS）管理解决方案**。
 
 ## 快速开始
 

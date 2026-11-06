@@ -188,14 +188,22 @@ An SS handler returns `rpc::result_code_type` and may be a coroutine awaiting ne
 Rule options (`ss_rule_options`): `match_node_id`, `times` (FIFO script), `delay_generations`, `no_response`,
 `malformed_type_url`/`malformed_body`.
 
+`rpc::<module>::oneway::<rpc>()` can be called outside a task with `atfw::testing::make_context()`, returns the
+integer send result directly, and reuses the same-name mock rule. Requests are serialized on send; after
+`runtime::pump_once()`, the handler runs in an independent task and may await nested RPCs, while its response and
+return code are dropped. Wait for an observable handler result and inspect send history. See
+`src/tools/rpc-unit-test/test/rpc_unit_test_ss.cpp` for complete cases.
+
 ### Router / DNS / UUID / resource / CS / raw transport
 
 - **Router**: `test.router_manager()` + `router_test_object` address the router object to a mock node; router RPC shares
   the unary SS chain (`mock://` connector) without touching Mako.
 - **DNS**: `test.dns().mock_a(domain, ip)` / `mock(records)` / `mock_error(domain)`; the hook sits before
   `uv_getaddrinfo`, so tests issue no system DNS requests.
-- **DB**: the default in-memory backend supports field-presence merging, CAS, KL, and TTL under their Redis/Lua
-  contracts, with no rule registration needed; generated per-table typed handlers (`rpc::db::<ns>::mock::<interface>`)
+- **DB**: the default in-memory backend supports field-presence merging, CAS, KL, and TTL without rule registration,
+  but production KV `set/insert` now overwrites all fields and the mock and contract tests have not caught up. Do not
+  use this backend to validate production full-overwrite semantics; use typed handlers to pin explicit business
+  expectations. Generated per-table typed handlers (`rpc::db::<ns>::mock::<interface>`)
   and engine-level `test.db().mock_table(name)` callbacks can override individual interfaces, with everything else
   falling back to the in-memory backend. Raw entry APIs (`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`) seed CAS versions
   or exact bytes.
@@ -223,16 +231,12 @@ overridden per rule (e.g. explicitly mark a stream as `fail` for negative assert
   pump generations (consistent across SS and DNS).
 - Engines deliver in **due order, not FIFO**; delivery resumes coroutines synchronously and a task may re-enter the
   engine (two-phase drain, see `src/tools/rpc-unit-test/src/detail/pending_drain.h`).
-- The DB in-memory backend aligns with the Redis/Lua golden contract (`src/server_frame/test/server_frame_test_db_script_contract.cpp`
-  executes the real db_msg_dispatcher scripts in an embedded Lua interpreter to pin the behavior contract, mirrored by
-  the engine selftest): `EXPIRE`/`PERSIST` on a missing key is a
-  successful no-op (not an error); a CAS set accepts a record without a version, an equal expected version, or
-  **an expected version of 0 (ignore the CAS check and force the overwrite; the stored version still bumps from the
-  real one)**, otherwise the conflict returns `EN_DB_OLD_VERSION` and writes the stored version back; insert
-  (`op_type::kv_insert`) rejects an already-versioned record with `EN_DB_KEY_EXISTS`; every write path
-  (HSET/CAS/insert) merges only the fields present in the store message; KL indexes start at 1, stay monotonic and are
-  never reused, and reaching `max_list_length` evicts the single smallest index (0 keeps one entry); `inc_field`
-  creates from 0 and never touches the CAS version.
+- DB CAS set accepts a record without a version, an equal expected version, or **expected version 0 (ignore the CAS
+  check and force the overwrite while still incrementing the stored version)**; otherwise it returns
+  `EN_DB_OLD_VERSION` with the stored version. Insert rejects an already-versioned record; KL indexes stay monotonic
+  and unreused, and `inc_field` starts at 0 without changing CAS. `server_frame_test_db_script_contract.cpp` executes
+  the embedded Lua but still asserts presence-only merging on every write, while production `set/insert` now overwrites
+  all fields. The mock and tests require a separate correction.
 - Deeper invariants for modifying the engines/hook seams live in
   `.agents/skills/rpc-unit-test/references/engine-invariants.md`.
 

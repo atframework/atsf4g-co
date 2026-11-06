@@ -12,7 +12,7 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 | `build/`                  | CMake configure/build and compile, link, or configure failures                        |
 | `testing/`                | Ordinary unit-test targets, test design/review, execution, filters, Windows startup   |
 | `rpc-unit-test/`          | `src/**` RPC/runtime/async-hook unit tests and their mock engines                     |
-| `business-logic/`         | Matchmaking and team business behavior; select only the relevant module reference    |
+| `business-logic/`         | Matchmaking/team, chat/mail/compliance, item-source, and Orbit room behavior         |
 | `deployment-config/`      | Go deployment templates, Helm values, atdtool rendering, and generated scripts        |
 | `configure-expression/`   | `enable_expression` and environment expansion in annotated config fields              |
 | `atgateway-protocol/`     | atgateway v2 wire protocol, handshake, crypto, compression, and reconnection          |

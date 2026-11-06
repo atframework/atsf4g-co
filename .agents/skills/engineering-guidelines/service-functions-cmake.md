@@ -66,7 +66,8 @@ Implications:
 - Use for service RPC/client SDK libraries.
 - Common options: `STATIC`, `SHARED`, `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `DLLEXPORT_DECL`,
   `SHARED_LIBRARY_DECL`, `NATIVE_CODE_DECL`.
-- Source lists: `HEADERS <headers...>` and `SOURCES <sources...>`.
+- Source lists: `HEADERS <headers...>`, `SOURCES <sources...>`, and `PRECOMPILE_HEADERS <headers...>`.
+- `GENERATED_FLOW_NAMES <flows...>` collects generated outputs from named flows into the SDK sources.
 - Dependency options:
   - `USE_COMPONENTS <names...>` -> `components::<name>`.
   - `USE_SERVICE_PROTOCOL <names...>` -> `protocol::<name>`.
@@ -79,7 +80,7 @@ Implications:
 - Use for normal service executables.
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
 - Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `MAIN_HEADERS`, `MAIN_DIRECTORIES`,
-  `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
+  `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`, `GENERATED_FLOW_NAMES`.
 - Dependency options:
   - `USE_COMPONENTS <names...>` -> `components::<name>`.
   - `USE_SERVICE_SDK <names...>` -> `sdk::<name>`.
@@ -126,7 +127,8 @@ Implications:
 - Use for reusable component SDK libraries.
 - Common options: `STATIC`, `SHARED`, `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `DLLEXPORT_DECL`,
   `SHARED_LIBRARY_DECL`, `NATIVE_CODE_DECL`.
-- Source lists: `HEADERS <headers...>` and `SOURCES <sources...>`.
+- Source lists: `HEADERS <headers...>`, `SOURCES <sources...>`, and `PRECOMPILE_HEADERS <headers...>`.
+- `GENERATED_FLOW_NAMES <flows...>` collects generated outputs from named flows into the SDK sources.
 - Dependency option: `USE_COMPONENTS <names...>` -> `components::<name>`.
 - Empty `SOURCES` -> `INTERFACE` library; otherwise static/shared per project options.
 - Exports alias: `components::<TARGET_NAME>`.
@@ -136,7 +138,7 @@ Implications:
 - Use for component-owned service executables (e.g., rank board, distributed transaction coordinator).
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
 - Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `MAIN_HEADERS`, `MAIN_DIRECTORIES`,
-  `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
+  `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`, `GENERATED_FLOW_NAMES`.
 - Dependency option: `USE_COMPONENTS <names...>` -> `components::<name>`.
 - `MAIN_SOURCES` splits the build like the service helper: the static library is `<TARGET_FULL_NAME>-private` with
   alias `components::<TARGET_NAME>::private`; the executable compiles only `MAIN_SOURCES` and links it.

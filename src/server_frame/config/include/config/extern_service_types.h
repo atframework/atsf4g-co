@@ -1,13 +1,12 @@
-#ifndef ATFRAMEWORK_SERVICE_COMPONENT_CONFIG_EXTERN_SERVICE_TYPES_H
-#  define ATFRAMEWORK_SERVICE_COMPONENT_ .hCONFIG_EXTERN_SERVICE_TYPES_H
+// Copyright 2026 atframework
 
-#  pragma once
+#pragma once
 
-#  include <config/compile_optimize.h>
+#include <config/compile_optimize.h>
 
-#  include <config/atframe_service_types.h>
+#include <config/atframe_service_types.h>
 
-#  include "config/server_frame_build_feature.h"
+#include "config/server_frame_build_feature.h"  // IWYU pragma: keep
 
 namespace atframework {
 namespace component {
@@ -39,8 +38,7 @@ enum class logic_service_type : uint32_t {
   kFriendManagementSvr = 31,  // 好友管理服务
   kFriendRecommendSvr = 32,   // 好友推荐服务
 
-  kComplianceSvr = 33,  // 合规服务（敏感词、实名认证、防沉迷等的管理）
+  kComplianceSvr = 33,  // 合规服务（当前实现文本过滤）
 };
 }  // namespace component
 }  // namespace atframework
-#endif

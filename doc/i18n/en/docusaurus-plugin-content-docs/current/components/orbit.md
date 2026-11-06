@@ -26,6 +26,26 @@ Location: `src/component/orbit/`.
    UE DS. Agent and managed process identity/communication settings must agree.
    Existing process paths, arguments, and template data can be changed through configuration.
 
+`OrbitAutoClient` is a C++14 example client in `src/component/GameSharedComponent/Orbit/AutoClient/`.
+It uses `atfw::util::file_system` for log paths and does not require `std::filesystem`.
+
+## Room and User Lifecycle
+
+1. Match creates the initial room through `orbit_room_create`. After startup, `room_ready` returns connection data,
+   player tokens, and the absolute `end_join_timepoint`. Waiting-room late joins call `orbit_user_join` against the
+   existing room, with `is_last_one` marking the final batch.
+2. DS and Orbit server advance state through `user_init`, `remote_start_client`, `room_status`, `client_event`,
+   heartbeat, `end_join`, `user_quit`, and related entry points. Every async callback must validate the room, user,
+   and current lifecycle.
+3. Rooms publish `DOrbitRoomEventLog` through DTMQ `EN_ORBIT_CHANNEL_TYPE_ROOM=101`. Lobby's
+   `user_get_info(need_user_orbit_room)` returns room key, address, token, and init information.
+4. Orbit chat type 102 is currently only a configuration/protocol reservation, not a complete room-chat path;
+   see [chat](chat).
+
+Match's EndJoin/UserQuit actions currently return success as placeholders, and Lobby result handling still contains
+a TODO. Room creation, user initialization, and quit notifications therefore do not establish a completed Match-side
+settlement loop.
+
 ## Customization and Design
 
 ### Composition

@@ -8,11 +8,11 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <cstdint>
-
 #include <std/explicit_declare.h>
 
 #include <rpc/rpc_utils.h>
+
+#include <cstdint>
 
 PROJECT_NAMESPACE_BEGIN
 class DMailContent;

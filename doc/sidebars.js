@@ -35,6 +35,10 @@ const sidebars = {
         'components/overview',
         'components/dtmq',
         'components/distributed-transaction',
+        'components/compliance',
+        'components/chat',
+        'components/mail',
+        'components/item',
         'components/rank',
         'components/orbit',
         'components/friend',
@@ -44,7 +48,7 @@ const sidebars = {
     {
       type: 'category',
       label: '服务',
-      items: ['services/overview', 'services/robot'],
+      items: ['services/overview', 'services/auth', 'services/robot'],
     },
     {
       type: 'category',

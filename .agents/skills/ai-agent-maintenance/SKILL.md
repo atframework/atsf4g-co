@@ -41,7 +41,8 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 ### 3. Choose one authoritative surface
 
 - Put stable, high-signal, broadly applicable rules in `AGENTS.md`.
-- Keep `CLAUDE.md` as a thin `@AGENTS.md` and Skill-index bridge; add only verified Claude-specific differences.
+- Keep `CLAUDE.md` as a thin compatibility bridge for sessions that do not load the shared surfaces directly;
+  add only verified Claude-specific differences.
 - Keep `.agents/skills/README.md` to names, one-line routing, and compact maintenance rules.
 - Keep `.agents/source-index.md` as an on-demand, current-state task-to-source map. Point to existing catalogs such as
   `doc/sidebars.js` instead of duplicating every document; do not turn it into a history log or an always-loaded prompt.
@@ -53,8 +54,9 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 
 ### 4. Maintain Skills for low context cost
 
-- Keep folder and `name` identical, lowercase, hyphenated, and at most 64 characters. Keep portable frontmatter to
-  `name` and `description` unless a verified client-specific requirement justifies a separate client-owned surface.
+- Keep folder and `name` identical, lowercase, hyphenated, and at most 64 characters; do not start or end with a
+  hyphen or use consecutive hyphens. Keep portable frontmatter to `name` and `description` unless a verified
+  client-specific requirement justifies a separate client-owned surface.
 - Make `description` intent-first and specific: say what the Skill does, when it should trigger, and a useful near-miss
   boundary. Keep the key trigger early and stay within 1024 characters.
 - Follow the root writing rule. Write imperative, project-specific procedures, remove explanations the agent already
@@ -68,6 +70,10 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 - For a new or materially changed trigger, draft 8-10 realistic should-trigger queries and 8-10 near-miss
   should-not-trigger queries. Measure invocation only when the active client exposes observable Skill calls; otherwise
   perform a manual boundary review and report that no trigger rate was measured.
+- Evaluate output quality separately from activation. Define a few observable outcome, process, style, and efficiency
+  checks; when the harness supports isolated runs, compare fresh sessions against the previous Skill or a no-Skill
+  baseline and inspect traces and artifacts. Do not infer improvement from shorter text or successful activation. If
+  fresh runs are unavailable, perform a source-backed manual review and report that limitation.
 
 ### 5. Validate and report
 

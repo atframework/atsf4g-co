@@ -71,6 +71,12 @@ ON 依赖编译器的标准协程检测结果；不支持时该选项被强制�
 | `PROJECT_SERVER_FRAME_ENABLE_RPC_MOCK` | Debug ON | RPC mock |
 | `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` | 随单元测试开关启用 | 离线 RPC 测试 hook |
 | `CRYPTO_USE_OPENSSL` / `CRYPTO_USE_MBEDTLS` | 按配置选择 | 加密后端 |
+| `PROJECT_CHANNEL_INTEGRATION_STEAM` | ON | Steam 渠道集成；OFF 时不引入 Steamworks SDK |
+
+Steam 集成默认使用 Steamworks SDK 1.65.0，并从 `SteamworksSDKCI` 的 GitHub releases 镜像下载重新打包的
+发布文件。可通过 `PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_MIRROR` 更换镜像，但归档必须匹配配置中的
+SHA256。已有离线包时，设置 `SteamworksSDK_ROOT` 或包含 `SteamworksSDKConfig.cmake` 的 `SteamworksSDK_DIR`
+可跳过下载。官方包需要 Steamworks partner 账号，构建脚本不会匿名下载官方包。
 
 业务服务、组件服务和常规工具目录在 `src/CMakeLists.txt` 中登记，已有这些服务没有逐服务构建开关。
 robot 有自己的 Go 构建流程；使用测试时见[测试指南](../development/testing)。

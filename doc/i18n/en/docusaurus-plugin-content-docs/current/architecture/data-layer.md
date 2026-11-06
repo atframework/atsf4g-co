@@ -30,6 +30,10 @@ The data layer currently supports only **Redis** (`src/server_frame/dispatcher/d
 | KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`; monotonically increasing indexes with count-based trimming (embedded Lua) |
 | TTL | Key expiration management |
 
+Current KV `set` / `insert` write paths serialize and overwrite every field; unset fields become empty/default values
+rather than being presence-merged. Use an explicit field operation for a partial update and verify that the generated
+API provides that semantic.
+
 ### Generated DB Interfaces
 
 Generated from the table/index extensions in `svr.local.table.proto` / `svr.global.table.proto` +
@@ -47,6 +51,11 @@ uint64_t version = 0;
 int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account_type, open_id, row, version));
 ```
 
+Current generation templates join Redis key fields with `:`, replacing the old `.` separator. `login_auth` also
+changed to the `(account_type, open_id)` composite key. Reads have no old-key fallback, and the repository has no
+automatic migration script. Upgrades must migrate keys for every affected table plus the login composite key and
+coordinate reader/writer versions; mixed old/new versions must not be assumed to see the same records.
+
 ### UUID
 
 `src/server_frame/rpc/db/uuid.{h,cpp}` provides ID generation: `standard` / `short` / `global_increase`
@@ -54,8 +63,8 @@ int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account
 
 ### Session and User Cache
 
-- `src/server_frame/data/session.{h,cpp}`: gateway session, key = `(gateway_node_id, session_id)`, responsible
+- `src/component/user/sdk/data/session.{h,cpp}`: gateway session, key = `(gateway_node_id, session_id)`, responsible
   for downstream sending;
-- `src/server_frame/data/user_cache.{h,cpp}`: user data cache base class with dirty marking and init-task
+- `src/component/user/sdk/data/user_cache.{h,cpp}`: user data cache base class with dirty marking and init-task
   waiting;
-- `src/server_frame/logic/session_manager.*` / `user_manager.*`: the corresponding manager singletons.
+- `src/component/user/sdk/logic/session_manager.*` / `user_manager.*`: the corresponding manager singletons.

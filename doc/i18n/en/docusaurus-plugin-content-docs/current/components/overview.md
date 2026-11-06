@@ -14,10 +14,15 @@ See [component integration](../development/add-component).
 | --- | --- | --- |
 | [Message queues](dtmq) | `src/component/dtmq/`, `dtmq-proxysvr` | `USE_COMPONENTS "dtmq-proxy-sdk"` |
 | [Distributed transactions](distributed-transaction) | `src/component/distributed_transaction/`, `dtcoordsvr` | `USE_COMPONENTS "distributed-transaction-sdk"` |
+| [Compliance text filtering](compliance) | `src/component/compliance/`, `compliance-svr` | `USE_COMPONENTS "compliance-sdk"` |
+| [Chat](chat) | `src/lobbysvr/service/logic/chat/`, DTMQ | Built into Lobby; `USE_COMPONENTS "dtmq-proxy-sdk"` |
+| [Mail](mail) | `src/lobbysvr/service/logic/mail/`, `src/lobbysvr/sdk/rpc/mail/` | `USE_SERVICE_SDK "lobbysvr-sdk"` |
+| [Item operations and sources](item) | `src/component/GameSharedComponent/ItemAlgorithm/`, Lobby item module | `USE_COMPONENTS "ItemAlgorithmSDK"` |
 | [Leaderboards](rank) | `src/component/rank/`, `rank_board_svr` | `USE_COMPONENTS "rank-board-svr-sdk" "rank-logic-sdk"` |
 | [Friends](friend) | `src/friendsvr/`, management and recommendation services | `USE_SERVICE_SDK "friend-sdk-management"` |
 | [Matchmaking and teams](matching-team) | `src/matchsvr/`, `src/teamsvr/` | `USE_SERVICE_SDK "matchsvr-sdk" "team-common-sdk" "team-sdk-room"` |
 | [UE DS management (Orbit)](orbit) | `src/component/orbit/`, controller / agent / server / client | Select SDKs by process role; see the Orbit quick start |
+| User and Router integration | `src/component/user/sdk/` | `USE_COMPONENTS "user-sdk"` |
 | Shared algorithms | `src/component/GameSharedComponent/` | `USE_COMPONENTS "ItemAlgorithmSDK" "BattleUtilitySDK"` |
 
 Append these parameters to existing service declarations and select dependencies for the APIs you use;

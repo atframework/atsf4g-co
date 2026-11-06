@@ -176,14 +176,20 @@ SS handler 返回 `rpc::result_code_type`，可以是协程并用 `RPC_AWAIT_COD
 `ss_rule_options`：`match_node_id`、`times`（FIFO 脚本）、`delay_generations`、`no_response`、
 `malformed_type_url`/`malformed_body`。
 
+`rpc::<module>::oneway::<rpc>()` 可用 `atfw::testing::make_context()` 在任务外调用，直接返回整数发送结果，
+复用同名 mock 规则。请求在发送时序列化；`runtime::pump_once()` 后 handler 在独立任务中执行，可等待嵌套
+RPC，但响应和返回码被丢弃。测试应等待可观察的 handler 结果并检查发送历史，完整用例见
+`src/tools/rpc-unit-test/test/rpc_unit_test_ss.cpp`。
+
 ### Router / DNS / UUID / resource / CS / raw transport
 
 - **Router**：`test.router_manager()` + `router_test_object` 把 router object 寻址到 mock 节点；router RPC 与
   unary SS 同链（`mock://` connector），不改 Mako。
 - **DNS**：`test.dns().mock_a(domain, ip)` / `mock(records)` / `mock_error(domain)`；hook 在 `uv_getaddrinfo`
   之前，测试不产生系统 DNS 请求。
-- **DB**：默认内存 backend 支持字段 presence 合并、CAS、KL 和 TTL，按对应 Redis/Lua 契约实现，无需注册规则；
-  生成层 per-table typed handler（`rpc::db::<ns>::mock::<interface>`）与引擎层 `test.db().mock_table(name)` 回调
+- **DB**：默认内存 backend 支持字段 presence 合并、CAS、KL 和 TTL，无需注册规则；但当前生产 KV
+  `set/insert` 已改为全字段覆盖，mock 与契约测试尚未对齐。不要用该内存 backend 验证生产的全字段覆盖语义；
+  可使用 typed handler 显式固定当前业务预期。生成层 per-table typed handler（`rpc::db::<ns>::mock::<interface>`）与引擎层 `test.db().mock_table(name)` 回调
   可覆盖单个接口，未覆盖的回落内存 backend。raw entry API（`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`）用于
   CAS 版本种子/精确 bytes。
 - **UUID**：`generate_global_increase_id`/`generate_global_unique_id` 经 DB `inc_field` 流入 DB mock
@@ -207,12 +213,10 @@ DB 覆盖顺序：生成层 typed handler → 引擎层 per-table 回调 → 内
 - `delay_generations`：`0` 表示在观察到请求的那个 pump 完成；`N` 表示额外延迟 `N` 个完整 pump（SS/DNS 一致）。
 - 引擎投递按**到期顺序**而非 FIFO；投递会同步恢复协程，任务可重入引擎（两阶段 drain，见
   `src/tools/rpc-unit-test/src/detail/pending_drain.h`）。
-- DB 内存后端对齐 Redis/Lua golden contract（`src/server_frame/test/server_frame_test_db_script_contract.cpp`
-  在嵌入式 Lua 中真实执行 db_msg_dispatcher 的脚本并固化行为契约，引擎 selftest 同步固化）：`EXPIRE`/`PERSIST` 对缺失 key 是成功 no-op（非错误）；CAS set 接受无版本记录、相等期望版本、或
-  **期望版本 0（忽略版本比较强制覆盖，存储版本仍按真实版本 +1 递增）**，否则冲突返回 `EN_DB_OLD_VERSION`
-  并回写存储版本；insert（`op_type::kv_insert`）拒绝已有版本的记录并返回 `EN_DB_KEY_EXISTS`；所有写路径
-  （HSET/CAS/insert）只合并 store 消息中 present 的字段；KL 索引 1 起单调不复用，达到 `max_list_length` 时
-  按最小索引淘汰一条（0 表示仅保留一条）；`inc_field` 从 0 创建且不动 CAS 版本。
+- DB 的 CAS set 接受无版本记录、相等期望版本或**期望版本 0（忽略版本比较强制覆盖，存储版本仍按真实版本
+  +1 递增）**，否则返回 `EN_DB_OLD_VERSION` 并回写存储版本；insert 拒绝已有版本记录；KL 索引单调不复用，
+  `inc_field` 从 0 创建且不动 CAS 版本。`server_frame_test_db_script_contract.cpp` 真实执行内嵌 Lua，但当前仍
+  断言所有写路径只合并 present 字段；生产 `set/insert` 已改为全字段覆盖，mock 与测试需另行修正。
 - 修改引擎/hook seam 的更深入不变量见 `.agents/skills/rpc-unit-test/references/engine-invariants.md`。
 
 ## 外部依赖离线矩阵

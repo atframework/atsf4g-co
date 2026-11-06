@@ -15,8 +15,7 @@ import "protocol/pbdesc/com.struct.proto";
 
 package atframework.shared;
 
-// Placeholder definitions for team protocol messages referenced by com.protocol.proto.
-// These exist so proto generation succeeds; real definitions should be added here.
+// Team protocol messages referenced by com.protocol.proto.
 
 message CSTeamSendInvitationReq {
   // 不指定team_key时，表示邀请用户加入当前玩家所在的默认队伍，如果默认队伍不存在，会先创建一个

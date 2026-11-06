@@ -22,7 +22,7 @@ title: 路由系统
 | `router_object_base` / `router_object<T>` | `src/server_frame/router/` | 路由对象基类：`pull_object`/`save_object`（协程 RPC）、TTL、降级 |
 | `router_manager_base` / `router_manager<TCache, TObj, TPrivData>` | `router/router_manager.h` | 对象管理器：`mutable_cache`/`mutable_object`、事件回调 |
 | `router_manager_set` | `router/router_manager_set.h` | 单例：按 type_id 管理全部 manager、定时保存、空闲回收、关闭任务与 metrics |
-| `router_user_cache` / `router_user_manager` | `router/router_user_*` | 用户路由特化（`user_cache` 对象、`pull_online_server`） |
+| `router_user_cache` / `router_user_manager` | `src/component/user/sdk/router/router_user_*` | 用户路由特化（`user_cache` 对象、`pull_online_server`） |
 
 对象 key = `type_id + zone_id + object_id`。
 

@@ -53,9 +53,11 @@ dtmq 提供游戏内高频消息频道（聊天、队伍、公会广播等）能
 - 频道乐观锁：`channel_lock_checker` 比较预期持有者，并按请求重置锁；`reset_lock` 提供修改入口。
   频道记录索引未启用 DB CAS；
 - 频道类型配置经 Excel（`com.struct.dtmq.config.proto` 的 `ExcelDtmqChannelType`：`channel_type`、
-  `show_max_log_count`、`readonly_replicate_count`），由 `excel_config_dtmq_index.cpp` 加载为
-  `DChannelConfigure`；
-- DB 落地：`table_dtmq_channel_record`（生成的 `rpc::db::dtmq_channel_record` Redis 接口）。
+  `channel_configure`、`show_max_log_count`、`readonly_replicate_count`）加载。`DChannelConfigure` 包含
+  `max_log_count`、`gc_log_count`、`gc_expire_duration`、`memory_only`、字数限制、心跳/重试、订阅超时和
+  共享订阅者 GC 时间；
+- 非 `memory_only` 频道通过 `table_dtmq_channel_record`（生成的 `rpc::db::dtmq_channel_record` Redis
+  接口）落地；`memory_only=true` 跳过 DB 保存。
 
 ### 副本与路由
 
@@ -84,7 +86,8 @@ flowchart LR
 
 ### 客户端 SDK
 
-- `dtmq_client_api`：`get_target_server_id(s)`、`send_message`、`find_message`、`page_query_message`、
+- `dtmq_client_api`：`get_target_server_id(s)`、单条/批量 `send_message`、可在 task 外调用的
+  `send_message_oneway`、`update`、`reset_lock`、`destroy_channel`、`find_message`、`page_query_message`、
   `normalize_replicate_index`；
 - `dtmq_client_subscriber`：进程内共享订阅者（`shared_subscriber`）：本地 WAL 日志缓存、乐观锁/快照/
   消息回调、心跳、接收 `channel_event_sync` 事件流。

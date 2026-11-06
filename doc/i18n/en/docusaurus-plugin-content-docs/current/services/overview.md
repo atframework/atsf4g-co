@@ -12,14 +12,15 @@ title: Services Overview
 | Service/deployment chart | Purpose | Minimal validation entry |
 | --- | --- | --- |
 | `echosvr` | Raw message echo example | Send data through atgateway and check the echo |
-| `authsvr` | Login authentication, `AuthsvrClientService` | robot login request and authentication response |
+| `authsvr` | Login authentication and internal account pre-generation, `AuthsvrClientService` | [Authentication and account management](auth) |
 | `cachesvr` | Distributed object cache with SDK | Follow existing calls in the lobby's `cache/` |
-| `lobbysvr` | Player login/data, friends, teams, matching, notifications | Login with robot and run existing business commands |
+| `lobbysvr` | Player login/data, chat, mail, items, friends, teams, matching, notifications | Robot business commands; [chat](../components/chat), [mail](../components/mail), [items](../components/item) |
 | `friendsvr-management` / `friendsvr-recommend` | Friend management; recommendation strategies remain unimplemented | [Friend quick start](../components/friend) |
 | `matchsvr` | Matchmaking pools and rooms | [Matchmaking quick start](../components/matching-team) |
 | `teamsvr-room` / `teamsvr-match` | Team rooms; teammate search remains unimplemented | [Team quick start](../components/matching-team) |
 | `dtmq-proxysvr` | Message channels, subscriptions, synchronization | [DTMQ quick start](../components/dtmq) |
 | `dtcoordsvr` | Distributed transaction coordinator | [Transaction quick start](../components/distributed-transaction) |
+| `compliance-svr` | Batch text filtering and dictionary management | [Compliance service](../components/compliance) |
 | `rank-board-svr` / `rank-settlement-svr` | Leaderboards and periodic settlement | [Rank quick start](../components/rank) |
 | `orbit-controller` / `orbit-agent` / `orbit-server` | UE DS management; `orbitsvr` implements the server example | [Orbit quick start](../components/orbit) |
 | `atgateway` / `atproxy` | Client access and cross-server traffic | [Access configuration](../architecture/gateway-proxy) |

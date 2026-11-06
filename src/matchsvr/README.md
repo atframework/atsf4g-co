@@ -72,7 +72,7 @@ SEARCHING -> CONFIRMING -> CREATING_BATTLE -> FINISHED
 | 补入已有未满 faction | 当前 Unit 独立确认 | 整个 Unit 退出；其他 Unit 不受影响 |
 | 多个 Unit 共同新增 faction | 固定该 faction 的创建成员，全部确认后才分别提交初始化 | 拒绝或超时 Unit 退出；其余创建 Unit 恢复搜索；撤销该次 faction |
 
-新 faction 共同确认期间不再追加创建成员。创建确认释放后，后续补入按已有 faction 的独立 Unit 规则处理。初始化阶段每个 Unit 独立成功或失败，不回退已经成功的其他 Unit。
+新 faction 共同确认期间不再追加创建成员。创建确认释放后，后续补入按已有 faction 的独立 Unit 规则处理。后补 Unit 初始化失败会关闭整个等待室，不再继续接纳；已经成功的其他 Unit 不回退。
 
 普通搜索中已经形成的完整 faction 可以整体迁入等待室，保持其容量及成员。普通搜索中的不完整 faction 以单 Unit 为迁移单位。所有迁移都不拆分 Unit。
 
@@ -87,11 +87,11 @@ SEARCHING -> CONFIRMING -> CREATING_BATTLE -> FINISHED
 faction 成功人数 + 未完成 Unit 预留人数 <= faction 固定容量
 ```
 
-预留占满时不再接纳，但不会仅因预留占满而永久关闭。截止前 Unit 拒绝或初始化失败会释放其本地预留；成功人数达到上限时等待室永久关闭。
+预留占满时不再接纳，但不会仅因预留占满而永久关闭。截止前 Unit 拒绝会释放其本地预留；初始化失败释放对应预留并关闭等待室。成功人数达到上限时等待室永久关闭。
 
-成功 Unit 的玩家退出 DS，不扣减该等待室成功人数，不腾出位置，也不重新开放已关闭的等待室。退出后可使用新的 Unit ID 再次匹配同一等待室，也可匹配其他房间；Match 不等待旧 Room 回收或匹配侧结算。
+成功 Unit 的玩家退出 DS，不扣减该等待室成功人数，不腾出位置，也不重新开放已关闭的等待室。退出后可使用新的 Unit ID 匹配其他房间，但不能重新加入该等待室；Match 不等待旧 Room 回收或匹配侧结算。
 
-再次加入同一等待室仍须满足等待室规则、剩余容量和截止时间，并按新 Unit 预留人数，成功后增加成功人数。成功成员数据继续参与规则比较，但不作为玩家重复匹配占用；尚未完成入场的 Unit 仍禁止玩家重复加入。Match 不检查玩家实际退出 DS 的状态。
+等待室按已接纳 Unit ID 和成功玩家身份拒绝重入。其他新玩家仍须满足等待室规则、剩余容量和截止时间，并按新 Unit 预留人数，成功后增加成功人数。成功成员数据继续参与规则比较和旧房重入检查，但不作为其他匹配的玩家重复占用；尚未完成入场的 Unit 仍禁止玩家重复加入。Match 不检查玩家实际退出 DS 的状态。
 
 ## 绝对截止时间
 
@@ -159,7 +159,7 @@ Lobby 用 `acknowledge_event_id` 记录已消费位置，`pending_acknowledge_ev
 
 ## Orbit 协议范围
 
-本实现复用 `SSMatchingOrbitRoomReadyReq.end_join_timepoint`、`SSOrbitUserInitReq` 和原 `result_code`。不修改 Orbit 服务、DS 协议或结算流程，不新增 reserve、commit、query、cancel、实际连接回报或 DS 撤销接口。
+Match 复用 `SSMatchingOrbitRoomReadyReq.end_join_timepoint`、`SSOrbitUserInitReq` 和原 `result_code`，并接收 Orbit 的 EndJoin/UserQuit 生命周期通知。当前 Match 侧这些通知入口仍是返回成功的占位实现，不代表结算已经完成。Match 不新增 reserve、commit、query、cancel、实际连接回报或 DS 撤销接口。
 
 无等待室初始请求沿用 `is_last_one=true`。需要保留追加入口时，Match 初始和后补请求使用 false。等待室关闭后停止发送后补初始化；Match 本地结束不依赖向 DS 发送空封口请求或等待封口确认。
 
@@ -176,6 +176,6 @@ Lobby 用 `acknowledge_event_id` 记录已消费位置，`pending_acknowledge_ev
 | [`matching_logic_test.cpp`](test/matching_logic_test.cpp) | 受控时间和 RPC mock 场景 |
 | [`matching_waiting_rule_test.cpp`](test/matching_waiting_rule_test.cpp) | 独立配置、时间窗、固定 faction、人数预留与完成摘要 |
 
-修改时至少验证开关关闭、初始失败、绝对截止相等及跨 await 到期、新请求和已有搜索候选优先级、两类 faction 拒绝范围、最后名额竞争、Unit 完成后 Room 继续存在、WAL 回收和旧消息隔离。通知验证需要同时检查内容与实际投递次数。
+修改时至少验证开关关闭、初始失败、后补初始化失败关闭等待室、绝对截止相等及跨 await 到期、新请求和已有搜索候选优先级、两类 faction 拒绝范围、最后名额竞争、成功玩家重新匹配且不能重入旧等待室、Unit 完成后 Room 继续存在、WAL 回收和旧消息隔离。通知验证需要同时检查内容与实际投递次数。
 
 测试应使用工程 RPC 单元测试目标与离线 runtime。生成配置后要检查实际 bytes/JSON 字段；生成器退出成功本身不能证明工作簿列被正确消费。测试结果以本轮实际构建和执行日志为准，本文件不记录未经执行的通过结论。

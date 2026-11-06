@@ -19,7 +19,8 @@ cmake --build <BUILD_DIR> --config Debug --target robot-build
 2. 按[运行与部署](../getting-started/run-deploy)生成 robot 配置并启动所需服务。
    可执行文件在 `<BUILD_DIR>/publish/robot/bin/robot`（Windows 为 `robot.exe`）。
 3. 先查看 `robot --help` 和 `src/robot/cmd/` 的命令，再从一次登录与业务请求开始。
-   匹配场景参数参照 `src/robot/case_config/`，好友入口见 `cmd/friend.go`。
+   匹配场景参数参照 `src/robot/case_config/`，好友入口见 `cmd/friend.go`。邮件入口见 `cmd/mail.go`；
+   `cmd/chat.go` 提供频道、快照、心跳和推送验证，但 `chat send` 只支持 world/private，不覆盖 team/Orbit/battle。
 4. 验证请求/响应后再增加并发与运行时长；检查服务日志及遥测。
 
 ## 定制与详细设计

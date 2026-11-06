@@ -19,7 +19,9 @@ cmake --build <BUILD_DIR> --config Debug --target robot-build
 2. [Generate configuration](../getting-started/run-deploy) and start the required services.
    The binary is `<BUILD_DIR>/publish/robot/bin/robot` (`robot.exe` on Windows).
 3. Read `robot --help` and commands under `src/robot/cmd/`, then start with one login and business request.
-   Matching scenarios are under `src/robot/case_config/`; friend commands use `cmd/friend.go`.
+   Matching scenarios are under `src/robot/case_config/`; friend commands use `cmd/friend.go`. See `cmd/mail.go`
+   for mail. `cmd/chat.go` covers channels, snapshots, heartbeats, and push, but `chat send` supports only
+   world/private and does not cover team/Orbit/battle.
 4. Verify responses before increasing concurrency/duration, and inspect service logs and telemetry.
 
 ## Customization and Design

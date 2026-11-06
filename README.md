@@ -11,8 +11,9 @@ It supports **C++20 standard coroutines** and **traditional stackful coroutines*
 The C++20 backend needs a standard coroutine toolchain; check third-party version/toolchain requirements separately.
 
 Infrastructure includes atgateway, atproxy, service discovery, Redis access, router caches, and OpenTelemetry.
-Reusable components and services include **DTMQ, distributed transactions, leaderboards, friends, matchmaking,
-and teams**. **Orbit is a Dedicated Server (DS) management solution for Unreal Engine (UE).**
+Reusable components and services include **DTMQ, distributed transactions, leaderboards, compliance text filtering,
+friends, matchmaking, and teams**. Lobby modules cover **chat, mail, and item inventories**.
+**Orbit is a Dedicated Server (DS) management solution for Unreal Engine (UE).**
 
 ## Quick Start
 

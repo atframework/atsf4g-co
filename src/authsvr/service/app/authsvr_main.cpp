@@ -37,8 +37,8 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include "app/authsvr_helper.h"
 #include "app/handle_cs_rpc_authsvrclientservice.atfw.gen.h"
@@ -101,7 +101,7 @@ class main_service_module : public atfw::atapp::module_impl {
   static int cmd_gen_accounts(atfw::util::cli::callback_param params) {
     constexpr const char *kUsage =
         "auth-gen-accounts <count> <open-id prefix> [start index]  pre-generate internal auth "
-        "accounts (default: prefix=devacc, start index=1)";
+        "accounts (default: start index=1)";
 
     if (params.get_params_number() < 2) {
       ::atfw::atapp::app::add_custom_command_rsp(params, kUsage);
@@ -242,9 +242,7 @@ int main(int argc, char *argv[]) {
   // 自定义指令注册示例：handler 为 static 成员函数，指令通过 atapp 的控制台/管理通道下发
   app.get_command_manager()
       ->bind_cmd("auth-gen-accounts", &main_service_module::cmd_gen_accounts)
-      ->set_help_msg(
-          "auth-gen-accounts <count> [open-id prefix] [start index] [account type]    pre-generate internal auth "
-          "accounts");
+      ->set_help_msg("auth-gen-accounts <count> <open-id prefix> [start index]    pre-generate internal auth accounts");
 
   // run
   return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);

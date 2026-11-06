@@ -1,6 +1,6 @@
 apiVersion: v2
 name: compliance-svr
-description: Compliance service for text filtering, identity verification, and playtime management
+description: Compliance service for batch text filtering and dictionary management
 
 # A chart can be either an 'application' or a 'library' chart.
 #

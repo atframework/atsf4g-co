@@ -85,9 +85,14 @@ RPCs requiring a response await completion and obtain results through `RPC_AWAIT
 Even when the response or return value is unused, use `RPC_AWAIT_IGNORE_RESULT` to explicitly await and ignore it.
 These macros adapt C++20 and traditional stackful coroutines; see [awaiting RPC completion](../development/add-rpc-task#await-rpc).
 
-`allow_no_wait` permits send-only APIs. SS methods with a streaming request or response generate notification APIs,
-such as `channel_event_sync`; each call sends an SSMsg rather than opening a persistent gRPC-style stream.
-Use generated headers for exact return types, target parameters, and namespaces.
+For non-router RPCs, `stream` or `allow_no_wait` generates `rpc::<module>::oneway::<rpc>()`: it sends synchronously,
+can be called outside a task, returns the integer send result directly, and does not wait for a response. Ordinary
+unary calls can use `__no_wait`; `__wait_later` still sends a response-required request so the caller can wait later.
+`broadcast` is a separate fire-and-forget form.
+
+SS methods with a streaming request or response, such as `channel_event_sync`, send one SSMsg per call rather than
+opening a persistent gRPC-style stream. Use generated headers for exact return types, target parameters, and
+namespaces.
 
 Framework calls return integer error codes; `rpc::result_code_type` wraps results that require coroutine waits
 and is not an HTTP status type. System, atbus, and DB errors are defined in `svr.const.err.proto`;

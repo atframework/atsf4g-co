@@ -47,7 +47,11 @@ int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account
 
 生成接口按存储选项提供 `get_all`、`batch_get_all`、`insert`、`replace`、`remove_all`、
 TTL 与字段自增等。CAS 的 `version` 在读后保存并传给更新；具体参数与可用接口查生成头文件。
-已有表增加字段通常只需修改 proto 和业务读写逻辑。
+已有表增加字段通常只需修改 proto 和业务读写逻辑，但当前 `set` / `insert` 会覆盖全部字段，新增字段应
+同时检查旧记录读取默认值和更新时的覆盖结果。
+
+修改 `key_fields` 或 key 分隔符属于数据布局变更。当前模板使用 `:`，旧 `.` key 没有自动回退或迁移；
+变更前需要提供迁移步骤并协调所有读写方，不能只重新生成接口。
 
 ## 定制与详细设计
 

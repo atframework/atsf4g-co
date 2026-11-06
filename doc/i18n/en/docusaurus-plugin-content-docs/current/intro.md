@@ -18,15 +18,15 @@ title: Introduction
   database APIs, and Excel loaders. Routine extensions use existing declarations plus business logic.
 - **Cross-platform infrastructure**: atgateway handles client access and atproxy handles inter-server traffic;
   service discovery, router caches, Redis access, and OpenTelemetry are built in.
-- **Reusable components and services**: dtmq, distributed transactions, leaderboards, friends, matchmaking,
-  teams, and their SDKs.
+- **Reusable components and services**: dtmq, distributed transactions, leaderboards, compliance text filtering,
+  friends, matchmaking, teams, and their SDKs. Lobby modules cover chat, mail, and item inventories.
 - **Orbit**: a Dedicated Server (DS) management solution for Unreal Engine (UE), with controller / agent /
   server / client layers managing process lifecycles, heartbeats, and communication.
 - **Deployment tools**: atdtool and values configuration generate resources and scripts for Kubernetes,
   Docker, and bare-metal/local deployments.
 
-Check third-party toolchain requirements separately from the project's C++14 requirement; newer dependency
-versions can cause a build to use a higher language standard. See [prerequisites](getting-started/prerequisites)
+Check each target's language standard and third-party toolchain requirements separately; newer dependency versions
+can cause a build to use a higher language standard. See [prerequisites](getting-started/prerequisites)
 and [switching coroutine backends](getting-started/build#coroutine-backend).
 
 ## Where to Start
@@ -51,7 +51,7 @@ atsf4g-co/
 ├── src/
 │   ├── server_frame/   # Shared config, protocols, dispatcher, router, RPC, data layer
 │   ├── *svr/           # Lobby, authentication, cache, friend, matchmaking, team services
-│   ├── component/      # dtmq, distributed_transaction, rank, orbit, shared algorithms
+│   ├── component/      # dtmq, distributed_transaction, rank, orbit, compliance, shared algorithms
 │   ├── templates/      # Code generation templates for framework maintainers
 │   ├── tools/          # Code generators and offline RPC test tools
 │   └── robot/          # Go stress-test and simulated client

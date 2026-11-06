@@ -70,6 +70,13 @@ dependencies. This workspace's C++20 setting chooses a backend rather than defin
 | `PROJECT_SERVER_FRAME_ENABLE_RPC_MOCK` | Debug ON | RPC mock |
 | `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` | Enabled with unit tests | Offline RPC test hooks |
 | `CRYPTO_USE_OPENSSL` / `CRYPTO_USE_MBEDTLS` | Selected by configuration | Crypto backend |
+| `PROJECT_CHANNEL_INTEGRATION_STEAM` | ON | Steam channel integration; OFF excludes the Steamworks SDK |
+
+Steam integration uses Steamworks SDK 1.65.0 by default and downloads repacked release archives from the
+`SteamworksSDKCI` GitHub releases mirror. `PROJECT_THIRD_PARTY_STEAMWORKS_SDK_RELEASE_MIRROR` selects another mirror,
+but archives must match the configured SHA256 values. For an existing offline package, set `SteamworksSDK_ROOT` or a
+`SteamworksSDK_DIR` containing `SteamworksSDKConfig.cmake` to skip downloading. Official packages require a Steamworks
+partner account; the build scripts do not download them anonymously.
 
 Business services, component services, and ordinary tools are registered in `src/CMakeLists.txt`;
 they have no individual service build switches. robot has its own Go build workflow.

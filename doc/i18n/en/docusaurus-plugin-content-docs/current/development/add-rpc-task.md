@@ -51,7 +51,10 @@ the framework result object returned by the call.
 | `RPC_AWAIT_IGNORE_RESULT(call)` | Await completion and explicitly ignore the result |
 
 These macros adapt C++20 coroutines and traditional stackful coroutines to the same business-code waiting pattern.
-Ignoring the result still waits for completion; for send-only behavior, use a generated no-wait API permitted by the declaration.
+Ignoring the result still waits for completion. For a non-router stream or `allow_no_wait` RPC, use
+`rpc::<module>::oneway::<rpc>()` for send-only behavior; it returns the send result synchronously and can be called
+outside a task. Ordinary unary `__no_wait` is a different parameter form, while `__wait_later` waits for a response
+later and is not no-wait.
 
 ## Quick Start: Add a CS RPC to an Existing Service
 
@@ -80,7 +83,8 @@ actions after deleting an RPC. Do not edit `*.atfw.gen.*`.
 | `rpc_options.module_name` | Business subdirectory for the action |
 | `service_options.module_name` | SDK directory and namespace organization |
 | `api_name` | RPC API identifier; the generated C++ function still follows the rpc method name |
-| `allow_no_wait: true` | Allows generated no-wait call forms; check the actual generated API |
+| `allow_no_wait: true` | Generates `oneway` and unary no-wait forms for non-router RPCs |
+| `allow_ignore_discovery: true` | Allows `__ignore_discovery` to bypass discovery availability checks for a supplied target; unrelated to response waiting |
 | `returns (stream X)` | Server-streamed downstream messages, such as `user_dirty_chg_sync` |
 | `rpc x(stream Req)` | Request streams, such as `channel_event_sync` |
 

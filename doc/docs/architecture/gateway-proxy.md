@@ -28,6 +28,9 @@ title: 网关与代理
 网关不解析业务消息体：上行时把 `CSMsg` 连同 `(gateway_node_id, session_id)` 封装为
 `gateway::server_message` 经 atbus 投递给目标服务；下行时按 session 路由回客户端。
 
+重连复用 session ID，执行完整 ECDH 并轮换 token；新 transport 继承原 session 的自定义 router，激活时不会
+重置成默认路由。wire 规则和兼容性见 `atframework/service/atgateway/protocol/PROTOCOL.md` 的重连章节。
+
 ### atproxy
 
 位置：`atframework/service/atproxy`。服务间通信代理：

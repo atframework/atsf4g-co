@@ -17,8 +17,8 @@ high-performance game server architectures.
 - `src/server_frame/`: shared config, protocol, dispatcher, router, RPC, data, and utility code.
 - `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `friendsvr`, `matchsvr`, `teamsvr`,
   `rank_settlement_svr`, `orbitsvr`).
-- `src/component/`: DTMQ, distributed transaction, rank, Orbit (UE Dedicated Server management), and shared algorithms
-  plus their SDKs.
+- `src/component/`: DTMQ, distributed transaction, rank, Orbit (UE Dedicated Server management), the compliance
+  service and SDK, and shared item/user algorithms.
 - `src/robot/` and `src/tools/`: Go stress client, generators, diagnostics, and the offline mock-RPC test fixture.
 - `src/templates/`: Mako templates for generated RPC/task code.
 - `doc/`: Docusaurus documentation site (architecture + development docs, zh-CN/en i18n).
@@ -59,6 +59,9 @@ high-performance game server architectures.
   the implementation or the case design; never weaken, skip, or loosen an existing assertion, add a retry, or widen a
   timeout merely to force green. If scope or prerequisites remain unclear, state assumptions and coverage gaps instead
   of claiming completeness.
+- Update the owning documentation in the same change when altering documented behavior, public APIs/protocols,
+  configuration, service/deployment topology, or module ownership. Keep zh-CN/en pages synchronized; update a Skill or
+  source route only when the discovery path or reusable procedure changed.
 - For notification changes, test both payload and delivery: normal actions, empty actions, full-state replacement,
   data repair, and repeated cleanup. Assert required removals and forbidden duplicate pushes at the actual flush boundary.
 - Add root-project ordinary C++ unit-test targets only through `project_add_normal_unit_test`. For tests under `src/**`

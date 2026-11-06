@@ -12,14 +12,15 @@ title: 服务总览
 | 服务/部署 chart | 用途 | 最小验证入口 |
 | --- | --- | --- |
 | `echosvr` | 原始消息回显示例 | 经 atgateway 发送数据并检查回显 |
-| `authsvr` | 登录鉴权，`AuthsvrClientService` | robot 登录请求与认证响应 |
+| `authsvr` | 登录鉴权与内部账号预生成，`AuthsvrClientService` | [鉴权配置与账号管理](auth) |
 | `cachesvr` | 分布式对象缓存，带 SDK | 参照大厅服 `cache/` 的现有缓存调用 |
-| `lobbysvr` | 玩家登录、用户数据、好友、队伍、匹配及通知 | robot 登录后执行已有业务命令 |
+| `lobbysvr` | 玩家登录、用户数据、聊天、邮件、道具、好友、队伍、匹配及通知 | robot 业务命令；[聊天](../components/chat)、[邮件](../components/mail)、[道具](../components/item) |
 | `friendsvr-management` / `friendsvr-recommend` | 好友管理；推荐策略待实现 | [好友上手](../components/friend) |
 | `matchsvr` | 匹配池与房间 | [匹配上手](../components/matching-team) |
 | `teamsvr-room` / `teamsvr-match` | 队伍房间；队友搜索服务待实现 | [组队上手](../components/matching-team) |
 | `dtmq-proxysvr` | 消息频道、订阅与同步 | [DTMQ 上手](../components/dtmq) |
 | `dtcoordsvr` | 分布式事务协调者 | [事务上手](../components/distributed-transaction) |
+| `compliance-svr` | 批量文本过滤与词库管理 | [合规服务](../components/compliance) |
 | `rank-board-svr` / `rank-settlement-svr` | 排行榜与周期结算 | [排行榜上手](../components/rank) |
 | `orbit-controller` / `orbit-agent` / `orbit-server` | UE DS 管理；server 由 `orbitsvr` 示例实现 | [Orbit 上手](../components/orbit) |
 | `atgateway` / `atproxy` | 客户端接入与跨服通信 | [接入配置](../architecture/gateway-proxy) |

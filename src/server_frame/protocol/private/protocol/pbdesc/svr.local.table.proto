@@ -48,7 +48,7 @@ message table_login_auth {
   string access_token_code = 11;                        // 认证码
   google.protobuf.Timestamp access_token_expired = 12;  // 认证码过期时间
 
-  // 上次登入的账号数据,如果时内部鉴权模式，里面会保存密码Hash
+  // 上次登入的账号数据；内部鉴权模式直接保存原始访问凭证
   DAccountData last_account_data = 21;
 }
 

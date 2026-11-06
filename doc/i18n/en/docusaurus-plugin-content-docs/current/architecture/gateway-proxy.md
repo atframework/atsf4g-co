@@ -29,6 +29,10 @@ The gateway does not parse business message bodies: upstream, it wraps `CSMsg` t
 `(gateway_node_id, session_id)` into a `gateway::server_message` and delivers it to the target service via atbus;
 downstream, it routes responses back to the client by session.
 
+Reconnection reuses the session ID, performs a complete ECDH handshake, and rotates the token. The new transport
+inherits the session's custom router, which is not reset to the default on activation. See the reconnection section of
+`atframework/service/atgateway/protocol/PROTOCOL.md` for wire rules and compatibility.
+
 ### atproxy
 
 Location: `atframework/service/atproxy`. Proxy for communication between services:

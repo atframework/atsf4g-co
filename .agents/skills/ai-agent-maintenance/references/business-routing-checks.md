@@ -4,7 +4,7 @@ Use only when maintaining the business Skill's scope, module layout, or loading 
 
 ## Design basis
 
-Official guidance checked on 2026-09-30; recheck the relevant
+Official guidance checked on 2026-11-06; recheck the relevant
 [compatibility sources](compatibility-sources.md) before relying on mutable client behavior.
 
 - Skill metadata is discovery context; concise, specific descriptions help select the right workflow.
@@ -25,15 +25,15 @@ Review dated baseline sections only for relevant matchmaking reviews or fixes, a
 
 | Should select business guidance | Module reference(s) |
 | --- | --- |
-| 修复 matchsvr 阵营容量分配不满足模板的问题 | Matching |
+| 验证后补 Unit 初始化失败会关闭等待室且不回退成功 Unit | Matching |
 | 审查匹配迁移时 WAL switch/remove/add 的通知顺序 | Matching |
-| 修改 Matching.xlsx 后检查生成配置是否遗漏字段 | Matching |
-| 验证匹配关卡候选交集与 Orbit 最终关卡一致 | Matching |
-| 为匹配确认超时和建战斗回调失败补回归测试 | Matching |
 | 检查 Lobby 首次拉取组队数据前后的 dirty 推送 | Team |
-| 修复邀请过期后 pending 列表没有移除的问题 | Team |
-| 审查旧队伍对象迟到回调是否误删当前队伍 | Team |
-| 为 Team Room 入队权限和成员丢失修复补测试 | Team |
+| 审查加入申请与邀请的权限、过期和通知流程 | Team |
+| 修复合规批量结果顺序或服务端部分结果残留 | Compliance |
+| 排查队伍聊天中普通文本与队伍通知的投递差异 | Chat |
+| 审查邮件模板 after_rendered 回调和附件部分提交 | Mail and Item |
+| 检查道具来源是否真正进入 OSS 流水而非仅传入回调 | Item |
+| 核实 Orbit EndJoin/UserQuit 与结算占位边界 | Orbit and Matching |
 | 排查队伍 ready/start-matching 回调与匹配状态不一致 | Team and Matching |
 
 | Should not select business guidance | Route instead |

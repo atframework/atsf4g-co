@@ -50,7 +50,13 @@ int32_t result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, account
 Storage options determine generated `get_all`, `batch_get_all`, `insert`, `replace`, `remove_all`,
 TTL, and field-increment APIs. Keep the CAS `version` returned by reads and pass it to updates;
 check generated headers for actual signatures and available APIs.
-Adding fields to an existing table usually needs only proto and business read/write changes.
+Adding fields to an existing table usually needs only proto and business read/write changes, but current `set` /
+`insert` operations overwrite every field. Check default values read from old records and the effect of subsequent
+overwrites.
+
+Changing `key_fields` or the key separator is a data-layout change. Current templates use `:`, with no automatic
+fallback or migration for old `.` keys. Provide migration steps and coordinate every reader/writer instead of only
+regenerating APIs.
 
 ## Customization and Design
 

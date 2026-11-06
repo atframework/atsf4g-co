@@ -80,9 +80,12 @@ transport 不走 SS 引擎，不可用于 `test.ss()`。
 不关注回包或返回值时也要用 `RPC_AWAIT_IGNORE_RESULT` 显式等待并忽略结果。
 这些宏统一适配 C++20 协程和传统有栈协程，用法见[等待 RPC 完成](../development/add-rpc-task#await-rpc)。
 
-`allow_no_wait` 允许生成只发送不等待的接口。SS 请求或响应声明为 stream 时生成通知接口，
-例如 `channel_event_sync`，每次调用发送一条 SSMsg，不建立 gRPC 式的持续流连接。
-具体返回类型、目标参数和命名空间以生成头文件为准。
+对非 router RPC，`stream` 或 `allow_no_wait` 会生成 `rpc::<module>::oneway::<rpc>()`：同步发送、可在 task
+外调用、直接返回整数发送结果，不等待响应。普通 unary 调用可用 `__no_wait` 参数显式选择不等待；
+`__wait_later` 仍发送需要响应的请求，供调用方稍后等待。`broadcast` 是独立的 fire-and-forget 形态。
+
+SS 请求或响应声明为 stream 时，例如 `channel_event_sync`，每次调用发送一条 SSMsg，不建立 gRPC 式的持续
+流连接。具体返回类型、目标参数和命名空间以生成头文件为准。
 
 框架调用结果是整数错误码；`rpc::result_code_type` 包装需要协程等待的结果，不是 HTTP 状态码类型。
 系统、atbus、DB 等错误定义在 `svr.const.err.proto`，客户端业务错误定义在 `com.const.proto`。

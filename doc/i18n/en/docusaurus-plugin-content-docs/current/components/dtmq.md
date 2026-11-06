@@ -56,10 +56,11 @@ channel increments or snapshots to subscriber nodes. `stream` means no ordinary 
 - Channel optimistic locking: `channel_lock_checker` compares the expected holder and resets the lock as requested;
   `reset_lock` provides the update API. The channel-record index does not enable DB CAS;
 - Channel type configuration comes from Excel (`ExcelDtmqChannelType` in `com.struct.dtmq.config.proto`:
-  `channel_type`, `show_max_log_count`, `readonly_replicate_count`), loaded by
-  `excel_config_dtmq_index.cpp` as `DChannelConfigure`;
-- DB persistence: `table_dtmq_channel_record` (the generated `rpc::db::dtmq_channel_record` Redis
-  interface).
+  `channel_type`, `channel_configure`, `show_max_log_count`, `readonly_replicate_count`). `DChannelConfigure`
+  includes `max_log_count`, `gc_log_count`, `gc_expire_duration`, `memory_only`, word limits,
+  heartbeat/retry, subscriber timeout, and shared-subscriber GC time;
+- Non-`memory_only` channels persist through `table_dtmq_channel_record` (the generated
+  `rpc::db::dtmq_channel_record` Redis interface); `memory_only=true` skips DB saves.
 
 ### Replicas and Routing
 
@@ -89,7 +90,8 @@ subscriber records. `DChannelMessageDetail::CommandCase` selects each log's acti
 
 ### Client SDK
 
-- `dtmq_client_api`: `get_target_server_id(s)`, `send_message`, `find_message`, `page_query_message`,
+- `dtmq_client_api`: `get_target_server_id(s)`, single/batch `send_message`, `send_message_oneway` callable
+  outside tasks, `update`, `reset_lock`, `destroy_channel`, `find_message`, `page_query_message`, and
   `normalize_replicate_index`;
 - `dtmq_client_subscriber`: in-process shared subscriber (`shared_subscriber`): local WAL log cache,
   optimistic lock/snapshot/message callbacks, heartbeat, and receiving the `channel_event_sync` event

@@ -50,7 +50,9 @@ task_action_echo_text::result_type task_action_echo_text::operator()() {
 | `RPC_AWAIT_IGNORE_RESULT(call)` | 等待调用完成，显式忽略返回结果 |
 
 这些宏统一适配 C++20 协程和传统有栈协程，业务代码使用同一套等待方式。
-忽略结果仍会等待 RPC 完成；需要只发送不等回包时，使用声明允许的生成 no-wait 接口。
+忽略结果仍会等待 RPC 完成。对非 router 的 stream 或 `allow_no_wait` RPC，需要只发送不等回包时使用
+`rpc::<module>::oneway::<rpc>()`；它同步返回发送结果，可在 task 外调用。普通 unary 的 `__no_wait` 是
+另一种参数形式；`__wait_later` 用于之后等待响应，不是 no-wait。
 
 ## 快速上手：已有服务增加 CS RPC
 
@@ -79,7 +81,8 @@ task_action_echo_text::result_type task_action_echo_text::operator()() {
 | `rpc_options.module_name` | action 所在的业务子目录 |
 | `service_options.module_name` | SDK 输出目录与命名空间组织 |
 | `api_name` | RPC 的 API 标识；生成的 C++ 函数名仍按 rpc 方法名生成 |
-| `allow_no_wait: true` | 允许生成免等待调用方式；以生成的具体接口为准 |
+| `allow_no_wait: true` | 为非 router RPC 生成 `oneway` 及 unary no-wait 调用形式 |
+| `allow_ignore_discovery: true` | 允许 `__ignore_discovery` 绕过指定目标的服务发现可用性检查，与是否等待响应无关 |
 | `returns (stream X)` | 服务端流式下行，例如 `user_dirty_chg_sync` |
 | `rpc x(stream Req)` | 请求流，例如 `channel_event_sync` |
 

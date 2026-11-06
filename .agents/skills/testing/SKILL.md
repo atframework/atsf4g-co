@@ -5,7 +5,9 @@ description: "Use when: designing, writing, reviewing, or running generic unit t
 
 # Unit testing (atsf4g-co)
 
-This repository uses a private unit testing framework shared by several atframework projects.
+This repository uses a private unit testing framework shared by several atframework projects. For tests or dependency
+failures under an independent Git root such as `atframework/`, read that subproject's nearest `AGENTS.md` and build/test
+guidance before diagnosing; its dependencies and test wiring are not supplied by this root repository transitively.
 
 Read [test design and acceptance](references/test-design-and-acceptance.md) when planning, writing, or reviewing cases.
 It is not needed merely to run a known test command.

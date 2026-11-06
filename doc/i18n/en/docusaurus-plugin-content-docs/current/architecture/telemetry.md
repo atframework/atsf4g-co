@@ -63,5 +63,6 @@ latency).
   YAML);
 - Structured log protocols: `protocol/private/protocol/log/` (`svr.mon.log.proto` monitoring logs,
   `svr.oss.log.proto` OSS logs);
-- On the deployment side, logs are collected by vector (K8s) or local files, configured in
-  `modules/vector.yaml`.
+- On the deployment side, vector (K8s) or local files collect logs. Current file outputs in
+  `install/cloud-native/modules/vector.yaml` and `otelcol.yaml` use `.jsonl`. Each OSS event still needs a business
+  emission point; a protocol definition alone does not produce output.
