@@ -167,7 +167,7 @@ void global_mail_manager::try_to_start_async_jobs(rpc::context &ctx) {
 
     int res = task_manager::me()->start_task(task_inst, start_data);
     if (res < 0) {
-      FWLOGERROR("[MAIL] start task_action_global_mail_async_jobs failed, res: {}({})", res,
+      FWLOGERROR("[MAIL] start task_action_global_mail_async_jobs failed, result code: {}({})", res,
                  protobuf_mini_dumper_get_error_msg(res));
       task_type_trait::reset_task(mail_async_task_);
       return;

@@ -119,13 +119,13 @@ static void global_mail_gm_add_global_mail(const std::shared_ptr<rpc::context> &
         int32_t ret = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_global_mail_with_template(
             child_ctx, mail_template_id, nullptr, zone_id, render_by_client, reset_title_and_content));
         if (ret != 0) {
-          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_global_mail failed res {}, mail_template_id {}, zone_id{} ", ret,
-                       mail_template_id, zone_id);
+          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_global_mail failed result code: {}, mail_template_id {}, zone_id {} ",
+                       ret, mail_template_id, zone_id);
         }
         RPC_RETURN_CODE(ret);
       });
   if (async_get_ret.is_error()) {
-    FCTXLOGERROR(*ctx, "{} async_invoke a task to add global mail failed.res: {}({})", *user_inst,
+    FCTXLOGERROR(*ctx, "{} async_invoke a task to add global mail failed. result code: {}({})", *user_inst,
                  *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
     rsp_body->set_result_code(::PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
   }
@@ -151,7 +151,7 @@ static void global_mail_gm_remove_global_mail(const std::shared_ptr<rpc::context
         RPC_RETURN_CODE(ret);
       });
   if (async_get_ret.is_error()) {
-    FCTXLOGERROR(*ctx, "{} async_invoke a task to remove global mail failed.res: {}({})", *user_inst,
+    FCTXLOGERROR(*ctx, "{} async_invoke a task to remove global mail failed. result code: {}({})", *user_inst,
                  *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
     rsp_body->set_result_code(::PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
   }
@@ -185,26 +185,26 @@ static void user_mail_gm_add_user_mail(const std::shared_ptr<rpc::context> &ctx,
   bool render_by_client = custom_title.empty() && custom_content.empty();
 
   int32_t mail_template_id = params[0]->to_int32();
-  auto async_get_ret = rpc::async_invoke(*ctx, "user_mail_gm.add_user_mail",
-                                         [user_inst, mail_template_id, render_by_client,
-                                          reset_title_and_content](rpc::context &child_ctx) -> rpc::result_code_type {
-                                           PROJECT_NAMESPACE_ID::DMailUserInfo *receiver =
-                                               child_ctx.create<PROJECT_NAMESPACE_ID::DMailUserInfo>();
-                                           PROJECT_NAMESPACE_ID::DMailUserInfo local_receiver;
-                                           if (nullptr == receiver) {
-                                             receiver = &local_receiver;
-                                           }
-                                           user_inst->get_user_mail_manager().pack_mail_user(*receiver);
-                                           int32_t res = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_user_mail_with_template(
-                                               child_ctx, mail_template_id, user_inst->get_zone_id(), *receiver,
-                                               nullptr, render_by_client, reset_title_and_content));
-                                           if (res != 0) {
-                                             FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed res {}", res);
-                                           }
-                                           RPC_RETURN_CODE(res);
-                                         });
+  auto async_get_ret = rpc::async_invoke(
+      *ctx, "user_mail_gm.add_user_mail",
+      [user_inst, mail_template_id, render_by_client,
+       reset_title_and_content](rpc::context &child_ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::DMailUserInfo *receiver = child_ctx.create<PROJECT_NAMESPACE_ID::DMailUserInfo>();
+        PROJECT_NAMESPACE_ID::DMailUserInfo local_receiver;
+        if (nullptr == receiver) {
+          receiver = &local_receiver;
+        }
+        user_inst->get_user_mail_manager().pack_mail_user(*receiver);
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            ::rpc::mail::add_user_mail_with_template(child_ctx, mail_template_id, user_inst->get_zone_id(), *receiver,
+                                                     nullptr, render_by_client, reset_title_and_content));
+        if (res != 0) {
+          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed result code: {}", res);
+        }
+        RPC_RETURN_CODE(res);
+      });
   if (async_get_ret.is_error()) {
-    FCTXLOGERROR(*ctx, "{} async_invoke a task to send user mail failed.res: {}({})", *user_inst,
+    FCTXLOGERROR(*ctx, "{} async_invoke a task to send user mail failed. result code: {}({})", *user_inst,
                  *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
     rsp_body->set_result_code(::PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
   }
@@ -988,16 +988,17 @@ int user_mail_manager::add_mail_with_template(rpc::context &ctx, int32_t mail_te
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::mail::add_user_mail_with_template(
             child_ctx, mail_template_id, user_ptr->get_zone_id(), *receiver, nullptr, true));
         if (ret < 0) {
-          FCTXLOGERROR(child_ctx, "{} try to add mail of template {} reason=({}, {}, {}) failed, res: {}({})",
+          FCTXLOGERROR(child_ctx, "{} try to add mail of template {} reason=({}, {}, {}) failed, result code: {}({})",
                        *user_ptr, mail_template_id, reason.major_reason, reason.minor_reason, reason.reason_param, ret,
                        protobuf_mini_dumper_get_error_msg(ret));
         }
         RPC_RETURN_CODE(ret);
       });
   if (async_task.is_error()) {
-    FCTXLOGERROR(ctx, "{} async_invoke a task to add mail of template {} for reason=({}, {}, {}) failed.res: {}({})",
-                 *user_ptr, mail_template_id, reason.major_reason, reason.minor_reason, reason.reason_param,
-                 *async_task.get_error(), protobuf_mini_dumper_get_error_msg(*async_task.get_error()));
+    FCTXLOGERROR(
+        ctx, "{} async_invoke a task to add mail of template {} for reason=({}, {}, {}) failed. result code: {}({})",
+        *user_ptr, mail_template_id, reason.major_reason, reason.minor_reason, reason.reason_param,
+        *async_task.get_error(), protobuf_mini_dumper_get_error_msg(*async_task.get_error()));
 
     return *async_task.get_error();
   }
@@ -1475,7 +1476,7 @@ void user_mail_manager::try_to_start_async_jobs(rpc::context &ctx) {
 
     int res = task_manager::me()->start_task(task_inst, start_data);
     if (res < 0) {
-      FCTXLOGERROR(ctx, "{} start task_action_mail_async_jobs failed, res: {}({})", *owner_, res,
+      FCTXLOGERROR(ctx, "{} start task_action_mail_async_jobs failed, result code: {}({})", *owner_, res,
                    protobuf_mini_dumper_get_error_msg(res));
       task_type_trait::reset_task(mail_async_task_);
       return;
@@ -1507,8 +1508,8 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
     int res = RPC_AWAIT_CODE_RESULT(
         owner_->get_user_item_manager().generate_item_from_offset_cfg(ctx, mail.content->attachments(), out_instances));
     if (res < 0) {
-      FCTXLOGERROR(ctx, "receive attachments of mail {} failed, res: {}({})", *owner_, mail.record->mail_id(), res,
-                   protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(ctx, "receive attachments of mail {} failed, result code: {}({})", *owner_, mail.record->mail_id(),
+                   res, protobuf_mini_dumper_get_error_msg(res));
       ret = res;
       break;
     }
@@ -1541,8 +1542,8 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
     auto check_result = checked_add_request.get_check_result();
     if (check_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       ret = check_result.error_code;
-      FCTXLOGERROR(ctx, "receive attachments of mail {} failed, res: {}({})", *owner_, mail.record->mail_id(), ret,
-                   protobuf_mini_dumper_get_error_msg(ret));
+      FCTXLOGERROR(ctx, "receive attachments of mail {} failed, result code: {}({})", *owner_, mail.record->mail_id(),
+                   ret, protobuf_mini_dumper_get_error_msg(ret));
       break;
     }
 
@@ -1555,7 +1556,7 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
       is_dirty_ = true;
       mutable_dirty_mail(*mail.record);
       FCTXLOGERROR(ctx,
-                   "receive attachments of mail {} failed after possible partial commit, res: {}({}), "
+                   "receive attachments of mail {} failed after possible partial commit, result code: {}({}), "
                    "failed_type_id={}",
                    *owner_, mail.record->mail_id(), ret, protobuf_mini_dumper_get_error_msg(ret),
                    add_result.failed_type_id);
