@@ -1,11 +1,12 @@
 // Copyright 2026 atframework
 
+#include <common/file_system.h>
+#include <nostd/mutex.h>
+#include <string/string_format.h>
+
 #include <Orbit/OrbitEasyApi.h>
 
 #include <chrono>
-#include <cstdlib>
-#include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -44,22 +45,24 @@ int get_process_id() {
 #endif
 }
 
-std::filesystem::path get_log_file_path(int argc, char* argv[]) {
-  std::error_code error_code;
+std::string get_log_file_path(int argc, char* argv[]) {
+  const std::string log_file_name = "log_" + std::to_string(get_process_id()) + ".log";
   if (argc > 0 && nullptr != argv && nullptr != argv[0]) {
-    std::filesystem::path executable_path = std::filesystem::absolute(std::filesystem::path{argv[0]}, error_code);
-    if (!error_code) {
-      return executable_path.parent_path() / ("log_" + std::to_string(get_process_id()) + ".log");
+    const std::string executable_path = atfw::util::file_system::get_abs_path(argv[0]);
+    std::string executable_directory;
+    if (!executable_path.empty() &&
+        atfw::util::file_system::dirname(executable_path.c_str(), executable_path.size(), executable_directory) &&
+        !executable_directory.empty()) {
+      return executable_directory + atfw::util::file_system::DIRECTORY_SEPARATOR + log_file_name;
     }
   }
 
-  error_code.clear();
-  std::filesystem::path current_path = std::filesystem::current_path(error_code);
-  if (error_code) {
+  std::string current_path = atfw::util::file_system::get_cwd();
+  if (current_path.empty()) {
     current_path = ".";
   }
 
-  return current_path / ("log_" + std::to_string(get_process_id()) + ".log");
+  return current_path + atfw::util::file_system::DIRECTORY_SEPARATOR + log_file_name;
 }
 
 const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel level) {
@@ -79,6 +82,15 @@ const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClie
 
   return "UNKNOWN";
 }
+
+static void waiting_and_tick(std::chrono::seconds duration) {
+  auto start_time = std::chrono::steady_clock::now();
+  while (std::chrono::steady_clock::now() - start_time < duration) {
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::tick();
+    std::this_thread::sleep_for(kTickInterval);
+  }
+}
+
 }  // namespace
 
 ORBIT_RPC_HANDLE(echo, "atframework.shared.OrbitServerRpcService/echo", PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
@@ -90,23 +102,16 @@ int task_action_echo::hook_run(void*, const rpc_request_type& req_body, rpc_resp
   return 0;
 }
 
-void waiting_and_tick(std::chrono::seconds duration) {
-  auto start_time = std::chrono::steady_clock::now();
-  while (std::chrono::steady_clock::now() - start_time < duration) {
-    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::tick();
-    std::this_thread::sleep_for(kTickInterval);
-  }
-}
-
 int main(int argc, char* argv[]) {
   using callbacks_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientCallbacks;
-  using options_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientOptions;
+  // using options_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientOptions;
 
-  const std::filesystem::path log_file_path = get_log_file_path(argc, argv);
+  const std::string log_file_path = get_log_file_path(argc, argv);
+  // NOLINTNEXTLINE(bugprone-signed-bitwise)
   std::ofstream log_file{log_file_path, std::ios::out | std::ios::trunc};
   std::mutex log_mutex;
   auto write_log_line = [&log_file, &log_mutex](const std::string& message) {
-    std::lock_guard<std::mutex> lock{log_mutex};
+    atfw::util::nostd::scoped_lock<std::mutex> lock{log_mutex};
     if (log_file.is_open()) {
       log_file << "[" << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) << "] " << message
                << '\n';
@@ -116,12 +121,14 @@ int main(int argc, char* argv[]) {
               << '\n';
   };
 
-  { ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService); }
+  {
+    ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService);
+  }
 
   if (log_file.is_open()) {
-    write_log_line(std::string{"log file: "} + log_file_path.string());
+    write_log_line(atfw::util::string::format("log file: {}", log_file_path));
   } else {
-    std::cerr << "open log file failed: " << log_file_path.string() << '\n';
+    std::cerr << "open log file failed: " << log_file_path << '\n';
   }
 
   callbacks_t callbacks;
@@ -132,12 +139,12 @@ int main(int argc, char* argv[]) {
         write_log_line(stream.str());
       };
   bool stopped = false;
-  callbacks.on_request_stop = [&stopped]() { stopped = true; };
-  callbacks.on_seed_waiting_tick = [&write_log_line]() { write_log_line(std::string{"waiting for fork"}); };
+  callbacks.on_request_stop = [&stopped] { stopped = true; };
+  callbacks.on_seed_waiting_tick = [&write_log_line] { write_log_line(std::string("waiting for fork")); };
 
   int init_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::init(argc, argv, "", true, callbacks);
   if (init_result != 0) {
-    write_log_line(std::string{"orbit runtime init failed, code="} + std::to_string(init_result));
+    write_log_line(atfw::util::string::format("orbit runtime init failed, code={}", init_result));
     return init_result;
   }
 
@@ -150,19 +157,19 @@ int main(int argc, char* argv[]) {
   bool ping_sent = false;
 
   if (ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::is_seed_process()) {
-    write_log_line(std::string{"seed process, waiting for "} + std::to_string(kSeedReadyDelay.count()) + " seconds");
+    write_log_line(atfw::util::string::format("seed process, waiting for {} seconds", kSeedReadyDelay.count()));
     waiting_and_tick(kSeedReadyDelay);
     // Seed进程准备成功
     int32_t seed_ready_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::notify_seed_process_ready();
     if (seed_ready_result != 0) {
-      write_log_line(std::string{"seed process notify_seed_process_ready failed, code="} +
-                     std::to_string(seed_ready_result));
+      write_log_line(
+          atfw::util::string::format("seed process notify_seed_process_ready failed, code={}", seed_ready_result));
       return seed_ready_result;
     }
 
     int32_t blocking_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::blocking_seed_process();
     if (blocking_result != 0) {
-      write_log_line(std::string{"seed process blocking_seed_process failed, code="} + std::to_string(blocking_result));
+      write_log_line(atfw::util::string::format("seed process blocking_seed_process failed, code={}", blocking_result));
       return blocking_result;
     }
 
@@ -207,7 +214,7 @@ int main(int argc, char* argv[]) {
       int32_t shutdown_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
           atfw::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "orbit-auto-client done");
       if (shutdown_result < 0) {
-        write_log_line(std::string{"orbit runtime shutdown failed, code="} + std::to_string(shutdown_result));
+        write_log_line(atfw::util::string::format("orbit runtime shutdown failed, code={}", shutdown_result));
       }
     }
 

@@ -20,7 +20,7 @@ project_component_declare_service(
   RESOURCE_DIRECTORIES
   "${ORBIT_AUTO_CLIENT_ROOT_DIRECTORY}/log")
 
-target_compile_features(${ORBIT_AUTO_CLIENT_TARGET_NAME} PRIVATE cxx_std_17)
+target_compile_features(${ORBIT_AUTO_CLIENT_TARGET_NAME} PRIVATE cxx_std_14)
 target_compile_definitions(${ORBIT_AUTO_CLIENT_TARGET_NAME}
   PRIVATE GAME_SHARED_COMPONENT_SERVER_MODE=1
           "PROJECT_PROTOCOL_NAMESPACE_ID=${PROJECT_NAMESPACE}")
