@@ -199,7 +199,8 @@ static void user_mail_gm_add_user_mail(const std::shared_ptr<rpc::context> &ctx,
             ::rpc::mail::add_user_mail_with_template(child_ctx, mail_template_id, user_inst->get_zone_id(), *receiver,
                                                      nullptr, render_by_client, reset_title_and_content));
         if (res != 0) {
-          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed result code: {}", res);
+          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed result code: {}({})", res,
+                       protobuf_mini_dumper_get_error_msg(res));
         }
         RPC_RETURN_CODE(res);
       });
@@ -1508,8 +1509,8 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
     int res = RPC_AWAIT_CODE_RESULT(
         owner_->get_user_item_manager().generate_item_from_offset_cfg(ctx, mail.content->attachments(), out_instances));
     if (res < 0) {
-      FCTXLOGERROR(ctx, "receive attachments of mail {} failed, result code: {}({})", *owner_, mail.record->mail_id(),
-                   res, protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(ctx, "{} receive attachments of mail {} failed, result code: {}({})", *owner_,
+                   mail.record->mail_id(), res, protobuf_mini_dumper_get_error_msg(res));
       ret = res;
       break;
     }
@@ -1542,8 +1543,8 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
     auto check_result = checked_add_request.get_check_result();
     if (check_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       ret = check_result.error_code;
-      FCTXLOGERROR(ctx, "receive attachments of mail {} failed, result code: {}({})", *owner_, mail.record->mail_id(),
-                   ret, protobuf_mini_dumper_get_error_msg(ret));
+      FCTXLOGERROR(ctx, "{} receive attachments of mail {} failed, result code: {}({})", *owner_,
+                   mail.record->mail_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
       break;
     }
 
@@ -1556,7 +1557,7 @@ rpc::result_code_type user_mail_manager::receive_mail_attachments(rpc::context &
       is_dirty_ = true;
       mutable_dirty_mail(*mail.record);
       FCTXLOGERROR(ctx,
-                   "receive attachments of mail {} failed after possible partial commit, result code: {}({}), "
+                   "{} receive attachments of mail {} failed after possible partial commit, result code: {}({}), "
                    "failed_type_id={}",
                    *owner_, mail.record->mail_id(), ret, protobuf_mini_dumper_get_error_msg(ret),
                    add_result.failed_type_id);
