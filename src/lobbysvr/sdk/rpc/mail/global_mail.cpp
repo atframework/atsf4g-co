@@ -369,6 +369,17 @@ LOBBY_RPC_API result_code_type add_global_mail(rpc::context &ctx, PROJECT_NAMESP
 LOBBY_RPC_API result_code_type add_global_mail_with_template(rpc::context &ctx, int32_t mail_template_id,
                                                              const PROJECT_NAMESPACE_ID::DMailUserInfo *sender,
                                                              uint32_t zone_id, bool render_by_client) {
+  auto empty_callback = [](PROJECT_NAMESPACE_ID::DMailContent &) {};
+
+  // call add_user_mail()
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      add_global_mail_with_template(ctx, mail_template_id, sender, zone_id, render_by_client, empty_callback)));
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API result_code_type add_global_mail_with_template(
+    ::rpc::context &ctx, int32_t mail_template_id, const PROJECT_NAMESPACE_ID::DMailUserInfo *sender, uint32_t zone_id,
+    bool render_by_client,
+    atfw::util::nostd::function_ref<void(PROJECT_NAMESPACE_ID::DMailContent &mail_content)> after_rendered) {
   PROJECT_NAMESPACE_ID::DMailUserInfo receiver;
   // check mail_template_id
   if (mail_template_id == 0) {
@@ -396,6 +407,8 @@ LOBBY_RPC_API result_code_type add_global_mail_with_template(rpc::context &ctx, 
 
     mail->set_mail_id(guid);
   }
+
+  after_rendered(*mail);
 
   // call add_user_mail()
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_global_mail(ctx, *mail, zone_id)));

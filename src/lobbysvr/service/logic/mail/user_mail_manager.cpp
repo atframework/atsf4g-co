@@ -44,6 +44,7 @@
 #include <algorithm>
 #include <list>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -93,15 +94,30 @@ static void global_mail_gm_add_global_mail(const std::shared_ptr<rpc::context> &
     zone_id = params[1]->to_uint32();
   }
 
-  bool render_by_client = true;
+  auto user_input_title = params.get("title");
+  auto user_input_content = params.get("content");
+  std::string custom_title = user_input_title ? user_input_title->to_string() : "";
+  std::string custom_content = user_input_content ? user_input_content->to_string() : "";
+
+  auto reset_title_and_content = [custom_title, custom_content](PROJECT_NAMESPACE_ID::DMailContent &mail_content) {
+    if (!custom_title.empty()) {
+      mail_content.set_title(custom_title);
+    }
+    if (!custom_content.empty()) {
+      mail_content.set_content(custom_content);
+    }
+  };
+
+  bool render_by_client = custom_title.empty() && custom_content.empty();
 
   excel_config_block_report_t block_cfg_error;
   int32_t mail_template_id = params[0]->to_int32();
   auto async_get_ret = rpc::async_invoke(
       *ctx, "global_mail_gm.add_global_mail",
-      [zone_id, mail_template_id, render_by_client](rpc::context &child_ctx) -> rpc::result_code_type {
+      [zone_id, mail_template_id, render_by_client,
+       reset_title_and_content](rpc::context &child_ctx) -> rpc::result_code_type {
         int32_t ret = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_global_mail_with_template(
-            child_ctx, mail_template_id, nullptr, zone_id, render_by_client));
+            child_ctx, mail_template_id, nullptr, zone_id, render_by_client, reset_title_and_content));
         if (ret != 0) {
           FCTXLOGERROR(child_ctx, "on_gm_cmd_add_global_mail failed res {}, mail_template_id {}, zone_id{} ", ret,
                        mail_template_id, zone_id);
@@ -152,23 +168,41 @@ static void user_mail_gm_add_user_mail(const std::shared_ptr<rpc::context> &ctx,
     return;
   }
 
+  auto user_input_title = params.get("title");
+  auto user_input_content = params.get("content");
+  std::string custom_title = user_input_title ? user_input_title->to_string() : "";
+  std::string custom_content = user_input_content ? user_input_content->to_string() : "";
+
+  auto reset_title_and_content = [custom_title, custom_content](PROJECT_NAMESPACE_ID::DMailContent &mail_content) {
+    if (!custom_title.empty()) {
+      mail_content.set_title(custom_title);
+    }
+    if (!custom_content.empty()) {
+      mail_content.set_content(custom_content);
+    }
+  };
+
+  bool render_by_client = custom_title.empty() && custom_content.empty();
+
   int32_t mail_template_id = params[0]->to_int32();
-  auto async_get_ret = rpc::async_invoke(
-      *ctx, "user_mail_gm.add_user_mail",
-      [user_inst, mail_template_id](rpc::context &child_ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::DMailUserInfo *receiver = child_ctx.create<PROJECT_NAMESPACE_ID::DMailUserInfo>();
-        PROJECT_NAMESPACE_ID::DMailUserInfo local_receiver;
-        if (nullptr == receiver) {
-          receiver = &local_receiver;
-        }
-        user_inst->get_user_mail_manager().pack_mail_user(*receiver);
-        int32_t res = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_user_mail_with_template(
-            child_ctx, mail_template_id, user_inst->get_zone_id(), *receiver, nullptr, true));
-        if (res != 0) {
-          FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed res {}", res);
-        }
-        RPC_RETURN_CODE(res);
-      });
+  auto async_get_ret = rpc::async_invoke(*ctx, "user_mail_gm.add_user_mail",
+                                         [user_inst, mail_template_id, render_by_client,
+                                          reset_title_and_content](rpc::context &child_ctx) -> rpc::result_code_type {
+                                           PROJECT_NAMESPACE_ID::DMailUserInfo *receiver =
+                                               child_ctx.create<PROJECT_NAMESPACE_ID::DMailUserInfo>();
+                                           PROJECT_NAMESPACE_ID::DMailUserInfo local_receiver;
+                                           if (nullptr == receiver) {
+                                             receiver = &local_receiver;
+                                           }
+                                           user_inst->get_user_mail_manager().pack_mail_user(*receiver);
+                                           int32_t res = RPC_AWAIT_CODE_RESULT(::rpc::mail::add_user_mail_with_template(
+                                               child_ctx, mail_template_id, user_inst->get_zone_id(), *receiver,
+                                               nullptr, render_by_client, reset_title_and_content));
+                                           if (res != 0) {
+                                             FCTXLOGERROR(child_ctx, "on_gm_cmd_add_user_mail failed res {}", res);
+                                           }
+                                           RPC_RETURN_CODE(res);
+                                         });
   if (async_get_ret.is_error()) {
     FCTXLOGERROR(*ctx, "{} async_invoke a task to send user mail failed.res: {}({})", *user_inst,
                  *async_get_ret.get_error(), protobuf_mini_dumper_get_error_msg(*async_get_ret.get_error()));
@@ -180,16 +214,16 @@ static void init_user_mail_manager_gm_handle() {
   task_action_user_gm_cmd_nomsg::register_gm_command(
       "add-global-mail", global_mail_gm_add_global_mail,
       ATFW_UTIL_MACRO_UTF8_TO_ZSTRING(
-          "add-global-mail <mail template ID> [zone ID]                      Send global mail."));
+          "add-global-mail <mail template ID> [zone ID] [title=...] [content=...]  Send global mail."));
   task_action_user_gm_cmd_nomsg::register_gm_command(
       "remove-global-mail", global_mail_gm_remove_global_mail,
       ATFW_UTIL_MACRO_UTF8_TO_ZSTRING(
-          "remove-global-mail <zone ID> <mail ID>                            Remove global mail."));
+          "remove-global-mail <zone ID> <mail ID>                                  Remove global mail."));
 
   task_action_user_gm_cmd_nomsg::register_gm_command(
       "add-user-mail", user_mail_gm_add_user_mail,
       ATFW_UTIL_MACRO_UTF8_TO_ZSTRING(
-          "add-user-mail <mail template ID>                                  Send user mail."));
+          "add-user-mail <mail template ID> [title=...] [content=...]             Send user mail."));
 }
 
 static bool init_user_mail_manager_handle() {
