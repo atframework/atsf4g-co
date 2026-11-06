@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+option cc_enable_arenas = true;
+
+import "protocol/common/com.struct.item.common.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+package atframework.shared;
+
+message CSItemUseReq {}
+
+message SCItemUseRsp {}
+
+message DItemMoveRequest {
+  DItemBasic source_item_basic = 1;
+  DItemPosition target_position = 2;
+}
+
+message CSItemMoveReq {
+  repeated DItemMoveRequest requests = 1;
+}
+
+message SCItemMoveRsp {}

@@ -20,6 +20,7 @@ import "protocol/pbdesc/com.protocol.auth.proto";
 import "protocol/pbdesc/com.protocol.match.proto";
 import "protocol/pbdesc/com.protocol.mail.proto";
 import "protocol/pbdesc/com.protocol.friend_api.proto";
+import "protocol/pbdesc/com.protocol.item.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -337,7 +338,6 @@ service LobbysvrClientService {
     };
   }
 
-
   // ================ 邮件RPC ================
   rpc mail_get_all(CSMailGetAllReq) returns (SCMailGetAllRsp) {
     option (atframework.rpc_options) = {
@@ -441,6 +441,21 @@ service LobbysvrClientService {
     option (atframework.rpc_options) = {
       module_name: "friend_api"
       api_name: "获取推荐好友"
+    };
+  };
+
+  // ================ 物品RPC ================
+  rpc item_use(CSItemUseReq) returns (SCItemUseRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "item"
+      api_name: "使用物品"
+    };
+  };
+
+  rpc item_move(CSItemMoveReq) returns (SCItemMoveRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "item"
+      api_name: "移动物品"
     };
   };
 }
