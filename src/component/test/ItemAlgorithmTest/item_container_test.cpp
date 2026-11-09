@@ -266,6 +266,12 @@ struct HookTestState {
   int32_t count_changed_calls = 0;
   item_algorithm::ItemOperationContext last_count_context;
   int32_t data_changed_calls = 0;
+  // 最近一次单条校验钩子收到的请求 (用于验证 move 透传的是扣减数量 / 目标位置)
+  int32_t last_add_type_id = 0;
+  int64_t last_add_count = 0;
+  int32_t last_add_position_x = -1;
+  int32_t last_sub_type_id = 0;
+  int64_t last_sub_count = 0;
 
   void reset_call_counts() {
     check_item_position_calls = 0;
@@ -286,6 +292,9 @@ class HookTestItemFiniteGridContainer : public TestItemFiniteGridContainer {
   int32_t on_check_add_one(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                            const PROJECT_NAMESPACE_ID::DItemInstance& request) const override {
     ++state_->on_check_add_calls;
+    state_->last_add_type_id = request.item_basic().type_id();
+    state_->last_add_count = request.item_basic().count();
+    state_->last_add_position_x = get_inventory_x(request.item_basic().position());
     if (state_->reject_all_add ||
         (state_->rejected_add_position_x >= 0 &&
          get_inventory_x(request.item_basic().position()) == state_->rejected_add_position_x)) {
@@ -297,6 +306,8 @@ class HookTestItemFiniteGridContainer : public TestItemFiniteGridContainer {
   int32_t on_check_sub_one(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                            const PROJECT_NAMESPACE_ID::DItemBasic& request) const override {
     ++state_->on_check_sub_calls;
+    state_->last_sub_type_id = request.type_id();
+    state_->last_sub_count = request.count();
     if (state_->reject_sub) {
       return kHookRejectedError;
     }
@@ -3837,6 +3848,86 @@ CASE_TEST(ItemContainer, on_check_sub_hook) {
   CASE_EXPECT_EQ(sub_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 2);
+}
+
+/// @brief check_move 也要跑单条业务钩子: 扣减条目走 on_check_sub_one, 放入条目走 on_check_add_one
+///
+/// 钩子拿到的必须是"移动语义"的那份请求: 扣减侧 count = op_count, 放入侧 count = op_count 且
+/// 位置 = 目标位置; 否则业务规则在 move 路径上会按错误的数据判断。
+CASE_TEST(ItemContainer, on_check_add_sub_one_hook_in_move) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemFiniteGridContainer>();
+  auto& grid = *grid_ptr;
+  init_test_container(grid);
+  auto config = make_test_config_group();
+  auto& state = grid.hook_state();
+
+  ItemAddRequest setup_requests;
+  *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 3, 0, 0);
+  auto setup_checked =
+      grid.check_add(config, make_item_readable_iterable(setup_requests), item_algorithm::ItemOperationSource{});
+  CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  PROJECT_NAMESPACE_ID::DItemGridPosition source_position;
+  source_position.mutable_user_inventory()->set_x(0);
+  source_position.mutable_user_inventory()->set_y(0);
+  auto source_entry = grid.get(source_position);
+  CASE_EXPECT_TRUE(source_entry != nullptr);
+  if (!source_entry) {
+    return;
+  }
+
+  // Case 1: 两个钩子都通过 → check_move 成功, 且钩子收到的是 op_count / 目标位置
+  {
+    state.reset_call_counts();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({source_entry, 2});
+    move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(2, 1), 2});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
+    CASE_EXPECT_EQ(state.on_check_add_calls, 1);
+    CASE_EXPECT_EQ(state.last_sub_type_id, kItemTypeId_1x1);
+    CASE_EXPECT_EQ(state.last_sub_count, static_cast<int64_t>(2));
+    CASE_EXPECT_EQ(state.last_add_type_id, kItemTypeId_1x1);
+    CASE_EXPECT_EQ(state.last_add_count, static_cast<int64_t>(2));
+    CASE_EXPECT_EQ(state.last_add_position_x, 2);
+  }
+  // check 阶段不改数据
+  CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
+
+  // Case 2: 扣减侧被业务拒绝 → 立刻失败, 不会再跑放入侧
+  {
+    state.reject_sub = true;
+    state.reset_call_counts();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({source_entry, 1});
+    move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(2, 1), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, kHookRejectedError);
+    CASE_EXPECT_EQ(checked.result.failed_type_id, kItemTypeId_1x1);
+    CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
+    CASE_EXPECT_EQ(state.on_check_add_calls, 0);
+    state.reject_sub = false;
+  }
+  CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
+
+  // Case 3: 放入侧被业务拒绝 (按目标位置拒绝) → 扣减侧已通过, 整体失败, 数据不变
+  {
+    state.rejected_add_position_x = 2;
+    state.reset_call_counts();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({source_entry, 1});
+    move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(2, 1), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, kHookRejectedError);
+    CASE_EXPECT_EQ(checked.result.failed_type_id, kItemTypeId_1x1);
+    CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
+    CASE_EXPECT_EQ(state.on_check_add_calls, 1);
+    CASE_EXPECT_EQ(state.last_add_position_x, 2);
+    state.rejected_add_position_x = -1;
+  }
+  CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
 }
 
 CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
