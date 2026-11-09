@@ -514,6 +514,13 @@ ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& conf
     return false;
   }
 
+  int32_t one_ret = on_check_add_one(config_group, item_instance);
+  if (one_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    FWINSTLOGWARNING(logger(), "load failed: check add one failed type={} current={} add={}, error={} ({})", type_id,
+                     current_total, add_count, one_ret, PROJECT_NAMESPACE_ID::EnErrorCode_Name(one_ret));
+    return false;
+  }
+
   // 钩子上下文: 原因由调用方指定 (默认 kLoad), 来源由调用方传入
   const ItemOperationContext context{reason, source};
   return on_load_one(config_group, item_entry, context);

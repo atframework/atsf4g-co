@@ -49,19 +49,14 @@ ItemInfiniteGridContainer::on_check_add(const ItemAddCheckedRequest& checked_req
     int64_t add_count = item_basic.count();
     int64_t guid = item_basic.guid();
 
-    auto position_cfg = get_item_position_cfg(config_group, item_basic);
-    if (position_cfg == nullptr) {
+    // 上限统一由基类接口给出: 取不到位置配置返回 0 (按不可堆叠处理), 配置 <=0 视为无限
+    int64_t accumulation_limit = get_stack_limit(config_group, type_id);
+    if (accumulation_limit <= 0) {
       int32_t error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
       FWINSTLOGWARNING(logger(), "check_add failed[{}]: item position cfg not found type={}, error={} ({})", i, type_id,
                        error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       result = {error_code, type_id};
       return false;
-    }
-
-    int64_t accumulation_limit = position_cfg->accumulation_limit();
-    if (accumulation_limit <= 0) {
-      // <=0 视为无限堆叠
-      accumulation_limit = INT32_MAX;
     }
 
     if (add_count > accumulation_limit) {
@@ -86,12 +81,12 @@ ItemInfiniteGridContainer::on_check_add(const ItemAddCheckedRequest& checked_req
         return false;
       }
 
-      int64_t total = existing_basic.count() + scratch.pending_existing_extra[target_pos] + add_count;
-      if (total > accumulation_limit) {
+      int64_t pending_extra = scratch.pending_existing_extra[target_pos];
+      if (get_entry_stack_room(config_group, existing_entry, item_basic, pending_extra) < add_count) {
         int32_t error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
         FWINSTLOGWARNING(logger(), "check_add failed[{}]: stack overflow at ({},{}), total={} limit={}, error={} ({})",
-                         i, target_pos.x, target_pos.y, total, accumulation_limit, error_code,
-                         PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+                         i, target_pos.x, target_pos.y, existing_basic.count() + pending_extra + add_count,
+                         accumulation_limit, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         result = {error_code, type_id};
         return false;
       }
@@ -619,18 +614,12 @@ bool ItemInfiniteGridContainer::check_move_request(const excel_config_group_ptr_
       return false;
     }
 
-    auto position_cfg = get_item_position_cfg(config_group, ref_basic);
-    if (position_cfg == nullptr) {
+    int64_t accumulation_limit = get_stack_limit(config_group, type_id);
+    if (accumulation_limit <= 0) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
       FWINSTLOGWARNING(logger(), "check_move failed: move_add position cfg not found type={}, error={} ({})", type_id,
                        error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
-    }
-
-    int64_t accumulation_limit = position_cfg->accumulation_limit();
-    if (accumulation_limit <= 0) {
-      // <=0 视为无限堆叠
-      accumulation_limit = INT32_MAX;
     }
 
     // 填充 Helper 字段 (本模式每件占一个槽位)
@@ -743,13 +732,17 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
         return false;
       }
 
-      int64_t target_total = target_basic.count() + pending_merge_extra[op.position] + op.op_count;
-      if (target_total > op.accumulation_limit) {
+      PROJECT_NAMESPACE_ID::DItemBasic incoming_basic;
+      incoming_basic.set_type_id(op.type_id);
+      incoming_basic.set_count(op.op_count);
+      int64_t pending_extra = pending_merge_extra[op.position];
+      if (get_entry_stack_room(checked_request.config_group, existing_entry, incoming_basic, pending_extra) <
+          op.op_count) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
         FWINSTLOGWARNING(logger(),
                          "check_move failed: merge stack overflow at slot ({},{}), total={} limit={}, error={} ({})",
-                         op.position.x, op.position.y, target_total, op.accumulation_limit, error_code,
-                         PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+                         op.position.x, op.position.y, target_basic.count() + pending_extra + op.op_count,
+                         op.accumulation_limit, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return false;
       }
       pending_merge_extra[op.position] += op.op_count;

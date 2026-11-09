@@ -37,21 +37,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
  public:
   /// @brief 初始化无位置容器
   /// @param position_type  容器声明的位置字段 (无位置模式不做落位, 库内不再用它做字段映射,
-  ///                       只保存下来供接入层通过 get_position_type() 读取)
   /// @param container_guid 容器唯一 ID
   /// @param next_entry_id 条目 ID 自增游标 (持久化恢复用); 0 或省略时按 1 处理
   ITEM_ALGORITHM_API void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
                                int64_t container_guid, uint64_t next_entry_id = 1);
 
  protected:
-  /// @brief 取本容器声明的位置字段类型
-  ///
-  /// 接入层的位置字段声明; 库内不再自己映射, 只保存供接入层读取。
-  /// 被调用时机: 接入层实现 extract_position / apply_position 时, 用它决定读写哪个 proto 字段。
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase get_position_type() const {
-    return position_type_;
-  }
-
   // ============================================================
   // 条目校验 (本模式只接受不占格道具, 且不接受 GUID)
   // ============================================================
@@ -174,10 +165,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
       const item_basic_readable_iterable& ignore_item,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& success_item,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& failed_item) const override;
-
- private:
-  PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_ =
-      PROJECT_NAMESPACE_ID::DItemGridPosition::POSITION_TYPE_NOT_SET;
 };
 
 }  // namespace item_algorithm

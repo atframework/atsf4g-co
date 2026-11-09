@@ -230,7 +230,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 初始化所有模式共用的部分 (容器 GUID + 条目 ID 自增游标 + 清空)
   /// @param next_entry_id 条目 ID 自增游标; 0 (旧存档 / 新建容器) 时按 1 处理
-  ITEM_ALGORITHM_API void init_container(int64_t container_guid, uint64_t next_entry_id);
+  ITEM_ALGORITHM_API void init_container(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
+                                         int64_t container_guid, uint64_t next_entry_id);
 
  protected:
   // 钩子开始
@@ -526,6 +527,28 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// 使用; 与 get_item_count 的缓存值交叉验证。
   ITEM_ALGORITHM_API int64_t count_type_total(int32_t type_id) const;
 
+  /// @brief 某类型道具的堆叠上限
+  ///
+  /// 语义: 配置 accumulation_limit <= 0 视为无限堆叠 (返回 int64_t 最大值);
+  /// 取不到位置配置时返回 0 (按不可堆叠处理)。
+  ITEM_ALGORITHM_API int64_t get_stack_limit(const excel_config_group_ptr_t& config_group, int32_t type_id) const;
+
+  /// @brief 该条目还能再容纳多少件 basic (0 表示不可再堆叠)
+  ///
+  /// 判定条件: entry 非空; basic.type_id == entry.type_id; basic.guid == 0 且 entry.guid == 0。
+  /// 剩余容量 = get_stack_limit - entry.count - batch_reserved_count (下限 0)。
+  /// @param batch_reserved_count 本批次已在该条目上额外预订的数量, 允许为负 (表示本批次已知会释放)
+  ITEM_ALGORITHM_API int64_t get_entry_stack_room(const excel_config_group_ptr_t& config_group,
+                                                  const item_entry_ptr_t& entry,
+                                                  const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+                                                  int64_t batch_reserved_count = 0) const;
+
+  /// @brief 该条目能否再容纳 basic 的全部数量 (room >= basic.count() 且 basic.count() > 0)
+  ITEM_ALGORITHM_API bool can_stack_to_entry(const excel_config_group_ptr_t& config_group,
+                                             const item_entry_ptr_t& entry,
+                                             const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+                                             int64_t batch_reserved_count = 0) const;
+
   /// @brief 批次校验的公共单条检查 (各 check_* 与 load / apply_entries 共用)
   ///
   /// 依次检查: is_item_valid (条目字段与本模式自洽) -> 归属本容器 -> check_item_position
@@ -573,6 +596,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @brief 当前操作流水号 (仅供日志)
   ATFW_UTIL_FORCEINLINE int64_t get_operate_id() const { return operate_id_; }
 
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase get_position_type() const {
+    return position_type_;
+  }
+
   /// @brief 创建条目并登记 entry_id 索引
   ITEM_ALGORITHM_API item_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance);
   /// @brief 创建条目并登记 entry_id 索引 (指定 entry_id)
@@ -596,6 +623,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
  private:
   bool init_ = false;
   int64_t container_guid_ = 0;
+  PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_ =
+      PROJECT_NAMESPACE_ID::DItemGridPosition::POSITION_TYPE_NOT_SET;
 
   std::unordered_map<uint64_t, item_entry_weak_ptr_t> entry_id_index_;
   item_group_map_type item_groups_;

@@ -16,12 +16,11 @@ ITEM_ALGORITHM_API ItemInfiniteGridContainer::~ItemInfiniteGridContainer() {}
 ITEM_ALGORITHM_API void ItemInfiniteGridContainer::init(
     PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
     uint64_t next_entry_id) {
-  init_container(container_guid, next_entry_id);
-  position_type_ = position_type;
+  init_container(position_type, container_guid, next_entry_id);
 
   // 不限制行列, 也不维护位图: 位置占用只由子类的 position_index_ 表达 (每件道具占一个位置)
-  FWINSTLOGDEBUG(logger(), "init infinite grid position_type={} container_guid={}", static_cast<int>(position_type_),
-                 container_guid);
+  FWINSTLOGDEBUG(logger(), "init infinite grid position_type={} container_guid={}",
+                 static_cast<int>(get_position_type()), container_guid);
 }
 
 // ============================================================
@@ -122,7 +121,8 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::remove_entry_index(
 
 ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_position_for_infinite(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& /*config_group*/,
-    const PROJECT_NAMESPACE_ID::DItemBasic& /*basic*/, PROJECT_NAMESPACE_ID::DItemGridPosition& /*out_pos*/) const {
+    const PROJECT_NAMESPACE_ID::DItemBasic& /*basic*/, const position_count_map_type& /*batch_reserved*/,
+    ItemGridPosition& /*out_pos*/) const {
   // 默认无法自动确定位置; 具体业务容器 (如装备槽按 type_id 映射槽位) 覆盖本函数
   return false;
 }
@@ -173,6 +173,10 @@ ItemInfiniteGridContainer::get(const PROJECT_NAMESPACE_ID::DItemGridPosition& po
   return find_entry_at_position(extract_position(position));
 }
 
+ITEM_ALGORITHM_API item_entry_ptr_t ItemInfiniteGridContainer::get_at(const ItemGridPosition& position) const {
+  return find_entry_at_position(position);
+}
+
 ITEM_ALGORITHM_API item_entry_ptr_t ItemInfiniteGridContainer::get_by_guid(int64_t guid) const {
   return find_entry_by_guid(guid);
 }
@@ -201,6 +205,9 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_positions(
     return false;
   }
 
+  // 本批次内已经分配出去的位置与数量: 每件成功后累加, 供后面的道具避让或堆叠
+  position_count_map_type batch_reserved;
+
   // foreach_item 返回 false 表示提前中断: 这里只有"道具非法"一条中断路径, 中断后整次寻位失败
   return items.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstance& item) {
     const auto& basic = item.item_basic();
@@ -212,17 +219,22 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_positions(
       return false;
     }
 
-    // 复用同一个临时实例保存候选位置
-    PROJECT_NAMESPACE_ID::DItemInstance tmp_inst;
-    *tmp_inst.mutable_item_basic() = basic;
+    ItemGridPosition out_pos;
+    bool found = on_find_position_for_infinite(config_group, basic, batch_reserved, out_pos);
+    if (!found) {
+      // 子类无法确定位置: 交给调用方决定后续处理
+      FWINSTLOGWARNING(logger(), "find_positions: on_find_position_for_infinite rejected type={}, move to failed_item",
+                       basic.type_id());
+    }
 
-    PROJECT_NAMESPACE_ID::DItemGridPosition out_pos;
-    bool found = on_find_position_for_infinite(config_group, basic, out_pos);
     if (found) {
-      *tmp_inst.mutable_item_basic()->mutable_position()->mutable_grid_position() = out_pos;
-      tmp_inst.mutable_item_basic()->mutable_position()->set_container_guid(get_container_guid());
-      // 候选位置还要过一遍单条业务校验 (业务容器覆盖 on_check_add_one); 不通过就进 failed_item
-      if (PROJECT_NAMESPACE_ID::EN_SUCCESS != on_check_add_one(config_group, tmp_inst)) {
+      // 候选位置换成 proto 后再过一遍单条业务校验 (业务容器覆盖 on_check_add_one);
+      // 整条拷贝实例, 保证 item_data 等字段在校验时可见
+      PROJECT_NAMESPACE_ID::DItemInstance candidate = item;
+      auto* candidate_grid_pos = candidate.mutable_item_basic()->mutable_position()->mutable_grid_position();
+      apply_position(*candidate_grid_pos, out_pos);
+      candidate.mutable_item_basic()->mutable_position()->set_container_guid(get_container_guid());
+      if (PROJECT_NAMESPACE_ID::EN_SUCCESS != on_check_add_one(config_group, candidate)) {
         FWINSTLOGWARNING(logger(), "find_positions: on_check_add_one rejected type={}, move to failed_item",
                          basic.type_id());
         found = false;
@@ -234,13 +246,12 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_find_positions(
       *out = item;
       auto* out_basic = out->mutable_item_basic();
       out_basic->set_count(basic.count());
-      *out_basic->mutable_position()->mutable_grid_position() = out_pos;
+      apply_position(*out_basic->mutable_position()->mutable_grid_position(), out_pos);
       // 与其它模式一致地写回容器归属, 否则结果无法直接喂给 check_add
       out_basic->mutable_position()->set_container_guid(get_container_guid());
+      // 记录本批次占用: 同一位置的后续道具按此扣减可堆叠容量
+      batch_reserved[out_pos] += basic.count();
     } else {
-      // 子类无法确定位置: 交给调用方决定后续处理
-      FWINSTLOGWARNING(logger(), "find_positions: on_find_position_for_infinite rejected type={}, move to failed_item",
-                       basic.type_id());
       auto* out = failed_item.Add();
       *out = item;
       out->mutable_item_basic()->set_count(basic.count());

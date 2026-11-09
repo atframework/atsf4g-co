@@ -91,7 +91,7 @@ template <typename ModeContainerT, typename DerivedT>
 item_algorithm::ItemGridPosition user_item_container<ModeContainerT, DerivedT>::extract_position(
     const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
   item_algorithm::ItemGridPosition result;
-  switch (position.position_type_case()) {
+  switch (this->get_position_type()) {
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
       result.x = position.user_inventory().x();
       result.y = position.user_inventory().y();

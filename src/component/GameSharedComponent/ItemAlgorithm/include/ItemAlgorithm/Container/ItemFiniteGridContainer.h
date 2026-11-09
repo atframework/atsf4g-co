@@ -144,13 +144,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
       int32_t row_size, int32_t column_size, std::vector<item_entry_ptr_t>& out_entries) const;
 
  protected:
-  /// @brief 接入层的位置字段声明
-  ///
-  /// 库内不再自己映射位置字段, 只保存 init 传入的值, 供接入层的 extract_position / apply_position 读取。
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase get_position_type() const {
-    return position_type_;
-  }
-
   // ============================================================
   // 排序键与格子判断
   // ============================================================
@@ -364,8 +357,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
  private:
   int32_t row_size_ = 0;
   int32_t column_size_ = 0;
-  PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_ =
-      PROJECT_NAMESPACE_ID::DItemGridPosition::POSITION_TYPE_NOT_SET;
   ItemGridOccupancy occupy_grid_flag_;
   position_index_type position_index_;
   guid_index_type guid_index_;

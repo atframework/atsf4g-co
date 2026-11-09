@@ -311,7 +311,9 @@ bool ItemFiniteGridFindPositionHelper::find_positions_stack_process(
           if (planned_it != pending_existing_extra.end()) {
             already_planned = planned_it->second;
           }
-          int64_t remaining_capacity = accumulation_limit - eb.count() + ignored - already_planned;
+          // 剩余容量统一由容器接口给出 (同类 + 双方都无 GUID + 上限), 本批次已预订的数量计入
+          int64_t remaining_capacity =
+              container->get_entry_stack_room(config_group, entry, basic, already_planned - ignored);
           if (remaining_capacity <= 0) {
             continue;
           }

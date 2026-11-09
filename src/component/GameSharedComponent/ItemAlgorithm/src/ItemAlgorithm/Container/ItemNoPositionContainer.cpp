@@ -22,20 +22,19 @@ ITEM_ALGORITHM_API ItemNoPositionContainer::~ItemNoPositionContainer() {}
 ITEM_ALGORITHM_API void ItemNoPositionContainer::init(
     PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
     uint64_t next_entry_id) {
-  init_container(container_guid, next_entry_id);
-  position_type_ = position_type;
+  init_container(position_type, container_guid, next_entry_id);
 
   // 无位置模式不落位: 道具按类型合并计数, 不维护位置索引, 也不接受 GUID
   FWINSTLOGDEBUG(logger(), "init no position container position_type={} container_guid={}",
-                 static_cast<int>(position_type_), container_guid);
+                 static_cast<int>(get_position_type()), container_guid);
 }
 
 // ============================================================
 // 条目校验 (基类的 validate_item_basic 依赖本函数)
 // ============================================================
 
-ITEM_ALGORITHM_API bool ItemNoPositionContainer::is_item_valid(
-    const excel_config_group_ptr_t& /*config_group*/, const PROJECT_NAMESPACE_ID::DItemBasic& basic) const {
+ITEM_ALGORITHM_API bool ItemNoPositionContainer::is_item_valid(const excel_config_group_ptr_t& /*config_group*/,
+                                                               const PROJECT_NAMESPACE_ID::DItemBasic& basic) const {
   if (basic.type_id() == 0 || basic.count() <= 0) {
     return false;
   }

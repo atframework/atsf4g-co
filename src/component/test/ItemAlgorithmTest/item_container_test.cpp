@@ -136,6 +136,11 @@ class TestContainerWithPositionRegistry : public TestContainerWithPositionMappin
     cfg.set_column_size(col_size);
   }
 
+  /// @brief 容器声明的位置类型 (validate_item_basic 要求请求数据的位置字段与之一致)
+  PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase declared_position_type() const {
+    return this->get_position_type();
+  }
+
  protected:
   /// @brief 查注册表 (格子模式用它覆盖 get_item_position_cfg)
   const PROJECT_NAMESPACE_ID::DItemPositionCfg* lookup_position_cfg(int32_t type_id) const {
@@ -181,13 +186,70 @@ class TestItemInfiniteEquipmentSlotContainer : public TestItemInfiniteGridContai
   bool on_find_position_for_infinite(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& /*config_group*/,
       const PROJECT_NAMESPACE_ID::DItemBasic& /*basic*/,
-      PROJECT_NAMESPACE_ID::DItemGridPosition& out_pos) const override {
-    out_pos.mutable_character_equipment()->set_slot_idx(static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(slot_idx_));
+      const item_algorithm::ItemInfiniteGridContainer::position_count_map_type& batch_reserved,
+      item_algorithm::ItemGridPosition& out_pos) const override {
+    item_algorithm::ItemGridPosition pos{slot_idx_, 0};
+    // 固定槽位: 本批次已经分配过就不再返回, 避免两件道具拿到同一个位置
+    if (batch_reserved.find(pos) != batch_reserved.end()) {
+      return false;
+    }
+    out_pos = pos;
     return true;
   }
 
  private:
   int32_t slot_idx_ = 1;
+};
+
+/// @brief 无限格子模式夹具: 多槽位装备槽
+///
+/// 模拟装备容器的寻位策略: 按槽位列表顺序尝试, 空槽位可用, 已有条目可继续堆叠时复用。
+/// 同时把基类的堆叠判定接口暴露给用例, 便于直接验证语义。
+class TestItemInfiniteMultiSlotContainer : public TestItemInfiniteGridContainer {
+ public:
+  void set_slots(std::vector<int32_t> slots) { slots_ = std::move(slots); }
+
+  int64_t stack_limit_for(const item_algorithm::excel_config_group_ptr_t& config_group, int32_t type_id) const {
+    return get_stack_limit(config_group, type_id);
+  }
+
+  int64_t stack_room_for(const item_algorithm::excel_config_group_ptr_t& config_group,
+                         const item_algorithm::item_entry_ptr_t& entry, const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+                         int64_t batch_reserved_count = 0) const {
+    return get_entry_stack_room(config_group, entry, basic, batch_reserved_count);
+  }
+
+ protected:
+  bool on_find_position_for_infinite(
+      const item_algorithm::excel_config_group_ptr_t& config_group, const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+      const item_algorithm::ItemInfiniteGridContainer::position_count_map_type& batch_reserved,
+      item_algorithm::ItemGridPosition& out_pos) const override {
+    for (int32_t slot : slots_) {
+      item_algorithm::ItemGridPosition pos{slot, 0};
+      auto existing = get_at(pos);
+      auto reserved_it = batch_reserved.find(pos);
+      int64_t batch_count = (reserved_it != batch_reserved.end()) ? reserved_it->second : 0;
+
+      if (!existing) {
+        // 空槽位: 本批次已分配过就跳过
+        if (reserved_it != batch_reserved.end()) {
+          continue;
+        }
+        out_pos = pos;
+        return true;
+      }
+
+      // 已有条目: 同类且还有容量时复用
+      if (can_stack_to_entry(config_group, existing, basic, batch_count)) {
+        out_pos = pos;
+        return true;
+      }
+    }
+    return false;
+  }
+
+ private:
+  std::vector<int32_t> slots_;
 };
 
 struct HookTestState {
@@ -433,8 +495,57 @@ static PROJECT_NAMESPACE_ID::DItemInstance make_grid_item(int32_t type_id, int64
   return instance;
 }
 
-/// @brief 创建一个 DItemInstance (不占格道具, 如货币/虚拟道具)
+/// @brief 按容器声明的位置类型给请求数据补一个空位置 (具体坐标由用例自己覆盖)
+///
+/// validate_item_basic 现在要求请求的位置字段类型与容器声明的 position_type 一致,
+/// 请求侧的数据统一用这里补齐, 否则会被判 EN_ERR_INVALID_PARAM。
+template <typename ContainerT>
+static void fill_position_type(const ContainerT& grid, PROJECT_NAMESPACE_ID::DItemGridPosition& grid_position) {
+  switch (grid.declared_position_type()) {
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
+      grid_position.mutable_user_inventory();
+      break;
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory:
+      grid_position.mutable_character_inventory();
+      break;
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment:
+      grid_position.mutable_character_equipment();
+      break;
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory:
+      grid_position.set_virtual_inventory(true);
+      break;
+    default:
+      break;
+  }
+}
+
+/// @brief 创建一个 DItemInstance (不占格道具, 如货币/虚拟道具), 位置类型跟随容器声明
+///
+/// 容器不是 user_inventory 时必须用这个版本, 否则会被判"位置类型与容器不一致"。
+template <typename ContainerT>
+static PROJECT_NAMESPACE_ID::DItemInstance make_ungrid_item(const ContainerT& grid, int32_t type_id, int64_t count) {
+  PROJECT_NAMESPACE_ID::DItemInstance instance;
+  auto* basic = instance.mutable_item_basic();
+  basic->set_type_id(type_id);
+  basic->set_count(count);
+  basic->set_guid(0);
+  fill_position_type(grid, *basic->mutable_position()->mutable_grid_position());
+  return instance;
+}
+
+/// @brief 创建一个 DItemInstance (不占格道具), 位置类型按 user_inventory 标记
 static PROJECT_NAMESPACE_ID::DItemInstance make_ungrid_item(int32_t type_id, int64_t count) {
+  PROJECT_NAMESPACE_ID::DItemInstance instance;
+  auto* basic = instance.mutable_item_basic();
+  basic->set_type_id(type_id);
+  basic->set_count(count);
+  basic->set_guid(0);
+  basic->mutable_position()->mutable_grid_position()->mutable_user_inventory();
+  return instance;
+}
+
+/// @brief 创建一个不带位置字段的 DItemInstance (只用于验证"有位置容器拒绝无位置道具")
+static PROJECT_NAMESPACE_ID::DItemInstance make_ungrid_item_without_position(int32_t type_id, int64_t count) {
   PROJECT_NAMESPACE_ID::DItemInstance instance;
   auto* basic = instance.mutable_item_basic();
   basic->set_type_id(type_id);
@@ -461,6 +572,21 @@ static PROJECT_NAMESPACE_ID::DItemBasic make_sub_basic(int32_t type_id, int64_t 
   basic.set_guid(guid);
   basic.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
   basic.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
+  return basic;
+}
+
+/// @brief 创建一个 Sub/check_has 用的 DItemBasic, 位置类型跟随容器声明
+///
+/// 容器不是 user_inventory 时必须用这个版本 (无坐标含义的模式只标记位置类型),
+/// 否则 validate_item_basic 会以"位置类型与容器不一致"返回 EN_ERR_INVALID_PARAM。
+template <typename ContainerT>
+static PROJECT_NAMESPACE_ID::DItemBasic make_sub_basic_for(const ContainerT& grid, int32_t type_id, int64_t count,
+                                                           int64_t guid = 0) {
+  PROJECT_NAMESPACE_ID::DItemBasic basic;
+  basic.set_type_id(type_id);
+  basic.set_count(count);
+  basic.set_guid(guid);
+  fill_position_type(grid, *basic.mutable_position()->mutable_grid_position());
   return basic;
 }
 
@@ -534,12 +660,24 @@ static PROJECT_NAMESPACE_ID::DItemInstance make_equip_item(int64_t guid, int32_t
   return instance;
 }
 
-/// @brief 创建装备 Sub 请求 (按 GUID)
-static PROJECT_NAMESPACE_ID::DItemBasic make_equip_sub_by_guid(int64_t guid) {
+/// @brief 创建装备 Sub/check_has 请求 (按 GUID), 位置字段取自容器里的既有条目
+///
+/// 不能直接构造 DItemBasic: 缺位置字段会被 validate_item_basic 判成"位置类型与容器不一致"。
+/// 条目不存在时给一个位置类型合法的请求, 让调用方拿到原本想要的 ITEM_NOT_FOUND / 校验失败。
+template <typename ContainerT>
+static PROJECT_NAMESPACE_ID::DItemBasic make_equip_sub_by_guid(const ContainerT& grid, int64_t guid) {
   PROJECT_NAMESPACE_ID::DItemBasic basic;
+  auto entry = grid.get_by_guid(guid);
+  if (entry) {
+    basic = entry->item_instance().item_basic();
+    basic.set_count(1);
+    return basic;
+  }
+
   basic.set_type_id(kEquipmentTypeId);
   basic.set_count(1);
   basic.set_guid(guid);
+  fill_position_type(grid, *basic.mutable_position()->mutable_grid_position());
   return basic;
 }
 
@@ -1033,7 +1171,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
   CASE_MSG_INFO() << "=== Step 3: 有位置 Grid 拒绝无位置道具 ===\n";
   {
     ItemAddRequest reqs;
-    *reqs.Add() = make_ungrid_item(kCoinTypeId, 200);
+    *reqs.Add() = make_ungrid_item_without_position(kCoinTypeId, 200);
     auto checked = server.check_add(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     CASE_EXPECT_EQ(server.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -1273,7 +1411,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
   }
   // 11c: 装备不存在的 GUID
   {
-    auto sub = make_equip_sub_by_guid(77777);
+    auto sub = make_equip_sub_by_guid(server, 77777);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
     auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
@@ -1309,7 +1447,7 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
     if (by_guid) equip1002_entry_id = by_guid->entry_id();
   }
   {
-    auto sub = make_equip_sub_by_guid(1002);
+    auto sub = make_equip_sub_by_guid(server, 1002);
     ItemSubRequest reqs;
     *reqs.Add() = sub;
     auto checked = server.check_sub(config, make_item_readable_iterable(reqs), item_algorithm::ItemOperationSource{});
@@ -2893,9 +3031,9 @@ CASE_TEST(ItemContainer, find_positions_for_basics_review_issues) {
 
     // 消耗装备 1001 (原位), 兑换新装备 2001
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics;
-    basics.push_back(make_equip_sub_by_guid(2001));  // 新装备 (GUID 2001)
+    basics.push_back(make_equip_sub_by_guid(grid, 2001));  // 新装备 (GUID 2001)
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore;
-    ignore.push_back(make_equip_sub_by_guid(1001));  // 消耗旧装备 (GUID 1001)
+    ignore.push_back(make_equip_sub_by_guid(grid, 1001));  // 消耗旧装备 (GUID 1001)
     // 新装备指向 (0,0) (旧装备原位)
     basics[0].mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
     basics[0].mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
@@ -3784,7 +3922,7 @@ CASE_TEST(ItemContainer, check_has) {
 
     ItemHasRequest has_requests;
     *has_requests.Add() = make_sub_basic(kItemTypeId_1x1, 5, 0, 0);
-    *has_requests.Add() = make_equip_sub_by_guid(9001);
+    *has_requests.Add() = make_equip_sub_by_guid(grid, 9001);
     auto has_result = grid.check_has(config, make_item_readable_iterable(has_requests));
     CASE_EXPECT_EQ(has_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 5);
@@ -3806,7 +3944,7 @@ CASE_TEST(ItemContainer, check_has) {
     CASE_EXPECT_EQ(missing_position_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
 
     ItemHasRequest missing_guid_requests;
-    *missing_guid_requests.Add() = make_equip_sub_by_guid(9002);
+    *missing_guid_requests.Add() = make_equip_sub_by_guid(grid, 9002);
     auto missing_guid_result = grid.check_has(config, make_item_readable_iterable(missing_guid_requests));
     CASE_EXPECT_EQ(missing_guid_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
   }
@@ -4319,6 +4457,124 @@ CASE_TEST(ItemContainer, find_positions_for_infinite_fills_container_guid) {
   // 与其它模式一致地写上容器归属, 否则结果无法直接喂给 check_add
   CASE_EXPECT_EQ(success_items[0].position().container_guid(), container_guid);
   CASE_EXPECT_TRUE(success_items[0].position().grid_position().has_character_equipment());
+}
+
+// ============================================================
+// 无限格子寻位: 批次内已分配位置与堆叠容量
+//
+// on_find_positions 维护 position→count 映射记录"本批次已经分配出去的位置",
+// 钩子只读该参数, 不再自己扫描容器; 堆叠容量统一由基类接口判定。
+// ============================================================
+
+CASE_TEST(ItemContainer, infinite_find_positions_reserves_batch_positions) {
+  constexpr int64_t container_guid = 7701;
+  auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemInfiniteMultiSlotContainer>();
+  auto& grid = *grid_ptr;
+  grid.init(PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment, container_guid);
+  grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);  // 装备: 每槽一件
+  grid.register_position_cfg(kItemTypeId_1x1, 2, 1, 1);   // 可堆叠: 上限 2
+  register_test_log_handler(grid);
+  auto config = make_test_config_group();
+
+  auto find = [&](const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& requests,
+                  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
+                  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> items;
+    for (const auto& item : requests) {
+      *items.Add() = item;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_items;
+    return grid.find_positions_for_basics(config, make_item_readable_iterable(items),
+                                          make_item_readable_iterable(ignore_items), success, failed);
+  };
+
+  auto slot_of = [](const PROJECT_NAMESPACE_ID::DItemBasic& basic) {
+    return static_cast<int32_t>(basic.position().grid_position().character_equipment().slot_idx());
+  };
+
+  auto make_slot_instance = [](int32_t type_id, int64_t count, int32_t slot, int64_t guid) {
+    PROJECT_NAMESPACE_ID::DItemInstance instance;
+    instance.mutable_item_basic()->set_type_id(type_id);
+    instance.mutable_item_basic()->set_count(count);
+    instance.mutable_item_basic()->set_guid(guid);
+    instance.mutable_item_basic()
+        ->mutable_position()
+        ->mutable_grid_position()
+        ->mutable_character_equipment()
+        ->set_slot_idx(static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(slot));
+    return instance;
+  };
+
+  // Case 1: 两个空槽位, 同批次两件 (每件占一个槽位) → 分配到不同槽位
+  {
+    grid.set_slots({1, 2});
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    CASE_EXPECT_TRUE(
+        find({make_sub_basic(kEquipmentTypeId, 1, 0, 0, 601), make_sub_basic(kEquipmentTypeId, 1, 0, 0, 602)}, success,
+             failed));
+    CASE_EXPECT_EQ(success.size(), 2);
+    CASE_EXPECT_TRUE(failed.empty());
+    if (success.size() == 2) {
+      CASE_EXPECT_TRUE(slot_of(success[0]) != slot_of(success[1]));
+    }
+  }
+
+  // Case 2: 只有一个槽位, 同批次两件 → 第二件进 failed_item
+  {
+    grid.set_slots({1});
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    CASE_EXPECT_TRUE(
+        find({make_sub_basic(kEquipmentTypeId, 1, 0, 0, 611), make_sub_basic(kEquipmentTypeId, 1, 0, 0, 612)}, success,
+             failed));
+    CASE_EXPECT_EQ(success.size(), 1);
+    CASE_EXPECT_EQ(failed.size(), 1);
+  }
+
+  // Case 3: 槽位已有可堆叠条目 (上限 2, 现有 1) → 直接复用该槽位
+  {
+    auto seed = make_slot_instance(kItemTypeId_1x1, 1, 1, 0);
+    set_item_container_guid(seed, container_guid);
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(seed), item_algorithm::ItemOperationSource{}));
+
+    grid.set_slots({1});
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    CASE_EXPECT_TRUE(find({make_sub_basic(kItemTypeId_1x1, 1)}, success, failed));
+    CASE_EXPECT_EQ(success.size(), 1);
+    CASE_EXPECT_TRUE(failed.empty());
+    if (success.size() == 1) {
+      CASE_EXPECT_EQ(slot_of(success[0]), 1);
+    }
+
+    // Case 4: 同一批次再放两件 → 已预订数量计入容量, 只放得下 1 件
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success2;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed2;
+    CASE_EXPECT_TRUE(find({make_sub_basic(kItemTypeId_1x1, 1), make_sub_basic(kItemTypeId_1x1, 1)}, success2, failed2));
+    CASE_EXPECT_EQ(success2.size(), 1);
+    CASE_EXPECT_EQ(failed2.size(), 1);
+  }
+
+  // Case 5: 堆叠判定接口语义
+  {
+    auto entry = grid.get_at(item_algorithm::ItemGridPosition{1, 0});
+    CASE_EXPECT_TRUE(entry != nullptr);
+    if (entry) {
+      CASE_EXPECT_EQ(grid.stack_limit_for(config, kItemTypeId_1x1), static_cast<int64_t>(2));
+      // 1x1 现有 1, 上限 2 → 还能放 1
+      CASE_EXPECT_EQ(grid.stack_room_for(config, entry, make_sub_basic(kItemTypeId_1x1, 1)), static_cast<int64_t>(1));
+      // 本批次已预订 1 → 剩余 0
+      CASE_EXPECT_EQ(grid.stack_room_for(config, entry, make_sub_basic(kItemTypeId_1x1, 1), 1),
+                     static_cast<int64_t>(0));
+      // 类型不同 / 带 GUID 的道具不参与堆叠
+      CASE_EXPECT_EQ(grid.stack_room_for(config, entry, make_sub_basic(kItemTypeId_2x2, 1)), static_cast<int64_t>(0));
+      CASE_EXPECT_EQ(grid.stack_room_for(config, entry, make_sub_basic(kItemTypeId_1x1, 1, 0, 0, 99)),
+                     static_cast<int64_t>(0));
+      // 配置缺失 → 不可堆叠
+      CASE_EXPECT_EQ(grid.stack_limit_for(config, 999999), static_cast<int64_t>(0));
+    }
+  }
 }
 
 // ============================================================
@@ -5005,7 +5261,7 @@ CASE_TEST(ItemContainerGroup, no_position_container_rejects_move) {
   // 先放 10 个不占格道具
   {
     ItemAddRequest requests;
-    auto item = make_ungrid_item(kCoinTypeId, 10);
+    auto item = make_ungrid_item(grid, kCoinTypeId, 10);
     set_item_container_guid(item, kContainerGuid);
     *requests.Add() = item;
 
@@ -5018,7 +5274,7 @@ CASE_TEST(ItemContainerGroup, no_position_container_rejects_move) {
   // 用真实条目构造移动请求: 即使条目存在, 本模式也不支持 move
   ItemMoveRequest move_request;
   {
-    item_entry_ptr_t entry = grid.find_entry(make_sub_basic(kCoinTypeId, 10));
+    item_entry_ptr_t entry = grid.find_entry(make_sub_basic_for(grid, kCoinTypeId, 10));
     CASE_EXPECT_TRUE(!!entry);
     if (entry) {
       ItemMoveSubRequest sub_request;
@@ -5060,17 +5316,17 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
   {
     ItemAddRequest requests;
     {
-      auto item = make_ungrid_item(kCoinTypeId, 100);
+      auto item = make_ungrid_item(*grid_a, kCoinTypeId, 100);
       set_item_container_guid(item, kContainerGuidA);
       *requests.Add() = item;
     }
     {
-      auto item = make_ungrid_item(kCoinTypeId, 50);
+      auto item = make_ungrid_item(*grid_a, kCoinTypeId, 50);
       set_item_container_guid(item, kContainerGuidA);
       *requests.Add() = item;
     }
     {
-      auto item = make_ungrid_item(kVirtualTypeId, 7);
+      auto item = make_ungrid_item(*grid_b, kVirtualTypeId, 7);
       set_item_container_guid(item, kContainerGuidB);
       *requests.Add() = item;
     }
@@ -5091,7 +5347,7 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
   CASE_MSG_INFO() << "Case 2: count==0 空请求跳过\n";
   {
     ItemAddRequest requests;
-    auto item = make_ungrid_item(kCoinTypeId, 0);
+    auto item = make_ungrid_item(*grid_a, kCoinTypeId, 0);
     set_item_container_guid(item, kContainerGuidA);
     *requests.Add() = item;
 
@@ -5108,12 +5364,12 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
   {
     ItemSubRequest requests;
     {
-      auto sub = make_sub_basic(kCoinTypeId, 120);
+      auto sub = make_sub_basic_for(*grid_a, kCoinTypeId, 120);
       set_basic_container_guid(sub, kContainerGuidA);
       *requests.Add() = sub;
     }
     {
-      auto sub = make_sub_basic(kVirtualTypeId, 7);
+      auto sub = make_sub_basic_for(*grid_b, kVirtualTypeId, 7);
       set_basic_container_guid(sub, kContainerGuidB);
       *requests.Add() = sub;
     }
@@ -5131,7 +5387,7 @@ CASE_TEST(ItemContainerGroup, no_position_batch_add_sub_and_empty_request) {
   CASE_MSG_INFO() << "Case 4: 数量不足整体失败\n";
   {
     ItemSubRequest requests;
-    auto sub = make_sub_basic(kCoinTypeId, 31);
+    auto sub = make_sub_basic_for(*grid_a, kCoinTypeId, 31);
     set_basic_container_guid(sub, kContainerGuidA);
     *requests.Add() = sub;
 
@@ -5259,10 +5515,10 @@ CASE_TEST(ItemContainer, clear_then_reuse_is_consistent_for_all_modes) {
     for (int32_t round = 0; round < 2; ++round) {
       const int64_t coin_count = 10 + round * 5;
       ItemAddRequest add_requests;
-      auto coin = make_ungrid_item(kCoinTypeId, coin_count);
+      auto coin = make_ungrid_item(grid, kCoinTypeId, coin_count);
       set_item_container_guid(coin, container_guid);
       *add_requests.Add() = coin;
-      auto virt = make_ungrid_item(kVirtualTypeId, 5);
+      auto virt = make_ungrid_item(grid, kVirtualTypeId, 5);
       set_item_container_guid(virt, container_guid);
       *add_requests.Add() = virt;
 

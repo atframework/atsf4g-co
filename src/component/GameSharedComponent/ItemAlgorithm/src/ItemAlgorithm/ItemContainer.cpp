@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -29,9 +30,12 @@ ITEM_ALGORITHM_API ItemContainer::ItemContainer()
 
 ITEM_ALGORITHM_API ItemContainer::~ItemContainer() {}
 
-ITEM_ALGORITHM_API void ItemContainer::init_container(int64_t container_guid, uint64_t next_entry_id) {
+ITEM_ALGORITHM_API void ItemContainer::init_container(
+    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid,
+    uint64_t next_entry_id) {
   init_ = true;
   container_guid_ = container_guid;
+  position_type_ = position_type;
   // 条目 ID 自增游标: 0 (旧存档 / 新建容器) 时从 1 开始; 载入条目时会按条目 ID 继续上调
   next_entry_id_ = next_entry_id == 0 ? 1 : next_entry_id;
   clear();
@@ -405,6 +409,67 @@ ITEM_ALGORITHM_API int64_t ItemContainer::count_type_total(int32_t type_id) cons
   return total;
 }
 
+ITEM_ALGORITHM_API int64_t ItemContainer::get_stack_limit(const excel_config_group_ptr_t& config_group,
+                                                          int32_t type_id) const {
+  if (type_id == 0) {
+    return 0;
+  }
+
+  // get_item_position_cfg 只按 type_id 取配置, 这里用临时 basic 承载查询
+  PROJECT_NAMESPACE_ID::DItemBasic probe;
+  probe.set_type_id(type_id);
+  const PROJECT_NAMESPACE_ID::DItemPositionCfg* position_cfg = get_item_position_cfg(config_group, probe);
+  if (position_cfg == nullptr) {
+    return 0;
+  }
+
+  int64_t accumulation_limit = position_cfg->accumulation_limit();
+  if (accumulation_limit <= 0) {
+    // <=0 视为无限堆叠
+    return (std::numeric_limits<int64_t>::max)();
+  }
+  return accumulation_limit;
+}
+
+ITEM_ALGORITHM_API int64_t ItemContainer::get_entry_stack_room(const excel_config_group_ptr_t& config_group,
+                                                               const item_entry_ptr_t& entry,
+                                                               const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+                                                               int64_t batch_reserved_count) const {
+  if (!entry || basic.type_id() == 0) {
+    return 0;
+  }
+
+  const auto& entry_basic = entry->item_instance().item_basic();
+  // 带 GUID 的道具每件独立, 不参与堆叠; 类型不同也不能堆
+  if (basic.type_id() != entry_basic.type_id() || basic.guid() != 0 || entry_basic.guid() != 0) {
+    return 0;
+  }
+
+  int64_t limit = get_stack_limit(config_group, entry_basic.type_id());
+  if (limit <= 0) {
+    return 0;
+  }
+
+  int64_t used = entry_basic.count() + batch_reserved_count;
+  if (used < 0) {
+    used = 0;
+  }
+  if (used >= limit) {
+    return 0;
+  }
+  return limit - used;
+}
+
+ITEM_ALGORITHM_API bool ItemContainer::can_stack_to_entry(const excel_config_group_ptr_t& config_group,
+                                                          const item_entry_ptr_t& entry,
+                                                          const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+                                                          int64_t batch_reserved_count) const {
+  if (basic.count() <= 0) {
+    return false;
+  }
+  return get_entry_stack_room(config_group, entry, basic, batch_reserved_count) >= basic.count();
+}
+
 ITEM_ALGORITHM_API int32_t ItemContainer::validate_item_basic(const excel_config_group_ptr_t& config_group,
                                                               const PROJECT_NAMESPACE_ID::DItemBasic& basic) const {
   if (!is_item_valid(config_group, basic)) {
@@ -412,6 +477,10 @@ ITEM_ALGORITHM_API int32_t ItemContainer::validate_item_basic(const excel_config
   }
 
   if (basic.position().container_guid() != get_container_guid()) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+  }
+
+  if (basic.position().grid_position().position_type_case() != get_position_type()) {
     return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
   }
 

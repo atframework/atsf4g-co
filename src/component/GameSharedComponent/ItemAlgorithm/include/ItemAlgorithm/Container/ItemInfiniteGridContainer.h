@@ -38,6 +38,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
       std::unordered_map<ItemGridPosition, item_entry_ptr_t, ItemGridPositionHash, ItemGridPositionEqualTo>;
   using guid_index_type = std::unordered_map<int64_t, item_entry_ptr_t>;
   using position_set_type = std::unordered_set<ItemGridPosition, ItemGridPositionHash, ItemGridPositionEqualTo>;
+  using position_count_map_type =
+      std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo>;
 
  public:
   ITEM_ALGORITHM_API ItemInfiniteGridContainer();
@@ -59,6 +61,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   // ---- 位置查询 ----
   /// @brief 取槽位上的条目
   ITEM_ALGORITHM_API item_entry_ptr_t get(const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const;
+  /// @brief 取槽位上的条目 (容器内部坐标版本)
+  ///
+  /// 供寻位钩子这类已经持有内部坐标 (槽位序号) 的子类使用, 避免反复构造 proto 位置字段。
+  /// @return nullptr 表示该槽位空闲
+  ITEM_ALGORITHM_API item_entry_ptr_t get_at(const ItemGridPosition& position) const;
   /// @brief 按 GUID 取条目
   ITEM_ALGORITHM_API item_entry_ptr_t get_by_guid(int64_t guid) const;
 
@@ -219,26 +226,19 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   ITEM_ALGORITHM_API bool is_item_valid(const excel_config_group_ptr_t& config_group,
                                         const PROJECT_NAMESPACE_ID::DItemBasic& basic) const override;
 
-  /// @brief 位置字段声明 (接入层的位置字段)
-  ///
-  /// 库内不再自己映射 proto 位置字段, 这里只保存 init 传入的声明供接入层读取;
-  /// 被调用时机: 接入层实现 extract_position / apply_position 时按需要取。
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase get_position_type() const {
-    return position_type_;
-  }
-
   /// @brief 无限格子寻位钩子 (子类按自己的槽位规则决定落位)
   ///
   /// 被调用时机: on_find_positions 对每件待放置道具调用一次;
-  /// 返回 true 后候选位置还要再通过 on_check_add 才写进 success_item, 否则该件进 failed_item。
+  /// 返回 true 后候选位置还要再通过 on_check_add_one 才写进 success_item, 否则该件进 failed_item。
   /// 本模式没有格子与占用可推算, 因此不实现"扫描空格"的默认策略。
-  /// @param config_group 配置组
-  /// @param basic        待放置道具 (含位置 hint)
-  /// @param out_pos      [out] 找到的目标位置 (返回 true 时有效)
+  /// @param config_group   配置组
+  /// @param basic          待放置道具 (含位置 hint)
+  /// @param batch_reserved 本批次已分配的位置 → 已分配数量; 钩子只读, 由 on_find_positions 维护
+  /// @param out_pos        [out] 找到的目标位置 (内部坐标, 返回 true 时有效)
   /// @return true 表示成功找到位置, false 表示无法放置 (默认实现返回 false)
-  ITEM_ALGORITHM_API virtual bool on_find_position_for_infinite(const excel_config_group_ptr_t& config_group,
-                                                                const PROJECT_NAMESPACE_ID::DItemBasic& basic,
-                                                                PROJECT_NAMESPACE_ID::DItemGridPosition& out_pos) const;
+  ITEM_ALGORITHM_API virtual bool on_find_position_for_infinite(
+      const excel_config_group_ptr_t& config_group, const PROJECT_NAMESPACE_ID::DItemBasic& basic,
+      const position_count_map_type& batch_reserved, ItemGridPosition& out_pos) const;
 
   // ---- 位置与身份索引 (单槽位: 每个位置最多一个条目) ----
   /// @brief 取槽位上的条目
@@ -283,8 +283,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   bool check_move_request(const excel_config_group_ptr_t& config_group, ItemMoveCheckedRequest& checked_request) const;
 
  private:
-  PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_ =
-      PROJECT_NAMESPACE_ID::DItemGridPosition::POSITION_TYPE_NOT_SET;
   position_index_type position_index_;
   guid_index_type guid_index_;
 };
