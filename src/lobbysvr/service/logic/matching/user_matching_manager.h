@@ -172,7 +172,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   PROJECT_NAMESPACE_ID::DUserMatchingData data_;
   // 当前确认副作用成功后提交的 WAL 游标；创建战斗和完成通知先到达时仍保留该位置。
   int64_t pending_acknowledge_event_id_ = 0;
-  int64_t last_reported_acknowledge_event_id_ = 0;
+  //   int64_t last_reported_acknowledge_event_id_ = 0;
   time_t last_heartbeat_time_ = 0;
   std::vector<PROJECT_NAMESPACE_ID::DMatchedUserData> matched_users_;
   bool periodic_heartbeat_inflight_ = false;

@@ -149,7 +149,8 @@ user_matching_manager::~user_matching_manager() = default;
 void user_matching_manager::create_init(rpc::context&) {
   data_.Clear();
   pending_acknowledge_event_id_ = 0;
-  last_reported_acknowledge_event_id_ = 0;
+  data_.set_last_reported_acknowledge_event_id(0);
+
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
@@ -234,7 +235,7 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
               });
   }
   pending_acknowledge_event_id_ = 0;
-  last_reported_acknowledge_event_id_ = 0;
+  // data_.set_last_reported_acknowledge_event_id(0);
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
@@ -511,24 +512,26 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
     if (is_matching_not_found(snapshot.result()) && is_matching_finish(data_.view().status()) &&
         !has_pending_matching_event()) {
       // Unit 已回收，无需再补 ACK。匹配结束后的结果保留到下一轮开始；尚未结束的匹配仍交给登录恢复处理。
-      last_reported_acknowledge_event_id_ = get_acknowledge_event_id();
+      data_.set_last_reported_acknowledge_event_id(get_acknowledge_event_id());
+
       RPC_RETURN_CODE(snapshot.result());
     }
     FWLOGERROR("{} check matching rejected by matchsvr, unit_id={}, result={}({})", *owner_, unit_id, snapshot.result(),
                protobuf_mini_dumper_get_error_msg(snapshot.result()));
     RPC_RETURN_CODE(snapshot.result());
   }
-  if (acknowledge_event_id > last_reported_acknowledge_event_id_ ||
+  if (acknowledge_event_id > data_.last_reported_acknowledge_event_id() ||
       snapshot.snapshot().last_event_id() > get_last_event_id()) {
     FCTXLOGDEBUG(ctx,
                  "matching heartbeat accepted, zone_id={}, user_id={}, unit_id={}, matching_id={}, status={}, "
                  "event_id={}, reported_acknowledge_event_id={}->{}, result={}",
                  owner_->get_zone_id(), owner_->get_user_id(), unit_id, snapshot.matching_id(),
                  static_cast<int>(snapshot.snapshot().status()), snapshot.snapshot().last_event_id(),
-                 last_reported_acknowledge_event_id_,
-                 std::max(last_reported_acknowledge_event_id_, acknowledge_event_id), snapshot.result());
+                 data_.last_reported_acknowledge_event_id(),
+                 std::max(data_.last_reported_acknowledge_event_id(), acknowledge_event_id), snapshot.result());
   }
-  last_reported_acknowledge_event_id_ = std::max(last_reported_acknowledge_event_id_, acknowledge_event_id);
+  data_.set_last_reported_acknowledge_event_id(
+      std::max(data_.last_reported_acknowledge_event_id(), acknowledge_event_id));
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -975,7 +978,7 @@ void user_matching_manager::reset_matching_unit() {
   data_.clear_matchsvr_server_id();
   data_.clear_acknowledge_event_id();
   pending_acknowledge_event_id_ = 0;
-  last_reported_acknowledge_event_id_ = 0;
+  data_.set_last_reported_acknowledge_event_id(0);
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
   dirty_ = true;
@@ -1280,7 +1283,7 @@ void user_matching_manager::subscribe_matching_unit(rpc::context& ctx,
 void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
   if (!data_.has_view() || get_current_unit_id() == 0 || periodic_heartbeat_inflight_ ||
       (!is_in_matching() && !has_pending_matching_event() &&
-       last_reported_acknowledge_event_id_ >= get_acknowledge_event_id())) {
+       data_.last_reported_acknowledge_event_id() >= get_acknowledge_event_id())) {
     return;
   }
 
