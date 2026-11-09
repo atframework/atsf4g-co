@@ -314,6 +314,51 @@ ITEM_ALGORITHM_API ItemMoveCheckedRequest ItemContainer::check_move(const excel_
     return checked_request;
   }
 
+  // 单条业务校验: 移动的两端同样要过 on_check_sub_one / on_check_add_one,
+  // 否则 check_sub / check_add 上的业务规则在 move 路径上会被绕过。
+  // 传入的是调用方给的请求 (扣减数量 / 目标位置), 与模式校验的顺序和 check_add / check_sub 一致。
+  for (size_t i = 0; i < checked_request.request.move_sub_entrys.size(); ++i) {
+    const auto& sub_request = checked_request.request.move_sub_entrys[i];
+    if (!sub_request.entry) {
+      // 空条目交给 on_check_move 报错并保持原有错误码
+      continue;
+    }
+
+    PROJECT_NAMESPACE_ID::DItemBasic one_request = sub_request.entry->item_instance().item_basic();
+    one_request.set_count(sub_request.op_count);
+    int32_t one_ret = on_check_sub_one(config_group, one_request);
+    if (one_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      result.error_code = one_ret;
+      result.failed_type_id = one_request.type_id();
+      FWINSTLOGWARNING(
+          logger(), "check_move sub rejected[{}]: on_check_sub_one type={} count={} guid={}, error={} ({})", i,
+          one_request.type_id(), one_request.count(), one_request.guid(), result.error_code,
+          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+  }
+
+  for (size_t i = 0; i < checked_request.request.move_add_entrys.size(); ++i) {
+    const auto& add_request = checked_request.request.move_add_entrys[i];
+    if (!add_request.entry) {
+      continue;
+    }
+
+    PROJECT_NAMESPACE_ID::DItemInstance one_request = add_request.entry->item_instance();
+    one_request.mutable_item_basic()->set_count(add_request.op_count);
+    *one_request.mutable_item_basic()->mutable_position() = add_request.goal_position;
+    int32_t one_ret = on_check_add_one(config_group, one_request);
+    if (one_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      result.error_code = one_ret;
+      result.failed_type_id = one_request.item_basic().type_id();
+      FWINSTLOGWARNING(
+          logger(), "check_move add rejected[{}]: on_check_add_one type={} count={} guid={}, error={} ({})", i,
+          one_request.item_basic().type_id(), one_request.item_basic().count(), one_request.item_basic().guid(),
+          result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+  }
+
   // 本模式的移动校验 (入参 + 批次内占用预演): 失败时错误码由钩子写进 checked_request.result
   if (!on_check_move(checked_request)) {
     if (result.error_code == PROJECT_NAMESPACE_ID::EN_SUCCESS) {

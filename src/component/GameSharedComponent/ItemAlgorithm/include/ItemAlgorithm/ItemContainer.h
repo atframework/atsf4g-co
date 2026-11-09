@@ -39,14 +39,19 @@ using item_container_ptr_t = atfw::util::memory::strong_rc_ptr<ItemContainer>;
 ///   3. 给子类提供条目级原语 (建条目 / 入分组 / 改数量 / 改数据 / 刷排序键) 与
 ///      数量变化通知 (notify_entry_count_changed) 等公共收尾。
 ///
-/// 子类的扩展点 (均为单条/单批钩子, 不含流程):
-///   - on_check_add_one / on_check_sub_one / on_check_has_one  单条的额外校验
-///   - on_add_one / on_sub_one / on_load_one                  单条的落位与扣减
-///   - on_apply_remove_one / on_apply_update_one               客户端同步的单条处理
-///   - on_find_positions                                      寻位搜索
-///   - is_item_valid / check_item_position / get_item_position_cfg 本模式的字段规则
-///   - extract_position / apply_position                      位置字段映射 (由接入层实现)
-///   - 位置 / GUID 索引的挂摘与格子占用判断 (本模式自己维护的数据结构)
+/// 子类的扩展点 (均为单条/单批钩子, 不含流程), 按"谁来覆盖"分三组:
+///   1. 模式钩子 — 三个预设容器各自实现, 业务容器一般不用覆盖:
+///      on_check_add / on_check_sub / on_check_has / should_skip_add_request /
+///      on_add_one / on_sub_one / on_load_one / on_check_move / on_move_*_one /
+///      on_apply_*_one / on_find_positions / is_item_valid / make_entry_sort_key /
+///      find_entry_* / has_entry_guid / on_clear
+///   2. 业务接入钩子 — 三个预设容器都不覆盖, 业务按需覆盖 (与模式无关):
+///      on_check_add_one / on_check_sub_one / on_check_has_one / on_check_item_count_limit /
+///      on_item_count_changed / on_item_data_changed / check_item_position /
+///      get_item_position_cfg
+///   3. 位置字段映射 — 库内不做业务字段映射, 由最上层接入实现:
+///      extract_position / apply_position (纯虚, 接入层容器必须实现)
+/// 另外, 位置 / GUID 索引的挂摘与格子占用判断由各模式自己维护, 不在上面的钩子列表里。
 ///
 /// 库内不做 proto 位置字段的映射 (即不关心 user_inventory / character_equipment 等业务字段):
 /// extract_position / apply_position 是纯虚接口, 由最上层接入按自己的位置字段实现。
@@ -171,7 +176,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @brief 校验移动请求并生成 checked request (多条目: 先扣来源, 再放目标)
   ///
   /// 基类只做"基础操作": 建 checked request (request 自持) -> 初始化检查 -> 空请求判断
-  /// -> 交给 on_check_move 做本模式的移动校验 (来源 / 目标 / 批次内占用预演)。
+  /// -> 逐条跑业务钩子 (扣减条目 on_check_sub_one, 放入条目 on_check_add_one,
+  ///    顺序与 check_sub / check_add 一致) -> 交给 on_check_move 做本模式的移动校验
+  ///    (来源 / 目标 / 批次内占用预演)。
   /// 没有位置语义的模式 (无位置容器) 不支持 move: 基类默认的 on_check_move 直接拒绝。
   ITEM_ALGORITHM_API ItemMoveCheckedRequest check_move(const excel_config_group_ptr_t& config_group,
                                                        ItemMoveRequest&& request,
@@ -242,8 +249,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ITEM_ALGORITHM_API virtual void on_clear();
 
   // ============================================================
-  // 业务可覆盖的钩子 — 与模式无关, 三种模式共用这里的默认实现
-  // (业务容器直接覆盖这些, 不必区分模式)
+  // 模式钩子 — 由三个预设容器各自实现 (有限格子 / 无限格子 / 无位置)
+  // 业务容器一般不需要覆盖; 业务接入钩子集中在下一节
   // ============================================================
 
   /// @brief 一批放入请求的本模式检查
@@ -266,10 +273,21 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// 子类在这里检查 GUID 或指定位置上的条目是否存在、数量是否满足。
   /// @return EN_SUCCESS 表示整批通过; 失败时填 error_code 与 failed_type_id
   ITEM_ALGORITHM_API virtual ItemOperationResult on_check_has(const excel_config_group_ptr_t& config_group,
-                                                              const item_basic_readable_iterable& requests) const = 0;
+                                                             const item_basic_readable_iterable& requests) const = 0;
 
+  /// @brief 本条放入请求是否直接跳过 (即不校验也不执行)
+  ///
+  /// 被调用时机: check_add / add 的逐条循环开头, 在通用校验之前。默认不跳过;
+  /// 无位置容器把 count == 0 的请求当成空请求跳过。
+  ITEM_ALGORITHM_API virtual bool should_skip_add_request(const PROJECT_NAMESPACE_ID::DItemInstance& request) const;
+
+protected:
   // ============================================================
-  // 单条校验钩子 — 每条请求调一次 (默认实现不限制, 业务按需覆盖)
+  // 业务接入钩子 (开始) — 三个预设容器都不覆盖, 接入层 / 业务容器按需覆盖
+  //
+  // 这里的默认实现都是"不做额外限制", 业务要加规则时覆盖即可, 与容器模式无关:
+  // 预设容器不实现它们, 所以覆盖后三种模式都会生效。
+  // 位置字段映射 (extract_position / apply_position) 同样不由预设容器实现, 见下方同名小节。
   // ============================================================
 
   /// @brief 单条放入请求的额外校验
@@ -294,12 +312,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ITEM_ALGORITHM_API virtual int32_t on_check_has_one(const excel_config_group_ptr_t& config_group,
                                                       const PROJECT_NAMESPACE_ID::DItemBasic& request) const;
 
-  /// @brief 本条放入请求是否直接跳过 (即不校验也不执行)
-  ///
-  /// 被调用时机: check_add / add 的逐条循环开头, 在通用校验之前。默认不跳过;
-  /// 无位置容器把 count == 0 的请求当成空请求跳过。
-  ITEM_ALGORITHM_API virtual bool should_skip_add_request(const PROJECT_NAMESPACE_ID::DItemInstance& request) const;
-
   /// @brief 道具数量上限检查
   ///
   /// 被调用时机: check_add / load 逐条时 (current_count 已包含同批次前面的累计);
@@ -321,6 +333,16 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
                                                         int64_t new_count, int64_t type_total_count,
                                                         const ItemOperationContext& context);
 
+  /// @brief 道具数据变化钩子 (数量 / 位置等任意字段变化时触发)
+  ///
+  /// 由条目在改写 item_data 时触发 (见 ItemEntry::mutable_item_data), 因此保留在基类。
+  /// 三种模式容器在自己的操作流程里也会主动调用 (见各钩子的说明)。
+  /// 调用时机: 条目数据已被改写完成之后, 同一个操作可能触发多次 (每个条目一次)。
+  /// @param entry   数据发生变化的道具条目
+  /// @param context 操作上下文 (容器判定的原因 + 调用方透传的来源)
+  ITEM_ALGORITHM_API virtual void on_item_data_changed(const item_entry_ptr_t& entry,
+                                                      const ItemOperationContext& context);
+
   /// @brief 检查道具位置字段是否合法 (container_guid 已由基类判断)
   ///
   /// 被调用时机: 基类的 validate_item_basic, 即所有 check_* / load / apply_entries 逐条校验时。
@@ -335,6 +357,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ITEM_ALGORITHM_API virtual const PROJECT_NAMESPACE_ID::DItemPositionCfg* get_item_position_cfg(
       const excel_config_group_ptr_t& config_group, const PROJECT_NAMESPACE_ID::DItemBasic& basic) const;
 
+  // ============================================================
+  // 业务接入钩子 (结束)
+  // ============================================================
+
+protected:
   // ============================================================
   // 本模式自己实现的字段规则
   // ============================================================
@@ -385,20 +412,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @brief 把容器内部坐标写回 proto 位置字段 (由接入层按自己的位置字段实现)
   ITEM_ALGORITHM_API virtual void apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& position,
                                                  const ItemGridPosition& grid_pos) const = 0;
-
-  // ============================================================
-  // 子类可覆盖的变更通知钩子 (默认空实现)
-  // ============================================================
-
-  /// @brief 道具数据变化钩子 (数量 / 位置等任意字段变化时触发)
-  ///
-  /// 由条目在改写 item_data 时触发 (见 ItemEntry::mutable_item_data), 因此保留在基类。
-  /// 三种模式容器在自己的操作流程里也会主动调用 (见各钩子的说明)。
-  /// 调用时机: 条目数据已被改写完成之后, 同一个操作可能触发多次 (每个条目一次)。
-  /// @param entry   数据发生变化的道具条目
-  /// @param context 操作上下文 (容器判定的原因 + 调用方透传的来源)
-  ITEM_ALGORITHM_API virtual void on_item_data_changed(const item_entry_ptr_t& entry,
-                                                       const ItemOperationContext& context);
 
   // ============================================================
   // 单条执行钩子 — 基类负责 checked request 校验与循环, 子类只处理一件
