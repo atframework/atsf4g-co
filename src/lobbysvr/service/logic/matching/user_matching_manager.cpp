@@ -1354,3 +1354,9 @@ void user_matching_manager::init_level_select_data() {
   data_.mutable_level_data()->mutable_level_select()->set_faction_fill_policy(
       PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE);
 }
+
+int32_t user_matching_manager::get_last_match_faction_id() const { return data_.view().faction_id(); }
+
+std::string user_matching_manager::get_last_match_orbit_room_key() const {
+  return data_.view().orbit_room_key().client_id();
+}

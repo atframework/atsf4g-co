@@ -91,6 +91,10 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_matchsvr_snapshot(
       rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot);
 
+  // 聊天相关
+  int32_t get_last_match_faction_id() const;
+  std::string get_last_match_orbit_room_key() const;
+
  private:
   rpc::result_code_type start_matching_inner_(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                               const std::string& battle_version);
