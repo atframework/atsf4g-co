@@ -23,25 +23,34 @@ constexpr const double logic_hpa_observable_value::kDoubleNaN;
 #endif
 
 namespace {
+
+#if ABSL_LTS_RELEASE_VERSION >= 20260817
+using std::get;
+using std::holds_alternative;
+#else
+using absl::get;
+using absl::holds_alternative;
+#endif
+
 static int64_t pull_value_to_int64(const logic_hpa_pull_value& input) {
-  if (absl::holds_alternative<int64_t>(input.value)) {
-    return absl::get<int64_t>(input.value);
+  if (holds_alternative<int64_t>(input.value)) {
+    return get<int64_t>(input.value);
   }
 
-  if (absl::holds_alternative<double>(input.value)) {
-    return static_cast<int64_t>(absl::get<double>(input.value) + std::numeric_limits<float>::epsilon());
+  if (holds_alternative<double>(input.value)) {
+    return static_cast<int64_t>(get<double>(input.value) + std::numeric_limits<float>::epsilon());
   }
 
   return 0;
 }
 
 static double pull_value_to_double(const logic_hpa_pull_value& input) {
-  if (absl::holds_alternative<int64_t>(input.value)) {
-    return static_cast<double>(absl::get<int64_t>(input.value));
+  if (holds_alternative<int64_t>(input.value)) {
+    return static_cast<double>(get<int64_t>(input.value));
   }
 
-  if (absl::holds_alternative<double>(input.value)) {
-    return absl::get<double>(input.value);
+  if (holds_alternative<double>(input.value)) {
+    return get<double>(input.value);
   }
 
   return 0.0;
@@ -135,9 +144,9 @@ std::unique_ptr<logic_hpa_pull_instant_record> logic_hpa_pull_range_record::redu
       break;
     }
     case logic_hpa_range_reduce_type::kSum: {
-      bool previous_int64 = absl::holds_alternative<int64_t>(value.value);
+      bool previous_int64 = holds_alternative<int64_t>(value.value);
       for (size_t i = 1; i < data_.size(); ++i) {
-        if (previous_int64 && absl::holds_alternative<int64_t>(data_[i].value)) {
+        if (previous_int64 && holds_alternative<int64_t>(data_[i].value)) {
           value.value = pull_value_to_int64(value) + pull_value_to_int64(data_[i]);
         } else {
           previous_int64 = false;
@@ -147,9 +156,9 @@ std::unique_ptr<logic_hpa_pull_instant_record> logic_hpa_pull_range_record::redu
       break;
     }
     case logic_hpa_range_reduce_type::kAvg: {
-      bool previous_int64 = absl::holds_alternative<int64_t>(value.value);
+      bool previous_int64 = holds_alternative<int64_t>(value.value);
       for (size_t i = 1; i < data_.size(); ++i) {
-        if (previous_int64 && absl::holds_alternative<int64_t>(data_[i].value)) {
+        if (previous_int64 && holds_alternative<int64_t>(data_[i].value)) {
           value.value = pull_value_to_int64(value) + pull_value_to_int64(data_[i]);
         } else {
           previous_int64 = false;
@@ -164,9 +173,9 @@ std::unique_ptr<logic_hpa_pull_instant_record> logic_hpa_pull_range_record::redu
       break;
     }
     case logic_hpa_range_reduce_type::kMin: {
-      bool previous_int64 = absl::holds_alternative<int64_t>(value.value);
+      bool previous_int64 = holds_alternative<int64_t>(value.value);
       for (size_t i = 1; i < data_.size(); ++i) {
-        if (previous_int64 && absl::holds_alternative<int64_t>(data_[i].value)) {
+        if (previous_int64 && holds_alternative<int64_t>(data_[i].value)) {
           if (pull_value_to_int64(value) > pull_value_to_int64(data_[i])) {
             value = data_[i];
           }
@@ -180,9 +189,9 @@ std::unique_ptr<logic_hpa_pull_instant_record> logic_hpa_pull_range_record::redu
       break;
     }
     case logic_hpa_range_reduce_type::kMax: {
-      bool previous_int64 = absl::holds_alternative<int64_t>(value.value);
+      bool previous_int64 = holds_alternative<int64_t>(value.value);
       for (size_t i = 1; i < data_.size(); ++i) {
-        if (previous_int64 && absl::holds_alternative<int64_t>(data_[i].value)) {
+        if (previous_int64 && holds_alternative<int64_t>(data_[i].value)) {
           if (pull_value_to_int64(value) < pull_value_to_int64(data_[i])) {
             value = data_[i];
           }
