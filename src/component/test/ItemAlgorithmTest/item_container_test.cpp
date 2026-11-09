@@ -3928,6 +3928,34 @@ CASE_TEST(ItemContainer, on_check_add_sub_one_hook_in_move) {
     state.rejected_add_position_x = -1;
   }
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
+
+  // Case 4: op_count == 0 的非法入参在模式校验阶段就被拒绝, 业务钩子不会拿到 count=0
+  {
+    state.reset_call_counts();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({source_entry, 0});
+    move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(2, 1), 0});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    CASE_EXPECT_EQ(state.on_check_sub_calls, 0);
+    CASE_EXPECT_EQ(state.on_check_add_calls, 0);
+  }
+  CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
+
+  // Case 5: 目标位置非法 (被 check_item_position 拒绝) 同样在模式校验阶段失败, 业务钩子不参与
+  {
+    state.rejected_position_x = 2;
+    state.reset_call_counts();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({source_entry, 1});
+    move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(2, 1), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    CASE_EXPECT_EQ(state.on_check_sub_calls, 0);
+    CASE_EXPECT_EQ(state.on_check_add_calls, 0);
+    state.rejected_position_x = -1;
+  }
+  CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
 }
 
 CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {

@@ -314,18 +314,50 @@ ITEM_ALGORITHM_API ItemMoveCheckedRequest ItemContainer::check_move(const excel_
     return checked_request;
   }
 
+  // 本模式的移动校验 (入参 + 批次内占用预演): 失败时错误码由钩子写进 checked_request.result
+  if (!on_check_move(checked_request)) {
+    if (result.error_code == PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+    }
+    return checked_request;
+  }
+
   // 单条业务校验: 移动的两端同样要过 on_check_sub_one / on_check_add_one,
   // 否则 check_sub / check_add 上的业务规则在 move 路径上会被绕过。
-  // 传入的是调用方给的请求 (扣减数量 / 目标位置), 与模式校验的顺序和 check_add / check_sub 一致。
+  //
+  // 放在 on_check_move 之后: 此时 entry / op_count / goal_position 已经过本模式的入参校验,
+  // 这里再补一次 validate_item_basic, 让钩子看到的数据和 check_sub / check_add 里完全一致
+  // (钩子文档承诺"在通用校验之后调用")。
   for (size_t i = 0; i < checked_request.request.move_sub_entrys.size(); ++i) {
     const auto& sub_request = checked_request.request.move_sub_entrys[i];
     if (!sub_request.entry) {
-      // 空条目交给 on_check_move 报错并保持原有错误码
       continue;
     }
 
     PROJECT_NAMESPACE_ID::DItemBasic one_request = sub_request.entry->item_instance().item_basic();
+    // op_count 的正常性由 on_check_move 的入参校验兜底 (预设容器都会拒绝 <= 0);
+    // 自定义模式可能不校验, 这里仍做一次防御, 避免把非法数量交给业务钩子。
+    if (sub_request.op_count <= 0) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_type_id = one_request.type_id();
+      FWINSTLOGWARNING(logger(), "check_move sub rejected[{}]: invalid op_count={}, type={}, error={} ({})", i,
+                       sub_request.op_count, one_request.type_id(), result.error_code,
+                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
     one_request.set_count(sub_request.op_count);
+    int32_t validate_ret = validate_item_basic(config_group, one_request);
+    if (validate_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      result.error_code = validate_ret;
+      result.failed_type_id = one_request.type_id();
+      FWINSTLOGWARNING(
+          logger(), "check_move sub rejected[{}]: invalid sub request type={} count={} guid={}, error={} ({})", i,
+          one_request.type_id(), one_request.count(), one_request.guid(), result.error_code,
+          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
     int32_t one_ret = on_check_sub_one(config_group, one_request);
     if (one_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = one_ret;
@@ -345,8 +377,36 @@ ITEM_ALGORITHM_API ItemMoveCheckedRequest ItemContainer::check_move(const excel_
     }
 
     PROJECT_NAMESPACE_ID::DItemInstance one_request = add_request.entry->item_instance();
+    if (add_request.op_count <= 0) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_type_id = one_request.item_basic().type_id();
+      FWINSTLOGWARNING(logger(), "check_move add rejected[{}]: invalid op_count={}, type={}, error={} ({})", i,
+                       add_request.op_count, one_request.item_basic().type_id(), result.error_code,
+                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
     one_request.mutable_item_basic()->set_count(add_request.op_count);
     *one_request.mutable_item_basic()->mutable_position() = add_request.goal_position;
+
+    // 目标位置的通用校验: 容器归属 / 位置字段类型 / check_item_position, 覆盖 check_add 里
+    // validate_item_basic 与位置相关的部分。
+    // 这里不直接调 validate_item_basic: move 的放入端是"条目模板 + 目标位置", 部分移动时
+    // 来源条目还在, 新条目的 guid 会被置 0, 而 is_item_valid 要求 need_guid 的道具必须有 guid。
+    if (add_request.goal_position.container_guid() != get_container_guid() ||
+        add_request.goal_position.grid_position().position_type_case() != get_position_type() ||
+        !check_item_position(add_request.goal_position)) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_type_id = one_request.item_basic().type_id();
+      FWINSTLOGWARNING(
+          logger(),
+          "check_move add rejected[{}]: invalid goal position type={} container_guid={} expected_guid={}, error={} "
+          "({})",
+          i, one_request.item_basic().type_id(), add_request.goal_position.container_guid(), get_container_guid(),
+          result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
     int32_t one_ret = on_check_add_one(config_group, one_request);
     if (one_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = one_ret;
@@ -357,14 +417,6 @@ ITEM_ALGORITHM_API ItemMoveCheckedRequest ItemContainer::check_move(const excel_
           result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
-  }
-
-  // 本模式的移动校验 (入参 + 批次内占用预演): 失败时错误码由钩子写进 checked_request.result
-  if (!on_check_move(checked_request)) {
-    if (result.error_code == PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-    }
-    return checked_request;
   }
 
   FWINSTLOGDEBUG(logger(), "check_move pass, {} sub ops, {} add ops", checked_request.request.move_sub_entrys.size(),

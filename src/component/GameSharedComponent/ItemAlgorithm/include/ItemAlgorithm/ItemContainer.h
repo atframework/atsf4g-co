@@ -176,9 +176,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @brief 校验移动请求并生成 checked request (多条目: 先扣来源, 再放目标)
   ///
   /// 基类只做"基础操作": 建 checked request (request 自持) -> 初始化检查 -> 空请求判断
-  /// -> 逐条跑业务钩子 (扣减条目 on_check_sub_one, 放入条目 on_check_add_one,
-  ///    顺序与 check_sub / check_add 一致) -> 交给 on_check_move 做本模式的移动校验
-  ///    (来源 / 目标 / 批次内占用预演)。
+  /// -> 交给 on_check_move 做本模式的移动校验 (来源 / 目标 / 批次内占用预演)
+  /// -> 逐条跑业务钩子 (扣减条目 on_check_sub_one, 放入条目 on_check_add_one)。
+  /// 业务钩子的前置条件与 check_sub / check_add 一致: 只在入参通过本模式校验之后调用,
+  /// 且扣减侧再补一次 validate_item_basic、放入侧再校验目标位置 (容器归属 / 位置字段类型 /
+  /// check_item_position), 钩子不会看到 op_count 或目标位置非法的输入。
   /// 没有位置语义的模式 (无位置容器) 不支持 move: 基类默认的 on_check_move 直接拒绝。
   ITEM_ALGORITHM_API ItemMoveCheckedRequest check_move(const excel_config_group_ptr_t& config_group,
                                                        ItemMoveRequest&& request,
