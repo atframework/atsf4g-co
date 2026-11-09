@@ -341,6 +341,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
     auto now = util::time::time_utility::sys_now();
 
     // 状态指标，用于监控
+    // NOLINTBEGIN(bugprone-signed-bitwise)
     int64_t value = 0;
     if (output.main_controller_flag_cache == main_controller_flag::kYes) {
       value |= static_cast<int64_t>(controller_status_metrics_gauge::kMainController);
@@ -368,6 +369,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
       value |= static_cast<int64_t>(controller_status_metrics_gauge::kReplicatePending);
     }
 
+    // NOLINTEND(bugprone-signed-bitwise)
     output.controller_metrics_status.store(value, std::memory_order_relaxed);
   }
 
@@ -1519,14 +1521,6 @@ SERVER_FRAME_API util::network::http_request::ptr_t logic_hpa_controller::create
     ret->set_opt_string(CURLOPT_CAINFO, pull_ssl_cfg.ssl_ca_cert().c_str());
   }
 
-#if LIBCURL_VERSION_NUM >= 0x071504
-  if (!pull_ssl_cfg.ssl_client_tlsauth_username().empty()) {
-    ret->set_opt_string(CURLOPT_TLSAUTH_TYPE,
-                        "SRP");  // @see https://curl.haxx.se/libcurl/c/CURLOPT_TLSAUTH_TYPE.html
-    ret->set_opt_string(CURLOPT_TLSAUTH_USERNAME, pull_ssl_cfg.ssl_client_tlsauth_username().c_str());
-    ret->set_opt_string(CURLOPT_TLSAUTH_PASSWORD, pull_ssl_cfg.ssl_client_tlsauth_password().c_str());
-  }
-#endif
   // proxy cert and key
 #if LIBCURL_VERSION_NUM >= 0x073400
   if (!pull_ssl_cfg.ssl_proxy_cert().empty()) {
@@ -1551,13 +1545,6 @@ SERVER_FRAME_API util::network::http_request::ptr_t logic_hpa_controller::create
 
   if (!pull_ssl_cfg.ssl_proxy_ca_cert().empty()) {
     ret->set_opt_string(CURLOPT_PROXY_CAINFO, pull_ssl_cfg.ssl_proxy_ca_cert().c_str());
-  }
-
-  if (!pull_ssl_cfg.ssl_proxy_tlsauth_username().empty()) {
-    ret->set_opt_string(CURLOPT_PROXY_TLSAUTH_TYPE,
-                        "SRP");  // @see https://curl.haxx.se/libcurl/c/CURLOPT_PROXY_TLSAUTH_TYPE.html
-    ret->set_opt_string(CURLOPT_PROXY_TLSAUTH_USERNAME, pull_ssl_cfg.ssl_proxy_tlsauth_username().c_str());
-    ret->set_opt_string(CURLOPT_PROXY_TLSAUTH_PASSWORD, pull_ssl_cfg.ssl_proxy_tlsauth_password().c_str());
   }
 #endif
   // ssl cipher
@@ -1728,9 +1715,13 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
   }
 
   // 内置模块拉取指标的筛选规则,和k8s相似的结构
-  std::string auto_labels[] = {opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
-                               opentelemetry::semconv::service::kServiceNamespace, kLogicHpaLabelTargetKind,
-                               kLogicHpaLabelTargetApiVersion, kLogicHpaLabelTargetName};
+  std::string auto_labels[] = {
+      opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
+      opentelemetry::semconv::service::kServiceNamespace,
+      kLogicHpaLabelTargetKind,
+      kLogicHpaLabelTargetApiVersion,
+      kLogicHpaLabelTargetName,
+  };
 
   hpa_discovery_data_->discovery_filter.Clear();
   if (!owner_app_->get_metadata().kind().empty()) {
@@ -2055,12 +2046,17 @@ util::nostd::nonnull<std::shared_ptr<logic_hpa_policy>> logic_hpa_controller::in
     }
     if (append_default_aggregation_by(
             *patch_policy_cfg.mutable_aggregation_parameter(), common_attributes_reference_,
-            {{rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
-                  opentelemetry::semconv::deployment::kDeploymentEnvironmentName, true),
-              opentelemetry::semconv::deployment::kDeploymentEnvironmentName},
-             // {kLogicHpaMetricsTargetInfoInstance}, // Prometheus直接计算好，省去二次聚合
-             {kLogicHpaMetricsTargetInfoServiceNamespace, opentelemetry::semconv::service::kServiceNamespace},
-             {kLogicHpaMetricsTargetInfoServiceName, opentelemetry::semconv::service::kServiceName}})) {
+            {
+                {rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
+                     opentelemetry::semconv::deployment::kDeploymentEnvironmentName, true),
+                 opentelemetry::semconv::deployment::kDeploymentEnvironmentName},
+                // {kLogicHpaMetricsTargetInfoInstance}, // Prometheus直接计算好，省去二次聚合
+                {kLogicHpaMetricsTargetInfoServiceNamespace, opentelemetry::semconv::service::kServiceNamespace},
+                {
+                    kLogicHpaMetricsTargetInfoServiceName,
+                    opentelemetry::semconv::service::kServiceName,
+                },
+            })) {
       patch_policy_cfg.set_aggregation(PROJECT_NAMESPACE_ID::config::EN_HPA_POLICY_AGGREGATION_SUM);
       policy_instance = atfw::memory::stl::make_shared<logic_hpa_policy>(
           *this, telemetry_group_, hpa_cfg, patch_policy_cfg, common_attributes_reference_, common_selectors_);
@@ -3025,8 +3021,8 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
     cleanup_expect_replicas_policy();
     cleanup_default_hpa_discovery();
 
-    reload_custom_discoveries.reset(
-        new gsl::final_action<std::function<void()>>([hpa_discovery_data = hpa_discovery_data_]() {
+    reload_custom_discoveries =
+        gsl::make_unique<gsl::final_action<std::function<void()>>>([hpa_discovery_data = hpa_discovery_data_]() {
           if (!hpa_discovery_data || hpa_discovery_data->stoping) {
             return;
           }
@@ -3049,7 +3045,7 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
               custom_discovery.second.setup_callback(*custom_discovery.second.instance, accessor);
             }
           }
-        }));
+        });
   }
   // Stoping default_hpa_discovery
   if (hpa_discovery_data_->default_hpa_discovery && hpa_discovery_data_->default_hpa_discovery->is_stoping()) {

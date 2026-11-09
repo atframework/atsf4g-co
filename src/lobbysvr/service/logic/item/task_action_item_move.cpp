@@ -58,7 +58,7 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_item_move::result_type 
   }
 
   std::vector<item_algorithm::ItemContainerGroupMoveRequest> move_request;
-  move_request.reserve(req_body.requests_size());
+  move_request.reserve(static_cast<size_t>(req_body.requests_size()));
   for (auto& req : *req_body.mutable_requests()) {
     item_algorithm::ItemContainerGroupMoveRequest move_req;
     move_req.source_item_basic.Swap(req.mutable_source_item_basic());

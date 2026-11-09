@@ -40,16 +40,12 @@ metrics:
     # ssl_client_key_type: "PEM"
     # ssl_client_key_passwd: ""
     # ssl_ca_cert: ""
-    # ssl_client_tlsauth_username: ""
-    # ssl_client_tlsauth_password: ""
     # ssl_proxy_cert: ""
     # ssl_proxy_cert_type: "PEM"
     # ssl_proxy_key: ""
     # ssl_proxy_key_type: "PEM"
     # ssl_proxy_key_passwd: ""
     # ssl_proxy_ca_cert: ""
-    # ssl_proxy_tlsauth_username: ""
-    # ssl_proxy_tlsauth_password: ""
     # ssl_cipher_list: "" # @see https://curl.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html
     # ssl_cipher_list_tls13: "" # @see https://curl.se/libcurl/c/CURLOPT_TLS13_CIPHERS.html
   # labels:

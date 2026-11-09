@@ -62,8 +62,6 @@ message logic_hpa_ssl {
   string ssl_client_key_type = 114;          // CURLOPT_SSLKEYTYPE: PEM, DER or ENG
   string ssl_client_key_passwd = 115;        // CURLOPT_KEYPASSWD or CURLOPT_SSLCERTPASSWD
   string ssl_ca_cert = 116;                  // CURLOPT_CAINFO
-  string ssl_client_tlsauth_username = 117;  // CURLOPT_TLSAUTH_USERNAME
-  string ssl_client_tlsauth_password = 118;  // CURLOPT_TLSAUTH_PASSWORD
 
   string ssl_proxy_cert = 121;              // CURLOPT_PROXY_SSLCERT
   string ssl_proxy_cert_type = 122;         // CURLOPT_PROXY_SSLCERTTYPE: PEM or DER
@@ -71,8 +69,6 @@ message logic_hpa_ssl {
   string ssl_proxy_key_type = 124;          // CURLOPT_PROXY_SSLKEYTYPE: PEM, DER or ENG
   string ssl_proxy_key_passwd = 125;        // CURLOPT_PROXY_KEYPASSWD or CURLOPT_PROXY_SSLCERTPASSWD
   string ssl_proxy_ca_cert = 126;           // CURLOPT_PROXY_CAINFO
-  string ssl_proxy_tlsauth_username = 127;  // CURLOPT_PROXY_TLSAUTH_USERNAME
-  string ssl_proxy_tlsauth_password = 128;  // CURLOPT_PROXY_TLSAUTH_PASSWORD
 
   string ssl_cipher_list = 201;        // CURLOPT_SSL_CIPHER_LIST
   string ssl_cipher_list_tls13 = 202;  // CURLOPT_TLS13_CIPHERS
