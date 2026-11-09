@@ -298,7 +298,8 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   return 0;
 }
 
-int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key) {
+int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
+                                            int32_t /*faction_id*/) {
   if (is_orbit_room_exist()) {
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
     return PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM;

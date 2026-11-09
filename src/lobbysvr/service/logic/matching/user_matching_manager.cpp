@@ -182,8 +182,8 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
       if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE ||
           data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING ||
           data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED) {
-        const int32_t join_result =
-            owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key());
+        const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key(),
+                                                                                     data_.view().faction_id());
         if (join_result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
           FWLOGERROR("{} recover missing matching Unit through Orbit failed, unit_id={}, result={}({})", *owner_,
                      get_current_unit_id(), join_result, protobuf_mini_dumper_get_error_msg(join_result));
@@ -203,7 +203,8 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
     if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE ||
         data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING ||
         data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED) {
-      const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key());
+      const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key(),
+                                                                                   data_.view().faction_id());
       if (join_result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
         FWLOGERROR("{} recover missing matching Unit through Orbit failed, unit_id={}, result={}({})", *owner_,
                    get_current_unit_id(), join_result, protobuf_mini_dumper_get_error_msg(join_result));
@@ -715,8 +716,9 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
       bool snapshot_effect_succeeded = true;
       if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED &&
           !owner_->get_user_orbit_manager().is_orbit_room_exist()) {
-        snapshot_effect_succeeded = owner_->get_user_orbit_manager().join_orbit_room(
-                                        ctx, data_.view().orbit_room_key()) == PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+        snapshot_effect_succeeded =
+            owner_->get_user_orbit_manager().join_orbit_room(
+                ctx, data_.view().orbit_room_key(), data_.view().faction_id()) == PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
       }
       if (snapshot_effect_succeeded) {
         FCTXLOGDEBUG(ctx,
@@ -792,7 +794,8 @@ user_matching_manager::matching_sync_result user_matching_manager::acknowledge_m
 
     if (event_log.event_type() == PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_BATTLE_READY &&
         !owner_->get_user_orbit_manager().is_orbit_room_exist()) {
-      const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key());
+      const int32_t join_result = owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key(),
+                                                                                   data_.view().faction_id());
       if (join_result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
         FWLOGERROR("{} handle matching battle-ready event failed, unit_id={}, event_id={}, result={}", *owner_,
                    sync.unit_id(), event_log.event_id(), join_result);
