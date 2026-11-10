@@ -231,8 +231,7 @@ static bool init_user_mail_manager_handle() {
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kAddMail),
       [](rpc::context &ctx, user &user_inst, int32_t /*job_type*/,
-         // NOLINTNEXTLINE(performance-unnecessary-value-param)
-         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+         const task_action_user_remote_patch_jobs::async_job_ptr_type &job_data) -> int32_t {
         const PROJECT_NAMESPACE_ID::user_async_job_add_mail &add_mail = job_data->add_mail();
         return user_inst.get_user_mail_manager().add_mail(ctx, add_mail.mail_record());
       });
@@ -240,8 +239,7 @@ static bool init_user_mail_manager_handle() {
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kRemoveMail),
       [](rpc::context &ctx, user &user_inst, int32_t /*job_type*/,
-         // NOLINTNEXTLINE(performance-unnecessary-value-param)
-         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+         const task_action_user_remote_patch_jobs::async_job_ptr_type &job_data) -> int32_t {
         const PROJECT_NAMESPACE_ID::user_async_job_add_mail &remove_mail = job_data->remove_mail();
         if (0 == remove_mail.mail_record().mail_id()) {
           return 0;

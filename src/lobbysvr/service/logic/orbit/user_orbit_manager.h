@@ -10,8 +10,8 @@
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
 
+#include <chrono>
 #include <string>
-#include <unordered_map>
 
 namespace rpc {
 class context;
@@ -51,7 +51,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   // 远端启动Client
   void receive_orbit_remote_start(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
   // 组装历史数据
-  void load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::client_subscriber::ptr_t subscriber);
+  void load_orbit_room_snapshot(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber);
   // 收到事件消息
   void on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                         const ::atfw::dtmq::DChannelMessage& data);
@@ -64,8 +64,9 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   void clear_orbit_room_data();
   void on_receive_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomEventLog& event_log);
   void mark_dirty();
-  int32_t create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                      int64_t end_join_timepoint, int64_t expired_timepoint);
+  int32_t create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key, int32_t faction_id,
+                      std::chrono::system_clock::time_point end_join_timepoint,
+                      std::chrono::system_clock::time_point expired_timepoint);
   user* ATFW_UTIL_MACRO_NONNULL owner_;
 
   struct orbit_room_data {
@@ -82,10 +83,15 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   std::string subscriber_key_;
   bool dirty_ = false;
 
-  PROJECT_NAMESPACE_ID::DOrbitRoomKey room_key_;
-  int64_t end_join_timepoint_ = 0;
-  int64_t expired_timepoint_ = 0;
-  int64_t last_heartbeat_timepoint_ = 0;  // 最近一次收到房间心跳的时间点
+  struct orbit_room_cache {
+    PROJECT_NAMESPACE_ID::DOrbitRoomKey room_key;
+    int32_t faction_id = 0;
+    std::chrono::system_clock::time_point end_join_timepoint = std::chrono::system_clock::from_time_t(0);
+    std::chrono::system_clock::time_point expired_timepoint = std::chrono::system_clock::from_time_t(0);
+  };
+  orbit_room_cache room_cache_;
+  // 最近一次收到房间心跳的时间点
+  std::chrono::system_clock::time_point last_heartbeat_timepoint_ = std::chrono::system_clock::from_time_t(0);
   bool subscriber_ready_ = false;
   rpc::dtmq::client_subscriber::ptr_t subscriber_;
   orbit_room_data_ptr room_data_;

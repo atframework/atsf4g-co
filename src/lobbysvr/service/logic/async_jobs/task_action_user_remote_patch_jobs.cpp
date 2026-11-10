@@ -37,8 +37,6 @@
 #include <utility>
 #include <vector>
 
-#include "logic/mail/user_mail_manager.h"
-
 namespace {
 
 static std::unordered_map<int32_t, task_action_user_remote_patch_jobs::sync_callback_type>&

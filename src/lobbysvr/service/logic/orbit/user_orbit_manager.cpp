@@ -31,12 +31,9 @@
 
 #include <logic/async_jobs/user_async_jobs_manager.h>
 
-#include <list>
+#include <chrono>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 #include "data/session.h"
 #include "data/user.h"
@@ -44,9 +41,9 @@
 
 namespace {
 // 超过该秒数没有收到 orbitsvr 的房间心跳，认为房间已经不存在
-constexpr int64_t kOrbitRoomHeartbeatTimeoutSec = 120;
+static constexpr auto kOrbitRoomHeartbeatTimeout = std::chrono::seconds(120);
 // 判定房间过期后，留给结算/清理流程的容忍时间
-constexpr int64_t kOrbitRoomExpireDelaySec = 30;
+static constexpr auto kOrbitRoomExpireDelay = std::chrono::seconds(30);
 
 static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit_channel_event_callback_set() {
   rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret =
@@ -59,6 +56,7 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
           FWLOGERROR("user_orbit_manager on_ready callback missing local_private_data");
           return;
         }
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
         user_orbit_manager* orbit_mgr = reinterpret_cast<user_orbit_manager*>(local_private_data[0]);
         if (!orbit_mgr) {
           FWLOGERROR("user_orbit_manager on_ready callback missing orbit_mgr");
@@ -76,6 +74,7 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
           FWLOGERROR("user_orbit_manager on_receive_event callback missing local_private_data");
           return;
         }
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
         user_orbit_manager* orbit_mgr = reinterpret_cast<user_orbit_manager*>(local_private_data[0]);
         if (!orbit_mgr) {
           FWLOGERROR("user_orbit_manager on_receive_event callback missing orbit_mgr");
@@ -93,6 +92,7 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
           FWLOGERROR("user_orbit_manager on_destroyed callback missing local_private_data");
           return;
         }
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
         user_orbit_manager* orbit_mgr = reinterpret_cast<user_orbit_manager*>(local_private_data[0]);
         if (!orbit_mgr) {
           FWLOGERROR("user_orbit_manager on_destroyed callback missing orbit_mgr");
@@ -119,7 +119,7 @@ static bool init_user_orbit_manager_handle() {
   task_action_user_remote_patch_jobs::register_async_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish),
       [](rpc::context& ctx, user& user_inst, int32_t /*job_type*/,
-         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> rpc::result_code_type {
+         const task_action_user_remote_patch_jobs::async_job_ptr_type& job_data) -> rpc::result_code_type {
         PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = *job_data->mutable_orbit_finish();
         RPC_AWAIT_IGNORE_VOID(
             user_inst.get_user_orbit_manager().receive_orbit_settlement(ctx, *orbit_finish_data.mutable_data()));
@@ -128,7 +128,7 @@ static bool init_user_orbit_manager_handle() {
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitRemoteStart),
       [](rpc::context& ctx, user& user_inst, int32_t /*job_type*/,
-         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+         const task_action_user_remote_patch_jobs::async_job_ptr_type& job_data) -> int32_t {
         const PROJECT_NAMESPACE_ID::user_async_job_orbit_remote_start& orbit_remote_start_data =
             job_data->orbit_remote_start();
         user_inst.get_user_orbit_manager().receive_orbit_remote_start(ctx, orbit_remote_start_data.arg());
@@ -143,18 +143,21 @@ user_orbit_manager::user_orbit_manager(user& owner) : owner_(&owner) {
   ATFW_EXPLICIT_UNUSED_ATTR static bool init_handle = init_user_orbit_manager_handle();
 }
 
-void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
+void user_orbit_manager::refresh_feature_limit_second(rpc::context& ctx) {
   do {
     if (!subscriber_ready_) {
       // 等subscriber ready
       break;
     }
-    if (end_join_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= end_join_timepoint_) {
+    auto now = ctx.logical_now();
+    if (room_cache_.end_join_timepoint > std::chrono::system_clock::from_time_t(0) &&
+        now >= room_cache_.end_join_timepoint) {
       // 结束加入时间点到了 但是没有收到加入消息
-      FWLOGERROR(
+      FCTXLOGERROR(
+          ctx,
           "{} user_orbit_manager refresh_feature_limit_second orbit room end join timepoint reached but no join "
           "event, clear orbit room data {}",
-          *owner_, room_key_.client_id());
+          *owner_, room_cache_.room_key.client_id());
       clear_orbit_room_data();
       break;
     }
@@ -166,25 +169,27 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
           (room_data_->finish_event_ || PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH == room_data_->room_status_ ||
            PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_EXIT == room_data_->room_status_);
       if (!room_finished) {
-        int64_t now = atfw::util::time::time_utility::get_now();
-        if (last_heartbeat_timepoint_ <= 0) {
+        if (last_heartbeat_timepoint_ <= std::chrono::system_clock::from_time_t(0)) {
           // 恢复房间数据后从当前时间开始算
           last_heartbeat_timepoint_ = now;
-        } else if (now - last_heartbeat_timepoint_ >= kOrbitRoomHeartbeatTimeoutSec) {
-          int64_t next_expired_timepoint = now + kOrbitRoomExpireDelaySec;
-          if (expired_timepoint_ <= 0 || expired_timepoint_ > next_expired_timepoint) {
+        } else if (now - last_heartbeat_timepoint_ >= kOrbitRoomHeartbeatTimeout) {
+          auto next_expired_timepoint = now;
+          next_expired_timepoint += kOrbitRoomExpireDelay;
+          if (room_cache_.expired_timepoint <= std::chrono::system_clock::from_time_t(0) ||
+              room_cache_.expired_timepoint > next_expired_timepoint) {
             FWLOGWARNING(
                 "{} user_orbit_manager orbit room heartbeat timeout, last_heartbeat_timepoint: {}, expired_timepoint: "
                 "{} -> {}",
-                *owner_, last_heartbeat_timepoint_, expired_timepoint_, next_expired_timepoint);
-            expired_timepoint_ = next_expired_timepoint;
+                *owner_, last_heartbeat_timepoint_, room_cache_.expired_timepoint, next_expired_timepoint);
+            room_cache_.expired_timepoint = next_expired_timepoint;
             mark_dirty();
           }
         }
       }
     }
 
-    if (expired_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= expired_timepoint_) {
+    if (room_cache_.expired_timepoint > std::chrono::system_clock::from_time_t(0) &&
+        now >= room_cache_.expired_timepoint) {
       // 过期了
       if (owner_->get_user_async_jobs_manager().is_async_jobs_task_running()) {
         // 等异步任务完成
@@ -196,26 +201,26 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
           FWLOGERROR(
               "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no finish event, clear "
               "orbit room data {}",
-              *owner_, room_key_.client_id());
-          clear_orbit_room_data();
-          break;
-        } else {
-          // 存在结算 但是没有异步任务
-          FWLOGERROR(
-              "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no async jobs, clear "
-              "orbit room data {}",
-              *owner_, room_key_.client_id());
+              *owner_, room_cache_.room_key.client_id());
           clear_orbit_room_data();
           break;
         }
-      } else {
-        // 数据移除
+
+        // 存在结算 但是没有异步任务
         FWLOGERROR(
-            "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no room data, clear orbit "
-            "room data {}",
-            *owner_, room_key_.client_id());
+            "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no async jobs, clear "
+            "orbit room data {}",
+            *owner_, room_cache_.room_key.client_id());
         clear_orbit_room_data();
+        break;
       }
+
+      // 数据移除
+      FWLOGERROR(
+          "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no room data, clear orbit "
+          "room data {}",
+          *owner_, room_cache_.room_key.client_id());
+      clear_orbit_room_data();
     }
   } while (false);
 }
@@ -224,9 +229,11 @@ rpc::result_code_type user_orbit_manager::login_init(rpc::context& ctx) {
   subscriber_key_ = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
   // 如果存在数据则创建房间
   if (is_orbit_room_exist()) {
-    int32_t ret = create_room(ctx, room_key_, end_join_timepoint_, expired_timepoint_);
+    int32_t ret = create_room(ctx, room_cache_.room_key, room_cache_.faction_id, room_cache_.end_join_timepoint,
+                              room_cache_.expired_timepoint);
     if (ret != 0) {
-      FWLOGERROR("user_orbit_manager login_init create_room failed: {} for room: {}", ret, room_key_.client_id());
+      FWLOGERROR("user_orbit_manager login_init create_room failed: {} for room: {}", ret,
+                 room_cache_.room_key.client_id());
     }
   }
   RPC_RETURN_CODE(0);
@@ -234,7 +241,7 @@ rpc::result_code_type user_orbit_manager::login_init(rpc::context& ctx) {
 
 void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const {
   if (room_data_) {
-    *user_data.mutable_room_key() = room_key_;
+    *user_data.mutable_room_key() = room_cache_.room_key;
     user_data.set_client_address(room_data_->ready_data_.client_address());
     user_data.set_init(room_data_->is_joined_);
     user_data.set_token(room_data_->init_result_.token());
@@ -245,27 +252,36 @@ void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserDat
 }
 
 void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
-  room_key_ = user_table.orbit_room_data().room_key();
-  end_join_timepoint_ = user_table.orbit_room_data().user_end_join_timepoint();
-  expired_timepoint_ = user_table.orbit_room_data().expired_timepoint();
+  room_cache_.room_key = user_table.orbit_room_data().room_key();
+  room_cache_.faction_id = user_table.orbit_room_data().faction_id();
+  // FIXME(youxongyang): 协议使用原生Timestamp类型
+  room_cache_.end_join_timepoint =
+      std::chrono::system_clock::from_time_t(user_table.orbit_room_data().user_end_join_timepoint());
+  room_cache_.expired_timepoint =
+      std::chrono::system_clock::from_time_t(user_table.orbit_room_data().expired_timepoint());
 }
 
 int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
-  *user_table.mutable_orbit_room_data()->mutable_room_key() = room_key_;
-  user_table.mutable_orbit_room_data()->set_expired_timepoint(expired_timepoint_);
-  user_table.mutable_orbit_room_data()->set_user_end_join_timepoint(end_join_timepoint_);
+  *user_table.mutable_orbit_room_data()->mutable_room_key() = room_cache_.room_key;
+  user_table.mutable_orbit_room_data()->set_faction_id(room_cache_.faction_id);
+  user_table.mutable_orbit_room_data()->set_expired_timepoint(
+      std::chrono::system_clock::to_time_t(room_cache_.expired_timepoint));
+  user_table.mutable_orbit_room_data()->set_user_end_join_timepoint(
+      std::chrono::system_clock::to_time_t(room_cache_.end_join_timepoint));
   return 0;
 }
 
-bool user_orbit_manager::is_orbit_room_exist() const { return !room_key_.client_id().empty(); }
+bool user_orbit_manager::is_orbit_room_exist() const { return !room_cache_.room_key.client_id().empty(); }
 
 int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                        int64_t end_join_timepoint, int64_t expired_timepoint) {
+                                        int32_t faction_id, std::chrono::system_clock::time_point end_join_timepoint,
+                                        std::chrono::system_clock::time_point expired_timepoint) {
   mark_dirty();
-  room_key_ = room_key;
-  end_join_timepoint_ = end_join_timepoint;
-  expired_timepoint_ = expired_timepoint;
-  last_heartbeat_timepoint_ = atfw::util::time::time_utility::get_now();
+  room_cache_.room_key = room_key;
+  room_cache_.faction_id = faction_id;
+  room_cache_.end_join_timepoint = end_join_timepoint;
+  room_cache_.expired_timepoint = expired_timepoint;
+  last_heartbeat_timepoint_ = ctx.logical_now();
 
   // 创建subscriber并订阅频道
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
@@ -299,30 +315,33 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
 }
 
 int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                            int32_t /*faction_id*/) {
+                                            int32_t faction_id) {
   if (is_orbit_room_exist()) {
-    FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
+    FCTXLOGERROR(ctx, "{} user_orbit_manager already in orbit room: {}", *owner_, room_cache_.room_key.client_id());
     return PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM;
   }
   // 容忍时间 需要10秒处理状态
-  int64_t end_join_timepoint = atfw::util::time::time_utility::get_now() + 10;
+  std::chrono::system_clock::time_point end_join_timepoint = ctx.logical_now();
+  end_join_timepoint += std::chrono::seconds(10);
   // expired_timepoint 这里用 end_join_timepoint
-  int32_t ret = create_room(ctx, room_key, end_join_timepoint, end_join_timepoint);
+  int32_t ret = create_room(ctx, room_key, faction_id, end_join_timepoint, end_join_timepoint);
   if (ret != 0) {
-    FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key.client_id());
+    FCTXLOGERROR(ctx, "{} user_orbit_manager create_room failed: {} for room: {}", *owner_, ret, room_key.client_id());
     return ret;
   }
-  FWLOGINFO("user_orbit_manager joined orbit room: {}", room_key_.client_id());
+
+  FCTXLOGINFO(ctx, "{} user_orbit_manager joined orbit room: {}", *owner_, room_cache_.room_key.client_id());
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::client_subscriber::ptr_t subscriber) {
+void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx,
+                                                  const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
   if (!subscriber) {
-    FWLOGERROR("user_orbit_manager load_orbit_room_snapshot missing subscriber");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot missing subscriber", *owner_);
     return;
   }
   if (subscriber != subscriber_) {
-    FWLOGERROR("user_orbit_manager load_orbit_room_snapshot subscriber mismatch");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot subscriber mismatch", *owner_);
     return;
   }
   subscriber_ready_ = true;
@@ -340,24 +359,23 @@ void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::
 }
 
 rpc::result_void_type user_orbit_manager::receive_orbit_settlement(
-    ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
-    ATFW_EXPLICIT_UNUSED_ATTR PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data) {
+    rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data) {
   // 收到结算的时候 一定存在key 否则丢弃
   if (!is_orbit_room_exist()) {
-    FWLOGERROR("{} user_orbit_manager receive_orbit_settlement missing orbit room key {}", *owner_,
-               room_key_.client_id());
+    FCTXLOGERROR(ctx, "{} user_orbit_manager receive_orbit_settlement missing orbit room key {}", *owner_,
+                 room_cache_.room_key.client_id());
     RPC_RETURN_VOID;
   }
   // 结算不匹配 丢弃
-  if (finish_data.room_key().client_id() != room_key_.client_id()) {
-    FWLOGERROR("{} user_orbit_manager receive_orbit_settlement room key mismatch: {}", *owner_,
-               finish_data.room_key().client_id());
+  if (finish_data.room_key().client_id() != room_cache_.room_key.client_id()) {
+    FCTXLOGERROR(ctx, "{} user_orbit_manager receive_orbit_settlement room key mismatch: {}", *owner_,
+                 finish_data.room_key().client_id());
     RPC_RETURN_VOID;
   }
   if (!finish_data.init_success()) {
     // 没有成功直接删除
-    FWLOGERROR("{} user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}", *owner_,
-               room_key_.client_id());
+    FCTXLOGERROR(ctx, "{} user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}", *owner_,
+                 room_cache_.room_key.client_id());
     clear_orbit_room_data();
     RPC_RETURN_VOID;
   }
@@ -383,51 +401,53 @@ void user_orbit_manager::receive_orbit_remote_start(rpc::context& ctx,
 void user_orbit_manager::on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                                           const ::atfw::dtmq::DChannelMessage& data) {
   if (!subscriber) {
-    FWLOGERROR("user_orbit_manager load_orbit_room_snapshot missing subscriber");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot missing subscriber", *owner_);
     return;
   }
   if (subscriber != subscriber_) {
-    FWLOGERROR("user_orbit_manager load_orbit_room_snapshot subscriber mismatch");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot subscriber mismatch", *owner_);
     return;
   }
   if (data.detail().event().type_url().empty()) {
-    FWLOGERROR("user_orbit_manager on_receive_event missing type_url");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager on_receive_event missing type_url", *owner_);
     return;
   }
   PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
   if (!data.detail().event().UnpackTo(&event_log)) {
-    FWLOGERROR("user_orbit_manager on_receive_event failed to unpack event");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager on_receive_event failed to unpack event", *owner_);
     return;
   }
   on_receive_event(ctx, event_log);
 }
 
-void user_orbit_manager::on_channel_destroyed(rpc::context&, const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
+void user_orbit_manager::on_channel_destroyed(rpc::context& ctx,
+                                              const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
   if (!subscriber) {
-    FWLOGERROR("user_orbit_manager on_channel_destroyed missing subscriber");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager on_channel_destroyed missing subscriber", *owner_);
     return;
   }
   if (subscriber != subscriber_) {
-    FWLOGERROR("user_orbit_manager on_channel_destroyed subscriber mismatch");
+    FCTXLOGERROR(ctx, "{} user_orbit_manager on_channel_destroyed subscriber mismatch", *owner_);
     return;
   }
   // 过期时间设置为当前时间加容忍值
   subscriber_ready_ = true;
-  expired_timepoint_ = atfw::util::time::time_utility::get_now() + kOrbitRoomExpireDelaySec;
-  FWLOGWARNING("{} user_orbit_manager on_channel_destroyed room {}", *owner_, room_key_.client_id());
+  room_cache_.expired_timepoint = ctx.logical_now();
+  room_cache_.expired_timepoint += kOrbitRoomExpireDelay;
+  FCTXLOGWARNING(ctx, "{} user_orbit_manager on_channel_destroyed room {}", *owner_, room_cache_.room_key.client_id());
 }
 
 int32_t user_orbit_manager::dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& /*init_data*/) {
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
-void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
+void user_orbit_manager::on_receive_event(rpc::context& ctx,
                                           const PROJECT_NAMESPACE_ID::DOrbitRoomEventLog& event_log) {
   room_data_->room_status_ = event_log.orbit_room_status();
   switch (event_log.event_case()) {
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kRoomInit:
       room_data_->init_data_ = event_log.room_init();
-      expired_timepoint_ = event_log.room_init().expired_timepoint();
+      room_cache_.expired_timepoint = std::chrono::system_clock::from_time_t(event_log.room_init().expired_timepoint());
       mark_dirty();
       break;
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kReadyData:
@@ -439,7 +459,7 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
           event_log.user_init_success().init_result().user_key().user_key().zone_id() == owner_->get_zone_id()) {
         room_data_->init_result_ = event_log.user_init_success().init_result();
         room_data_->is_joined_ = true;
-        end_join_timepoint_ = 0;
+        room_cache_.end_join_timepoint = std::chrono::system_clock::from_time_t(0);
         mark_dirty();
       }
       break;
@@ -454,7 +474,7 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
       room_data_->exit_info_ = event_log.client_exit().exit_info();
       break;
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kRoomHeartbeat:
-      last_heartbeat_timepoint_ = atfw::util::time::time_utility::get_now();
+      last_heartbeat_timepoint_ = ctx.logical_now();
       break;
     default:
       break;
@@ -462,12 +482,12 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
 }
 
 void user_orbit_manager::clear_orbit_room_data() {
-  room_key_.Clear();
+  room_cache_.room_key.Clear();
   subscriber_ = nullptr;
   room_data_ = nullptr;
-  end_join_timepoint_ = 0;
-  expired_timepoint_ = 0;
-  last_heartbeat_timepoint_ = 0;
+  room_cache_.end_join_timepoint = std::chrono::system_clock::from_time_t(0);
+  room_cache_.expired_timepoint = std::chrono::system_clock::from_time_t(0);
+  last_heartbeat_timepoint_ = std::chrono::system_clock::from_time_t(0);
   subscriber_ready_ = false;
   mark_dirty();
 }

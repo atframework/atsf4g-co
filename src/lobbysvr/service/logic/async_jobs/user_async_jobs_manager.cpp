@@ -25,8 +25,10 @@
 
 #include <rpc/rpc_async_invoke.h>
 
+#include <string>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
 
@@ -34,7 +36,7 @@ static bool init_user_async_jobs_manager_handle() {
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kDebugMessage),
       [](rpc::context& /*ctx*/, user& user_inst, int32_t /*job_type*/,
-         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+         const task_action_user_remote_patch_jobs::async_job_ptr_type& job_data) -> int32_t {
         FWLOGINFO("{} [TODO] do async action {}, message: {}", user_inst, static_cast<int32_t>(job_data->action_case()),
                   job_data->DebugString());
         return 0;
