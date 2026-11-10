@@ -5282,6 +5282,410 @@ CASE_TEST(ItemContainerGroup, cross_container_move_and_reposition) {
   CASE_EXPECT_EQ(1, count_instances_type(*grid_b, kItemTypeId_2x2));
 }
 
+/// @brief 组级 add / sub / move 的多容器分支总览
+///
+/// 覆盖三组接口在所有分支上的行为:
+///   - add: 跨容器批量、同容器同位置合入、路由不到容器、某个容器位置冲突导致整批不落地;
+///   - sub: 跨容器批量、数量不足、路由不到容器;
+///   - move: 跨容器、同容器部分移动、同容器整件移动 (含 GUID 装备: 不能误报 GUID 重复)、
+///           同容器同锚点 (不需要移动)、源条目不存在、超出持有量、目标位置被占用、
+///           多条组请求合并到同一条目。
+CASE_TEST(ItemContainerGroup, add_sub_move_all_branches) {
+  using namespace item_algorithm;  // NOLINT(build/namespaces)
+  auto config = make_test_config_group();
+
+  constexpr int64_t kGuidA = 0x5031;
+  constexpr int64_t kGuidB = 0x5032;
+  constexpr int64_t kGuidUnknown = 0x503F;
+  constexpr int64_t kEquipGuid = 8201;
+
+  TestItemContainerGroup group;
+  auto grid_a = atfw::util::memory::make_strong_rc<TestItemFiniteGridContainer>();
+  auto grid_b = atfw::util::memory::make_strong_rc<TestItemFiniteGridContainer>();
+  init_test_container(*grid_a, 10, 10, kGuidA);
+  init_test_container(*grid_b, 10, 10, kGuidB);
+  grid_a->register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  grid_b->register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  group.register_container(kGuidA, grid_a);
+  group.register_container(kGuidB, grid_b);
+
+  /// @brief 构造一条组级移动请求 (来源条目按 type/guid/位置指定, 目标只带位置)
+  auto make_group_move = [](int32_t type_id, int64_t item_guid, int64_t from_guid, int32_t from_x, int32_t from_y,
+                            int64_t count, int64_t to_guid, int32_t to_x, int32_t to_y) {
+    std::vector<ItemContainerGroupMoveRequest> requests;
+    ItemContainerGroupMoveRequest request;
+    request.source_item_basic.set_type_id(type_id);
+    request.source_item_basic.set_count(count);
+    if (item_guid != 0) {
+      request.source_item_basic.set_guid(item_guid);
+    }
+    request.source_item_basic.mutable_position()->set_container_guid(from_guid);
+    request.source_item_basic.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(from_x);
+    request.source_item_basic.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(from_y);
+    request.target_position.set_container_guid(to_guid);
+    request.target_position.mutable_grid_position()->mutable_user_inventory()->set_x(to_x);
+    request.target_position.mutable_grid_position()->mutable_user_inventory()->set_y(to_y);
+    requests.push_back(std::move(request));
+    return requests;
+  };
+
+  // ============================================================
+  // add: 跨容器批量 (A 10 个 / B 5 个)
+  // ============================================================
+  CASE_MSG_INFO() << "add: 跨容器批量\n";
+  {
+    ItemAddRequest requests;
+    {
+      auto item = make_grid_item(kItemTypeId_1x1, 10, 0, 0);
+      set_item_container_guid(item, kGuidA);
+      *requests.Add() = item;
+    }
+    {
+      auto item = make_grid_item(kItemTypeId_1x1, 5, 0, 0);
+      set_item_container_guid(item, kGuidB);
+      *requests.Add() = item;
+    }
+
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(10, count_instances_type(*grid_a, kItemTypeId_1x1));
+  CASE_EXPECT_EQ(5, count_instances_type(*grid_b, kItemTypeId_1x1));
+
+  // ============================================================
+  // add: 同容器同位置再塞 → 合入同一条目
+  // ============================================================
+  CASE_MSG_INFO() << "add: 同容器同位置合入\n";
+  {
+    ItemAddRequest requests;
+    auto item = make_grid_item(kItemTypeId_1x1, 3, 0, 0);
+    set_item_container_guid(item, kGuidA);
+    *requests.Add() = item;
+
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(13, count_instances_type(*grid_a, kItemTypeId_1x1));
+  {
+    auto dumped = dump_container_items(*grid_a);
+    int32_t entry_count = 0;
+    for (const auto& instance : dumped) {
+      if (instance.item_basic().type_id() == kItemTypeId_1x1) {
+        ++entry_count;
+      }
+    }
+    CASE_EXPECT_EQ(1, entry_count);  // 合入后只有一个条目
+  }
+
+  // ============================================================
+  // add: 路由不到容器 → 整批失败, 不能执行
+  // ============================================================
+  CASE_MSG_INFO() << "add: 路由不到容器\n";
+  {
+    ItemAddRequest requests;
+    auto item = make_grid_item(kItemTypeId_1x1, 1, 1, 1);
+    set_item_container_guid(item, kGuidUnknown);
+    *requests.Add() = item;
+
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+    CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+
+  // ============================================================
+  // add: 某个容器位置冲突 → 整批不落地 (合法容器也不改)
+  // ============================================================
+  CASE_MSG_INFO() << "add: 单容器失败导致整批不落地\n";
+  {
+    ItemAddRequest pre_requests;
+    auto pre_item = make_grid_item(kItemTypeId_2x2, 1, 4, 4);
+    set_item_container_guid(pre_item, kGuidB);
+    *pre_requests.Add() = pre_item;
+    auto pre_checked = group.check_add(config, pre_requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(pre_checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.add(pre_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  {
+    ItemAddRequest requests;
+    {
+      auto item = make_grid_item(kItemTypeId_2x2, 1, 7, 7);
+      set_item_container_guid(item, kGuidA);
+      *requests.Add() = item;
+    }
+    {
+      // B(4,4) 已被 2x2 占据
+      auto item = make_grid_item(kItemTypeId_2x2, 1, 4, 4);
+      set_item_container_guid(item, kGuidB);
+      *requests.Add() = item;
+    }
+
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
+    // 同类型合入已满堆叠 (2x2 上限 1) → 堆叠溢出
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_2x2);
+    CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW);
+  }
+  CASE_EXPECT_EQ(0, count_instances_type(*grid_a, kItemTypeId_2x2));  // A 的合法条目也没落地
+  CASE_EXPECT_EQ(1, count_instances_type(*grid_b, kItemTypeId_2x2));
+
+  // ============================================================
+  // add: 目标位置被不同类型占据 → 位置冲突, 整批不落地
+  // ============================================================
+  {
+    ItemAddRequest requests;
+    {
+      auto item = make_grid_item(kItemTypeId_1x1, 2, 7, 7);
+      set_item_container_guid(item, kGuidA);
+      *requests.Add() = item;
+    }
+    {
+      // B(4,4) 是 2x2 的锚点, 放 1x1 属于位置冲突
+      auto item = make_grid_item(kItemTypeId_1x1, 2, 4, 4);
+      set_item_container_guid(item, kGuidB);
+      *requests.Add() = item;
+    }
+
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+    CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED);
+  }
+  CASE_EXPECT_EQ(13, count_instances_type(*grid_a, kItemTypeId_1x1));  // A(7,7) 没落地
+  CASE_EXPECT_EQ(5, count_instances_type(*grid_b, kItemTypeId_1x1));
+
+  // ============================================================
+  // sub: 跨容器批量 (A 4 个 / B 2 个)
+  // ============================================================
+  CASE_MSG_INFO() << "sub: 跨容器批量\n";
+  {
+    ItemSubRequest requests;
+    {
+      auto sub = make_sub_basic(kItemTypeId_1x1, 4, 0, 0);
+      set_basic_container_guid(sub, kGuidA);
+      *requests.Add() = sub;
+    }
+    {
+      auto sub = make_sub_basic(kItemTypeId_1x1, 2, 0, 0);
+      set_basic_container_guid(sub, kGuidB);
+      *requests.Add() = sub;
+    }
+
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(9, count_instances_type(*grid_a, kItemTypeId_1x1));
+  CASE_EXPECT_EQ(3, count_instances_type(*grid_b, kItemTypeId_1x1));
+
+  // ============================================================
+  // sub: 数量不足 → 整批失败, 数据不变
+  // ============================================================
+  CASE_MSG_INFO() << "sub: 数量不足\n";
+  {
+    ItemSubRequest requests;
+    auto sub = make_sub_basic(kItemTypeId_1x1, 99, 0, 0);
+    set_basic_container_guid(sub, kGuidA);
+    *requests.Add() = sub;
+
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+  }
+  CASE_EXPECT_EQ(9, count_instances_type(*grid_a, kItemTypeId_1x1));
+
+  // ============================================================
+  // sub: 路由不到容器
+  // ============================================================
+  CASE_MSG_INFO() << "sub: 路由不到容器\n";
+  {
+    ItemSubRequest requests;
+    auto sub = make_sub_basic(kItemTypeId_1x1, 1, 0, 0);
+    set_basic_container_guid(sub, kGuidUnknown);
+    *requests.Add() = sub;
+
+    auto checked = group.check_sub(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+  }
+
+  // ============================================================
+  // move: 跨容器 (A(0,0) 取 5 个到 B(6,6))
+  // ============================================================
+  CASE_MSG_INFO() << "move: 跨容器\n";
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 0, 0, 5, kGuidB, 6, 6);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(4, count_instances_type(*grid_a, kItemTypeId_1x1));
+  CASE_EXPECT_EQ(8, count_instances_type(*grid_b, kItemTypeId_1x1));
+  {
+    auto dumped_a = dump_container_items(*grid_a);
+    auto* left = find_dumped_by_position(dumped_a, kItemTypeId_1x1, 0, 0);
+    CASE_EXPECT_TRUE(left != nullptr);
+    if (left) {
+      CASE_EXPECT_EQ(4, left->item_basic().count());
+    }
+    auto dumped_b = dump_container_items(*grid_b);
+    auto* arrived = find_dumped_by_position(dumped_b, kItemTypeId_1x1, 6, 6);
+    CASE_EXPECT_TRUE(arrived != nullptr);
+    if (arrived) {
+      CASE_EXPECT_EQ(5, arrived->item_basic().count());
+    }
+  }
+
+  // ============================================================
+  // move: 同容器部分移动 (A(0,0) 取 2 个到 A(8,8)) → 源条目保留, 目标新条目
+  // ============================================================
+  CASE_MSG_INFO() << "move: 同容器部分移动\n";
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 0, 0, 2, kGuidA, 8, 8);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(4, count_instances_type(*grid_a, kItemTypeId_1x1));
+  {
+    auto dumped = dump_container_items(*grid_a);
+    auto* left = find_dumped_by_position(dumped, kItemTypeId_1x1, 0, 0);
+    auto* split = find_dumped_by_position(dumped, kItemTypeId_1x1, 8, 8);
+    CASE_EXPECT_TRUE(left != nullptr && split != nullptr);
+    if (left && split) {
+      CASE_EXPECT_EQ(2, left->item_basic().count());
+      CASE_EXPECT_EQ(2, split->item_basic().count());
+    }
+  }
+
+  // ============================================================
+  // move: 同容器同锚点 → 不需要移动, 数据不变
+  // ============================================================
+  CASE_MSG_INFO() << "move: 同容器同锚点\n";
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 0, 0, 2, kGuidA, 0, 0);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  {
+    auto dumped = dump_container_items(*grid_a);
+    auto* left = find_dumped_by_position(dumped, kItemTypeId_1x1, 0, 0);
+    CASE_EXPECT_TRUE(left != nullptr);
+    if (left) {
+      CASE_EXPECT_EQ(2, left->item_basic().count());
+    }
+  }
+
+  // ============================================================
+  // move: 同容器整件移动 (非 GUID, A(8,8) 全部搬到 A(9,9))
+  // ============================================================
+  CASE_MSG_INFO() << "move: 同容器整件移动\n";
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 8, 8, 2, kGuidA, 9, 9);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(4, count_instances_type(*grid_a, kItemTypeId_1x1));
+  {
+    auto dumped = dump_container_items(*grid_a);
+    CASE_EXPECT_TRUE(find_dumped_by_position(dumped, kItemTypeId_1x1, 8, 8) == nullptr);
+    auto* moved = find_dumped_by_position(dumped, kItemTypeId_1x1, 9, 9);
+    CASE_EXPECT_TRUE(moved != nullptr);
+    if (moved) {
+      CASE_EXPECT_EQ(2, moved->item_basic().count());
+    }
+  }
+
+  // ============================================================
+  // move: 同容器整件移动 GUID 装备 → 不能误报 GUID 重复
+  // ============================================================
+  CASE_MSG_INFO() << "move: 同容器整件移动 GUID 装备\n";
+  {
+    ItemAddRequest requests;
+    auto item = make_equip_item(kEquipGuid, 1, 1);
+    set_item_container_guid(item, kGuidA);
+    *requests.Add() = item;
+    auto checked = group.check_add(config, requests, item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_TRUE(grid_a->get_by_guid(kEquipGuid) != nullptr);
+  {
+    auto requests = make_group_move(kEquipmentTypeId, kEquipGuid, kGuidA, 1, 1, 1, kGuidA, 3, 3);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(1, count_instances_type(*grid_a, kEquipmentTypeId));
+  {
+    auto dumped = dump_container_items(*grid_a);
+    CASE_EXPECT_TRUE(find_dumped_by_position(dumped, kEquipmentTypeId, 1, 1) == nullptr);
+    auto* moved = find_dumped_by_position(dumped, kEquipmentTypeId, 3, 3);
+    CASE_EXPECT_TRUE(moved != nullptr);
+    if (moved) {
+      CASE_EXPECT_EQ(kEquipGuid, moved->item_basic().guid());
+    }
+  }
+
+  // ============================================================
+  // move: 源条目不存在 / 超出持有量 / 目标被占用
+  // ============================================================
+  CASE_MSG_INFO() << "move: 失败分支\n";
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 5, 5, 1, kGuidB, 0, 3);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+  }
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 0, 0, 99, kGuidB, 0, 3);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+  }
+  {
+    // B(4,4) 被 2x2 占据
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 0, 0, 1, kGuidB, 4, 4);
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_ERR_ITEM_MOVE_TARGET_OCCUPIED);
+    CASE_EXPECT_EQ(checked.get_failed_type_id(), kItemTypeId_1x1);
+    // check 不通过时不能执行
+    CASE_EXPECT_NE(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(4, count_instances_type(*grid_a, kItemTypeId_1x1));
+  CASE_EXPECT_EQ(8, count_instances_type(*grid_b, kItemTypeId_1x1));
+
+  // ============================================================
+  // move: 多条组请求移动同一条目 → 合成一次 sub
+  // ============================================================
+  CASE_MSG_INFO() << "move: 同一条目多条请求合并\n";
+  {
+    auto requests = make_group_move(kItemTypeId_1x1, 0, kGuidA, 9, 9, 1, kGuidB, 7, 7);
+    auto second = make_group_move(kItemTypeId_1x1, 0, kGuidA, 9, 9, 1, kGuidB, 7, 7);
+    requests.insert(requests.end(), second.begin(), second.end());
+
+    auto checked = group.check_move(config, std::move(requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(group.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_EQ(2, count_instances_type(*grid_a, kItemTypeId_1x1));
+  CASE_EXPECT_EQ(10, count_instances_type(*grid_b, kItemTypeId_1x1));
+  {
+    auto dumped = dump_container_items(*grid_a);
+    CASE_EXPECT_TRUE(find_dumped_by_position(dumped, kItemTypeId_1x1, 9, 9) == nullptr);
+    auto dumped_b = dump_container_items(*grid_b);
+    auto* merged = find_dumped_by_position(dumped_b, kItemTypeId_1x1, 7, 7);
+    CASE_EXPECT_TRUE(merged != nullptr);
+    if (merged) {
+      CASE_EXPECT_EQ(2, merged->item_basic().count());
+    }
+  }
+}
+
 /// @brief 组级 check_has: 按容器分片后各自检查; 整体替换由调用方用容器的 clear + load 组合
 CASE_TEST(ItemContainerGroup, check_has_across_containers) {
   using namespace item_algorithm;  // NOLINT(build/namespaces)

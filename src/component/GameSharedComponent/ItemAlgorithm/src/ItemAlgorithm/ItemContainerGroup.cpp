@@ -321,9 +321,27 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest ItemContainerGroup::chec
     builder.move_request.move_sub_entrys.push_back(std::move(sub_request));
   };
 
-  // 追加一条 add (数据模板用独立条目, 避免容器层的条目去重判断失败)
+  // 追加一条 add
+  //
+  // 数据模板的选取分两种情况:
+  //   - 同容器整件移动: 直接复用来源条目当模板。这条 add 和前面的 sub 是同一个条目, 容器层可以
+  //     按条目指针把两者配成一对, 不会把来源条目当成"从外部移入"去判 GUID 重复;
+  //     执行阶段 Phase 1 把它整体移出, Phase 2 只覆盖数量与位置, 不会丢掉原条目的数据。
+  //   - 其余情况 (部分移动 / 跨容器): 用独立条目模板。部分移动时来源条目还在, GUID 不能复制;
+  //     跨容器时目标容器拿不到来源条目, 只能按模板复制。
   auto append_add = [](ContainerBuilder& builder, const item_container_ptr_t& owner, const item_entry_ptr_t& source,
-                       const PROJECT_NAMESPACE_ID::DItemPosition& goal_position, int32_t op_count, bool is_whole_move) {
+                       const PROJECT_NAMESPACE_ID::DItemPosition& goal_position, int32_t op_count, bool is_whole_move,
+                       bool is_same_container) {
+    ItemMoveAddRequest add_request;
+    add_request.goal_position = goal_position;
+    add_request.op_count = op_count;
+
+    if (is_whole_move && is_same_container) {
+      add_request.entry = source;
+      builder.move_request.move_add_entrys.push_back(std::move(add_request));
+      return;
+    }
+
     PROJECT_NAMESPACE_ID::DItemInstance add_instance = source->item_instance();
     add_instance.mutable_item_basic()->set_count(op_count);
     if (!is_whole_move) {
@@ -332,10 +350,7 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest ItemContainerGroup::chec
     }
     *add_instance.mutable_item_basic()->mutable_position() = goal_position;
 
-    ItemMoveAddRequest add_request;
     add_request.entry = atfw::util::memory::make_strong_rc<ItemEntry>(owner, std::move(add_instance), 0);
-    add_request.goal_position = goal_position;
-    add_request.op_count = op_count;
     builder.move_request.move_add_entrys.push_back(std::move(add_request));
   };
 
@@ -377,8 +392,10 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest ItemContainerGroup::chec
     remaining -= move_count;
     int32_t op_count = static_cast<int32_t>(move_count);
 
+    bool is_same_container = (source_container == target_container);
+
     // 同一容器同一锚点: 不需要移动
-    if (source_container == target_container &&
+    if (is_same_container &&
         source_container->is_same_grid_position(group_request.source_item_basic.position().grid_position(),
                                                 group_request.target_position.grid_position())) {
       continue;
@@ -386,7 +403,7 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest ItemContainerGroup::chec
 
     append_sub(get_builder(source_container), source_entry, op_count);
     append_add(get_builder(target_container), target_container, source_entry, group_request.target_position, op_count,
-               is_whole_move);
+               is_whole_move, is_same_container);
   }
 
   // ============================================================
