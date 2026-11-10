@@ -272,6 +272,8 @@ struct HookTestState {
   int32_t last_add_position_x = -1;
   int32_t last_sub_type_id = 0;
   int64_t last_sub_count = 0;
+  // 最近一次 on_check_sub_one 的 is_move 标记 (check_sub 为 false, check_move 为 true)
+  bool last_sub_is_move = false;
 
   void reset_call_counts() {
     check_item_position_calls = 0;
@@ -304,14 +306,15 @@ class HookTestItemFiniteGridContainer : public TestItemFiniteGridContainer {
   }
 
   int32_t on_check_sub_one(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-                           const PROJECT_NAMESPACE_ID::DItemBasic& request) const override {
+                           const PROJECT_NAMESPACE_ID::DItemBasic& request, bool is_move) const override {
     ++state_->on_check_sub_calls;
     state_->last_sub_type_id = request.type_id();
     state_->last_sub_count = request.count();
+    state_->last_sub_is_move = is_move;
     if (state_->reject_sub) {
       return kHookRejectedError;
     }
-    return TestItemFiniteGridContainer::on_check_sub_one(config_group, request);
+    return TestItemFiniteGridContainer::on_check_sub_one(config_group, request, is_move);
   }
 
   int32_t on_check_item_count_limit(int32_t type_id, int64_t current_count, int64_t add_count) const override {
@@ -352,6 +355,61 @@ class HookTestItemFiniteGridContainer : public TestItemFiniteGridContainer {
 
  private:
   std::shared_ptr<HookTestState> state_;
+};
+
+/// @brief on_check_move_positions 专用的拒绝错误码 (容器本身不会在正常路径返回它)
+static constexpr int32_t kMovePositionsRejectedError = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
+
+/// @brief on_check_move_positions 的测试状态 (无限格子: 移动生效后的槽位占用校验)
+struct HookTestMovePositionsState {
+  int32_t move_positions_calls = 0;
+  // true: 一律拒绝; required_slot >= 0: 最终占用里必须还有这个槽位, 否则拒绝
+  // (模拟"武器槽不能同时为空"这类按最终槽位判断的业务规则)
+  bool reject_all = false;
+  int32_t required_slot = -1;
+  // 最近一次收到的最终占用: 槽位 → 状态 (count 为移动生效后的数量)
+  item_algorithm::ItemInfiniteGridContainer::item_move_slot_state_map_type last_final_slots;
+
+  void reset() {
+    move_positions_calls = 0;
+    last_final_slots.clear();
+  }
+
+  /// @brief 最终占用里某个槽位的数量 (0 表示移动生效后该槽位是空的)
+  int64_t count_of_slot(int32_t slot) const {
+    for (const auto& kv : last_final_slots) {
+      if (kv.first.x == slot) {
+        return kv.second.count;
+      }
+    }
+    return 0;
+  }
+};
+
+/// @brief 无限格子模式夹具: 记录 / 拒绝 on_check_move_positions
+class HookTestItemInfiniteGridContainer : public TestItemInfiniteGridContainer {
+ public:
+  HookTestItemInfiniteGridContainer() : state_(std::make_shared<HookTestMovePositionsState>()) {}
+
+  HookTestMovePositionsState& hook_state() { return *state_; }
+
+ protected:
+  int32_t on_check_move_positions(
+      const item_algorithm::excel_config_group_ptr_t& config_group,
+      const item_algorithm::ItemInfiniteGridContainer::item_move_slot_state_map_type& final_slots) const override {
+    ++state_->move_positions_calls;
+    state_->last_final_slots = final_slots;
+    if (state_->reject_all) {
+      return kMovePositionsRejectedError;
+    }
+    if (state_->required_slot >= 0 && state_->count_of_slot(state_->required_slot) <= 0) {
+      return kMovePositionsRejectedError;
+    }
+    return TestItemInfiniteGridContainer::on_check_move_positions(config_group, final_slots);
+  }
+
+ private:
+  std::shared_ptr<HookTestMovePositionsState> state_;
 };
 
 /// @brief 服务器端测试子类 — 在 on_item_data_changed 中只记录 entry_id
@@ -3845,6 +3903,8 @@ CASE_TEST(ItemContainer, on_check_sub_hook) {
       grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
   CASE_EXPECT_EQ(sub_checked.result.error_code, kHookRejectedError);
   CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
+  // check_sub 不是移动, is_move 必须是 false (否则业务会跳过"武器槽不能同时为空"的检查)
+  CASE_EXPECT_FALSE(state.last_sub_is_move);
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 2);
 }
 
@@ -3887,6 +3947,8 @@ CASE_TEST(ItemContainer, on_check_add_sub_one_hook_in_move) {
     CASE_EXPECT_EQ(state.on_check_add_calls, 1);
     CASE_EXPECT_EQ(state.last_sub_type_id, kItemTypeId_1x1);
     CASE_EXPECT_EQ(state.last_sub_count, static_cast<int64_t>(2));
+    // 移动带来的扣减要带上 is_move, 业务据此跳过"中间态"判断, 改由 on_check_move_positions 收口
+    CASE_EXPECT_TRUE(state.last_sub_is_move);
     CASE_EXPECT_EQ(state.last_add_type_id, kItemTypeId_1x1);
     CASE_EXPECT_EQ(state.last_add_count, static_cast<int64_t>(2));
     CASE_EXPECT_EQ(state.last_add_position_x, 2);
@@ -3954,6 +4016,165 @@ CASE_TEST(ItemContainer, on_check_add_sub_one_hook_in_move) {
     state.rejected_position_x = -1;
   }
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
+}
+
+/// @brief on_check_move_positions: 移动生效后的槽位占用快照要交给业务钩子
+///
+/// 快照语义 (只包含移动生效后仍占用的槽位):
+///   - 整件移动: 来源槽消失, 目标槽 = 搬过去的数量;
+///   - 部分移动: 来源槽剩下多少就记多少, 目标槽单独记;
+///   - 合入已有堆叠: 目标槽是"合入后"的总量;
+///   - 钩子拒绝 → check_move 失败且不改数据;
+///   - 非 move 操作 (check_add / check_sub) 不会触发这个钩子。
+CASE_TEST(ItemContainer, on_check_move_positions_hook) {
+  using namespace item_algorithm;  // NOLINT(build/namespaces)
+
+  constexpr int64_t kContainerGuid = 0x5121;
+  constexpr int64_t kEquipGuid = 8301;
+
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemInfiniteGridContainer>();
+  auto& grid = *grid_ptr;
+  grid.init(PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment, kContainerGuid);
+  grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);  // 装备: 每槽一件
+  grid.register_position_cfg(kItemTypeId_1x1, 2, 1, 1);   // 可堆叠: 上限 2
+  auto config = make_test_config_group();
+  auto& state = grid.hook_state();
+
+  auto slot_position = [&](int32_t slot) {
+    PROJECT_NAMESPACE_ID::DItemPosition position;
+    position.set_container_guid(kContainerGuid);
+    position.mutable_grid_position()->mutable_character_equipment()->set_slot_idx(
+        static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(slot));
+    return position;
+  };
+  auto make_slot_instance = [&](int32_t type_id, int64_t count, int32_t slot, int64_t guid) {
+    PROJECT_NAMESPACE_ID::DItemInstance instance;
+    instance.mutable_item_basic()->set_type_id(type_id);
+    instance.mutable_item_basic()->set_count(count);
+    instance.mutable_item_basic()->set_guid(guid);
+    *instance.mutable_item_basic()->mutable_position() = slot_position(slot);
+    return instance;
+  };
+  auto load_slot = [&](int32_t type_id, int64_t count, int32_t slot, int64_t guid) {
+    auto instance = make_slot_instance(type_id, count, slot, guid);
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(instance), item_algorithm::ItemOperationSource{}));
+    return grid.get_at(ItemGridPosition{slot, 0});
+  };
+
+  // (1) 整件移动: 槽位 1 → 槽位 2, 快照里槽位 1 消失、槽位 2 = 1
+  auto equip_entry = load_slot(kEquipmentTypeId, 1, 1, kEquipGuid);
+  CASE_EXPECT_TRUE(equip_entry != nullptr);
+  if (!equip_entry) {
+    return;
+  }
+  {
+    state.reset();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({equip_entry, 1});
+    move_requests.move_add_entrys.push_back({equip_entry, slot_position(2), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    CASE_EXPECT_EQ(state.last_final_slots.size(), static_cast<size_t>(1));
+    CASE_EXPECT_EQ(state.count_of_slot(1), static_cast<int64_t>(0));
+    CASE_EXPECT_EQ(state.count_of_slot(2), static_cast<int64_t>(1));
+  }
+
+  // (2) 部分移动: 槽位 3 有 2 个, 移 1 个到槽位 4 → 两个槽位各 1
+  auto stack_entry = load_slot(kItemTypeId_1x1, 2, 3, 0);
+  CASE_EXPECT_TRUE(stack_entry != nullptr);
+  if (!stack_entry) {
+    return;
+  }
+  {
+    state.reset();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({stack_entry, 1});
+    move_requests.move_add_entrys.push_back({stack_entry, slot_position(4), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    CASE_EXPECT_EQ(state.count_of_slot(3), static_cast<int64_t>(1));
+    CASE_EXPECT_EQ(state.count_of_slot(4), static_cast<int64_t>(1));
+  }
+
+  // (3) 合入已有堆叠: 槽位 5 有 1 个, 把槽位 4 的 1 个移过去 → 槽位 4 消失、槽位 5 = 2
+  auto merge_target_entry = load_slot(kItemTypeId_1x1, 1, 5, 0);
+  CASE_EXPECT_TRUE(merge_target_entry != nullptr);
+  if (!merge_target_entry) {
+    return;
+  }
+  auto split_entry = grid.get_at(ItemGridPosition{4, 0});
+  CASE_EXPECT_TRUE(split_entry != nullptr);
+  if (split_entry) {
+    state.reset();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({split_entry, 1});
+    move_requests.move_add_entrys.push_back({split_entry, slot_position(5), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    CASE_EXPECT_EQ(state.count_of_slot(4), static_cast<int64_t>(0));
+    CASE_EXPECT_EQ(state.count_of_slot(5), static_cast<int64_t>(2));
+  }
+
+  // (4) 钩子拒绝 → check_move 失败, 数据不变 (check 阶段不落地)
+  {
+    state.reject_all = true;
+    state.reset();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({equip_entry, 1});
+    move_requests.move_add_entrys.push_back({equip_entry, slot_position(9), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, kMovePositionsRejectedError);
+    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    // 钩子拿到的是"移动生效后"的快照: 槽位 2 会空、槽位 9 会有 1
+    CASE_EXPECT_EQ(state.count_of_slot(2), static_cast<int64_t>(0));
+    CASE_EXPECT_EQ(state.count_of_slot(9), static_cast<int64_t>(1));
+    state.reject_all = false;
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{2, 0}) != nullptr);
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{9, 0}) == nullptr);
+
+  // (5) 按最终槽位判断的业务规则: 要求槽位 2 仍被占用时, 把装备搬走会被拒绝
+  {
+    state.required_slot = 2;
+    state.reset();
+    ItemMoveRequest move_requests;
+    move_requests.move_sub_entrys.push_back({equip_entry, 1});
+    move_requests.move_add_entrys.push_back({equip_entry, slot_position(9), 1});
+    auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, kMovePositionsRejectedError);
+    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    state.required_slot = -1;
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{2, 0}) != nullptr);
+
+  // (6) 非 move 操作不会触发该钩子
+  {
+    state.reset();
+    ItemAddRequest add_requests;
+    *add_requests.Add() = make_slot_instance(kItemTypeId_1x1, 1, 6, 0);
+    auto checked =
+        grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.move_positions_calls, 0);
+  }
+  {
+    state.reset();
+    ItemSubRequest sub_requests;
+    PROJECT_NAMESPACE_ID::DItemBasic sub;
+    sub.set_type_id(kItemTypeId_1x1);
+    sub.set_count(1);
+    *sub.mutable_position() = slot_position(3);
+    *sub_requests.Add() = sub;
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(grid.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.move_positions_calls, 0);
+  }
 }
 
 CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {

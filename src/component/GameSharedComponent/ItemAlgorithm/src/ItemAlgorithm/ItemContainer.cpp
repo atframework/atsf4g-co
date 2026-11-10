@@ -196,7 +196,8 @@ ITEM_ALGORITHM_API int32_t ItemContainer::on_check_add_one(
 }
 
 ITEM_ALGORITHM_API int32_t ItemContainer::on_check_sub_one(const excel_config_group_ptr_t& /*config_group*/,
-                                                           const PROJECT_NAMESPACE_ID::DItemBasic& /*request*/) const {
+                                                           const PROJECT_NAMESPACE_ID::DItemBasic& /*request*/,
+                                                           bool /*is_move*/) const {
   // 默认不限制, 业务按需覆盖
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }

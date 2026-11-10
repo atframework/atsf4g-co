@@ -41,6 +41,25 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   using position_count_map_type =
       std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo>;
 
+  /// @brief check_move 期间维护的槽位推演状态
+  ///
+  /// 一份数据同时表达"移动生效后每个槽位有多少数量"和"本次批次在这个槽位新建条目时的校验信息",
+  /// 不再单独维护 pending 集合。
+  struct ItemMoveSlotState {
+    /// 移动生效后该槽位的数量 (0 表示空槽)
+    int64_t count = 0;
+    /// 本批次在这个槽位新建条目时的类型 (仅 is_new_slot 有效)
+    int32_t type_id = 0;
+    /// 本批次在这个槽位新建的条目是否带 GUID (仅 is_new_slot 有效)
+    bool has_guid = false;
+    /// 这个槽位的占用是否由本批次新建 (不是容器里已有的条目)
+    bool is_new_slot = false;
+    /// 本批次新建条目时的堆叠上限 (仅 is_new_slot 有效)
+    int64_t accumulation_limit = 1;
+  };
+  using item_move_slot_state_map_type =
+      std::unordered_map<ItemGridPosition, ItemMoveSlotState, ItemGridPositionHash, ItemGridPositionEqualTo>;
+
  public:
   ITEM_ALGORITHM_API ItemInfiniteGridContainer();
   ITEM_ALGORITHM_API ~ItemInfiniteGridContainer() override;
@@ -154,6 +173,17 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   /// 被调用时机: 基类 check_move 完成初始化检查与空请求判断后调用一次。
   /// 失败时把错误码写进 checked_request.result.error_code 并返回 false。
   ITEM_ALGORITHM_API bool on_check_move(ItemMoveCheckedRequest& checked_request) const override;
+
+  /// @brief 移动生效后的槽位占用校验 (业务扩展点)
+  ///
+  /// 被调用时机: on_check_move 完成入参校验与批次内预演、确认本次移动可以执行之后,
+  /// 此时"来源已扣、目标已占"的中间态还没写进容器, 只能通过 final_slots 判断最终结果。
+  /// @param config_group 配置组
+  /// @param final_slots  移动生效后的槽位推演结果: 位置 → 槽位状态 (count 为 0 表示空槽;
+  ///                     只包含仍然占用槽位的位置)。业务判断占用情况用 count 即可。
+  /// @return EN_SUCCESS 通过; 其他错误码会让本次 check_move 失败, error_code 原样返回给调用方
+  ITEM_ALGORITHM_API virtual int32_t on_check_move_positions(
+      const excel_config_group_ptr_t& config_group, const item_move_slot_state_map_type& final_slots) const;
 
   /// @brief 扣减一条移动来源 (整体移走时摘掉槽位与 GUID 索引)
   ///

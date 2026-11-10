@@ -358,7 +358,9 @@ ITEM_ALGORITHM_API ItemMoveCheckedRequest ItemContainer::check_move(const excel_
       return checked_request;
     }
 
-    int32_t one_ret = on_check_sub_one(config_group, one_request);
+    // 告诉业务这是移动带来的扣减: 扣减侧的中间态不代表最终槽位,
+    // 需要按"移动后最终占用"判断的规则由 on_check_move_positions 统一处理。
+    int32_t one_ret = on_check_sub_one(config_group, one_request, true);
     if (one_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = one_ret;
       result.failed_type_id = one_request.type_id();

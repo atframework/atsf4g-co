@@ -302,10 +302,18 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 单条扣减请求的额外校验
   ///
-  /// 被调用时机: 基类 check_sub 完成该条的通用校验与按类型总量对账之后。
-  /// @return EN_SUCCESS 表示通过; 其他错误码会让该条请求失败, 整个 check_sub 失败
+  /// 被调用时机: 基类 check_sub 完成该条的通用校验与按类型总量对账之后;
+  /// check_move 的扣减条目也会调用 (业务规则不能只在 check_sub 上生效)。
+  /// @param config_group 配置组
+  /// @param request      扣减请求 (count = 本次扣减数量)
+  /// @param is_move      是否来自 check_move。移动是"位置搬运", 扣减侧看到的中间态
+  ///                     (来源位置已空、目标位置还没占上) 并不代表最终结果,
+  ///                     需要按最终槽位判断的规则 (如"武器槽不能同时为空") 应在
+  ///                     is_move 为 true 时跳过, 交给 on_check_move_positions。
+  /// @return EN_SUCCESS 表示通过; 其他错误码会让该条请求失败, check_sub / check_move 失败
   ITEM_ALGORITHM_API virtual int32_t on_check_sub_one(const excel_config_group_ptr_t& config_group,
-                                                      const PROJECT_NAMESPACE_ID::DItemBasic& request) const;
+                                                     const PROJECT_NAMESPACE_ID::DItemBasic& request,
+                                                     bool is_move = false) const;
 
   /// @brief 单条对账请求的额外校验
   ///

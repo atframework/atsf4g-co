@@ -688,37 +688,43 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
   }
 
   // ============================================================
-  // Phase 1 (Sub): 记录会被整体移走的来源槽位
+  // Phase 1 (Sub) / Phase 2 (Add): 都在同一份槽位推演数据上做
+  //
+  // 直接把当前槽位索引拷一份出来, 后面 sub 减、add 加都只改这一份;
+  // "这个槽位是不是本批次新建的 / 新建时的类型、GUID、堆叠上限"也记在这一份里,
+  // 不再额外维护 pending_new_anchors / pending_merge_extra。
   // ============================================================
-  position_set_type removed_anchors;
-
-  for (const auto& op : checked_request.request.move_sub_entrys) {
-    if (op.entry->item_instance().item_basic().count() > op.op_count) {
-      continue;
+  item_move_slot_state_map_type move_slots;
+  move_slots.reserve(position_index_.size());
+  for (const auto& kv : position_index_) {
+    if (kv.second != nullptr) {
+      move_slots[kv.first].count = kv.second->item_instance().item_basic().count();
     }
-    removed_anchors.insert(op.position);
   }
 
-  // ============================================================
-  // Phase 2 (Add): 在临时数据上检查所有 Add 操作的可行性
-  // ============================================================
-  std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> pending_merge_extra;
+  // ---- Sub: 从推演数据里扣掉来源数量, 归零即视为槽位空出来 ----
+  for (const auto& op : checked_request.request.move_sub_entrys) {
+    auto slot_iter = move_slots.find(op.position);
+    if (slot_iter == move_slots.end()) {
+      continue;
+    }
+    slot_iter->second.count -= op.op_count;
+    if (slot_iter->second.count <= 0) {
+      move_slots.erase(slot_iter);
+    }
+  }
 
-  struct PendingNewAnchor {
-    int32_t type_id = 0;
-    int64_t count = 0;
-    bool has_guid = false;
-    int64_t accumulation_limit = 1;
-  };
-  std::unordered_map<ItemGridPosition, PendingNewAnchor, ItemGridPositionHash, ItemGridPositionEqualTo>
-      pending_new_anchors;
-
+  // ---- Add: 合入已有条目 / 本批次新建槽位 / 全新槽位 ----
   for (const auto& op : checked_request.request.move_add_entrys) {
-    // ---- 1. 检查目标槽位是否有未被移走的已有条目 (用于合入) ----
-    item_entry_ptr_t existing_entry = find_entry_at_position(op.position);
-    bool has_unmoved_existing = (existing_entry != nullptr && removed_anchors.count(op.position) == 0);
+    auto& slot = move_slots[op.position];
+    // 本次放入之前这个槽位的数量:
+    //   > 0 且不是本批次新建 → 槽位上还有没被移走的条目, 只能合入
+    //   与条目自身数量的差额 → 本批次已排队合入的数量
+    const int64_t slot_base_total = slot.count;
+    slot.count = slot_base_total + op.op_count;
 
-    if (has_unmoved_existing) {
+    item_entry_ptr_t existing_entry = find_entry_at_position(op.position);
+    if (existing_entry != nullptr && !slot.is_new_slot && slot_base_total > 0) {
       // 目标槽位有未被移走的已有条目, 只能合入
       const auto& target_basic = existing_entry->item_instance().item_basic();
 
@@ -735,7 +741,10 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
       PROJECT_NAMESPACE_ID::DItemBasic incoming_basic;
       incoming_basic.set_type_id(op.type_id);
       incoming_basic.set_count(op.op_count);
-      int64_t pending_extra = pending_merge_extra[op.position];
+      int64_t pending_extra = slot_base_total - target_basic.count();
+      if (pending_extra < 0) {
+        pending_extra = 0;
+      }
       if (get_entry_stack_room(checked_request.config_group, existing_entry, incoming_basic, pending_extra) <
           op.op_count) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
@@ -745,39 +754,54 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
                          op.accumulation_limit, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return false;
       }
-      pending_merge_extra[op.position] += op.op_count;
       continue;
     }
 
-    // ---- 2. 检查本批次是否已在此槽位创建了新条目 ----
-    auto pending_it = pending_new_anchors.find(op.position);
-    if (pending_it != pending_new_anchors.end()) {
-      if (pending_it->second.has_guid || pending_it->second.type_id != op.type_id) {
+    // ---- 2. 本批次已经在这个槽位新建过条目: 类型 / GUID 必须一致, 且不能超堆叠上限 ----
+    if (slot.is_new_slot) {
+      if (slot.has_guid || slot.type_id != op.type_id) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
         FWINSTLOGWARNING(logger(), "check_move failed: pending slot ({},{}) occupied, error={} ({})", op.position.x,
                          op.position.y, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return false;
       }
-      int64_t total = pending_it->second.count + op.op_count;
-      if (total > pending_it->second.accumulation_limit) {
+      if (slot.count > slot.accumulation_limit) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
         FWINSTLOGWARNING(logger(),
                          "check_move failed: pending stack overflow at slot ({},{}), total={} limit={}, error={} ({})",
-                         op.position.x, op.position.y, total, pending_it->second.accumulation_limit, error_code,
+                         op.position.x, op.position.y, slot.count, slot.accumulation_limit, error_code,
                          PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return false;
       }
-      pending_it->second.count = total;
       continue;
     }
 
     // ---- 3. 全新槽位: 本模式不做范围与矩形占用判断, 上面已确认槽位上没有条目 ----
-    pending_new_anchors[op.position] =
-        PendingNewAnchor{op.type_id, static_cast<int64_t>(op.op_count),
-                         op.entry->item_instance().item_basic().guid() != 0, op.accumulation_limit};
+    slot.is_new_slot = true;
+    slot.type_id = op.type_id;
+    slot.has_guid = (op.entry->item_instance().item_basic().guid() != 0);
+    slot.accumulation_limit = op.accumulation_limit;
+  }
+
+  // ============================================================
+  // Phase 3: 移动生效后的槽位占用校验 (业务规则扩展点)
+  // ============================================================
+  // move_slots 在 Phase 1 / Phase 2 里已经跟着 sub / add 同步推演完了, 直接交给钩子
+  int32_t positions_ret = on_check_move_positions(checked_request.config_group, move_slots);
+  if (positions_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    error_code = positions_ret;
+    FWINSTLOGWARNING(logger(), "check_move failed: final positions rejected, error={} ({})", error_code,
+                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+    return false;
   }
 
   return true;
+}
+
+ITEM_ALGORITHM_API int32_t ItemInfiniteGridContainer::on_check_move_positions(
+    const excel_config_group_ptr_t& /*config_group*/, const item_move_slot_state_map_type& /*final_slots*/) const {
+  // 默认不限制, 业务按需覆盖
+  return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
 // ============================================================
