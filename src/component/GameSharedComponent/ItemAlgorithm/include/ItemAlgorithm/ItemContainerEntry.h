@@ -43,6 +43,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemEntry : public atfw::util::memory::enable_sh
   /// 对条目本身是不透明的: 条目只负责保存它, 不理解它的含义。
   /// 具体含义 (坐标 / 槽位 / …… ) 由容器按自己的位置语义决定。
   ITEM_ALGORITHM_API uint64_t sort_key() const;
+  ITEM_ALGORITHM_API bool is_reusable() const;
 
  private:
   friend class ItemContainer;

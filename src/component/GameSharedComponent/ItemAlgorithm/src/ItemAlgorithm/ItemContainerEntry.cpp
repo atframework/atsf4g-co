@@ -26,6 +26,10 @@ ITEM_ALGORITHM_API uint64_t ItemEntry::entry_id() const { return entry_id_; }
 
 ITEM_ALGORITHM_API uint64_t ItemEntry::sort_key() const { return sort_key_; }
 
+ITEM_ALGORITHM_API bool ItemEntry::is_reusable() const {
+  return entry_id() == 0 || item_instance().item_basic().count() <= 0;
+}
+
 ITEM_ALGORITHM_API void ItemEntry::set_sort_key(uint64_t key) { sort_key_ = key; }
 
 ITEM_ALGORITHM_API const PROJECT_NAMESPACE_ID::DItemInstance& ItemEntry::item_instance() const {

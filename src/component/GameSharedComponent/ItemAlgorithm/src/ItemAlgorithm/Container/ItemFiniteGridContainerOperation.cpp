@@ -533,10 +533,10 @@ ITEM_ALGORITHM_API ItemOperationResult ItemFiniteGridContainer::on_move_add_one(
     return {};
   }
 
-  PROJECT_NAMESPACE_ID::DItemInstance new_instance = request.entry->item_instance();
-  new_instance.mutable_item_basic()->set_count(request.op_count);
-  *new_instance.mutable_item_basic()->mutable_position() = request.goal_position;
-  item_entry_ptr_t new_entry = make_entry(std::move(new_instance));
+  PROJECT_NAMESPACE_ID::DItemBasic new_basic = request.entry->item_instance().item_basic();
+  new_basic.set_count(request.op_count);
+  *new_basic.mutable_position() = request.goal_position;
+  item_entry_ptr_t new_entry = try_update_entry(request.entry, std::move(new_basic));
   if (!insert_entry_into_group(new_entry)) {
     FWINSTLOGERROR(logger(),
                    "[EntrySortKeyError] add failed to insert entry type={} count={} guid={} at ({},{}) entry_id={}",

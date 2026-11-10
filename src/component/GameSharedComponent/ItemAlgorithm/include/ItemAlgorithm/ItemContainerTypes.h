@@ -140,7 +140,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemMoveSubRequest {
 };
 
 struct ATFW_UTIL_SYMBOL_VISIBLE ItemMoveAddRequest {
-  item_entry_ptr_t entry;  // Entry ID 无效 仅使用instance
+  item_entry_ptr_t entry;
   PROJECT_NAMESPACE_ID::DItemPosition goal_position;
   int32_t op_count = 0;
 

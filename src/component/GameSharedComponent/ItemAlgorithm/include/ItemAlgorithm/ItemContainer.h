@@ -275,7 +275,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// 子类在这里检查 GUID 或指定位置上的条目是否存在、数量是否满足。
   /// @return EN_SUCCESS 表示整批通过; 失败时填 error_code 与 failed_type_id
   ITEM_ALGORITHM_API virtual ItemOperationResult on_check_has(const excel_config_group_ptr_t& config_group,
-                                                             const item_basic_readable_iterable& requests) const = 0;
+                                                              const item_basic_readable_iterable& requests) const = 0;
 
   /// @brief 本条放入请求是否直接跳过 (即不校验也不执行)
   ///
@@ -283,7 +283,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// 无位置容器把 count == 0 的请求当成空请求跳过。
   ITEM_ALGORITHM_API virtual bool should_skip_add_request(const PROJECT_NAMESPACE_ID::DItemInstance& request) const;
 
-protected:
+ protected:
   // ============================================================
   // 业务接入钩子 (开始) — 三个预设容器都不覆盖, 接入层 / 业务容器按需覆盖
   //
@@ -343,7 +343,7 @@ protected:
   /// @param entry   数据发生变化的道具条目
   /// @param context 操作上下文 (容器判定的原因 + 调用方透传的来源)
   ITEM_ALGORITHM_API virtual void on_item_data_changed(const item_entry_ptr_t& entry,
-                                                      const ItemOperationContext& context);
+                                                       const ItemOperationContext& context);
 
   /// @brief 检查道具位置字段是否合法 (container_guid 已由基类判断)
   ///
@@ -363,7 +363,7 @@ protected:
   // 业务接入钩子 (结束)
   // ============================================================
 
-protected:
+ protected:
   // ============================================================
   // 本模式自己实现的字段规则
   // ============================================================
@@ -619,6 +619,11 @@ protected:
   ITEM_ALGORITHM_API item_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance);
   /// @brief 创建条目并登记 entry_id 索引 (指定 entry_id)
   ITEM_ALGORITHM_API item_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstanceEntry&& instance);
+  /// @brief 尝试填充 entry_id 索引 并更新entry
+  ITEM_ALGORITHM_API item_entry_ptr_t try_update_entry(const item_entry_ptr_t& entry,
+                                                       const PROJECT_NAMESPACE_ID::DItemBasic& basic);
+  ITEM_ALGORITHM_API item_entry_ptr_t try_update_entry(const item_entry_ptr_t& entry,
+                                                       PROJECT_NAMESPACE_ID::DItemBasic&& basic);
 
   /// @brief 把条目放进它所属类型的排序分组
   /// @return false 表示同排序键的条目已存在, 该条目没有进分组

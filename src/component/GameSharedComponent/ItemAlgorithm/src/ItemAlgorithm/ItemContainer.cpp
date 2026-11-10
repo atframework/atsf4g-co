@@ -390,6 +390,42 @@ item_entry_ptr_t ItemContainer::make_entry(PROJECT_NAMESPACE_ID::DItemInstanceEn
   return entry;
 }
 
+item_entry_ptr_t ItemContainer::try_update_entry(const item_entry_ptr_t& entry,
+                                                 const PROJECT_NAMESPACE_ID::DItemBasic& basic) {
+  item_entry_ptr_t ret = entry;
+  if (ret->is_reusable()) {
+    if (ret->entry_id() == 0) {
+      ret->entry_id_ = next_entry_id_++;
+    }
+    ret->mutable_item_basic() = basic;
+    add_entry_id_index(entry);
+    set_entry_sort_key(entry);
+  } else {
+    PROJECT_NAMESPACE_ID::DItemInstance instance = entry->item_instance();
+    *instance.mutable_item_basic() = basic;
+    ret = make_entry(std::move(instance));
+  }
+  return ret;
+}
+
+item_entry_ptr_t ItemContainer::try_update_entry(const item_entry_ptr_t& entry,
+                                                 PROJECT_NAMESPACE_ID::DItemBasic&& basic) {
+  item_entry_ptr_t ret = entry;
+  if (ret->is_reusable()) {
+    if (ret->entry_id() == 0) {
+      ret->entry_id_ = next_entry_id_++;
+    }
+    ret->mutable_item_basic() = std::move(basic);
+    add_entry_id_index(entry);
+    set_entry_sort_key(entry);
+  } else {
+    PROJECT_NAMESPACE_ID::DItemInstance instance = entry->item_instance();
+    *instance.mutable_item_basic() = std::move(basic);
+    ret = make_entry(std::move(instance));
+  }
+  return ret;
+}
+
 // ============================================================
 // 批次校验的公共单条检查与公共收尾
 // ============================================================

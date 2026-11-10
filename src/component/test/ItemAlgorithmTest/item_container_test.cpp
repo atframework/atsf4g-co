@@ -1519,17 +1519,15 @@ CASE_TEST(ItemContainer, lifecycle_and_client_sync) {
       CASE_EXPECT_TRUE(moved != nullptr);  // 新位置有
       if (moved) {
         CASE_EXPECT_EQ(moved->item_instance().item_basic().count(), static_cast<int64_t>(90));
-        // 整体 Move (sub 全部+add) 会创建新 entry, entry_id 不同
-        CASE_EXPECT_NE(moved->entry_id(), old_entry_id);
-        // 新 entry 应能通过 find_entry_by_id 找到
-        verify_find_entry_by_id(server, moved->entry_id(), kItemTypeId_1x1, 90, 0);
+        // 整体 Move (sub 全部+add) 会创建新 entry, entry_id 相同
+        CASE_EXPECT_EQ(moved->entry_id(), old_entry_id);
       }
       const auto& flags = server.get_occupy_grid_flag();
       CASE_EXPECT_FALSE(flags.is_occupied(1, 0));  // (1,0) 已释放
       CASE_EXPECT_TRUE(flags.is_occupied(2, 0));   // (2,0) 占用
     }
-    // 整体 Move 后: 旧 entry 已删除, 应无法通过 find_entry_by_id 找到
-    verify_not_find_entry_by_id(server, old_entry_id);
+    // 整体 Move 后: entry 存在, 通过 find_entry_by_id 找到
+    verify_find_entry_by_id(server, old_entry_id, kItemTypeId_1x1, 90, 0);
     verify_container_dump(server);
     sync_and_verify(server, client, config, "Step 13: Move 整体搬移");
   }
