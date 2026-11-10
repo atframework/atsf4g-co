@@ -2,6 +2,7 @@
 
 #include "logic/orbit/user_orbit_manager.h"
 
+#include <std/explicit_declare.h>
 #include <string/string_format.h>
 
 // clang-format off
@@ -9,6 +10,7 @@
 // clang-format on
 
 #include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/config/lobbysvr_config.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/com.struct.orbit.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -25,7 +27,8 @@
 #include <rpc/orbit/orbitsvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
-#include <std/explicit_declare.h>
+
+#include <config/logic_config.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -38,6 +41,7 @@
 #include "data/session.h"
 #include "data/user.h"
 #include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
+#include "logic/chat/user_chat_manager.h"
 
 namespace {
 // 超过该秒数没有收到 orbitsvr 的房间心跳，认为房间已经不存在
@@ -112,9 +116,9 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_
 static bool init_user_orbit_manager_handle() {
   user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
                                  PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserOrbitRoomFieldNumber),
-                             [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
+                             [](rpc::context& ctx, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
                                auto& orbit_mgr = user_inst.get_user_orbit_manager();
-                               orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
+                               orbit_mgr.fetch_user_data(ctx, *rsp.mutable_user_orbit_room());
                              });
   task_action_user_remote_patch_jobs::register_async_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish),
@@ -239,7 +243,7 @@ rpc::result_code_type user_orbit_manager::login_init(rpc::context& ctx) {
   RPC_RETURN_CODE(0);
 }
 
-void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const {
+void user_orbit_manager::fetch_user_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const {
   if (room_data_) {
     *user_data.mutable_room_key() = room_cache_.room_key;
     user_data.set_client_address(room_data_->ready_data_.client_address());
@@ -248,6 +252,16 @@ void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserDat
     user_data.set_client_template_id(room_data_->init_data_.client_template_id());
     user_data.set_region(room_data_->init_data_.region());
     user_data.set_create_timepoint(room_data_->init_data_.create_timepoint());
+  }
+
+  if (chat_channel_battlefield_subscriber_) {
+    user_chat_manager::dump_dtmq_to_chat_channel_metadata(ctx, *chat_channel_battlefield_subscriber_,
+                                                          *user_data.add_chat_channel(), true);
+  }
+
+  if (chat_channel_faction_subscriber_) {
+    user_chat_manager::dump_dtmq_to_chat_channel_metadata(ctx, *chat_channel_faction_subscriber_,
+                                                          *user_data.add_chat_channel(), true);
   }
 }
 
@@ -291,26 +305,29 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   channel_key.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
   channel_key.set_channel_id(
       rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
-  subscriber_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-  if (!subscriber_) {
+  event_subscriber_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+  if (!event_subscriber_) {
     FWLOGERROR("Failed to create world chat channel {}:{}, maybe configure is missing.", channel_key.channel_type(),
                channel_key.channel_id());
     clear_orbit_room_data();
     return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND;
   }
-  subscriber_->set_local_private_data(local_private_data);
+  event_subscriber_->set_local_private_data(local_private_data);
 
   // 初始化房间数据
   room_data_ = atfw::component::memory::stl::make_strong_rc<orbit_room_data>();
   // 恢复房间快照
-  if (subscriber_->is_ready()) {
-    load_orbit_room_snapshot(ctx, subscriber_);
+  if (event_subscriber_->is_ready()) {
+    load_orbit_room_snapshot(ctx, event_subscriber_);
   }
 
   // 设置回调
-  if (!subscriber_->get_shared_event_callback_set()) {
-    subscriber_->set_shared_event_callback_set(get_shared_orbit_channel_event_callback_set());
+  if (!event_subscriber_->get_shared_event_callback_set()) {
+    event_subscriber_->set_shared_event_callback_set(get_shared_orbit_channel_event_callback_set());
   }
+
+  // 安装聊天频道
+  install_chat_channel(ctx);
   return 0;
 }
 
@@ -340,12 +357,12 @@ void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx,
     FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot missing subscriber", *owner_);
     return;
   }
-  if (subscriber != subscriber_) {
+  if (subscriber != event_subscriber_) {
     FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot subscriber mismatch", *owner_);
     return;
   }
   subscriber_ready_ = true;
-  subscriber_->query_cached_message(ctx, [this, &ctx](const atfw::dtmq::DChannelMessage& msg) {
+  event_subscriber_->query_cached_message(ctx, [this, &ctx](const atfw::dtmq::DChannelMessage& msg) {
     if (msg.detail().event().type_url().empty()) {
       return true;
     }
@@ -404,7 +421,7 @@ void user_orbit_manager::on_receive_event(rpc::context& ctx, const rpc::dtmq::cl
     FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot missing subscriber", *owner_);
     return;
   }
-  if (subscriber != subscriber_) {
+  if (subscriber != event_subscriber_) {
     FCTXLOGERROR(ctx, "{} user_orbit_manager load_orbit_room_snapshot subscriber mismatch", *owner_);
     return;
   }
@@ -426,7 +443,7 @@ void user_orbit_manager::on_channel_destroyed(rpc::context& ctx,
     FCTXLOGERROR(ctx, "{} user_orbit_manager on_channel_destroyed missing subscriber", *owner_);
     return;
   }
-  if (subscriber != subscriber_) {
+  if (subscriber != event_subscriber_) {
     FCTXLOGERROR(ctx, "{} user_orbit_manager on_channel_destroyed subscriber mismatch", *owner_);
     return;
   }
@@ -481,14 +498,100 @@ void user_orbit_manager::on_receive_event(rpc::context& ctx,
   }
 }
 
+void user_orbit_manager::uninstall_chat_channel() {
+  if (chat_channel_battlefield_subscriber_) {
+    owner_->get_user_chat_manager().unregister_external_chat_channel(chat_channel_battlefield_subscriber_);
+    chat_channel_battlefield_subscriber_ = nullptr;
+  }
+
+  if (chat_channel_faction_subscriber_) {
+    owner_->get_user_chat_manager().unregister_external_chat_channel(chat_channel_faction_subscriber_);
+    chat_channel_faction_subscriber_ = nullptr;
+  }
+}
+
+void user_orbit_manager::install_chat_channel(rpc::context& ctx) {
+  const auto& lobbysvr_cfg =
+      logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+
+  do {
+    if (!lobbysvr_cfg.orbit().allow_battlefield_chat_channel()) {
+      if (chat_channel_battlefield_subscriber_) {
+        owner_->get_user_chat_manager().unregister_external_chat_channel(chat_channel_battlefield_subscriber_);
+        chat_channel_battlefield_subscriber_ = nullptr;
+      }
+      break;
+    }
+    if (room_cache_.room_key.client_id().empty()) {
+      break;
+    }
+
+    auto channel_id = rpc::dtmq::make_unicast_channel_id(
+        PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_CHAT, 0,
+        atfw::util::string::format("{}:battlefield", room_cache_.room_key.client_id()));
+    install_chat_channel_into(ctx, chat_channel_battlefield_subscriber_, channel_id);
+  } while (false);
+
+  do {
+    if (!lobbysvr_cfg.orbit().allow_faction_chat_channel()) {
+      if (chat_channel_faction_subscriber_) {
+        owner_->get_user_chat_manager().unregister_external_chat_channel(chat_channel_faction_subscriber_);
+        chat_channel_faction_subscriber_ = nullptr;
+      }
+      break;
+    }
+
+    if (room_cache_.room_key.client_id().empty()) {
+      break;
+    }
+
+    auto channel_id = rpc::dtmq::make_unicast_channel_id(
+        PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_CHAT, 0,
+        atfw::util::string::format("{}:faction:{}", room_cache_.room_key.client_id(), room_cache_.faction_id));
+    install_chat_channel_into(ctx, chat_channel_faction_subscriber_, channel_id);
+  } while (false);
+}
+
+void user_orbit_manager::install_chat_channel_into(rpc::context& ctx, rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                                   const std::string& channel_id) {
+  // 如果已经订阅了相同的频道，则不需要重新订阅
+  if (subscriber && subscriber->get_channel_key().channel_id() == channel_id) {
+    return;
+  }
+  // 先注销老的channel
+  if (subscriber) {
+    owner_->get_user_chat_manager().unregister_external_chat_channel(subscriber);
+    subscriber = nullptr;
+  }
+
+  // 再创建新的频道
+  rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
+  subscribe_options.auto_create_channel = true;
+  atfw::dtmq::DChannelIdKey channel_key;
+  channel_key.set_channel_type(rpc::dtmq::parse_channel_type_from_channel_id(channel_id));
+  channel_key.set_channel_id(channel_id);
+  subscriber = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+  if (!subscriber) {
+    FCTXLOGERROR(ctx, "{} Failed to create world chat channel {}:{}, maybe configure is missing.", *owner_,
+                 channel_key.channel_type(), channel_key.channel_id());
+    return;
+  }
+
+  // 注册到聊天频道，走聊天的统一处理
+  owner_->get_user_chat_manager().register_external_chat_channel(subscriber);
+}
+
 void user_orbit_manager::clear_orbit_room_data() {
   room_cache_.room_key.Clear();
-  subscriber_ = nullptr;
+  event_subscriber_ = nullptr;
   room_data_ = nullptr;
   room_cache_.end_join_timepoint = std::chrono::system_clock::from_time_t(0);
   room_cache_.expired_timepoint = std::chrono::system_clock::from_time_t(0);
   last_heartbeat_timepoint_ = std::chrono::system_clock::from_time_t(0);
   subscriber_ready_ = false;
+
+  uninstall_chat_channel();
+
   mark_dirty();
 }
 
@@ -497,7 +600,7 @@ void user_orbit_manager::mark_dirty() {
   owner_->insert_dirty_handle_if_not_exists(
       reinterpret_cast<uintptr_t>(this), "user.user_orbit_manager.mark_dirty", [](gsl::string_view, user&) {
         user::dirty_sync_handle_t handle;
-        handle.build_fn = [](rpc::context&, user& user_inst, user::dirty_message_container& output) {
+        handle.build_fn = [](rpc::context& ctx, user& user_inst, user::dirty_message_container& output) {
           if (!user_inst.get_user_orbit_manager().dirty_) {
             return;
           }
@@ -505,7 +608,7 @@ void user_orbit_manager::mark_dirty() {
             output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
           }
           auto& orbit_mgr = user_inst.get_user_orbit_manager();
-          orbit_mgr.fetch_user_data(*output.user_dirty->mutable_dirty_orbit_rooms()->mutable_data());
+          orbit_mgr.fetch_user_data(ctx, *output.user_dirty->mutable_dirty_orbit_rooms()->mutable_data());
         };
         handle.clear_fn = [](rpc::context&, user& user_inst) { user_inst.get_user_orbit_manager().dirty_ = false; };
         return handle;

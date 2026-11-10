@@ -61,5 +61,8 @@ lobbysvr:
     friend_level_lru_record_expire_time: 43200s
     friend_sns_channel_blacklist: []
     friend_sns_cache_timeout: 1h
+  orbit:
+    allow_battlefield_chat_channel: true
+    allow_faction_chat_channel: true
 
 enable_excel_config: true

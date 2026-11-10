@@ -231,10 +231,10 @@ enum EnErrorCode {
   EN_ERR_LOGIN_OPENID_NOT_MATCH = -415
   [(error_code.description) = "上传上来的openid不匹配"];
   EN_ERR_LOGIN_CREATE_USER_FAILED = -416
-  [(error_code.description) = "创建用户失败"];
+  [(error_code.description) = "禁止注册或创建用户失败"];
   EN_ERR_LOGIN_USERID_NOT_MATCH = -417
   [(error_code.description) = "用户ID不匹配"];
-
+ 
   // 道具模块错误码
   EN_ERR_ITEM_NOT_ENOUGH = -501
   [(error_code.description) = "道具不足"];

@@ -52,6 +52,11 @@ message lobbysvr_friend_api_cfg {
       [(atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
 }
 
+message lobbysvr_orbit_cfg {
+  bool allow_battlefield_chat_channel = 1;
+  bool allow_faction_chat_channel = 2;
+}
+
 message lobbysvr_cfg {
   google.protobuf.Duration rank_auto_update_interval = 101
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "30s" }];  // 排行榜强制刷新间隔
@@ -59,4 +64,5 @@ message lobbysvr_cfg {
   lobbysvr_team_cfg team = 202;
   lobbysvr_matching_cfg matching = 203;
   lobbysvr_friend_api_cfg friend_api = 204;
+  lobbysvr_orbit_cfg orbit = 205;
 }

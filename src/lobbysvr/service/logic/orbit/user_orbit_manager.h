@@ -37,7 +37,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   user& get_owner() { return *owner_; }
   const user& get_owner() const { return *owner_; }
 
-  void fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const;
+  void fetch_user_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const;
   void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
 
@@ -61,6 +61,11 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   int32_t dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& init_data);
 
  private:
+  void uninstall_chat_channel();
+  void install_chat_channel(rpc::context& ctx);
+  void install_chat_channel_into(rpc::context& ctx, rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                 const std::string& channel_id);
+
   void clear_orbit_room_data();
   void on_receive_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomEventLog& event_log);
   void mark_dirty();
@@ -93,6 +98,8 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   // 最近一次收到房间心跳的时间点
   std::chrono::system_clock::time_point last_heartbeat_timepoint_ = std::chrono::system_clock::from_time_t(0);
   bool subscriber_ready_ = false;
-  rpc::dtmq::client_subscriber::ptr_t subscriber_;
+  rpc::dtmq::client_subscriber::ptr_t event_subscriber_;
+  rpc::dtmq::client_subscriber::ptr_t chat_channel_battlefield_subscriber_;
+  rpc::dtmq::client_subscriber::ptr_t chat_channel_faction_subscriber_;
   orbit_room_data_ptr room_data_;
 };

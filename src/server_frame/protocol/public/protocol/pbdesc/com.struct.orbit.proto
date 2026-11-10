@@ -9,6 +9,7 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.chat.proto";
 
 package atframework.shared;
 
@@ -177,6 +178,9 @@ message DOrbitRoomUserData {
   int32 client_template_id = 5;
   string region = 6;
   int64 create_timepoint = 7;
+
+  // 战斗中要加入的聊天频道
+  repeated atframework.chat.DChatChannelMeta chat_channel = 11;
 }
 
 message DOrbitRoomDirty {
