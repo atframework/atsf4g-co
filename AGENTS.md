@@ -97,6 +97,9 @@ high-performance game server architectures.
 - Write PowerShell defensively: single quotes unless expansion is needed, `${name}` for ambiguous boundaries,
   here-strings instead of heredocs, `& { ... } | ...` to pipe statement blocks, and full cmdlet names instead of
   ambiguous Unix aliases (`cat`, `find`, `where`).
+- For efficient Git repository transfers between VMs, containers, or sandboxes (such as Windows to WSL), start a
+  temporary Git service on the source and use `git clone`, `git pull`, or `git merge` on the destination; do not copy
+  repository files directly across filesystems.
 - Read the `shell-tooling` skill for the full modern-tool inventory, install channels, agent practices, and
   PowerShell authoring rules before shell-heavy work or command-failure debugging.
 
