@@ -10,6 +10,7 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 
 import "protocol/pbdesc/com.struct.chat.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
+import "protocol/common/com.struct.dtmq.common.proto";
 
 package atframework.chat;
 
@@ -33,7 +34,9 @@ message CSChatChannelHeartbeatReq {
   repeated atframework.dtmq.DChannelSyncPoint heartbeat_data = 1;
 }
 
-message SCChatChannelHeartbeatRsp {}
+message SCChatChannelHeartbeatRsp {
+  repeated atframework.dtmq.DChannelIdKey invalid_channel_key = 1;
+}
 
 message SCChatChannelSync {
   repeated DChatChannelData chat_channel = 1;

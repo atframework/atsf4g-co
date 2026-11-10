@@ -20,7 +20,7 @@ system notifications.
 | System announcement | 4 | `NO` | Longer-lived system messages |
 | Team chat | 12 | `YES` | Team text and team system notifications |
 | Orbit events | 101 | `YES` | `DOrbitRoomEventLog` room events |
-| Orbit chat | 102 | `YES` | Channel declared; end-to-end integration is not complete |
+| Orbit chat | 102 | `YES` | Battlefield/faction chat of an Orbit room; subscribed per config at room creation |
 
 DTMQ persists records for channels with `memory_only=NO` and skips DB saves for `YES`. World, private, and team
 messages ultimately reach DTMQ through `user_chat_manager::send_event_message`. A nonzero client-provided
@@ -65,12 +65,18 @@ This fail-open choice belongs to chat; it is not a universal policy for all comp
 
 ## Orbit and Battle Channel Boundaries
 
-`EN_ORBIT_CHANNEL_TYPE_CHAT=102` and the corresponding Excel configuration exist, but Orbit rooms currently
-subscribe to the event channel `EN_ORBIT_CHANNEL_TYPE_ROOM=101`. CS `DChatChannelKey` still has only
-world/private/team keys.
+When an Orbit room is created (`user_orbit_manager::create_room`), lobbysvr subscribes to
+`EN_ORBIT_CHANNEL_TYPE_CHAT=102` chat channels in addition to the event channel `EN_ORBIT_CHANNEL_TYPE_ROOM=101`:
+`lobbysvr_cfg.orbit.allow_battlefield_chat_channel` controls the battlefield channel `<room client_id>:battlefield`,
+and `lobbysvr_cfg.orbit.allow_faction_chat_channel` controls the faction channel
+`<room client_id>:faction:<faction_id>`.
 
-Orbit/battle-room chat is therefore a configuration or protocol reservation, not proof of complete room
-subscription, message sending, and client synchronization.
+The subscribed chat channels are registered into `user_chat_manager` and reuse the unified CS snapshot, heartbeat,
+and incremental sync; channel metadata is delivered with `DOrbitRoomUserData.chat_channel`.
+
+The send side is not integrated yet: CS `DChatChannelKey` still has only world/private/team keys, and
+`user_chat_manager::build_dtmq_channel_key_from_chat_channel_key` returns `EN_ERR_DTMQ_INVALID_CHANNEL` for other
+keys, so clients cannot send to Orbit channels through the chat RPC yet.
 
 Implementation entry points are `src/lobbysvr/service/logic/chat/`, `src/teamsvr/sdk/common/rpc/team/`,
 `src/orbitsvr/service/logic/room/`, and [DTMQ](dtmq).

@@ -34,18 +34,14 @@
 
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
-task_action_chat_channel_heartbeat::task_action_chat_channel_heartbeat(
-    dispatcher_start_data_type&& param)
+task_action_chat_channel_heartbeat::task_action_chat_channel_heartbeat(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_chat_channel_heartbeat::~task_action_chat_channel_heartbeat() {}
 
-const char* task_action_chat_channel_heartbeat::name() const {
-  return "task_action_chat_channel_heartbeat";
-}
+const char* task_action_chat_channel_heartbeat::name() const { return "task_action_chat_channel_heartbeat"; }
 
-task_action_chat_channel_heartbeat::result_type
-task_action_chat_channel_heartbeat::operator()() {
+task_action_chat_channel_heartbeat::result_type task_action_chat_channel_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
@@ -59,6 +55,8 @@ task_action_chat_channel_heartbeat::operator()() {
   rpc::context::message_holder<atfw::chat::SCChatChannelSync> sync_msg{get_shared_context()};
 
   std::unordered_set<std::string> channel_id_set;
+  bool has_invalid_channel = false;
+  bool all_invalid_channel = true;
   for (const auto& sync_point : req_body.heartbeat_data()) {
     if (channel_id_set.end() != channel_id_set.find(sync_point.channel_key().channel_id())) {
       FCTXLOGWARNING(get_shared_context(), "duplicate channel_id {} in heartbeat_data will be ignored",
@@ -69,9 +67,22 @@ task_action_chat_channel_heartbeat::operator()() {
     int32_t response_code =
         user_inst->get_user_chat_manager().receive_heartbeat(get_shared_context(), sync_point, *sync_msg);
     if (response_code != 0) {
+      // 通知无效的订阅
+      if (response_code == PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND) {
+        has_invalid_channel = true;
+        auto* invalid_channel_key = get_response_body().add_invalid_channel_key();
+        *invalid_channel_key = sync_point.channel_key();
+
+        FCTXLOGDEBUG(get_shared_context(), "user {} receive_heartbeat but channel already be removed", *user_inst);
+        continue;
+      }
+
+      all_invalid_channel = false;
       FCTXLOGWARNING(get_shared_context(), "user {} receive_heartbeat failed, response_code={}({})", *user_inst,
                      response_code, protobuf_mini_dumper_get_error_msg(response_code));
       set_response_code(response_code);
+    } else {
+      all_invalid_channel = false;
     }
   }
 
@@ -81,6 +92,11 @@ task_action_chat_channel_heartbeat::operator()() {
       RPC_AWAIT_IGNORE_RESULT(
           rpc::lobbysvrclientservice::send_chat_channel_sync(get_shared_context(), *sync_msg, *sess));
     }
+  }
+
+  // 如果所有的频道都无效，则返回 EN_ERR_DTMQ_CHANNEL_NOT_FOUND
+  if (has_invalid_channel && all_invalid_channel) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
   }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

@@ -19,7 +19,7 @@ title: 聊天
 | 系统公告 | 4 | `NO` | 生命周期较长的系统消息 |
 | 队伍聊天 | 12 | `YES` | 队伍文本和队伍系统通知 |
 | Orbit 事件 | 101 | `YES` | `DOrbitRoomEventLog` 房间事件 |
-| Orbit 聊天 | 102 | `YES` | 频道配置已声明，端到端接入尚未完成 |
+| Orbit 聊天 | 102 | `YES` | Orbit 房间的战场/阵营聊天，创建房间时按配置订阅 |
 
 `memory_only=NO` 的频道由 DTMQ 持久化记录；`YES` 的频道跳过 DB 保存。世界、私聊和队伍消息最终都经
 `user_chat_manager::send_event_message` 写入 DTMQ。客户端发送非零 `world_partition_channel` 会被拒绝。
@@ -60,11 +60,17 @@ Lobby 将 DTMQ 队伍事件映射为 `SCUserTeamRoomChgSync`。客户端不能�
 
 ## Orbit 与战斗频道边界
 
-`EN_ORBIT_CHANNEL_TYPE_CHAT=102` 和相应 Excel 配置已经存在，但 Orbit 房间当前实际订阅的是事件频道
-`EN_ORBIT_CHANNEL_TYPE_ROOM=101`。CS `DChatChannelKey` 仍只有 world/private/team 三种 key。
+Orbit 房间创建时（`user_orbit_manager::create_room`）除订阅事件频道 `EN_ORBIT_CHANNEL_TYPE_ROOM=101` 外，
+还会按配置订阅 `EN_ORBIT_CHANNEL_TYPE_CHAT=102` 的聊天频道：`lobbysvr_cfg.orbit.allow_battlefield_chat_channel`
+控制战场频道 `<room client_id>:battlefield`，`lobbysvr_cfg.orbit.allow_faction_chat_channel` 控制阵营频道
+`<room client_id>:faction:<faction_id>`。
 
-因此，Orbit/战斗房间聊天目前只能视为配置或协议预留，不能据此假定房间订阅、消息发送和客户端同步已经
-完整接入。
+订阅的聊天频道注册进 `user_chat_manager`，复用统一的 CS 快照、心跳与增量同步；频道元数据随
+`DOrbitRoomUserData.chat_channel` 下发。
+
+发送侧尚未接入：CS `DChatChannelKey` 仍只有 world/private/team 三种 key，
+`user_chat_manager::build_dtmq_channel_key_from_chat_channel_key` 对其他 key 返回
+`EN_ERR_DTMQ_INVALID_CHANNEL`，客户端还不能通过聊天 RPC 向 Orbit 频道发送消息。
 
 实现入口为 `src/lobbysvr/service/logic/chat/`、`src/teamsvr/sdk/common/rpc/team/`、
 `src/orbitsvr/service/logic/room/` 和[DTMQ](dtmq)。
