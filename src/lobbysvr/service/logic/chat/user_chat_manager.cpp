@@ -568,14 +568,14 @@ void user_chat_manager::foreach_channel(
     return;
   }
 
-  for (const auto& kv : external_chat_channels_) {
-    if (!callback(kv.second)) {
+  for (const auto& kv : external_chat_channel_) {
+    if (!callback(kv.second.channel_subscriber)) {
       break;
     }
   }
 }
 
-int32_t user_chat_manager::check_writable(rpc::context& /*ctx*/, const atfw::dtmq::DChannelIdKey& channel_key) const {
+int32_t user_chat_manager::check_writable(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key) const {
   if (subscriber_key_.empty()) {
     return PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED;
   }
@@ -600,12 +600,34 @@ int32_t user_chat_manager::check_writable(rpc::context& /*ctx*/, const atfw::dtm
   }
 
   switch (channel_key.channel_type()) {
+    // 公告频道和饲料频道总是允许发送消息
     case atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC:
     case atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE:
       return 0;
     default: {
-      auto iter = external_chat_channels_.find(channel_key.channel_id());
-      if (iter != external_chat_channels_.end()) {
+      // 已知外部频道使用外部频道的检查规则
+      auto iter_channel = external_chat_channel_.find(channel_key.channel_id());
+      if (iter_channel != external_chat_channel_.end()) {
+        if (iter_channel->second.option.readonly) {
+          return PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE;
+        }
+        if (iter_channel->second.option.check_writable != nullptr) {
+          return iter_channel->second.option.check_writable(ctx, *owner_, iter_channel->second.channel_subscriber);
+        }
+        return 0;
+      }
+      // 未知外部频道采用注册的规则
+      if (rpc::dtmq::parse_channel_type_from_channel_id(channel_key.channel_id()) != channel_key.channel_type()) {
+        return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL;
+      }
+      auto iter_type = external_channel_type_rule_.find(channel_key.channel_type());
+      if (iter_type != external_channel_type_rule_.end()) {
+        if (iter_type->second.readonly) {
+          return PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE;
+        }
+        if (iter_type->second.check_writable != nullptr) {
+          return iter_type->second.check_writable(ctx, *owner_, channel_key);
+        }
         return 0;
       }
       return PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE;
@@ -716,10 +738,10 @@ int32_t user_chat_manager::get_snapshot(rpc::context& ctx, gsl::string_view chan
 
   // 外部频道
   {
-    auto iter = external_chat_channels_.find(std::string(channel_id));
-    if (iter != external_chat_channels_.end()) {
-      if (iter->second) {
-        fn(iter->second);
+    auto iter = external_chat_channel_.find(std::string(channel_id));
+    if (iter != external_chat_channel_.end()) {
+      if (iter->second.channel_subscriber) {
+        fn(iter->second.channel_subscriber);
         return ret;
       }
     }
@@ -840,22 +862,47 @@ int32_t user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(
       dtmq_channel_key = rpc::team::team_api::make_team_chat_channel_key(chat_channel_key.team_channel());
       return 0;
     }
-    default:
+    case atfw::chat::DChatChannelKey::KeyTypeCase::kDynamicChannel: {
+      uint32_t channel_type = chat_channel_key.dynamic_channel().channel_type();
+      if (rpc::dtmq::parse_channel_type_from_channel_id(chat_channel_key.dynamic_channel().channel_id()) !=
+          channel_type) {
+        return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL;
+      }
+
+      // 已知类型不允许通过 dynamic_channel 发送消息，必须使用对应的内置类型
+      switch (channel_type) {
+        case atfw::chat::DChatChannelKey::KeyTypeCase::kWorldPartitionChannel:
+        case atfw::chat::DChatChannelKey::KeyTypeCase::kPrivateChannel:
+        case atfw::chat::DChatChannelKey::KeyTypeCase::kTeamChannel:
+          return PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+        default:
+          break;
+      }
+
+      protobuf_copy_message(dtmq_channel_key, chat_channel_key.dynamic_channel());
+      return 0;
+    }
+    default: {
       return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL;
+    }
   }
 }
 
-bool user_chat_manager::register_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel) {
+bool user_chat_manager::register_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel,
+                                                       const external_chat_channel_option& option) {
   if (!channel) {
     return false;
   }
 
-  auto& store_channel = external_chat_channels_[channel->get_channel_key().channel_id()];
-  if (store_channel == channel) {
+  external_remove_channel_notifitication_.erase(channel->get_channel_key().channel_id());
+  auto& store_channel = external_chat_channel_[channel->get_channel_key().channel_id()];
+  if (store_channel.channel_subscriber == channel) {
+    store_channel.option = option;
     return true;
   }
 
-  store_channel = channel;
+  store_channel.channel_subscriber = channel;
+  store_channel.option = option;
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
   channel->set_local_private_data(local_private_data);
   install_subscriber_callback(channel);
@@ -867,20 +914,37 @@ bool user_chat_manager::unregister_external_chat_channel(const rpc::dtmq::client
     return false;
   }
 
-  auto it = external_chat_channels_.find(channel->get_channel_key().channel_id());
-  if (it == external_chat_channels_.end()) {
+  auto it = external_chat_channel_.find(channel->get_channel_key().channel_id());
+  if (it == external_chat_channel_.end()) {
     return false;
   }
 
-  if (it->second && it->second != channel) {
+  if (it->second.channel_subscriber && it->second.channel_subscriber != channel) {
     return false;
   }
 
-  if (it->second) {
-    uninstall_subscriber_callback(it->second);
-    it->second->set_local_private_data({});
+  if (it->second.channel_subscriber) {
+    uninstall_subscriber_callback(it->second.channel_subscriber);
+    it->second.channel_subscriber->set_local_private_data({});
   }
-  external_chat_channels_.erase(it);
+  external_chat_channel_.erase(it);
+  external_remove_channel_notifitication_[channel->get_channel_key().channel_id()] = channel->get_channel_key();
+
+  insert_user_dirty_handle();
+  return true;
+}
+
+void user_chat_manager::register_external_channel_type(uint32_t channel_type,
+                                                       const external_channel_type_rule& option) {
+  external_channel_type_rule_[channel_type] = option;
+}
+
+bool user_chat_manager::unregister_external_channel_type(uint32_t channel_type) {
+  auto it = external_channel_type_rule_.find(channel_type);
+  if (it == external_channel_type_rule_.end()) {
+    return false;
+  }
+  external_channel_type_rule_.erase(it);
   return true;
 }
 
@@ -966,9 +1030,9 @@ rpc::dtmq::client_subscriber::ptr_t user_chat_manager::get_channel_by_key(
 
       return nullptr;
     default: {
-      auto iter = external_chat_channels_.find(channel_key.channel_id());
-      if (iter != external_chat_channels_.end()) {
-        return iter->second;
+      auto iter = external_chat_channel_.find(channel_key.channel_id());
+      if (iter != external_chat_channel_.end()) {
+        return iter->second.channel_subscriber;
       }
       return nullptr;
     }
@@ -1033,6 +1097,38 @@ user_chat_manager::global_setup_private_channel_event_set_handle(uintptr_t uniqu
 
     fn(ctx, chat_mgr->get_owner(), data);
   };
+}
+
+void user_chat_manager::insert_user_dirty_handle() {
+  // 注册脏数据dump的handle
+  owner_->insert_dirty_handle_if_not_exists(
+      reinterpret_cast<uintptr_t>(this), "user_chat_manager.insert_user_dirty_handle",
+      [](rpc::context& ctx, user& user_inst, user::dirty_message_container& /*dirty_message*/) {
+        if (user_inst.get_user_chat_manager().external_remove_channel_notifitication_.empty()) {
+          return;
+        }
+
+        std::unordered_map<std::string, atfw::dtmq::DChannelIdKey> dirty_data;
+        dirty_data.swap(user_inst.get_user_chat_manager().external_remove_channel_notifitication_);
+
+        auto sess = user_inst.get_session();
+        // 如果session已经离线，忽略通知
+        if (!sess) {
+          return;
+        }
+
+        auto* sync_message = ctx.create<atfw::chat::SCChatChannelSync>();
+        if (sync_message == nullptr) {
+          return;
+        }
+
+        for (const auto& kv : dirty_data) {
+          protobuf_copy_message(*sync_message->add_close_channel(), kv.second);
+        }
+
+        rpc::lobbysvrclientservice::send_chat_channel_sync(ctx, *sync_message, *sess).unwrap();
+      },
+      nullptr);
 }
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS

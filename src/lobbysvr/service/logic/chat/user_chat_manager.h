@@ -56,6 +56,24 @@ class user;
 class user_chat_manager : public atfw::util::design_pattern::noncopyable {
  public:
   using chat_channel_event_callback_t = void (*)(rpc::context& ctx, user&, const ::atfw::dtmq::DChannelMessage& data);
+  using chat_channel_check_writable_callback_t = int32_t (*)(rpc::context& ctx, user&,
+                                                             const rpc::dtmq::client_subscriber::ptr_t&);
+  using channel_type_check_writable_callback_t = int32_t (*)(rpc::context& ctx, user&,
+                                                             const atfw::dtmq::DChannelIdKey& channel_key);
+
+  struct external_chat_channel_option {
+    bool readonly = false;
+    chat_channel_check_writable_callback_t check_writable = nullptr;
+
+    inline external_chat_channel_option() noexcept {}
+  };
+
+  struct external_channel_type_rule {
+    bool readonly = false;
+    channel_type_check_writable_callback_t check_writable = nullptr;
+
+    inline external_channel_type_rule() noexcept {}
+  };
 
  public:
   static int32_t global_tick(rpc::context& ctx);
@@ -107,9 +125,14 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   int32_t build_dtmq_channel_key_from_chat_channel_key(const atfw::chat::DChatChannelKey& chat_channel_key,
                                                        atfw::dtmq::DChannelIdKey& dtmq_channel_key);
 
-  bool register_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel);
+  bool register_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel,
+                                      const external_chat_channel_option& option = {});
 
   bool unregister_external_chat_channel(const rpc::dtmq::client_subscriber::ptr_t& channel);
+
+  void register_external_channel_type(uint32_t channel_type, const external_channel_type_rule& option = {});
+
+  bool unregister_external_channel_type(uint32_t channel_type);
 
   static void dump_dtmq_to_chat_channel_metadata(rpc::context& ctx, const rpc::dtmq::client_subscriber& channel,
                                                  atfw::chat::DChatChannelMeta& metadata, bool with_configure);
@@ -150,6 +173,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   static rpc::dtmq::client_subscriber::event_callback_on_receive_event_t global_setup_private_channel_event_set_handle(
       uintptr_t unique_guard, chat_channel_event_callback_t ATFW_UTIL_MACRO_NONNULL fn);
 
+  void insert_user_dirty_handle();
+
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
   time_t last_send_to_world_channel_timepoint_unix_sec_;
@@ -163,5 +188,13 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   rpc::dtmq::client_subscriber::ptr_t sys_notification_channel_;
   rpc::dtmq::client_subscriber::ptr_t sys_announcement_channel_;
 
-  std::unordered_map<std::string, rpc::dtmq::client_subscriber::ptr_t> external_chat_channels_;
+  struct external_chat_channel_data {
+    external_chat_channel_option option;
+    rpc::dtmq::client_subscriber::ptr_t channel_subscriber;
+
+    inline external_chat_channel_data() {}
+  };
+  std::unordered_map<std::string, external_chat_channel_data> external_chat_channel_;
+  std::unordered_map<uint32_t, external_channel_type_rule> external_channel_type_rule_;
+  std::unordered_map<std::string, atfw::dtmq::DChannelIdKey> external_remove_channel_notifitication_;
 };

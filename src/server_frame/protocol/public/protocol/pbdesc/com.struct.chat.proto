@@ -57,6 +57,9 @@ message DChatChannelKey {
     uint64 world_partition_channel = 1;
     atframework.shared.DUserIDKey private_channel = 2;
     atframework.team.DTeamKey team_channel = 3;
+
+    // 由其他模块动态注入的频道
+    atframework.dtmq.DChannelIdKey dynamic_channel = 11;
   }
 }
 

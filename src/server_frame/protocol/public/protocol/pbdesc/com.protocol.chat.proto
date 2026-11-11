@@ -40,6 +40,9 @@ message SCChatChannelHeartbeatRsp {
 
 message SCChatChannelSync {
   repeated DChatChannelData chat_channel = 1;
+
+  // 主动通知的频道关闭
+  repeated atframework.dtmq.DChannelIdKey close_channel = 2;
 }
 
 message CSChatSendMessageReq {
