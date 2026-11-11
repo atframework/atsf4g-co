@@ -299,16 +299,19 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
                                               const item_entry_ptr_t& entry,
                                               const ItemOperationContext& context) override;
 
-  /// @brief 应用客户端同步的"新增或更新一条"
+  /// @brief 应用客户端同步的"一批新增或更新"
   ///
-  /// 被调用时机: 基类 apply_entries 的新增/更新阶段, 每条已通过通用校验之后调用一次。
-  /// 已有条目位置变化时要重新排序 (先摘出分组, 刷排序键, 再插回) 并按新槽位重挂索引;
-  /// 位置没变但 GUID 变了只需要重挂 GUID 索引; 条目不存在则新建并挂索引。
-  /// @param existing 该 entry_id 已存在的条目 (不存在时为 nullptr)
-  ITEM_ALGORITHM_API void on_apply_update_one(const excel_config_group_ptr_t& config_group,
-                                              const item_entry_ptr_t& existing,
-                                              const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update,
-                                              const ItemOperationContext& context) override;
+  /// 被调用时机: 基类 apply_entries 的新增/更新阶段, 整批已通过通用校验之后调用一次。
+  /// 分两阶段执行:
+  ///   1. 先把这批里"槽位会变"的已有条目的旧槽位索引统一摘掉;
+  ///   2. 再统一写数据 (槽位变化时重新排序、按新槽位重挂索引; 槽位没变但 GUID 变了只重挂 GUID
+  ///      索引; 条目不存在则新建并挂索引)。
+  /// 之所以分两阶段: 同一批里两个装备互换槽位时, 逐条处理会让后一条摘旧槽位时把前一条刚挂上的
+  /// 新槽位索引清掉, 那个槽位在容器里就变成空槽。
+  /// @param updates 这批要新增/更新的条目 (未校验, 逐条走 validate_apply_update_entry)
+  ITEM_ALGORITHM_API void on_apply_update_batch(
+      const excel_config_group_ptr_t& config_group, const item_instance_entry_readable_iterable& updates,
+      const ItemOperationContext& context) override;
 
   /// @brief 为一批道具寻位 (本模式不扫描格子, 逐件委托 on_find_position_for_infinite)
   ///

@@ -625,6 +625,29 @@ ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& conf
   return on_load_one(config_group, item_entry, context);
 }
 
+ITEM_ALGORITHM_API bool ItemContainer::validate_apply_update_entry(
+    const excel_config_group_ptr_t& config_group, const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) const {
+  const auto& item_basic = update.instance().item_basic();
+  int32_t type_id = item_basic.type_id();
+
+  if (update.entry_id() == 0) {
+    FWINSTLOGERROR(logger(), "apply update failed: entry_id=0 type={}", type_id);
+    return false;
+  }
+
+  // 同步包是外部输入, 必须自己校验: 道具字段合法且归属本容器。
+  // 少了这一步就会把别的容器的数据或数量为 0 的条目写进本容器。
+  int32_t check_ret = validate_item_basic(config_group, item_basic);
+  if (check_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    FWINSTLOGERROR(logger(), "apply update failed: invalid item entry_id={} type={} count={} error={} ({})",
+                   update.entry_id(), type_id, item_basic.count(), check_ret,
+                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(check_ret));
+    return false;
+  }
+
+  return true;
+}
+
 ITEM_ALGORITHM_API void ItemContainer::apply_entries(const excel_config_group_ptr_t& config_group,
                                                      const google::protobuf::RepeatedField<uint64_t>& remove_entry_ids,
                                                      const item_instance_entry_readable_iterable& update_entries,
@@ -662,34 +685,13 @@ ITEM_ALGORITHM_API void ItemContainer::apply_entries(const excel_config_group_pt
   // ============================================================
   // Phase 2: 按 entry_id 新增或更新
   // ============================================================
-  // 回调返回 false 会中断遍历; 跳过本条 (相当于原来循环里的 continue) 时返回 true 继续
-  update_entries.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) -> bool {
-    const auto& item_basic = update.instance().item_basic();
-    int32_t type_id = item_basic.type_id();
+  // 整批原样交给模式钩子: 同批次里两条条目互换位置时, 逐条落地会互相清掉刚挂上的位置索引
+  // (后一条摘旧位置 = 摘掉前一条的新位置), 必须由子类在批内分两阶段处理。
+  // 基类不落临时容器, 逐条的通用校验由子类调 validate_apply_update_entry 完成。
+  on_apply_update_batch(config_group, update_entries, update_context);
 
-    if (update.entry_id() == 0) {
-      FWINSTLOGERROR(logger(), "apply update failed: entry_id=0 type={}", type_id);
-      return true;
-    }
-
-    // 同步包是外部输入, 必须自己校验: 道具字段合法且归属本容器。
-    // 少了这一步就会把别的容器的数据或数量为 0 的条目写进本容器。
-    int32_t check_ret = validate_item_basic(config_group, item_basic);
-    if (check_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-      FWINSTLOGERROR(logger(), "apply update failed: invalid item entry_id={} type={} count={} error={} ({})",
-                     update.entry_id(), type_id, item_basic.count(), check_ret,
-                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(check_ret));
-      return true;
-    }
-
-    item_entry_ptr_t existing = find_entry_by_id(update.entry_id());
-    on_apply_update_one(config_group, existing, update, update_context);
-    FWINSTLOGINFO(logger(), "apply {} entry_id={} type={} count={}", existing ? "update" : "add", update.entry_id(),
-                  type_id, item_basic.count());
-    return true;
-  });
-
-  FWINSTLOGINFO(logger(), "apply entries done, {} remove, {} update", remove_entry_ids.size(), update_entries.size());
+  FWINSTLOGINFO(logger(), "apply entries done, {} remove, {} update", remove_entry_ids.size(),
+                update_entries.size());
 }
 
 ITEM_ALGORITHM_API bool ItemContainer::find_positions_for_instances(

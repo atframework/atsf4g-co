@@ -249,33 +249,44 @@ ITEM_ALGORITHM_API void ItemNoPositionContainer::on_apply_remove_one(const excel
   notify_entry_count_changed(entry, old_count, 0, context);
 }
 
-ITEM_ALGORITHM_API void ItemNoPositionContainer::on_apply_update_one(
-    const excel_config_group_ptr_t& /*config_group*/, const item_entry_ptr_t& existing,
-    const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update, const ItemOperationContext& context) {
-  // 被调用时机: 基类 apply_entries 的新增/更新阶段, 每条通过校验并按 entry_id 查过一次之后。
-  const auto& item_basic = update.instance().item_basic();
-  int32_t type_id = item_basic.type_id();
-  int64_t new_count = item_basic.count();
+ITEM_ALGORITHM_API void ItemNoPositionContainer::on_apply_update_batch(
+    const excel_config_group_ptr_t& config_group, const item_instance_entry_readable_iterable& updates,
+    const ItemOperationContext& context) {
+  // 被调用时机: 基类 apply_entries 的新增/更新阶段, 整批原样传进来 (逐条校验在这里做)。
+  // 本模式没有位置 / GUID 索引, 不存在"批内条目互相摘索引"的问题, 直接逐条落地即可。
+  updates.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) -> bool {
+    if (!validate_apply_update_entry(config_group, update)) {
+      return true;
+    }
 
-  if (existing) {
-    // 更新已有条目: 本模式位置语义为空, 只需覆盖数据并刷新数量缓存
-    int64_t old_count = existing->item_instance().item_basic().count();
-    set_entry_instance(existing, update.instance());
-    notify_entry_count_changed(existing, old_count, new_count, context);
-    return;
-  }
+    const auto& item_basic = update.instance().item_basic();
+    int32_t type_id = item_basic.type_id();
+    int64_t new_count = item_basic.count();
 
-  // 新增条目: 沿用同步包里的 entry_id
-  PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry = update;
-  item_entry_ptr_t entry = make_entry(std::move(new_entry));
-  if (!insert_entry_into_group(entry)) {
-    FWINSTLOGERROR(logger(), "[EntrySortKeyError] apply add failed to insert entry type={} count={} entry_id={}",
-                   type_id, new_count, entry->entry_id());
-    // 条目没进分组, 不能再动数量缓存, 否则缓存与实时计数会对不上
-    return;
-  }
+    item_entry_ptr_t existing = find_entry_by_id(update.entry_id());
+    if (existing) {
+      // 更新已有条目: 本模式位置语义为空, 只需覆盖数据并刷新数量缓存
+      int64_t old_count = existing->item_instance().item_basic().count();
+      set_entry_instance(existing, update.instance());
+      notify_entry_count_changed(existing, old_count, new_count, context);
+      FWINSTLOGINFO(logger(), "apply update entry_id={} type={} count={}", update.entry_id(), type_id, new_count);
+      return true;
+    }
 
-  notify_entry_count_changed(entry, 0, new_count, context);
+    // 新增条目: 沿用同步包里的 entry_id
+    PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry = update;
+    item_entry_ptr_t entry = make_entry(std::move(new_entry));
+    if (!insert_entry_into_group(entry)) {
+      FWINSTLOGERROR(logger(), "[EntrySortKeyError] apply add failed to insert entry type={} count={} entry_id={}",
+                     type_id, new_count, entry->entry_id());
+      // 条目没进分组, 不能再动数量缓存, 否则缓存与实时计数会对不上
+      return true;
+    }
+
+    notify_entry_count_changed(entry, 0, new_count, context);
+    FWINSTLOGINFO(logger(), "apply add entry_id={} type={} count={}", update.entry_id(), type_id, new_count);
+    return true;
+  });
 }
 
 // ============================================================

@@ -493,16 +493,32 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
                                                       const item_entry_ptr_t& entry,
                                                       const ItemOperationContext& context) = 0;
 
-  /// @brief 应用客户端同步的“新增或更新一条”
+  /// @brief 应用客户端同步的“一批新增或更新” (批量钩子)
   ///
-  /// 被调用时机: apply_entries 的新增/更新阶段, 每条通过 (is_item_valid / 容器归属) 校验后调用一次;
-  /// 条目不存在时子类负责新建并挂索引, 已存在时负责覆盖数据并刷新索引与数量缓存。
+  /// 被调用时机: apply_entries 的新增/更新阶段, 整批原样交给子类 (基类不落任何临时容器);
+  /// 逐条的通用校验由子类调 validate_apply_update_entry 完成, 条目不存在时子类负责新建并挂索引,
+  /// 已存在时负责覆盖数据并刷新索引与数量缓存。
+  ///
+  /// 为什么必须是整批: 同一批里可能出现“两条条目互换位置”(客户端拖动对调时服务端一条 dirty
+  /// 下发两条 update_entries)。逐条处理时, 后一条摘自己的旧位置会把前一条刚挂上的新位置索引/
+  /// 占用位清掉, 那个格子在容器里就变成“空槽”, 后续 check_move 会放行、下发后才被服务端拒绝。
+  /// 所以有位置语义的子类要在钩子内分两阶段: 先统一摘掉这批里位置会变的条目的旧位置,
+  /// 再统一写数据 + 挂新位置 (可重复遍历 updates)。
   /// @param config_group 配置组 (查位置配置用)
-  /// @param existing 该 entry_id 已存在的条目 (不存在时为 nullptr)
-  ITEM_ALGORITHM_API virtual void on_apply_update_one(const excel_config_group_ptr_t& config_group,
-                                                      const item_entry_ptr_t& existing,
-                                                      const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update,
-                                                      const ItemOperationContext& context) = 0;
+  /// @param updates      这批要新增/更新的条目 (未校验, 子类自行过滤)
+  /// @param context      操作上下文 (原因固定为 kApplyUpdate)
+  ITEM_ALGORITHM_API virtual void on_apply_update_batch(
+      const excel_config_group_ptr_t& config_group, const item_instance_entry_readable_iterable& updates,
+      const ItemOperationContext& context) = 0;
+
+  /// @brief apply_entries 更新条目的通用校验 (entry_id 非 0 + 字段合法且归属本容器)
+  ///
+  /// 同步包是外部输入, 每个容器在落地前都要过这一关; 抽成基类的 protected helper,
+  /// 各模式在自己的 on_apply_update_batch 里逐条调用 (不合格的条目打日志并跳过)。
+  /// @return true 表示这条可以落地
+  ITEM_ALGORITHM_API bool validate_apply_update_entry(
+      const excel_config_group_ptr_t& config_group,
+      const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) const;
 
   // ============================================================
   // 寻位钩子 — 基类做入参校验与输出预留, 子类实现搜索

@@ -4472,6 +4472,170 @@ CASE_TEST(ItemContainer, on_check_sub_positions_hook) {
   }
 }
 
+/// @brief 一条同步批次里两个条目互换位置: 位置索引与占用状态必须都正确落位
+///
+/// 客户端拖动对调时, 服务端一条 dirty 里会下发两条 update_entries (A 去 B 的格子, B 去 A 的格子)。
+/// 逐条处理时, 后一条摘自己的旧位置会把前一条刚挂上的新位置索引/占用位清掉, 于是那个格子在容器里
+/// "看起来是空的": 后续 check_move 会放行, 真正下发到服务端才被 -507 打回 (线上日志里的现象)。
+/// 这里锁定 apply_entries 的批量语义。
+CASE_TEST(ItemContainer, apply_entries_swap_positions) {
+  using namespace item_algorithm;  // NOLINT(build/namespaces)
+  auto config = make_test_config_group();
+
+  // ============================================================
+  // 有限格子 (背包/仓库): (0,0) 与 (1,0) 互换
+  // ============================================================
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemFiniteGridContainer>();
+    auto& grid = *grid_ptr;
+    grid.init(10, 10, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    // 用带 GUID 的装备, 这样挪到已被占用的格子上不会走"合入", 才能验证占用判定
+    grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+
+    constexpr int64_t kLeftGuid = 9101;
+    constexpr int64_t kRightGuid = 9102;
+    auto make_at = [](int64_t guid, int32_t x, int32_t y) {
+      PROJECT_NAMESPACE_ID::DItemInstance instance;
+      auto* basic = instance.mutable_item_basic();
+      basic->set_type_id(kEquipmentTypeId);
+      basic->set_count(1);
+      basic->set_guid(guid);
+      auto* grid_position = basic->mutable_position()->mutable_grid_position();
+      grid_position->mutable_user_inventory()->set_x(x);
+      grid_position->mutable_user_inventory()->set_y(y);
+      return instance;
+    };
+
+    CASE_EXPECT_TRUE(
+        grid.load(config, make_load_entry(make_at(kLeftGuid, 0, 0)), item_algorithm::ItemOperationSource{}));
+    CASE_EXPECT_TRUE(
+        grid.load(config, make_load_entry(make_at(kRightGuid, 1, 0)), item_algorithm::ItemOperationSource{}));
+
+    auto entry_left = grid.get(make_inventory_target(0, 0).grid_position());
+    auto entry_right = grid.get(make_inventory_target(1, 0).grid_position());
+    CASE_EXPECT_TRUE(entry_left != nullptr);
+    CASE_EXPECT_TRUE(entry_right != nullptr);
+    if (!entry_left || !entry_right) {
+      return;
+    }
+    const uint64_t left_id = entry_left->entry_id();
+    const uint64_t right_id = entry_right->entry_id();
+
+    // 同一条同步批次里互换位置: (1,0) 的去 (0,0) 先处理, (0,0) 的去 (1,0) 后处理
+    std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::DItemInstance>> updates;
+    updates.emplace_back(right_id, make_at(kRightGuid, 0, 0));
+    updates.emplace_back(left_id, make_at(kLeftGuid, 1, 0));
+    call_apply_entries(grid, config, {}, updates);
+
+    auto moved_to_left = grid.get(make_inventory_target(0, 0).grid_position());
+    auto moved_to_right = grid.get(make_inventory_target(1, 0).grid_position());
+    CASE_EXPECT_TRUE(moved_to_left != nullptr);
+    CASE_EXPECT_TRUE(moved_to_right != nullptr);
+    if (moved_to_left) {
+      CASE_EXPECT_EQ(right_id, moved_to_left->entry_id());
+    }
+    if (moved_to_right) {
+      CASE_EXPECT_EQ(left_id, moved_to_right->entry_id());
+    }
+
+    // 索引与占用都正确时, 把 (1,0) 往 (0,0) 挪必须被判"目标已占用"
+    if (moved_to_right) {
+      ItemMoveRequest move_requests;
+      move_requests.move_sub_entrys.push_back({moved_to_right, 1});
+      move_requests.move_add_entrys.push_back({moved_to_right, make_inventory_target(0, 0), 1});
+      auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
+      CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_MOVE_TARGET_OCCUPIED);
+    }
+  }
+
+  // ============================================================
+  // 无限格子 (装备槽): 槽位 1 与槽位 2 互换
+  // ============================================================
+  {
+    constexpr int64_t kContainerGuid = 0x5211;
+    constexpr int32_t kSlot1 = 1;
+    constexpr int32_t kSlot2 = 2;
+
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemInfiniteGridContainer>();
+    auto& grid = *grid_ptr;
+    grid.init(PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment, kContainerGuid);
+    grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+
+    constexpr int64_t kSlot1Guid = 9201;
+    constexpr int64_t kSlot2Guid = 9202;
+    auto make_in_slot = [&](int32_t slot, int64_t guid) {
+      PROJECT_NAMESPACE_ID::DItemInstance instance;
+      auto* basic = instance.mutable_item_basic();
+      basic->set_type_id(kEquipmentTypeId);
+      basic->set_count(1);
+      basic->set_guid(guid);
+      basic->mutable_position()->set_container_guid(kContainerGuid);
+      basic->mutable_position()
+          ->mutable_grid_position()
+          ->mutable_character_equipment()
+          ->set_slot_idx(static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(slot));
+      return instance;
+    };
+
+    CASE_EXPECT_TRUE(
+        grid.load(config, make_load_entry(make_in_slot(kSlot1, kSlot1Guid)), item_algorithm::ItemOperationSource{}));
+    CASE_EXPECT_TRUE(
+        grid.load(config, make_load_entry(make_in_slot(kSlot2, kSlot2Guid)), item_algorithm::ItemOperationSource{}));
+
+    auto entry_slot1 = grid.get_at(ItemGridPosition{kSlot1, 0});
+    auto entry_slot2 = grid.get_at(ItemGridPosition{kSlot2, 0});
+    CASE_EXPECT_TRUE(entry_slot1 != nullptr);
+    CASE_EXPECT_TRUE(entry_slot2 != nullptr);
+    if (!entry_slot1 || !entry_slot2) {
+      return;
+    }
+    const uint64_t slot1_id = entry_slot1->entry_id();
+    const uint64_t slot2_id = entry_slot2->entry_id();
+
+    std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::DItemInstance>> updates;
+    updates.emplace_back(slot2_id, make_in_slot(kSlot1, kSlot2Guid));
+    updates.emplace_back(slot1_id, make_in_slot(kSlot2, kSlot1Guid));
+    call_apply_entries(grid, config, {}, updates);
+
+    auto moved_slot1 = grid.get_at(ItemGridPosition{kSlot1, 0});
+    auto moved_slot2 = grid.get_at(ItemGridPosition{kSlot2, 0});
+    CASE_EXPECT_TRUE(moved_slot1 != nullptr);
+    CASE_EXPECT_TRUE(moved_slot2 != nullptr);
+    if (moved_slot1) {
+      CASE_EXPECT_EQ(slot2_id, moved_slot1->entry_id());
+    }
+    if (moved_slot2) {
+      CASE_EXPECT_EQ(slot1_id, moved_slot2->entry_id());
+    }
+  }
+
+  // ============================================================
+  // 无位置容器: 一条同步批次里同时新增 + 更新数量
+  // ============================================================
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemNoPositionContainer>();
+    auto& grid = *grid_ptr;
+    grid.init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, 0);
+
+    auto coin = make_ungrid_item(grid, kCoinTypeId, 10);
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(coin), item_algorithm::ItemOperationSource{}));
+
+    auto coin_group = grid.get_group(kCoinTypeId);
+    CASE_EXPECT_TRUE(coin_group != nullptr);
+    CASE_EXPECT_FALSE(coin_group == nullptr || coin_group->empty());
+    const uint64_t coin_id =
+        (coin_group != nullptr && !coin_group->empty()) ? (*coin_group->begin())->entry_id() : 1;
+
+    std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::DItemInstance>> updates;
+    updates.emplace_back(coin_id, make_ungrid_item(grid, kCoinTypeId, 30));   // 更新数量
+    updates.emplace_back(0x7FFF, make_ungrid_item(grid, kVirtualTypeId, 5));  // 新增条目 (entry_id 由同步包指定)
+    call_apply_entries(grid, config, {}, updates);
+
+    CASE_EXPECT_EQ(30, grid.get_item_count(kCoinTypeId));
+    CASE_EXPECT_EQ(5, grid.get_item_count(kVirtualTypeId));
+  }
+}
+
 CASE_TEST(ItemContainer, on_check_item_count_limit_hook) {
   auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemFiniteGridContainer>();
   auto& grid = *grid_ptr;

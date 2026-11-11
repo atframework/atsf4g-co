@@ -134,16 +134,16 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
                                               const item_entry_ptr_t& entry,
                                               const ItemOperationContext& context) override;
 
-  /// @brief 应用客户端同步的"新增或更新一条"
+  /// @brief 应用客户端同步的"一批新增或更新"
   ///
-  /// 被调用时机: 基类 apply_entries 的新增/更新阶段, 每条通过 (entry_id 非 0 / 字段校验 /
-  /// 容器归属) 校验、并按 entry_id 查过一次条目之后调用一次。
-  /// 已有条目只覆盖数据并刷新数量缓存; 没有条目则按同步包里的 entry_id 新建。
-  /// @param existing 该 entry_id 已存在的条目 (不存在时为 nullptr)
-  ITEM_ALGORITHM_API void on_apply_update_one(const excel_config_group_ptr_t& config_group,
-                                              const item_entry_ptr_t& existing,
-                                              const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update,
-                                              const ItemOperationContext& context) override;
+  /// 被调用时机: 基类 apply_entries 的新增/更新阶段, 整批通过 (entry_id 非 0 / 字段校验 /
+  /// 容器归属) 校验之后调用一次。
+  /// 本模式没有位置 / GUID 索引, 不需要分批内两阶段: 已有条目只覆盖数据并刷新数量缓存,
+  /// 没有条目则按同步包里的 entry_id 新建。
+  /// @param updates 这批要新增/更新的条目 (未校验, 逐条走 validate_apply_update_entry)
+  ITEM_ALGORITHM_API void on_apply_update_batch(
+      const excel_config_group_ptr_t& config_group, const item_instance_entry_readable_iterable& updates,
+      const ItemOperationContext& context) override;
 
   // ============================================================
   // 寻位钩子

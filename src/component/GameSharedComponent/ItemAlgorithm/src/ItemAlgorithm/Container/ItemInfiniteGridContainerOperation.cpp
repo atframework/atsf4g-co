@@ -1007,61 +1007,92 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::on_apply_remove_one(const exc
                 guid);
 }
 
-ITEM_ALGORITHM_API void ItemInfiniteGridContainer::on_apply_update_one(
-    const excel_config_group_ptr_t& /*config_group*/, const item_entry_ptr_t& existing,
-    const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update, const ItemOperationContext& context) {
-  const auto& item_basic = update.instance().item_basic();
-  int32_t type_id = item_basic.type_id();
-  int64_t new_count = item_basic.count();
-  int64_t guid = item_basic.guid();
-
-  auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
-  if (item_type_config == nullptr || !item_type_config->need_occupy_the_grid) {
-    FWINSTLOGERROR(logger(), "apply update failed: invalid item type={} entry_id={} guid={}", type_id,
-                   update.entry_id(), guid);
-    return;
-  }
-
-  if (existing) {
-    // --- 更新已有 entry ---
-    int64_t old_count = existing->item_instance().item_basic().count();
-    int64_t old_guid = existing->item_instance().item_basic().guid();
-    ItemGridPosition old_pos = extract_position(existing->item_instance().item_basic().position().grid_position());
-    ItemGridPosition new_pos = extract_position(item_basic.position().grid_position());
-
-    bool position_changed = (old_pos != new_pos);
-    if (position_changed) {
-      // 旧槽位与旧 GUID 先摘掉: 覆盖数据后 extract_position 取到的就是新槽位
-      detach_entry_index(existing);
+ITEM_ALGORITHM_API void ItemInfiniteGridContainer::on_apply_update_batch(
+    const excel_config_group_ptr_t& config_group, const item_instance_entry_readable_iterable& updates,
+    const ItemOperationContext& context) {
+  // 被调用时机: 基类 apply_entries 的新增/更新阶段, 整批原样传进来 (逐条校验在这里做)。
+  //
+  // Phase A: 先把这批里"槽位会变"的已有条目的旧槽位索引统一摘掉。
+  // 不能边更新边摘: 同批次两个装备互换槽位时, 后一条摘自己的旧槽位会把前一条刚挂上的新槽位
+  // 索引一起清掉, 那个槽位在容器里就变成空槽。
+  updates.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) -> bool {
+    if (!validate_apply_update_entry(config_group, update)) {
+      return true;
     }
 
-    // 覆盖 item_instance
-    set_entry_instance(existing, update.instance());
-
-    // 排序键由容器按位置语义算, 槽位变了要重新排序: 先从分组摘出, 刷键后再插回
-    if (position_changed) {
-      remove_entry_from_group(existing);
-      set_entry_sort_key(existing);
-      if (!insert_entry_into_group(existing)) {
-        FWINSTLOGERROR(logger(), "[EntrySortKeyError] apply update failed to re-insert entry type={} entry_id={}",
-                       type_id, existing->entry_id());
-      }
-      attach_entry_index(existing);
-    } else if (old_guid != guid) {
-      // 位置没变时索引不会随 attach_entry_index 一起刷新, 这里按新 GUID 重挂
-      if (old_guid != 0) {
-        detach_entry_guid(old_guid);
-      }
-      if (guid != 0) {
-        attach_entry_guid(guid, existing);
-      }
+    item_entry_ptr_t existing = find_entry_by_id(update.entry_id());
+    if (!existing) {
+      return true;
     }
 
-    // 数量缓存与通知 (条目数据已经覆盖完成, 这里只用新旧数量算差值)
-    notify_entry_count_changed(existing, old_count, new_count, context);
-    FWINSTLOGINFO(logger(), "apply update entry_id={} type={} count={} guid={}", update.entry_id(), type_id, new_count,
-                  guid);
-  } else {
+    ItemGridPosition old_pos =
+        extract_position(existing->item_instance().item_basic().position().grid_position());
+    ItemGridPosition new_pos = extract_position(update.instance().item_basic().position().grid_position());
+    if (old_pos == new_pos) {
+      return true;
+    }
+
+    // 覆盖数据之后 extract_position 取到的就是新槽位, 所以旧槽位必须在这里摘
+    detach_entry_index(existing);
+    return true;
+  });
+
+  // Phase B: 统一写数据 + 挂新槽位 (旧槽位在 Phase A 已经摘干净)
+  updates.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemInstanceEntry& update) -> bool {
+    if (!validate_apply_update_entry(config_group, update)) {
+      return true;
+    }
+
+    const auto& item_basic = update.instance().item_basic();
+    int32_t type_id = item_basic.type_id();
+    int64_t new_count = item_basic.count();
+    int64_t guid = item_basic.guid();
+
+    auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
+    if (item_type_config == nullptr || !item_type_config->need_occupy_the_grid) {
+      FWINSTLOGERROR(logger(), "apply update failed: invalid item type={} entry_id={} guid={}", type_id,
+                     update.entry_id(), guid);
+      return true;
+    }
+
+    item_entry_ptr_t existing = find_entry_by_id(update.entry_id());
+    if (existing) {
+      // --- 更新已有 entry ---
+      int64_t old_count = existing->item_instance().item_basic().count();
+      int64_t old_guid = existing->item_instance().item_basic().guid();
+      ItemGridPosition old_pos = extract_position(existing->item_instance().item_basic().position().grid_position());
+      ItemGridPosition new_pos = extract_position(item_basic.position().grid_position());
+      bool position_changed = (old_pos != new_pos);
+
+      // 覆盖 item_instance
+      set_entry_instance(existing, update.instance());
+
+      // 排序键由容器按位置语义算, 槽位变了要重新排序: 先从分组摘出, 刷键后再插回
+      if (position_changed) {
+        remove_entry_from_group(existing);
+        set_entry_sort_key(existing);
+        if (!insert_entry_into_group(existing)) {
+          FWINSTLOGERROR(logger(), "[EntrySortKeyError] apply update failed to re-insert entry type={} entry_id={}",
+                         type_id, existing->entry_id());
+        }
+        attach_entry_index(existing);
+      } else if (old_guid != guid) {
+        // 位置没变时索引不会随 attach_entry_index 一起刷新, 这里按新 GUID 重挂
+        if (old_guid != 0) {
+          detach_entry_guid(old_guid);
+        }
+        if (guid != 0) {
+          attach_entry_guid(guid, existing);
+        }
+      }
+
+      // 数量缓存与通知 (条目数据已经覆盖完成, 这里只用新旧数量算差值)
+      notify_entry_count_changed(existing, old_count, new_count, context);
+      FWINSTLOGINFO(logger(), "apply update entry_id={} type={} count={} guid={}", update.entry_id(), type_id,
+                    new_count, guid);
+      return true;
+    }
+
     // --- 新增 entry ---
     PROJECT_NAMESPACE_ID::DItemInstanceEntry new_entry_data = update;
     item_entry_ptr_t new_entry = make_entry(std::move(new_entry_data));
@@ -1071,14 +1102,15 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::on_apply_update_one(
                      "[EntrySortKeyError] apply add failed to insert entry type={} count={} guid={} entry_id={}",
                      type_id, new_count, guid, new_entry->entry_id());
       // 条目没进分组, 不能再动数量缓存, 否则缓存与实时计数会对不上
-      return;
+      return true;
     }
 
     attach_entry_index(new_entry);
     notify_entry_count_changed(new_entry, 0, new_count, context);
     FWINSTLOGINFO(logger(), "apply add entry_id={} type={} count={} guid={}", update.entry_id(), type_id, new_count,
                   guid);
-  }
+    return true;
+  });
 }
 
 }  // namespace item_algorithm
