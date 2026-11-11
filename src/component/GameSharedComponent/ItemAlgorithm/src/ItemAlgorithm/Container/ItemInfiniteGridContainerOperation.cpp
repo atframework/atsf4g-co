@@ -31,12 +31,12 @@ namespace item_algorithm {
 //   * 位置配置与堆叠上限 (accumulation_limit <= 0 视为无限堆叠);
 //   * 目标槽位已被占用时, 只有同类且都无 GUID 才能堆叠, 堆叠后不能超过上限;
 //   * 目标槽位在本批次内已被前面的请求预定 / 新建时, 按同样两条规则推演。
-// 同批次的占位状态由 on_check_add 在本地创建的 InfiniteGridCheckScratch 维护。
+// 同批次的占位状态由 on_check_add 在本地创建的 InfiniteGridAddCheckScratch 维护。
 // ============================================================
 
 ITEM_ALGORITHM_API ItemOperationResult
 ItemInfiniteGridContainer::on_check_add(const ItemAddCheckedRequest& checked_request) const {
-  InfiniteGridCheckScratch scratch;
+  InfiniteGridAddCheckScratch scratch;
   const auto& config_group = checked_request.config_group;
 
   // 回调返回 false 中断遍历; 失败结果在中断前写进 result
@@ -113,7 +113,7 @@ ItemInfiniteGridContainer::on_check_add(const ItemAddCheckedRequest& checked_req
         }
         pending_it->second.accumulated_count = total;
       } else {
-        scratch.pending_new_slots[target_pos] = InfiniteGridCheckScratch::PendingNewSlot{type_id, add_count};
+        scratch.pending_new_slots[target_pos] = InfiniteGridAddCheckScratch::PendingNewSlot{type_id, add_count};
       }
     }
 
@@ -192,11 +192,13 @@ ITEM_ALGORITHM_API ItemOperationResult ItemInfiniteGridContainer::on_add_one(
 //   * 其余按槽位定位
 // 基类已做完通用校验与"按类型总数够扣"判断, 这里按上述两种定位方式补本模式的校验,
 // 并用本地状态累计同批次内同一 GUID / 槽位已被要求扣减的数量。
+// 逐条检查全部通过之后再做整体检查: 把"假设这批扣减已执行完"的槽位视图交给
+// on_check_sub_positions, 由业务判断扣减结果是否可接受。
 // ============================================================
 
 ITEM_ALGORITHM_API ItemOperationResult
 ItemInfiniteGridContainer::on_check_sub(const ItemSubCheckedRequest& checked_request) const {
-  InfiniteGridCheckScratch scratch;
+  InfiniteGridSubCheckScratch scratch;
   const auto& config_group = checked_request.config_group;
 
   // 回调返回 false 中断遍历; 失败结果在中断前写进 result
@@ -253,6 +255,11 @@ ItemInfiniteGridContainer::on_check_sub(const ItemSubCheckedRequest& checked_req
         result = {error_code, type_id};
         return false;
       }
+
+      // 按 GUID 定位的扣减同样要落到槽位视图里: 记到条目所在的槽位上
+      ItemGridPosition guid_entry_position =
+          extract_position(guid_entry->item_instance().item_basic().position().grid_position());
+      scratch.pending_sub_counts[guid_entry_position] += sub_count;
     } else {
       // 按槽位预扣减, 跟踪同一槽位多次扣减
       ItemGridPosition target_pos = extract_position(request.position().grid_position());
@@ -291,7 +298,59 @@ ItemInfiniteGridContainer::on_check_sub(const ItemSubCheckedRequest& checked_req
     return true;
   });
 
+  if (result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    return result;
+  }
+
+  // 逐条基础检查全部通过后做整体检查: 扣减还没落地, "扣减后是什么样"由槽位视图表达
+  ItemSubSlotStateView final_slots(position_index_, scratch.pending_sub_counts);
+  int32_t positions_ret = on_check_sub_positions(config_group, final_slots);
+  if (positions_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    FWINSTLOGWARNING(logger(), "check_sub failed: final positions rejected, error={} ({})", positions_ret,
+                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(positions_ret));
+    return {positions_ret, 0};
+  }
+
   return result;
+}
+
+ITEM_ALGORITHM_API ItemInfiniteGridContainer::ItemSubSlotStateView::ItemSubSlotStateView(
+    const position_index_type& position_index, const position_count_map_type& pending_sub_counts)
+    : position_index_(position_index), pending_sub_counts_(pending_sub_counts) {}
+
+ITEM_ALGORITHM_API item_entry_ptr_t
+ItemInfiniteGridContainer::ItemSubSlotStateView::get_at(const ItemGridPosition& position) const {
+  if (get_count_at(position) <= 0) {
+    return nullptr;
+  }
+
+  auto index_iter = position_index_.find(position);
+  if (index_iter == position_index_.end()) {
+    return nullptr;
+  }
+  return index_iter->second;
+}
+
+ITEM_ALGORITHM_API int64_t
+ItemInfiniteGridContainer::ItemSubSlotStateView::get_count_at(const ItemGridPosition& position) const {
+  auto index_iter = position_index_.find(position);
+  if (index_iter == position_index_.end() || index_iter->second == nullptr) {
+    return 0;
+  }
+
+  int64_t count = index_iter->second->item_instance().item_basic().count();
+  auto sub_iter = pending_sub_counts_.find(position);
+  if (sub_iter != pending_sub_counts_.end()) {
+    count -= sub_iter->second;
+  }
+
+  return count > 0 ? count : 0;
+}
+
+ITEM_ALGORITHM_API int32_t ItemInfiniteGridContainer::on_check_sub_positions(
+    const excel_config_group_ptr_t& /*config_group*/, const ItemSubSlotStateView& /*final_slots*/) const {
+  // 默认不限制, 业务按需覆盖
+  return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
 ITEM_ALGORITHM_API ItemOperationResult ItemInfiniteGridContainer::on_sub_one(
@@ -353,7 +412,7 @@ ITEM_ALGORITHM_API ItemOperationResult ItemInfiniteGridContainer::on_sub_one(
 
 ITEM_ALGORITHM_API ItemOperationResult ItemInfiniteGridContainer::on_check_has(
     const excel_config_group_ptr_t& /*config_group*/, const item_basic_readable_iterable& requests) const {
-  InfiniteGridCheckScratch scratch;
+  InfiniteGridHasCheckScratch scratch;
   ItemOperationResult result;
 
   requests.foreach_item([&](const PROJECT_NAMESPACE_ID::DItemBasic& request) -> bool {
@@ -786,8 +845,10 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
   // ============================================================
   // Phase 3: 移动生效后的槽位占用校验 (业务规则扩展点)
   // ============================================================
-  // move_slots 在 Phase 1 / Phase 2 里已经跟着 sub / add 同步推演完了, 直接交给钩子
-  int32_t positions_ret = on_check_move_positions(checked_request.config_group, move_slots);
+  // move_slots 在 Phase 1 / Phase 2 里已经跟着 sub / add 同步推演完了;
+  // 钩子只看"移动执行完的结果", 通过视图查询, 不接触推演的中间字段。
+  ItemMoveSlotStateView final_slots(position_index_, move_slots, checked_request.request.move_add_entrys);
+  int32_t positions_ret = on_check_move_positions(checked_request.config_group, final_slots);
   if (positions_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     error_code = positions_ret;
     FWINSTLOGWARNING(logger(), "check_move failed: final positions rejected, error={} ({})", error_code,
@@ -798,8 +859,45 @@ ITEM_ALGORITHM_API bool ItemInfiniteGridContainer::on_check_move(ItemMoveChecked
   return true;
 }
 
+ITEM_ALGORITHM_API ItemInfiniteGridContainer::ItemMoveSlotStateView::ItemMoveSlotStateView(
+    const position_index_type& position_index, const item_move_slot_state_map_type& final_slots,
+    const std::vector<ItemMoveAddRequest>& move_add_entries)
+    : position_index_(position_index), final_slots_(final_slots), move_add_entries_(move_add_entries) {}
+
+ITEM_ALGORITHM_API item_entry_ptr_t
+ItemInfiniteGridContainer::ItemMoveSlotStateView::get_at(const ItemGridPosition& position) const {
+  if (get_count_at(position) <= 0) {
+    return nullptr;
+  }
+
+  // 槽位原本有条目: 移动后仍由它占用 (可能是合入了更多数量)
+  auto index_iter = position_index_.find(position);
+  if (index_iter != position_index_.end()) {
+    return index_iter->second;
+  }
+
+  // 本批次新建的槽位: 占用者是第一条放入该槽位请求带进来的条目
+  for (const auto& add_entry : move_add_entries_) {
+    if (add_entry.position == position) {
+      return add_entry.entry;
+    }
+  }
+
+  return nullptr;
+}
+
+ITEM_ALGORITHM_API int64_t
+ItemInfiniteGridContainer::ItemMoveSlotStateView::get_count_at(const ItemGridPosition& position) const {
+  auto slot_iter = final_slots_.find(position);
+  if (slot_iter == final_slots_.end()) {
+    return 0;
+  }
+
+  return slot_iter->second.count > 0 ? slot_iter->second.count : 0;
+}
+
 ITEM_ALGORITHM_API int32_t ItemInfiniteGridContainer::on_check_move_positions(
-    const excel_config_group_ptr_t& /*config_group*/, const item_move_slot_state_map_type& /*final_slots*/) const {
+    const excel_config_group_ptr_t& /*config_group*/, const ItemMoveSlotStateView& /*final_slots*/) const {
   // 默认不限制, 业务按需覆盖
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }

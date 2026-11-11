@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "ItemAlgorithm/ItemAlgorithmConfig.h"
 #include "ItemAlgorithm/ItemContainer.h"
@@ -60,6 +61,61 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   using item_move_slot_state_map_type =
       std::unordered_map<ItemGridPosition, ItemMoveSlotState, ItemGridPositionHash, ItemGridPositionEqualTo>;
 
+  /// @brief "假设这批扣减已经执行完"的槽位视图
+  ///
+  /// 由 on_check_sub 在逐条基础检查全部通过之后构造, 只持有两份数据的引用, 不复制:
+  ///   * 容器自己的槽位索引 (扣减前的真实数据);
+  ///   * 本次批次校验按槽位累计的扣减数量 (按 GUID 定位的请求也折算到条目所在槽位)。
+  /// get_at / get_count_at 把两者叠起来, 给出这批扣减执行完之后的槽位状态。
+  /// 视图只在 on_check_sub_positions 调用期间有效, 业务不要保存它。
+  class ItemSubSlotStateView {
+   public:
+    ITEM_ALGORITHM_API ItemSubSlotStateView(const position_index_type& position_index,
+                                            const position_count_map_type& pending_sub_counts);
+
+    /// @brief 假设扣减生效后该槽位剩下的条目
+    /// @return nullptr 表示该槽位这批扣减之后是空槽
+    ITEM_ALGORITHM_API item_entry_ptr_t get_at(const ItemGridPosition& position) const;
+    /// @brief 假设扣减生效后该槽位剩下的数量 (0 表示空槽)
+    ///
+    /// get_at 返回的是扣减前的条目数据, 要拿扣减后的数量用本接口。
+    ITEM_ALGORITHM_API int64_t get_count_at(const ItemGridPosition& position) const;
+
+   private:
+    const position_index_type& position_index_;
+    const position_count_map_type& pending_sub_counts_;
+  };
+
+  /// @brief "假设这次移动已经执行完"的槽位视图
+  ///
+  /// 由 on_check_move 在推演完"来源已扣、目标已占"之后构造, 只持有引用, 不复制:
+  ///   * 容器自己的槽位索引 (移动前的真实数据);
+  ///   * 本次批次推演出的按槽位最终数量 (move_slots);
+  ///   * 本次移动的放入请求 (新建槽位上还没有条目, 占用者要到这些请求里找)。
+  /// get_at / get_count_at 给出移动执行完之后的槽位状态。
+  /// 视图只在 on_check_move_positions 调用期间有效, 业务不要保存它。
+  class ItemMoveSlotStateView {
+   public:
+    ITEM_ALGORITHM_API ItemMoveSlotStateView(const position_index_type& position_index,
+                                             const item_move_slot_state_map_type& final_slots,
+                                             const std::vector<ItemMoveAddRequest>& move_add_entries);
+
+    /// @brief 假设移动生效后占用该槽位的条目
+    /// @return nullptr 表示该槽位移动生效后是空槽
+    ///
+    /// 本批次新建的槽位还没有条目, 返回即将占用它的那条放入请求的来源条目。
+    ITEM_ALGORITHM_API item_entry_ptr_t get_at(const ItemGridPosition& position) const;
+    /// @brief 假设移动生效后该槽位的数量 (0 表示空槽)
+    ///
+    /// get_at 返回的是移动前的条目数据, 要拿移动后的数量用本接口。
+    ITEM_ALGORITHM_API int64_t get_count_at(const ItemGridPosition& position) const;
+
+   private:
+    const position_index_type& position_index_;
+    const item_move_slot_state_map_type& final_slots_;
+    const std::vector<ItemMoveAddRequest>& move_add_entries_;
+  };
+
  public:
   ITEM_ALGORITHM_API ItemInfiniteGridContainer();
   ITEM_ALGORITHM_API ~ItemInfiniteGridContainer() override;
@@ -100,15 +156,14 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
 
  protected:
   // ============================================================
-  // 批次校验状态
+  // 批次校验状态 — 三个 check 各用一份, 字段按各自需要拆分
   // ============================================================
 
-  /// @brief 本模式在一次批次校验期间累计的占位 / 扣减 / 对账状态
+  /// @brief check_add 的批次占位状态
   ///
-  /// 被调用时机: on_check_add / on_check_sub / on_check_has 各自开始时创建, 在本次批次校验内使用。
-  /// check_add 需要它是因为同批次前面的请求可能已经占掉槽位或新建了条目;
-  /// check_sub / check_has 需要它是因为同一 GUID / 槽位在一个批次里可能被要求多次。
-  class InfiniteGridCheckScratch {
+  /// 被调用时机: on_check_add 开始时创建, 只在这次批次校验内使用。
+  /// 需要它是因为同批次前面的请求可能已经占掉槽位或新建了条目。
+  class InfiniteGridAddCheckScratch {
    public:
     /// @brief 本批次内将要新建的槽位
     struct PendingNewSlot {
@@ -121,10 +176,28 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
     /// @brief 本批次内将要新建的槽位 (键为槽位)
     std::unordered_map<ItemGridPosition, PendingNewSlot, ItemGridPositionHash, ItemGridPositionEqualTo>
         pending_new_slots;
+  };
+
+  /// @brief check_sub 的批次扣减状态
+  ///
+  /// 被调用时机: on_check_sub 开始时创建, 只在这次批次校验内使用;
+  /// 逐条基础检查全部通过后, 由 on_check_sub_positions 用它推演"假设扣减生效后"的槽位情况。
+  class InfiniteGridSubCheckScratch {
+   public:
+    /// @brief 本批次内按槽位累计已要求扣减的数量 (键为槽位)
+    ///
+    /// 按 GUID 定位的请求也记到条目所在的槽位上, 这样槽位视图能算上这批扣减的全部数量。
+    std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> pending_sub_counts;
     /// @brief 本批次内已按 GUID 要求扣减过的 GUID (同一批次里同一个 GUID 不能扣两次)
     std::unordered_set<int64_t> pending_sub_guids;
-    /// @brief 本批次内按槽位累计已要求扣减的数量 (键为槽位)
-    std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> pending_sub_counts;
+  };
+
+  /// @brief check_has 的批次对账状态
+  ///
+  /// 被调用时机: on_check_has 开始时创建, 只在这次批次校验内使用。
+  /// 需要它是因为同一 GUID / 槽位在一个批次里可能被要求多次。
+  class InfiniteGridHasCheckScratch {
+   public:
     /// @brief 本批次内按 GUID 累计已要求对账的数量
     std::unordered_map<int64_t, int64_t> pending_has_guids;
     /// @brief 本批次内按槽位累计已要求对账的数量 (键为槽位)
@@ -140,6 +213,17 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   ///
   /// 被调用时机: 基类 check_sub 完成所有通用校验和按类型总量校验后调用一次。
   ITEM_ALGORITHM_API ItemOperationResult on_check_sub(const ItemSubCheckedRequest& checked_request) const override;
+
+  /// @brief 扣减生效后的整体槽位校验 (业务扩展点)
+  ///
+  /// 被调用时机: on_check_sub 的逐条基础检查全部通过之后。此时扣减还没写进容器,
+  /// "这批扣减执行完是什么样"只能由 final_slots 表达。
+  /// @param config_group 配置组
+  /// @param final_slots  假设这批扣减已经执行完的槽位视图:
+  ///                     get_at 返回 nullptr 表示该槽位会被扣空, get_count_at 给剩余数量
+  /// @return EN_SUCCESS 通过; 其他错误码会让本次 check_sub 失败, error_code 原样返回给调用方
+  ITEM_ALGORITHM_API virtual int32_t on_check_sub_positions(
+      const excel_config_group_ptr_t& config_group, const ItemSubSlotStateView& final_slots) const;
 
   /// @brief 一批对账请求的本模式校验
   ///
@@ -179,11 +263,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   /// 被调用时机: on_check_move 完成入参校验与批次内预演、确认本次移动可以执行之后,
   /// 此时"来源已扣、目标已占"的中间态还没写进容器, 只能通过 final_slots 判断最终结果。
   /// @param config_group 配置组
-  /// @param final_slots  移动生效后的槽位推演结果: 位置 → 槽位状态 (count 为 0 表示空槽;
-  ///                     只包含仍然占用槽位的位置)。业务判断占用情况用 count 即可。
+  /// @param final_slots  假设本次移动已经执行完的槽位视图:
+  ///                     get_at 返回 nullptr 表示该槽位会被搬空, get_count_at 给移动后的数量
   /// @return EN_SUCCESS 通过; 其他错误码会让本次 check_move 失败, error_code 原样返回给调用方
   ITEM_ALGORITHM_API virtual int32_t on_check_move_positions(
-      const excel_config_group_ptr_t& config_group, const item_move_slot_state_map_type& final_slots) const;
+      const excel_config_group_ptr_t& config_group, const ItemMoveSlotStateView& final_slots) const;
 
   /// @brief 扣减一条移动来源 (整体移走时摘掉槽位与 GUID 索引)
   ///

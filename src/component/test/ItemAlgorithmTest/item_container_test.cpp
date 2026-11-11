@@ -360,56 +360,113 @@ class HookTestItemFiniteGridContainer : public TestItemFiniteGridContainer {
 /// @brief on_check_move_positions 专用的拒绝错误码 (容器本身不会在正常路径返回它)
 static constexpr int32_t kMovePositionsRejectedError = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
 
-/// @brief on_check_move_positions 的测试状态 (无限格子: 移动生效后的槽位占用校验)
-struct HookTestMovePositionsState {
-  int32_t move_positions_calls = 0;
-  // true: 一律拒绝; required_slot >= 0: 最终占用里必须还有这个槽位, 否则拒绝
-  // (模拟"武器槽不能同时为空"这类按最终槽位判断的业务规则)
+/// @brief on_check_sub_positions 专用的拒绝错误码 (check_sub 的正常路径不会返回它)
+static constexpr int32_t kSubPositionsRejectedError = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
+
+/// @brief on_check_move_positions / on_check_sub_positions 共用的测试状态
+///
+/// 两个钩子拿到的都是"操作生效后"的槽位视图 (get_at / get_count_at), 记录方式一致:
+/// 钩子里按 probe_slots 逐个探查, 把结果记进快照, 用例只断言快照。
+struct HookTestPositionsState {
+  int32_t positions_calls = 0;
+  // 钩子里要探查的槽位: 逐个调 get_at / get_count_at, 结果记进下面的快照
+  std::vector<int32_t> probe_slots;
+  // true: 一律拒绝; required_any_slots 里的槽位操作后全部为空时拒绝
+  // (模拟"武器槽不能同时为空"这类按操作后槽位判断的业务规则)
   bool reject_all = false;
-  int32_t required_slot = -1;
-  // 最近一次收到的最终占用: 槽位 → 状态 (count 为移动生效后的数量)
-  item_algorithm::ItemInfiniteGridContainer::item_move_slot_state_map_type last_final_slots;
+  std::vector<int32_t> required_any_slots;
+  // 最近一次收到的槽位快照: 槽位 → 操作后剩余数量 (0 表示该槽位会被扣空)
+  std::unordered_map<int32_t, int64_t> last_counts;
+  // 最近一次收到的槽位快照: 操作后仍有条目的槽位
+  std::unordered_set<int32_t> last_occupied;
 
   void reset() {
-    move_positions_calls = 0;
-    last_final_slots.clear();
+    positions_calls = 0;
+    last_counts.clear();
+    last_occupied.clear();
   }
 
-  /// @brief 最终占用里某个槽位的数量 (0 表示移动生效后该槽位是空的)
+  /// @brief 快照里某个槽位操作后的剩余数量 (没探查过或会被扣空都是 0)
   int64_t count_of_slot(int32_t slot) const {
-    for (const auto& kv : last_final_slots) {
-      if (kv.first.x == slot) {
-        return kv.second.count;
+    auto iter = last_counts.find(slot);
+    return iter == last_counts.end() ? 0 : iter->second;
+  }
+
+  /// @brief 快照里某个槽位操作后是否还有条目
+  bool occupied(int32_t slot) const { return last_occupied.count(slot) > 0; }
+
+  /// @brief required_any_slots 里是否至少还有一个槽位仍被占用
+  bool any_required_occupied() const {
+    for (int32_t slot : required_any_slots) {
+      if (last_occupied.count(slot) > 0) {
+        return true;
       }
     }
-    return 0;
+    return false;
   }
 };
 
-/// @brief 无限格子模式夹具: 记录 / 拒绝 on_check_move_positions
+/// @brief 无限格子模式夹具: 记录 / 拒绝 on_check_move_positions 与 on_check_sub_positions
 class HookTestItemInfiniteGridContainer : public TestItemInfiniteGridContainer {
  public:
-  HookTestItemInfiniteGridContainer() : state_(std::make_shared<HookTestMovePositionsState>()) {}
+  HookTestItemInfiniteGridContainer()
+      : move_state_(std::make_shared<HookTestPositionsState>()),
+        sub_state_(std::make_shared<HookTestPositionsState>()) {}
 
-  HookTestMovePositionsState& hook_state() { return *state_; }
+  HookTestPositionsState& move_hook_state() { return *move_state_; }
+  HookTestPositionsState& sub_hook_state() { return *sub_state_; }
 
  protected:
   int32_t on_check_move_positions(
       const item_algorithm::excel_config_group_ptr_t& config_group,
-      const item_algorithm::ItemInfiniteGridContainer::item_move_slot_state_map_type& final_slots) const override {
-    ++state_->move_positions_calls;
-    state_->last_final_slots = final_slots;
-    if (state_->reject_all) {
+      const item_algorithm::ItemInfiniteGridContainer::ItemMoveSlotStateView& final_slots) const override {
+    ++move_state_->positions_calls;
+    record_slots(*move_state_, final_slots);
+
+    if (move_state_->reject_all) {
       return kMovePositionsRejectedError;
     }
-    if (state_->required_slot >= 0 && state_->count_of_slot(state_->required_slot) <= 0) {
+    if (!move_state_->required_any_slots.empty() && !move_state_->any_required_occupied()) {
       return kMovePositionsRejectedError;
     }
+
     return TestItemInfiniteGridContainer::on_check_move_positions(config_group, final_slots);
   }
 
+  int32_t on_check_sub_positions(
+      const item_algorithm::excel_config_group_ptr_t& config_group,
+      const item_algorithm::ItemInfiniteGridContainer::ItemSubSlotStateView& final_slots) const override {
+    ++sub_state_->positions_calls;
+    record_slots(*sub_state_, final_slots);
+
+    if (sub_state_->reject_all) {
+      return kSubPositionsRejectedError;
+    }
+    if (!sub_state_->required_any_slots.empty() && !sub_state_->any_required_occupied()) {
+      return kSubPositionsRejectedError;
+    }
+
+    return TestItemInfiniteGridContainer::on_check_sub_positions(config_group, final_slots);
+  }
+
  private:
-  std::shared_ptr<HookTestMovePositionsState> state_;
+  /// @brief 两种视图的探查逻辑相同: 都提供 get_at / get_count_at
+  template <typename ViewT>
+  static void record_slots(HookTestPositionsState& state, const ViewT& final_slots) {
+    state.last_counts.clear();
+    state.last_occupied.clear();
+    for (int32_t slot : state.probe_slots) {
+      item_algorithm::ItemGridPosition position{slot, 0};
+      state.last_counts[slot] = final_slots.get_count_at(position);
+      if (final_slots.get_at(position) != nullptr) {
+        state.last_occupied.insert(slot);
+      }
+    }
+  }
+
+ private:
+  std::shared_ptr<HookTestPositionsState> move_state_;
+  std::shared_ptr<HookTestPositionsState> sub_state_;
 };
 
 /// @brief 服务器端测试子类 — 在 on_item_data_changed 中只记录 entry_id
@@ -4018,12 +4075,13 @@ CASE_TEST(ItemContainer, on_check_add_sub_one_hook_in_move) {
   CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 3);
 }
 
-/// @brief on_check_move_positions: 移动生效后的槽位占用快照要交给业务钩子
+/// @brief on_check_move_positions: 移动生效后的槽位状态要交给业务钩子
 ///
-/// 快照语义 (只包含移动生效后仍占用的槽位):
-///   - 整件移动: 来源槽消失, 目标槽 = 搬过去的数量;
+/// 视图语义 (移动还没落地, 只推演"这次移动执行完"的结果):
+///   - 整件移动: 来源槽 get_at 为 nullptr, 目标槽 = 搬过去的数量;
 ///   - 部分移动: 来源槽剩下多少就记多少, 目标槽单独记;
-///   - 合入已有堆叠: 目标槽是"合入后"的总量;
+///   - 合入已有堆叠: 目标槽是"合入后"的总量, 占用者仍是原有条目;
+///   - 目标槽是本批次新建的: 占用者是搬过来的来源条目;
 ///   - 钩子拒绝 → check_move 失败且不改数据;
 ///   - 非 move 操作 (check_add / check_sub) 不会触发这个钩子。
 CASE_TEST(ItemContainer, on_check_move_positions_hook) {
@@ -4038,7 +4096,7 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
   grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);  // 装备: 每槽一件
   grid.register_position_cfg(kItemTypeId_1x1, 2, 1, 1);   // 可堆叠: 上限 2
   auto config = make_test_config_group();
-  auto& state = grid.hook_state();
+  auto& state = grid.move_hook_state();
 
   auto slot_position = [&](int32_t slot) {
     PROJECT_NAMESPACE_ID::DItemPosition position;
@@ -4061,7 +4119,7 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
     return grid.get_at(ItemGridPosition{slot, 0});
   };
 
-  // (1) 整件移动: 槽位 1 → 槽位 2, 快照里槽位 1 消失、槽位 2 = 1
+  // (1) 整件移动: 槽位 1 → 槽位 2 → 视图里槽位 1 变空、槽位 2 有 1
   auto equip_entry = load_slot(kEquipmentTypeId, 1, 1, kEquipGuid);
   CASE_EXPECT_TRUE(equip_entry != nullptr);
   if (!equip_entry) {
@@ -4069,15 +4127,27 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
   }
   {
     state.reset();
+    state.probe_slots = {1, 2};
     ItemMoveRequest move_requests;
     move_requests.move_sub_entrys.push_back({equip_entry, 1});
     move_requests.move_add_entrys.push_back({equip_entry, slot_position(2), 1});
     auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
-    CASE_EXPECT_EQ(state.move_positions_calls, 1);
-    CASE_EXPECT_EQ(state.last_final_slots.size(), static_cast<size_t>(1));
+    CASE_EXPECT_EQ(state.positions_calls, 1);
     CASE_EXPECT_EQ(state.count_of_slot(1), static_cast<int64_t>(0));
+    CASE_EXPECT_FALSE(state.occupied(1));
     CASE_EXPECT_EQ(state.count_of_slot(2), static_cast<int64_t>(1));
+    // 槽位 2 是本批次新建的, 占用者是搬过来的来源条目
+    CASE_EXPECT_TRUE(state.occupied(2));
+
+    // 落地: 槽位 1 空、槽位 2 有 1 (后面的用例都在这个结果上继续)
+    CASE_EXPECT_EQ(grid.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{1, 0}) == nullptr);
+  auto moved_entry = grid.get_at(ItemGridPosition{2, 0});
+  CASE_EXPECT_TRUE(moved_entry != nullptr);
+  if (moved_entry) {
+    CASE_EXPECT_EQ(moved_entry->item_instance().item_basic().count(), static_cast<int64_t>(1));
   }
 
   // (2) 部分移动: 槽位 3 有 2 个, 移 1 个到槽位 4 → 两个槽位各 1
@@ -4088,17 +4158,29 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
   }
   {
     state.reset();
+    state.probe_slots = {3, 4};
     ItemMoveRequest move_requests;
     move_requests.move_sub_entrys.push_back({stack_entry, 1});
     move_requests.move_add_entrys.push_back({stack_entry, slot_position(4), 1});
     auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
-    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
     CASE_EXPECT_EQ(state.count_of_slot(3), static_cast<int64_t>(1));
+    CASE_EXPECT_TRUE(state.occupied(3));
     CASE_EXPECT_EQ(state.count_of_slot(4), static_cast<int64_t>(1));
-  }
+    CASE_EXPECT_TRUE(state.occupied(4));
 
-  // (3) 合入已有堆叠: 槽位 5 有 1 个, 把槽位 4 的 1 个移过去 → 槽位 4 消失、槽位 5 = 2
+    // 落地: 槽位 3 剩 1、槽位 4 有 1 (用例 3 从这里搬)
+    CASE_EXPECT_EQ(grid.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  auto stack_remain_entry = grid.get_at(ItemGridPosition{3, 0});
+  CASE_EXPECT_TRUE(stack_remain_entry != nullptr);
+  if (stack_remain_entry) {
+    CASE_EXPECT_EQ(stack_remain_entry->item_instance().item_basic().count(), static_cast<int64_t>(1));
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{4, 0}) != nullptr);
+
+  // (3) 合入已有堆叠: 槽位 5 有 1 个, 把槽位 4 的 1 个移过去 → 槽位 4 变空、槽位 5 = 2
   auto merge_target_entry = load_slot(kItemTypeId_1x1, 1, 5, 0);
   CASE_EXPECT_TRUE(merge_target_entry != nullptr);
   if (!merge_target_entry) {
@@ -4108,29 +4190,44 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
   CASE_EXPECT_TRUE(split_entry != nullptr);
   if (split_entry) {
     state.reset();
+    state.probe_slots = {4, 5};
     ItemMoveRequest move_requests;
     move_requests.move_sub_entrys.push_back({split_entry, 1});
     move_requests.move_add_entrys.push_back({split_entry, slot_position(5), 1});
     auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
-    CASE_EXPECT_EQ(state.move_positions_calls, 1);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
     CASE_EXPECT_EQ(state.count_of_slot(4), static_cast<int64_t>(0));
+    CASE_EXPECT_FALSE(state.occupied(4));
     CASE_EXPECT_EQ(state.count_of_slot(5), static_cast<int64_t>(2));
+    CASE_EXPECT_TRUE(state.occupied(5));
+
+    // 落地: 槽位 4 空、槽位 5 = 2
+    CASE_EXPECT_EQ(grid.move(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{4, 0}) == nullptr);
+  auto merged_entry = grid.get_at(ItemGridPosition{5, 0});
+  CASE_EXPECT_TRUE(merged_entry != nullptr);
+  if (merged_entry) {
+    CASE_EXPECT_EQ(merged_entry->item_instance().item_basic().count(), static_cast<int64_t>(2));
   }
 
   // (4) 钩子拒绝 → check_move 失败, 数据不变 (check 阶段不落地)
   {
     state.reject_all = true;
     state.reset();
+    state.probe_slots = {2, 9};
     ItemMoveRequest move_requests;
     move_requests.move_sub_entrys.push_back({equip_entry, 1});
     move_requests.move_add_entrys.push_back({equip_entry, slot_position(9), 1});
     auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, kMovePositionsRejectedError);
-    CASE_EXPECT_EQ(state.move_positions_calls, 1);
-    // 钩子拿到的是"移动生效后"的快照: 槽位 2 会空、槽位 9 会有 1
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    // 钩子拿到的是"移动生效后"的结果: 槽位 2 会空、槽位 9 会有 1
     CASE_EXPECT_EQ(state.count_of_slot(2), static_cast<int64_t>(0));
+    CASE_EXPECT_FALSE(state.occupied(2));
     CASE_EXPECT_EQ(state.count_of_slot(9), static_cast<int64_t>(1));
+    CASE_EXPECT_TRUE(state.occupied(9));
     state.reject_all = false;
   }
   CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{2, 0}) != nullptr);
@@ -4138,28 +4235,30 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
 
   // (5) 按最终槽位判断的业务规则: 要求槽位 2 仍被占用时, 把装备搬走会被拒绝
   {
-    state.required_slot = 2;
+    state.required_any_slots = {2};
     state.reset();
+    state.probe_slots = {2, 9};
     ItemMoveRequest move_requests;
     move_requests.move_sub_entrys.push_back({equip_entry, 1});
     move_requests.move_add_entrys.push_back({equip_entry, slot_position(9), 1});
     auto checked = grid.check_move(config, std::move(move_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, kMovePositionsRejectedError);
-    CASE_EXPECT_EQ(state.move_positions_calls, 1);
-    state.required_slot = -1;
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    state.required_any_slots.clear();
   }
   CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{2, 0}) != nullptr);
 
   // (6) 非 move 操作不会触发该钩子
   {
     state.reset();
+    state.probe_slots = {2, 9};
     ItemAddRequest add_requests;
     *add_requests.Add() = make_slot_instance(kItemTypeId_1x1, 1, 6, 0);
     auto checked =
         grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
-    CASE_EXPECT_EQ(state.move_positions_calls, 0);
+    CASE_EXPECT_EQ(state.positions_calls, 0);
   }
   {
     state.reset();
@@ -4173,7 +4272,203 @@ CASE_TEST(ItemContainer, on_check_move_positions_hook) {
         grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     CASE_EXPECT_EQ(grid.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
-    CASE_EXPECT_EQ(state.move_positions_calls, 0);
+    CASE_EXPECT_EQ(state.positions_calls, 0);
+  }
+}
+
+/// @brief on_check_sub_positions: 扣减生效后的槽位状态要交给业务钩子
+///
+/// 视图语义 (扣减还没落地, 只推演"这批扣减执行完"的结果):
+///   - 部分扣减: 槽位还剩多少就记多少, get_at 仍返回条目;
+///   - 整条扣空: get_count_at 为 0, get_at 返回 nullptr;
+///   - 同批次多条扣同一槽位: 数量累加, 一起扣空时同样变空;
+///   - 按 GUID 定位的扣减: 也要反映到条目所在槽位;
+///   - 钩子拒绝 → check_sub 失败且不改数据;
+///   - 非 sub 操作 (check_add / check_has) 不会触发这个钩子。
+CASE_TEST(ItemContainer, on_check_sub_positions_hook) {
+  using namespace item_algorithm;  // NOLINT(build/namespaces)
+
+  constexpr int64_t kContainerGuid = 0x6231;
+  constexpr int64_t kEquipGuid1 = 8401;
+  constexpr int64_t kEquipGuid2 = 8402;
+  constexpr int64_t kEquipGuid3 = 8403;
+
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemInfiniteGridContainer>();
+  auto& grid = *grid_ptr;
+  grid.init(PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment, kContainerGuid);
+  grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);  // 装备: 每槽一件
+  grid.register_position_cfg(kItemTypeId_1x1, 2, 1, 1);   // 可堆叠: 上限 2
+  auto config = make_test_config_group();
+  auto& state = grid.sub_hook_state();
+
+  auto slot_position = [&](int32_t slot) {
+    PROJECT_NAMESPACE_ID::DItemPosition position;
+    position.set_container_guid(kContainerGuid);
+    position.mutable_grid_position()->mutable_character_equipment()->set_slot_idx(
+        static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(slot));
+    return position;
+  };
+  auto make_slot_instance = [&](int32_t type_id, int64_t count, int32_t slot, int64_t guid) {
+    PROJECT_NAMESPACE_ID::DItemInstance instance;
+    instance.mutable_item_basic()->set_type_id(type_id);
+    instance.mutable_item_basic()->set_count(count);
+    instance.mutable_item_basic()->set_guid(guid);
+    *instance.mutable_item_basic()->mutable_position() = slot_position(slot);
+    return instance;
+  };
+  auto make_slot_basic = [&](int32_t type_id, int64_t count, int32_t slot, int64_t guid = 0) {
+    PROJECT_NAMESPACE_ID::DItemBasic basic;
+    basic.set_type_id(type_id);
+    basic.set_count(count);
+    basic.set_guid(guid);
+    *basic.mutable_position() = slot_position(slot);
+    return basic;
+  };
+  auto load_slot = [&](int32_t type_id, int64_t count, int32_t slot, int64_t guid) {
+    auto instance = make_slot_instance(type_id, count, slot, guid);
+    CASE_EXPECT_TRUE(grid.load(config, make_load_entry(instance), item_algorithm::ItemOperationSource{}));
+    return grid.get_at(ItemGridPosition{slot, 0});
+  };
+
+  // (1) 部分扣减: 槽位 3 有 2 个, 扣 1 → 视图里剩 1, 条目还在
+  CASE_EXPECT_TRUE(load_slot(kItemTypeId_1x1, 2, 3, 0) != nullptr);
+  {
+    state.reset();
+    state.probe_slots = {3};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kItemTypeId_1x1, 1, 3);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    CASE_EXPECT_EQ(state.count_of_slot(3), static_cast<int64_t>(1));
+    CASE_EXPECT_TRUE(state.occupied(3));
+  }
+  // check 阶段不改数据
+  CASE_EXPECT_EQ(grid.get_item_count_debug(kItemTypeId_1x1), 2);
+
+  // (2) 整条扣空: 一条请求扣掉全部 2 个 → 视图里槽位 3 变空
+  {
+    state.reset();
+    state.probe_slots = {3};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kItemTypeId_1x1, 2, 3);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    CASE_EXPECT_EQ(state.count_of_slot(3), static_cast<int64_t>(0));
+    CASE_EXPECT_FALSE(state.occupied(3));
+  }
+
+  // (3) 同批次两条扣同一槽位: 槽位 5 有 2 个, 各扣 1 → 累加后槽位 5 变空
+  CASE_EXPECT_TRUE(load_slot(kItemTypeId_1x1, 2, 5, 0) != nullptr);
+  {
+    state.reset();
+    state.probe_slots = {5};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kItemTypeId_1x1, 1, 5);
+    *sub_requests.Add() = make_slot_basic(kItemTypeId_1x1, 1, 5);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    CASE_EXPECT_EQ(state.count_of_slot(5), static_cast<int64_t>(0));
+    CASE_EXPECT_FALSE(state.occupied(5));
+  }
+
+  // (4) 按 GUID 定位的扣减同样反映到条目所在槽位: 槽位 1 的装备被扣掉 → 视图里槽位 1 变空
+  CASE_EXPECT_TRUE(load_slot(kEquipmentTypeId, 1, 1, kEquipGuid1) != nullptr);
+  {
+    state.reset();
+    state.probe_slots = {1};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kEquipmentTypeId, 1, 1, kEquipGuid1);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    CASE_EXPECT_EQ(state.count_of_slot(1), static_cast<int64_t>(0));
+    CASE_EXPECT_FALSE(state.occupied(1));
+    // 视图只看不落地
+    CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{1, 0}) != nullptr);
+  }
+
+  // (5) 钩子拒绝 → check_sub 失败, 数据不变
+  CASE_EXPECT_TRUE(load_slot(kItemTypeId_1x1, 2, 6, 0) != nullptr);
+  {
+    state.reset();
+    state.reject_all = true;
+    state.probe_slots = {6};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kItemTypeId_1x1, 1, 6);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, kSubPositionsRejectedError);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    // 钩子看到的是"扣减生效后"的结果, 但容器数据没被改动
+    CASE_EXPECT_EQ(state.count_of_slot(6), static_cast<int64_t>(1));
+    state.reject_all = false;
+  }
+  auto slot6_entry = grid.get_at(ItemGridPosition{6, 0});
+  CASE_EXPECT_TRUE(slot6_entry != nullptr);
+  if (slot6_entry) {
+    CASE_EXPECT_EQ(slot6_entry->item_instance().item_basic().count(), static_cast<int64_t>(2));
+  }
+
+  // (6) 按扣减后槽位判断的业务规则: 槽位 7 / 8 至少留一个
+  CASE_EXPECT_TRUE(load_slot(kEquipmentTypeId, 1, 7, kEquipGuid2) != nullptr);
+  CASE_EXPECT_TRUE(load_slot(kEquipmentTypeId, 1, 8, kEquipGuid3) != nullptr);
+  state.required_any_slots = {7, 8};
+  {
+    // 第 1 步: 扣掉槽位 7, 槽位 8 还在 → 通过
+    state.reset();
+    state.probe_slots = {7, 8};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kEquipmentTypeId, 1, 7, kEquipGuid2);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.count_of_slot(7), static_cast<int64_t>(0));
+    CASE_EXPECT_EQ(state.count_of_slot(8), static_cast<int64_t>(1));
+    CASE_EXPECT_EQ(grid.sub(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{7, 0}) == nullptr);
+  {
+    // 第 2 步: 槽位 7 已经空了, 再扣掉槽位 8 → 两个都空, 拒绝
+    state.reset();
+    state.probe_slots = {7, 8};
+    ItemSubRequest sub_requests;
+    *sub_requests.Add() = make_slot_basic(kEquipmentTypeId, 1, 8, kEquipGuid3);
+    auto checked =
+        grid.check_sub(config, make_item_readable_iterable(sub_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, kSubPositionsRejectedError);
+    CASE_EXPECT_EQ(state.positions_calls, 1);
+    CASE_EXPECT_FALSE(state.occupied(7));
+    CASE_EXPECT_FALSE(state.occupied(8));
+  }
+  CASE_EXPECT_TRUE(grid.get_at(ItemGridPosition{8, 0}) != nullptr);
+  state.required_any_slots.clear();
+
+  // (7) 非 sub 操作不会触发该钩子
+  {
+    state.reset();
+    state.probe_slots = {7, 8};
+    ItemAddRequest add_requests;
+    *add_requests.Add() = make_slot_instance(kItemTypeId_1x1, 1, 9, 0);
+    auto checked =
+        grid.check_add(config, make_item_readable_iterable(add_requests), item_algorithm::ItemOperationSource{});
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(grid.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.positions_calls, 0);
+  }
+  {
+    state.reset();
+    ItemHasRequest has_requests;
+    *has_requests.Add() = make_slot_basic(kEquipmentTypeId, 1, 8, kEquipGuid3);
+    auto has_result = grid.check_has(config, make_item_readable_iterable(has_requests));
+    CASE_EXPECT_EQ(has_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(state.positions_calls, 0);
   }
 }
 
