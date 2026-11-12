@@ -131,17 +131,17 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_
   return OrbitRPCDispatcher::me()->init_rpc_req_callback(
       sequence, detail::__get_rpc_wait_timeout(request_options),
       [rpc_full_name, callback](const atfw::orbit::OrbitRpcMessage& rsp_msg) {
-        int32_t res = 0;
+        int32_t ret = 0;
         orbit_rpc_rsp_type rsp_body;
         if (rsp_msg.head().rpc_response().type_url() == orbit_rpc_rsp_type::descriptor()->full_name() &&
             !rsp_msg.body_bin().empty()) {
-          res = detail::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name);
+          ret = detail::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name);
         }
-        if (res == 0) {
-          res = rsp_msg.head().error_code();
+        if (ret == 0) {
+          ret = rsp_msg.head().error_code();
         }
         if (callback != nullptr) {
-          callback(res, rsp_body);
+          callback(ret, rsp_body);
         }
       });
 }

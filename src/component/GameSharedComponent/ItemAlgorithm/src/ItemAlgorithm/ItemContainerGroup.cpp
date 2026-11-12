@@ -329,7 +329,7 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest ItemContainerGroup::chec
   //     执行阶段 Phase 1 把它整体移出, Phase 2 只覆盖数量与位置, 不会丢掉原条目的数据。
   //   - 其余情况 (部分移动 / 跨容器): 用独立条目模板。部分移动时来源条目还在, GUID 不能复制;
   //     跨容器时目标容器拿不到来源条目, 只能按模板复制。
-  auto append_add = [](ContainerBuilder& builder, const item_container_ptr_t& owner, const item_entry_ptr_t& source,
+  auto append_add = [](ContainerBuilder& builder, const item_container_ptr_t& owner, const item_entry_ptr_t& source_ptr,
                        const PROJECT_NAMESPACE_ID::DItemPosition& goal_position, int32_t op_count, bool is_whole_move,
                        bool is_same_container) {
     ItemMoveAddRequest add_request;
@@ -337,12 +337,12 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest ItemContainerGroup::chec
     add_request.op_count = op_count;
 
     if (is_whole_move && is_same_container) {
-      add_request.entry = source;
+      add_request.entry = source_ptr;
       builder.move_request.move_add_entrys.push_back(std::move(add_request));
       return;
     }
 
-    PROJECT_NAMESPACE_ID::DItemInstance add_instance = source->item_instance();
+    PROJECT_NAMESPACE_ID::DItemInstance add_instance = source_ptr->item_instance();
     add_instance.mutable_item_basic()->set_count(op_count);
     if (!is_whole_move) {
       // 部分移动时来源条目还在, GUID 不能跟着复制到新条目
