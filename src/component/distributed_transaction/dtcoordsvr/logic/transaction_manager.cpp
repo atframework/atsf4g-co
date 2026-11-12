@@ -232,8 +232,8 @@ int transaction_manager::tick() {
   return ret;
 }
 
-rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_ptr_type& input) {
-  transaction_ptr_type data = input;
+rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_ptr_type& input_data) {
+  transaction_ptr_type data = input_data;
   if (!data) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -264,9 +264,9 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
                        storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
-        int result = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
-        if (result < 0) {
-          RPC_RETURN_CODE(result);
+        int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
+        if (ret < 0) {
+          RPC_RETURN_CODE(ret);
         }
         data->data_version = static_cast<int64_t>(data_version);
 
@@ -276,7 +276,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
           FCTXLOGERROR(subctx, "Refresh transaction {} TTL failed after save, res: {}({})",
                        input.metadata().transaction_uuid(), ttl_result, protobuf_mini_dumper_get_error_msg(ttl_result));
         }
-        RPC_RETURN_CODE(result);
+        RPC_RETURN_CODE(ret);
       },
       true)));
 }
@@ -330,13 +330,13 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(run_io_task(
       ctx, transaction_cache_ptr,
-      [transaction_cache_ptr, storage = std::move(storage)](rpc::context& ctx) mutable -> rpc::result_code_type {
+      [transaction_cache_ptr, storage = std::move(storage)](rpc::context& child_ctx) mutable -> rpc::result_code_type {
         uint64_t db_version = 0;
-        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{child_ctx};
         db_data->set_zone_id(get_transaction_zone_id(storage.metadata()));
         db_data->set_transaction_uuid(storage.metadata().transaction_uuid());
         if (false == db_data->mutable_blob_data()->PackFrom(storage)) {
-          FCTXLOGERROR(ctx, "Serialize transaction_blob_storage failed, {}",
+          FCTXLOGERROR(child_ctx, "Serialize transaction_blob_storage failed, {}",
                        db_data->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
@@ -344,41 +344,41 @@ rpc::result_code_type transaction_manager::create_transaction(
         rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
         if (!storage.metadata().memory_only()) {
           // 相同 UUID 的重放不能覆盖已持久化的全局决议或参与者确认；由 DB 原子判定是否首次创建。
-          ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, &db_version));
+          ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(child_ctx, db_data, &db_version));
           if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
             // 插入成功后 TTL 设置可能失败或响应丢失；重放补设原记录的 TTL，不覆盖数据。
             ret = RPC_AWAIT_CODE_RESULT(
-                rpc::db::distribute_transaction::get_all(ctx, get_transaction_zone_id(storage.metadata()),
+                rpc::db::distribute_transaction::get_all(child_ctx, get_transaction_zone_id(storage.metadata()),
                                                          storage.metadata().transaction_uuid(), *db_data, db_version));
             if (ret < 0) {
               RPC_RETURN_CODE(ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND
                                   ? PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS
                                   : ret);
             }
-            rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> existing(ctx);
+            rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> existing(child_ctx);
             if (!db_data->blob_data().UnpackTo(&*existing)) {
               RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
             }
             if (existing->metadata().transaction_uuid() != transaction_cache_ptr->data_key) {
               RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
             }
-            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, *existing)));
+            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(child_ctx, *existing)));
           }
           if (ret < 0) {
-            FCTXLOGERROR(ctx, "rpc::db::distribute_transaction::insert({}) failed, res: {}({})",
+            FCTXLOGERROR(child_ctx, "rpc::db::distribute_transaction::insert({}) failed, res: {}({})",
                          storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
             RPC_RETURN_CODE(ret);
           }
 
-          ret = RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, storage));
+          ret = RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(child_ctx, storage));
           if (ret < 0) {
-            FCTXLOGERROR(ctx, "Set transaction {} TTL failed after create, res: {}({})",
+            FCTXLOGERROR(child_ctx, "Set transaction {} TTL failed after create, res: {}({})",
                          storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
             rpc::result_code_type::value_type remove_result =
                 RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(
-                    ctx, get_transaction_zone_id(storage.metadata()), storage.metadata().transaction_uuid()));
+                    child_ctx, get_transaction_zone_id(storage.metadata()), storage.metadata().transaction_uuid()));
             if (remove_result < 0 && remove_result != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-              FCTXLOGERROR(ctx, "Remove transaction {} after TTL failure failed, res: {}({})",
+              FCTXLOGERROR(child_ctx, "Remove transaction {} after TTL failure failed, res: {}({})",
                            storage.metadata().transaction_uuid(), remove_result,
                            protobuf_mini_dumper_get_error_msg(remove_result));
             }
@@ -790,15 +790,14 @@ rpc::result_code_type transaction_manager::remove_transaction(
   }
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
       run_io_task(ctx, data, [this, data, zone_id](rpc::context& subctx) -> rpc::result_code_type {
-        int result =
-            RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(subctx, zone_id, data->data_key));
-        if (result == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-          result = 0;
+        int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(subctx, zone_id, data->data_key));
+        if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+          ret = 0;
         }
-        if (result == 0 && lru_caches_.get_cache(data->data_key, false) == data) {
+        if (ret == 0 && lru_caches_.get_cache(data->data_key, false) == data) {
           lru_caches_.remove_cache(data->data_key);
         }
-        RPC_RETURN_CODE(result);
+        RPC_RETURN_CODE(ret);
       })));
 }
 

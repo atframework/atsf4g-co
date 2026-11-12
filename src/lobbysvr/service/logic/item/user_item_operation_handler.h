@@ -50,9 +50,9 @@ struct item_operation_handle_checked_add_request {
   explicit item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_type_id = 0)
       : check_result{error_code, failed_type_id} {}
   explicit item_operation_handle_checked_add_request(
-      atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request,
+      atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> input_checked_request,
       item_algorithm::ItemOperationSource in_reason)
-      : checked_request(std::move(checked_request)), reason(in_reason) {}
+      : checked_request(std::move(input_checked_request)), reason(in_reason) {}
 
   item_operation_handle_checked_add_request(const item_operation_handle_checked_add_request&) = delete;
   item_operation_handle_checked_add_request& operator=(const item_operation_handle_checked_add_request&) = delete;
@@ -68,9 +68,9 @@ struct item_operation_handle_checked_sub_request {
   explicit item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_type_id = 0)
       : check_result{error_code, failed_type_id} {}
   explicit item_operation_handle_checked_sub_request(
-      atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request,
+      atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> input_checked_request,
       item_algorithm::ItemOperationSource in_reason)
-      : checked_request(std::move(checked_request)), reason(in_reason) {}
+      : checked_request(std::move(input_checked_request)), reason(in_reason) {}
 
   item_operation_handle_checked_sub_request(const item_operation_handle_checked_sub_request&) = delete;
   item_operation_handle_checked_sub_request& operator=(const item_operation_handle_checked_sub_request&) = delete;
@@ -84,18 +84,19 @@ struct item_operation_checked_add_request {
 
   item_operation_checked_add_request(const item_operation_checked_add_request&) = delete;
   item_operation_checked_add_request& operator=(const item_operation_checked_add_request&) = delete;
-  item_operation_checked_add_request(item_operation_checked_add_request&&) = default;
+  item_operation_checked_add_request(item_operation_checked_add_request&&) noexcept = default;
   item_operation_checked_add_request& operator=(item_operation_checked_add_request&&) = default;
   item_operation_result get_check_result() { return check_result; }
 
  private:
-  item_operation_checked_add_request(user* ATFW_UTIL_MACRO_NONNULL owner,
-                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_type_id = 0)
+  explicit item_operation_checked_add_request(user* ATFW_UTIL_MACRO_NONNULL owner,
+                                              int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS,
+                                              int32_t failed_type_id = 0)
       : owner_(owner), check_result{error_code, failed_type_id} {}
   item_operation_checked_add_request(
       user* ATFW_UTIL_MACRO_NONNULL owner,
-      std::list<std::pair<int32_t, item_operation_handle_checked_add_request>>&& checked_request)
-      : owner_(owner), checked_request(std::move(checked_request)) {}
+      std::list<std::pair<int32_t, item_operation_handle_checked_add_request>>&& input_checked_request)
+      : owner_(owner), checked_request(std::move(input_checked_request)) {}
 
   user* ATFW_UTIL_MACRO_NONNULL owner_;
   item_operation_result check_result;
@@ -107,18 +108,19 @@ struct item_operation_checked_sub_request {
 
   item_operation_checked_sub_request(const item_operation_checked_sub_request&) = delete;
   item_operation_checked_sub_request& operator=(const item_operation_checked_sub_request&) = delete;
-  item_operation_checked_sub_request(item_operation_checked_sub_request&&) = default;
+  item_operation_checked_sub_request(item_operation_checked_sub_request&&) noexcept = default;
   item_operation_checked_sub_request& operator=(item_operation_checked_sub_request&&) = default;
   item_operation_result get_check_result() { return check_result; }
 
  private:
-  item_operation_checked_sub_request(user* ATFW_UTIL_MACRO_NONNULL owner,
-                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_type_id = 0)
+  explicit item_operation_checked_sub_request(user* ATFW_UTIL_MACRO_NONNULL owner,
+                                              int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS,
+                                              int32_t failed_type_id = 0)
       : owner_(owner), check_result{error_code, failed_type_id} {}
   item_operation_checked_sub_request(
       user* ATFW_UTIL_MACRO_NONNULL owner,
-      std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>>&& checked_request)
-      : owner_(owner), checked_request(std::move(checked_request)) {}
+      std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>>&& input_checked_request)
+      : owner_(owner), checked_request(std::move(input_checked_request)) {}
 
   user* ATFW_UTIL_MACRO_NONNULL owner_;
   item_operation_result check_result;

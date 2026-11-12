@@ -587,11 +587,11 @@ static void run_snapshot_ack_lifecycle(EnDistibutedTransactionStatus status, boo
   if (!commit) {
     auto task = test.run_task("commit_after_reject_snapshot", std::chrono::seconds{2},
                               [handle, finished, output, status](rpc::context& ctx) -> rpc::result_code_type {
-                                SSParticipatorTransactionCommitReq request;
-                                SSParticipatorTransactionCommitRsp response;
-                                request.set_transaction_uuid("snapshot-ack");
+                                SSParticipatorTransactionCommitReq request_body;
+                                SSParticipatorTransactionCommitRsp response_body;
+                                request_body.set_transaction_uuid("snapshot-ack");
                                 CASE_EXPECT_EQ(finished ? 0 : PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED,
-                                               RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, response)));
+                                               RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request_body, response_body)));
                                 CASE_EXPECT_EQ(status, output->metadata().status());
                                 RPC_RETURN_CODE(0);
                               });

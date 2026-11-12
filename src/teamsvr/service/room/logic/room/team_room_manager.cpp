@@ -147,26 +147,26 @@ int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system
     if (room_weak.expired()) {
       return;
     }
-    auto room = room_weak.lock();
-    if (!room) {
+    auto room_ptr = room_weak.lock();
+    if (!room_ptr) {
       return;
     }
-    room->timer_timeout_ = std::chrono::system_clock::from_time_t(0);
+    room_ptr->timer_timeout_ = std::chrono::system_clock::from_time_t(0);
 
     if (team_room_manager::is_instance_destroyed()) {
       return;
     }
 
     // 房间可能已被回收(定时器未来得及移除)，校验 manager 仍持有该房间
-    if (team_room_manager::me()->get_room(team_key).get() != room.get()) {
+    if (team_room_manager::me()->get_room(team_key).get() != room_ptr.get()) {
       return;
     }
 
     auto* ctx = reinterpret_cast<rpc::context*>(team_room_manager::me()->timer_set_.get_private_data());
     if (nullptr != ctx) {
-      room->on_timer(*ctx);
+      room_ptr->on_timer(*ctx);
     } else {
-      room->on_timer(logic_server_get_current_tick_context());
+      room_ptr->on_timer(logic_server_get_current_tick_context());
     }
   };
 

@@ -580,9 +580,11 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   # never sit in the co-linkable implementation library. Everything else is compiled once into a static implementation
   # library (<TARGET_FULL_NAME>-private, alias components::<TARGET_NAME>::private) which the service executable and unit
   # tests link, so tests reuse the compiled service objects instead of recompiling them. A static archive needs no
-  # import/export annotation (export tables and .def files only exist when linking a shared library or executable);
-  # force default symbol visibility and PIC so global visibility presets never hide symbols from consumers and the PCH
-  # .pic variant stays flag-compatible.
+  # import/export annotation (export tables and .def files only exist when linking a shared library or executable), and
+  # static linking into executables resolves archive symbols regardless of ELF visibility. Keep the hidden preset (like
+  # server_frame) plus PIC so these TUs stay flag-compatible with the reused server_frame PCH: visibility flags that
+  # differ from the PCH creator make template instantiations (whose visibility comes from the PCH-serialized template
+  # pattern) diverge from their derived classes and trip -Wattributes.
   unset(project_component_declare_service_IMPL_TARGET_NAME)
   if(project_component_declare_service_MAIN_SOURCES)
     project_service_route_entry_point_files(
@@ -603,8 +605,8 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
                 ${project_component_declare_service_HEADERS} ${project_component_declare_service_SOURCES})
     set_target_properties(
       "${project_component_declare_service_IMPL_TARGET_NAME}"
-      PROPERTIES C_VISIBILITY_PRESET "default"
-                 CXX_VISIBILITY_PRESET "default"
+      PROPERTIES C_VISIBILITY_PRESET "hidden"
+                 CXX_VISIBILITY_PRESET "hidden"
                  VISIBILITY_INLINES_HIDDEN OFF
                  POSITION_INDEPENDENT_CODE ON)
     add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_MAIN_SOURCES}

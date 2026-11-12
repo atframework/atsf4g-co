@@ -63,14 +63,14 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
 
   struct external_chat_channel_option {
     bool readonly = false;
-    chat_channel_check_writable_callback_t check_writable = nullptr;
+    chat_channel_check_writable_callback_t ATFW_UTIL_MACRO_NULLABLE check_writable = nullptr;
 
     inline external_chat_channel_option() noexcept {}
   };
 
   struct external_channel_type_rule {
     bool readonly = false;
-    channel_type_check_writable_callback_t check_writable = nullptr;
+    channel_type_check_writable_callback_t ATFW_UTIL_MACRO_NULLABLE check_writable = nullptr;
 
     inline external_channel_type_rule() noexcept {}
   };
