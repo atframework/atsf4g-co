@@ -29,7 +29,9 @@ define_property(
 
 set(PROJECT_PCH_TOOL_SOURCE_FILE "${CMAKE_CURRENT_BINARY_DIR}/project_pch_tool_empty_source.cpp")
 set(PROJECT_PCH_TOOL_GENERATED_DIR "${CMAKE_BINARY_DIR}/_generated/pch")
-file(TOUCH "${PROJECT_PCH_TOOL_SOURCE_FILE}")
+if(NOT EXISTS "${PROJECT_PCH_TOOL_SOURCE_FILE}")
+  file(WRITE "${PROJECT_PCH_TOOL_SOURCE_FILE}" "")
+endif()
 
 if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
   list(APPEND PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES "${PROJECT_PCH_TOOL_GENERATED_DIR}")
@@ -362,8 +364,12 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
         endif()
       endforeach()
       target_link_libraries("${_interface_target_name}" PRIVATE "${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
-      set_target_properties("${_interface_target_name}" PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
-                                                                                                "hidden")
+      # REUSE_FROM brings in needed providers. Keep unused exports out of ALL and the lint target collection.
+      set_target_properties(
+        "${_interface_target_name}"
+        PROPERTIES EXCLUDE_FROM_ALL TRUE
+                   C_VISIBILITY_PRESET "hidden"
+                   CXX_VISIBILITY_PRESET "hidden")
 
       set(__project_pch_tool_compile_options "${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS}")
       list(
