@@ -57,6 +57,10 @@ set(PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT
     1
     CACHE STRING "Unity build minimum file count.")
 
+set(PROJECT_COMPONENT_PRECOMPILE_HEADER_STANDALONE_MIN_FILE_COUNT
+    8
+    CACHE STRING "Minimum file count to produce standalone precompile target.")
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "12.1.0")
   option(PROJECT_ENABLE_LINKER_MOLD "Enable use mold as linker." ON)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")

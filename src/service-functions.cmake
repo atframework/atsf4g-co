@@ -486,8 +486,8 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
                                                                         ${PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE})
   endif()
 
-  if(NOT PROJECT_ENABLE_UNITY_BUILD OR __project_service_declare_protocol_PROTOCOLS_LENGTH GREATER
-                                       PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
+  if(__project_service_declare_protocol_PROTOCOLS_LENGTH GREATER_EQUAL
+     PROJECT_COMPONENT_PRECOMPILE_HEADER_STANDALONE_MIN_FILE_COUNT)
     set(__current_pch_weight 0)
     project_pch_tool_increase_pch_weight(__current_pch_weight 50 ${project_service_declare_protocol_PROTOCOLS})
 
