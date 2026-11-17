@@ -30,6 +30,10 @@ endpoint 末尾不带 `/`，路径 `/v1/traces`、`/v1/metrics`、`/v1/logs` 由
 | logs（含 cs_actor、notification 分组） | `atframework_logs` |
 | spanmetrics | `atframework_metrics` |
 
+本地命名遥测组使用独立回环 receiver：`hpa` metrics 使用 `127.0.0.1:4328`，`cs_actor` logs 使用
+`127.0.0.1:4327`，`notification` logs 使用 `127.0.0.1:4337`。`hpa` 组是内置 policy 上报的必要配置，
+其 Prometheus HTTP API 地址与凭据由 OpenObserve 初始化脚本写入该组。
+
 这些 stream 在首次写入时自动创建，全局保留期为 14 天。OpenObserve exporter 使用独立组件名，
 配置 15 秒超时、指数退避重试、两个 consumer 和 4096 item 的有界队列；队列满时施加背压。
 Collector 各 pipeline 首先经过 `memory_limiter`，默认 hard/soft limit 为 512/384MiB。
@@ -63,7 +67,7 @@ daemon / systemd 两种模式）。
   未提供上下文时由 task action 开始 trace。atgateway 透传业务消息体，不负责注入业务 trace；
 - SS 链路：`rpc_context`（`src/server_frame/rpc/rpc_context.{h,cpp}`）随 `SSMsg` 传播 trace 上下文，
   跨服务串联 span；
-- DB 调用：Redis 命令作为子 span。
+- DB 调用：生成的表级接口创建以表名和接口名标识的 Client span，底层 Redis 原语作为其子 span。
 
 ### Metrics 与 HPA
 

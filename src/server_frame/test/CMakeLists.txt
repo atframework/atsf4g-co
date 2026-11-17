@@ -44,10 +44,19 @@ project_add_rpc_unit_test(
   TIMEOUT 120)
 
 project_add_rpc_unit_test(
+  TARGET ${PROJECT_NAME}-server-frame-hpa-name-mode-unit-test
+  COMPONENT server-frame
+  CATEGORY sdk
+  SOURCES "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_hpa_name_mode.cpp"
+  FEATURES HPA
+  LABELS fast
+  TIMEOUT 120)
+
+project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-server-frame-telemetry-unit-test
   COMPONENT server-frame
   CATEGORY sdk
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_telemetry.cpp"
-  FEATURES TELEMETRY
+  FEATURES TELEMETRY DB
   LABELS fast
   TIMEOUT 120)

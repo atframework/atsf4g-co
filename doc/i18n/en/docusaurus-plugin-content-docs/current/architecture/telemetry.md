@@ -30,6 +30,10 @@ The endpoint has no trailing `/`; the exporter appends `/v1/traces`, `/v1/metric
 | logs (including cs_actor and notification groups) | `atframework_logs` |
 | spanmetrics | `atframework_metrics` |
 
+Named telemetry groups use separate loopback receivers: `hpa` metrics use `127.0.0.1:4328`, `cs_actor` logs use
+`127.0.0.1:4327`, and `notification` logs use `127.0.0.1:4337`. The `hpa` group is required for built-in policy
+reporting. The OpenObserve initializer writes the Prometheus HTTP API address and credential into this group.
+
 Streams are created on their first write and use the global 14-day retention. OpenObserve exporters have distinct
 component names, a 15-second timeout, exponential-backoff retries, two consumers, and a bounded 4096-item queue.
 A full queue applies backpressure. Every Collector pipeline starts with `memory_limiter`, with default hard/soft
@@ -67,7 +71,8 @@ daemon and systemd modes).
   without context, the task action starts the trace. atgateway passes through business payloads without injecting business traces;
 - SS path: `rpc_context` (`src/server_frame/rpc/rpc_context.{h,cpp}`) propagates the trace context along with
   `SSMsg`, chaining spans across services;
-- DB calls: Redis commands appear as child spans.
+- DB calls: generated table APIs create client spans identified by table and operation names, with lower-level Redis
+  primitives as child spans.
 
 ### Metrics and HPA
 

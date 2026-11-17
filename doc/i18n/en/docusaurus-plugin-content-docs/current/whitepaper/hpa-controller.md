@@ -32,7 +32,10 @@ replica interfaces to integrate their own algorithms.
 Current defaults in `install/cloud-native/values/default/modules/hpa.yaml` enable the service controller with
 minimum replicas 2, pull interval 20 seconds, retry interval 5 seconds, and 60-second up/down stabilization windows.
 `cloudnative.autoscaling.enable` is false. These are deployment values, not protobuf defaults for unset fields;
-project overrides can differ.
+project overrides can differ. The `group.hpa` section in `modules/telemetry.yaml` is required for built-in policy
+reporting and pulling. Without this named group, the controller does not create the built-in metric observers.
+The OpenObserve initializer also sets `hpa.metrics.pull_metrics_name_mode` to `name_only` to match raw OTLP metric
+names. Deployments using Prometheus text-export names with unit suffixes can retain `name_and_unit`.
 
 ## Staged Target and Ready Changes
 

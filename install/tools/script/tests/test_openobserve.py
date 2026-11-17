@@ -214,6 +214,9 @@ class OpenObserveAcceptance(unittest.TestCase):
         http_api = values["opentelemetry"]["metrics"]["prometheus"]["http_api"]
         self.assertEqual(http_api["url"], "http://127.0.0.1:15080/api/acceptance_org/prometheus/api/v1")
         self.assertEqual(http_api["headers"], [{"key": "Authorization", "value": token}])
+        self.assertEqual(values["group"]["hpa"]["metrics"]["prometheus"]["http_api"], http_api)
+        hpa_values = yaml.safe_load(values_file.with_name("hpa.yaml").read_text())
+        self.assertEqual(hpa_values, {"metrics": {"pull_metrics_name_mode": "name_only"}})
         exporters = values["agent"]["otelcol"]["exporters"]
         for signal, name, stream in (
                 ("trace", "otlp_http/openobserve_trace", "atframework_traces"),
@@ -289,6 +292,8 @@ class OpenObserveAcceptance(unittest.TestCase):
             values = yaml.safe_load(values_file.read_text())
             self.assertEqual(values["opentelemetry"]["metrics"]["prometheus"]["http_api"]["url"],
                              f"http://127.0.0.1:{server.server_address[1]}/api/generated-org-id/prometheus/api/v1")
+            self.assertEqual(values["group"]["hpa"]["metrics"]["prometheus"]["http_api"]["url"],
+                             f"http://127.0.0.1:{server.server_address[1]}/api/generated-org-id/prometheus/api/v1")
             exporters = values["agent"]["otelcol"]["exporters"]
             for signal in ("trace", "metrics", "logs", "spanmetrics"):
                 exporter = next(iter(exporters[signal].values()))
@@ -321,6 +326,10 @@ class OpenObserveAcceptance(unittest.TestCase):
                              {"Authorization": token, "stream-name": stream})
             self.assertEqual(exporters[name]["sending_queue"]["queue_size"], 4096)
         pipelines = config["service"]["pipelines"]
+        self.assertEqual(config["receivers"]["otlp/hpa_metrics"]["protocols"]["grpc"]["endpoint"], "127.0.0.1:4328")
+        self.assertEqual(pipelines["metrics/hpa"]["receivers"], ["otlp/hpa_metrics"])
+        self.assertEqual(pipelines["metrics/hpa"]["processors"][0], "memory_limiter/hpa")
+        self.assertIn("otlp_http/openobserve_metrics", pipelines["metrics/hpa"]["exporters"])
         self.assertIn("otlp_http/openobserve_trace", pipelines["traces/default"]["exporters"])
         self.assertIn("otlp_http/openobserve_metrics", pipelines["metrics/default"]["exporters"])
         self.assertIn("otlp_http/openobserve_spanmetrics",

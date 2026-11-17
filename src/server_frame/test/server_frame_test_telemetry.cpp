@@ -1,13 +1,16 @@
 // Copyright 2026 atframework
 
-#include <chrono>
-#include <string>
-
+#include <atframework/testing/mock_db.h>
+#include <atframework/testing/runtime.h>
 #include <common/file_system.h>
 
-#include <atframework/testing/runtime.h>
+#include <chrono>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "frame/test_macros.h"
+#include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/rpc_context.h"
 
 namespace {
@@ -29,6 +32,39 @@ int32_t run_tracer_task(atfw::testing::runtime &test, gsl::string_view name) {
   }
   return result.result_code;
 }
+
+int32_t run_generated_db_tracer_task(atfw::testing::runtime &test) {
+  auto task =
+      test.run_task("generated-db-trace", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> record{ctx};
+        uint64_t version = 0;
+        int32_t result = 0;
+        result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, 11, "openid-trace", *record, version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, result);
+
+        record->set_account_type(11);
+        record->set_open_id("openid-trace");
+        record->set_user_id(1001);
+        result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, record, version));
+        CASE_EXPECT_EQ(0, result);
+
+        std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message> jobs;
+        result = RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::get_all(ctx, 7, 1001, 1, jobs));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, result);
+
+        result = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, 11, "openid-trace"));
+        CASE_EXPECT_EQ(0, result);
+        RPC_RETURN_CODE(0);
+      });
+  if (task.empty()) {
+    return -1;
+  }
+  auto result = test.wait(task, std::chrono::seconds{5});
+  if (!result.task_exited) {
+    return -2;
+  }
+  return result.result_code;
+}
 }  // namespace
 
 // server_frame component: file-only exporters (otlp_file) go through the real telemetry provider chain and
@@ -41,13 +77,17 @@ CASE_TEST(server_frame_unit_test, telemetry_file_only_export) {
 
   atfw::testing::runtime test;
   atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::db};
   options.telemetry_otlp_file_pattern = "telemetry-export-test";
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return;
   }
+  test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();
+  test.db().register_message_type<PROJECT_NAMESPACE_ID::table_user_async_jobs>();
 
   CASE_EXPECT_EQ(0, static_cast<int>(run_tracer_task(test, "rpc-unit-test/file-only")));
+  CASE_EXPECT_EQ(0, static_cast<int>(run_generated_db_tracer_task(test)));
   CASE_EXPECT_EQ(0, test.stop());
 
   CASE_EXPECT_TRUE(atfw::util::file_system::is_exist(trace_file.c_str()));
@@ -55,6 +95,10 @@ CASE_TEST(server_frame_unit_test, telemetry_file_only_export) {
   if (atfw::util::file_system::get_file_content(content, trace_file.c_str(), true)) {
     CASE_EXPECT_TRUE(!content.empty());
     CASE_EXPECT_TRUE(content.find("rpc-unit-test/file-only") != std::string::npos);
+    CASE_EXPECT_TRUE(content.find("rpc.db.login_auth/get_all") != std::string::npos);
+    CASE_EXPECT_TRUE(content.find("rpc.db.login_auth/replace") != std::string::npos);
+    CASE_EXPECT_TRUE(content.find("rpc.db.login_auth/remove_all") != std::string::npos);
+    CASE_EXPECT_TRUE(content.find("rpc.db.async_jobs/get_all") != std::string::npos);
   } else {
     CASE_EXPECT_TRUE(false);
   }

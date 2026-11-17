@@ -31,6 +31,9 @@ Kubernetes 场景还需部署指标适配器和原生 HPA，不能只开启服�
 服务侧 controller 启用，最小副本数为 2，拉取间隔 20 秒、失败重试间隔 5 秒，
 扩容与缩容稳定窗口均为 60 秒；`cloudnative.autoscaling.enable` 默认关闭。
 这些是部署 values，不等于 protobuf 未填写字段时的默认值，项目覆盖配置可能不同。
+`modules/telemetry.yaml` 中的 `group.hpa` 是内置 policy 上报和拉取的必要配置；缺少该命名组时，
+控制器不会创建内置指标 observer。OpenObserve 初始化脚本还会把 `hpa.metrics.pull_metrics_name_mode`
+设为 `name_only`，与 OTLP 原始指标名一致；使用带单位后缀的 Prometheus 文本导出名时可保留 `name_and_unit`。
 
 ## Target 与 Ready 分阶段切换
 

@@ -486,7 +486,10 @@ void logic_hpa_policy::make_query_metrics_name(std::list<gsl::string_view>& quer
       opentelemetry::exporter::metrics::PrometheusExporterUtils::TranslateToPrometheus(fake_resource_metrics, false);
 #endif
 
-  if (!prometheus_family.empty()) {
+  if (pull_metrics_name_mode_ == logic_hpa_pull_metrics_name_mode::kWithNameOnly) {
+    pull_metrics_name_ =
+        rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(metrics_name_, true);
+  } else if (!prometheus_family.empty()) {
     pull_metrics_name_ = (*prometheus_family.rbegin()).name;
   }
 

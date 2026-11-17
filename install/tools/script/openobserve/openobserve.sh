@@ -243,11 +243,11 @@ do_start() {
     volume_suffix=":Z"
   fi
 
-  echo "Starting OpenObserve container $CONTAINER_NAME on 127.0.0.1:${HTTP_PORT}..."
+  echo "Starting OpenObserve container $CONTAINER_NAME on 0.0.0.0:${HTTP_PORT}..."
   bash "$SERVICE_MANAGER" start "$SERVICE_STATE" "openobserve-${HTTP_PORT}" "$WORK_DIR" \
     --container "$engine" "$OPENOBSERVE_IMAGE" -- \
-    --publish "127.0.0.1:${HTTP_PORT}:5080" \
-    --publish "127.0.0.1:${GRPC_PORT}:5081" \
+    --publish "0.0.0.0:${HTTP_PORT}:5080" \
+    --publish "0.0.0.0:${GRPC_PORT}:5081" \
     --volume "${DATA_DIR}:/data${volume_suffix}" \
     --memory "$CONTAINER_MEMORY" \
     --cpus "$CONTAINER_CPUS" \
@@ -256,7 +256,7 @@ do_start() {
     --env "ZO_LOCAL_MODE_STORAGE=disk" \
     --env "ZO_ROOT_USER_EMAIL=${ROOT_USER_EMAIL}" \
     --env "ZO_ROOT_USER_PASSWORD=${root_password}" \
-    --env "ZO_WEB_URL=http://127.0.0.1:${HTTP_PORT}" \
+    --env "ZO_WEB_URL=http://0.0.0.0:${HTTP_PORT}" \
     --env "ZO_COMPACT_DATA_RETENTION_DAYS=${RETENTION_DAYS}" \
     --env "ZO_CREATE_ORG_THROUGH_INGESTION=false" \
     --env "ZO_TELEMETRY=false" \
@@ -300,7 +300,7 @@ do_start() {
     exit 1
   fi
 
-  echo "OpenObserve is ready at http://127.0.0.1:${HTTP_PORT} (organization: $ORGANIZATION)."
+  echo "OpenObserve is ready at http://0.0.0.0:${HTTP_PORT} (organization: $ORGANIZATION)."
   echo "  Root user: $ROOT_USER_EMAIL"
   echo "  Password file: $PASSWORD_FILE"
   echo "  Persistent data: $DATA_DIR"
@@ -366,7 +366,7 @@ do_status() {
     return 0
   fi
   if container_running "$engine"; then
-    echo "OpenObserve is running at http://127.0.0.1:${HTTP_PORT} (container $CONTAINER_NAME)."
+    echo "OpenObserve is running at http://0.0.0.0:${HTTP_PORT} (container $CONTAINER_NAME)."
   else
     echo "OpenObserve is not running."
   fi

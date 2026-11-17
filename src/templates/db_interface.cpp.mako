@@ -44,6 +44,7 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include "rpc/rpc_context.h"
 #include "rpc/db/db_utils.h"
 #include "rpc/db/hash_table.h"
+#include "rpc/internal/rpc_template_db_message.h"
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 // Typed mock handler slots below are guarded per op.

@@ -50,11 +50,11 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}\
     rpc::unit_test::db_mock_meta __meta;
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, rsp, __meta));
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, __input, rsp, __meta));
 %   if with_version:
     version = __meta.version;
 %   endif
-    RPC_DB_RETURN_CODE(__res);
+    RPC_DB_RETURN_CODE(__trace.finish(__res));
   }
 #endif
 </%def>
@@ -107,6 +107,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
 % else:
                                                               ) {
 % endif
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/get_all");
 ${emit_mock_intercept_get("get_all", index.enable_cas, key_fields, message_name)}  char db_key[256];
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
@@ -114,12 +115,12 @@ ${emit_mock_intercept_get("get_all", index.enable_cas, key_fields, message_name)
     keylen = static_cast<size_t>(result.size);
   }
   auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 output,
                                                                 &detail::unpack_${message_name}));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   rpc::shared_message<PROJECT_NAMESPACE_ID::${message_name}> tmp{*output->message};
   protobuf_move_message(rsp, std::move(*tmp));
@@ -133,11 +134,12 @@ ${emit_mock_intercept_get("get_all", index.enable_cas, key_fields, message_name)
   % endfor
   );
 % endfor
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_key_t> keys,
                                            std::vector<batch_get_result_t> &rsp) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/batch_get_all");
   std::vector<std::string> db_keys;
   db_keys.reserve(keys.size());
   for (auto &key : keys) {
@@ -153,10 +155,10 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
   std::vector<atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t>> outputs;
   outputs.resize(keys.size());
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::batch_get_all(
-      ctx, db_msg_dispatcher::me()->get_db_channel_type(), gsl::span<std::string>{db_keys}, outputs,
+      __trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(), gsl::span<std::string>{db_keys}, outputs,
       &detail::unpack_${message_name}));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   for (size_t index = 0; index < static_cast<size_t>(outputs.size()); ++index) {
     auto &output = outputs[index];
@@ -187,7 +189,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
     }
     rsp.push_back(std::move(result));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 SERVER_FRAME_API result_type replace(rpc::context &ctx,
@@ -197,17 +199,18 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
 % else:
                                                           ) {
 % endif
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/replace");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::replace_handler()) {
     rpc::unit_test::db_mock_meta __meta;
 % if index.enable_cas:
     __meta.version = version;
 % endif
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, *store, __meta));
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, *store, __meta));
 % if index.enable_cas:
     version = __meta.version;
 % endif
-    RPC_DB_RETURN_CODE(__res);
+    RPC_DB_RETURN_CODE(__trace.finish(__res));
   }
 #endif
   char db_key[256];
@@ -216,7 +219,7 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = size_t(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 shared_abstract_message<google::protobuf::Message>{store},
 % if index.enable_cas:
@@ -225,15 +228,16 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
                                                                 nullptr));
 % endif
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 % if index.enable_cas:
 SERVER_FRAME_API result_type insert(rpc::context &ctx,
                                  shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store,
                                  uint64_t* version) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/insert");
   uint64_t local_version = 0;
   if (version == nullptr) {
     version = &local_version;
@@ -242,9 +246,9 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx,
   if (auto __handler = mock_detail::replace_handler()) {
     rpc::unit_test::db_mock_meta __meta;
     __meta.version = *version;
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, *store, __meta));
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, *store, __meta));
     *version = __meta.version;
-    RPC_DB_RETURN_CODE(__res);
+    RPC_DB_RETURN_CODE(__trace.finish(__res));
   }
 #endif
   char db_key[256];
@@ -253,14 +257,14 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx,
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = size_t(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 shared_abstract_message<google::protobuf::Message>{store},
                                                                 *version));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 % endif
 
@@ -291,14 +295,15 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
 %         endfor
                                                           , ${inc_field["cpp_type"]}& inc_value
 ) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/inc_field_${inc_field["raw_name"]}");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::inc_field_${inc_field["raw_name"]}_handler()) {
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}    ${inc_field["cpp_type"]} __inc_out = 0;
     rpc::unit_test::db_mock_meta __meta;
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, __inc_out, __meta));
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, __input, __inc_out, __meta));
     inc_value = __inc_out;
-    RPC_DB_RETURN_CODE(__res);
+    RPC_DB_RETURN_CODE(__trace.finish(__res));
   }
 #endif
   char db_key[256];
@@ -310,18 +315,18 @@ ${emit_mock_input_fill(key_fields)}    ${inc_field["cpp_type"]} __inc_out = 0;
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_db{ctx};
   table_db->set_${inc_field["raw_name"]}(1);
   shared_abstract_message<google::protobuf::Message> message{table_db};
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::inc_field(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::inc_field(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 gsl::string_view{"${inc_field["raw_name"]}"},
                                                                 message,
                                                                 &detail::unpack_${message_name}_inc_field_${inc_field["raw_name"]}));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> tmp_db{message};
   protobuf_move_message(*table_db, std::move(*tmp_db));
   inc_value = table_db->${inc_field["raw_name"]}();
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 %     endfor
 % endif
@@ -396,6 +401,7 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
 %     else:
                                                           ) {
 %     endif
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/partly_get_${partly_field_name}");
 ${emit_mock_intercept_get("partly_get_" + partly_field_name, index.enable_cas, key_fields, message_name)}  char db_key[256];
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
@@ -425,14 +431,14 @@ ${emit_mock_intercept_get("partly_get_" + partly_field_name, index.enable_cas, k
 %>
 %     endfor
   auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_get(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_get(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 partly_get_field,
                                                                 ${partly_field_len},
                                                                 output,
                                                                 &detail::unpack_${message_name}_${partly_field_name}));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   rpc::shared_message<PROJECT_NAMESPACE_ID::${message_name}> tmp{*output->message};
   protobuf_move_message(rsp, std::move(*tmp));
@@ -446,11 +452,12 @@ ${emit_mock_intercept_get("partly_get_" + partly_field_name, index.enable_cas, k
   % endfor
   );
 % endfor
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context &ctx, gsl::span<table_key_t> keys,
                                            std::vector<batch_get_result_t> &rsp) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/batch_partly_get_${partly_field_name}");
   std::vector<std::string> db_keys;
   db_keys.reserve(keys.size());
   for (auto &key : keys) {
@@ -490,11 +497,11 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
 %     endfor
 
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::batch_partly_get(
-      ctx, db_msg_dispatcher::me()->get_db_channel_type(), gsl::span<std::string>{db_keys},
+      __trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(), gsl::span<std::string>{db_keys},
       partly_get_field, ${partly_field_len}, outputs,
       &detail::unpack_${message_name}_${partly_field_name}));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   for (size_t index = 0; index < outputs.size(); ++index) {
     auto &output = outputs[index];
@@ -525,7 +532,7 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
     }
     rsp.push_back(std::move(result));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 % endfor
 

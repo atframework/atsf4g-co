@@ -266,6 +266,22 @@ agent:
         prometheus:
           aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
 group:
+  # HPA 使用独立命名组；缺少该组会禁用内置 policy 指标。
+  hpa:
+    agent:
+      receivers:
+        metrics:
+          otlp/hpa_metrics:
+            protocols:
+              grpc:
+                endpoint: "127.0.0.1:4328"
+      enable_metrics: true
+      metrics_exporters:
+        otlp:
+          grpc:
+            endpoint: "127.0.0.1:4328"
+          file:
+            enable: true
   cs_actor:
     agent:
       shared_options:

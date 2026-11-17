@@ -102,13 +102,14 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &
 % endfor
                                                               , std::vector<${message_name}_list_message> &output
                                                               ) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/get_all");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::get_all_handler()) {
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}    std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::${message_name}>> __entries;
     rpc::unit_test::db_mock_meta __meta;
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, __entries, __meta));
-${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__res);
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, __input, __entries, __meta));
+${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__trace.finish(__res));
   }
 #endif
   char db_key[256];
@@ -118,12 +119,12 @@ ${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__res);
     keylen = static_cast<size_t>(index.size);
   }
   std::vector<db_key_list_message_result_t> results;
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_all(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_all(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 results,
                                                                 &detail::unpack_${message_name}));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   for (auto &result : results) {
     ${message_name}_list_message list_message;
@@ -142,7 +143,7 @@ ${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__res);
     }
     output.push_back(list_message);
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx
@@ -152,13 +153,14 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_indexs(rpc::con
 % endfor
                                                               , std::vector<${message_name}_list_message> &output
                                                               ) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/get_by_indexs");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::get_by_indexs_handler()) {
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}    std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::${message_name}>> __entries;
     rpc::unit_test::db_mock_meta __meta;
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, gsl::span<const uint64_t>{list_index}, __entries, __meta));
-${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__res);
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, __input, gsl::span<const uint64_t>{list_index}, __entries, __meta));
+${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__trace.finish(__res));
   }
 #endif
   char db_key[256];
@@ -168,12 +170,12 @@ ${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__res);
     keylen = static_cast<size_t>(index.size);
   }
   std::vector<db_key_list_message_result_t> results;
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index,
                                                                 results,
                                                                 &detail::unpack_${message_name}_indexs));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
   for (auto &result : results) {
     ${message_name}_list_message list_message;
@@ -192,17 +194,18 @@ ${emit_mock_kl_output_convert(message_name)}    RPC_DB_RETURN_CODE(__res);
     }
     output.push_back(list_message);
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
                                                           , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
                                                           ) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/add");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::add_handler()) {
     uint64_t __index_out = 0;
     rpc::unit_test::db_mock_meta __meta;
-    RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__handler(ctx, *store, __index_out, __meta)));
+    RPC_DB_RETURN_CODE(__trace.finish(RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, *store, __index_out, __meta))));
   }
 #endif
   char db_key[256];
@@ -211,24 +214,25 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 ${index.max_list_length},
                                                                 std::move(store)));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &ctx
                                                           , uint64_t list_index
                                                           , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
                                                           ) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/update");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::update_handler()) {
     rpc::unit_test::db_mock_meta __meta;
-    RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__handler(ctx, list_index, *store, __meta)));
+    RPC_DB_RETURN_CODE(__trace.finish(RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, list_index, *store, __meta))));
   }
 #endif
   char db_key[256];
@@ -237,13 +241,13 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type update(rpc::context &c
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index,
                                                                 std::move(store)));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx
@@ -251,11 +255,12 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::c
                                                                      , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
                                                                       , gsl::span<uint64_t> list_index) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/remove_by_index");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::remove_by_index_handler()) {
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}    rpc::unit_test::db_mock_meta __meta;
-    RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, gsl::span<const uint64_t>{list_index}, __meta)));
+    RPC_DB_RETURN_CODE(__trace.finish(RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, __input, gsl::span<const uint64_t>{list_index}, __meta))));
   }
 #endif
   char db_key[256];
@@ -264,12 +269,12 @@ ${emit_mock_input_fill(key_fields)}    rpc::unit_test::db_mock_meta __meta;
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx
@@ -277,11 +282,12 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::c
                                                                      , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
                                                                       , gsl::span<const uint64_t> list_index) {
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/remove_by_index");
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::remove_by_index_handler()) {
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}    rpc::unit_test::db_mock_meta __meta;
-    RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, list_index, __meta)));
+    RPC_DB_RETURN_CODE(__trace.finish(RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, __input, list_index, __meta))));
   }
 #endif
   char db_key[256];
@@ -290,12 +296,12 @@ ${emit_mock_input_fill(key_fields)}    rpc::unit_test::db_mock_meta __meta;
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen}, list_index));
   if (res < 0) {
-    RPC_DB_RETURN_CODE(res);
+    RPC_DB_RETURN_CODE(__trace.finish(res));
   }
-  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
 }
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
