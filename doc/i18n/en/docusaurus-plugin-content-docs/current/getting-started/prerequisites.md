@@ -25,6 +25,7 @@ does not make arbitrary dependency versions C++14-compatible.
 | Java Runtime | xresloader Excel exports; checked during configuration |
 | PowerShell 7+ | Windows build and runtime helper scripts |
 | Bash | Linux/macOS build and runtime helper scripts |
+| Docker / Podman / nerdctl | Local OpenObserve container; one engine with a reachable daemon is required |
 | git | Project and framework submodules |
 | Go | robot simulated client; version/build managed by robot tooling |
 | vcpkg (optional) | Pass its toolchain file when using existing Windows dependencies |
@@ -37,7 +38,7 @@ can also be used. After the [initial build configuration](build), reuse the dire
 ### etcd
 
 Standard services register/discover through etcd; atproxy uses it for online detection too.
-Published `tools/script/start_local_test_env.sh/.ps1` scripts start etcd and Redis together;
+Published `tools/script/start_local_test_env.sh/.ps1` scripts start etcd, Redis, and OpenObserve together;
 see [run and deploy](run-deploy).
 
 For a temporary etcd-only test instance:
@@ -58,6 +59,12 @@ Configure business services' etcd addresses in deployment values; the two settin
 Services using persistence for user data, caches, DTMQ, transactions, and similar features need Redis.
 The framework supports cluster and raw/sentinel connections; configure them for the selected services.
 The raw message echo example does not require the complete data layer.
+
+### OpenObserve
+
+The local observability backend runs as an OpenObserve OSS container. The first start pulls the image, creates the
+organization, generates the administrator password, and writes local otelcol values. Python 3 performs these
+initialization steps. Stopping the dependency scripts retains data and the password, so initialization is not repeated.
 
 ## Directory Conventions
 

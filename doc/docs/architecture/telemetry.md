@@ -16,6 +16,32 @@ title: 可观测性
 设计与故障处理见[可观测性与动态策略白皮书](../whitepaper/observability-policy)。
 订单撮合、搜索索引和战斗房间的指标用途示例见[应用场景](../whitepaper/metric-driven-scenarios)。
 
+## 本地 OpenObserve
+
+`start_local_test_env.sh/.ps1` 启动 OpenObserve 并生成独立 values，`generate_config` 自动完成凭据合并。
+默认 exporter 使用 OTLP/HTTP Protobuf + gzip 写入 `http://127.0.0.1:5080/api/atsf4g`，不经过应用的
+OTLP receiver 回环转发；应用仍先把信号发给本地 otelcol，再由 Collector 同时写本地文件和 OpenObserve。
+endpoint 末尾不带 `/`，路径 `/v1/traces`、`/v1/metrics`、`/v1/logs` 由 exporter 追加。
+
+| 信号 | OpenObserve stream |
+| --- | --- |
+| traces | `atframework_traces` |
+| metrics | `atframework_metrics` |
+| logs（含 cs_actor、notification 分组） | `atframework_logs` |
+| spanmetrics | `atframework_metrics` |
+
+这些 stream 在首次写入时自动创建，全局保留期为 14 天。OpenObserve exporter 使用独立组件名，
+配置 15 秒超时、指数退避重试、两个 consumer 和 4096 item 的有界队列；队列满时施加背压。
+Collector 各 pipeline 首先经过 `memory_limiter`，默认 hard/soft limit 为 512/384MiB。
+
+`span_metrics/default_default` connector 默认启用，生成 `atframework_trace.calls` 和
+`atframework_trace.duration` 等 RED 指标。默认使用 delta temporality、毫秒直方图和 exemplar；
+基数上限为 4096，失效指标和 series 在 15 分钟后过期。维度不包含进程实例 ID，避免重启放大基数；
+保留 connector 默认的 `collector.instance.id` 以满足 single-writer 约束。文件输出继续保留，
+普通 metrics 和 spanmetrics 使用不同文件。
+
+本地部署和容量说明见[运行与部署](../getting-started/run-deploy#本地-openobserve)。
+
 ## 定制与详细设计
 
 ### OpenTelemetry 封装

@@ -32,11 +32,36 @@ Set-Location ../..
 pwsh -NoLogo -NoProfile -File start_all.ps1
 ```
 
-已有外部 etcd/Redis 时不需要启动临时依赖，但 values 必须使用对应地址。
+已有外部依赖时可跳过统一启动脚本，但 values 必须使用对应地址；只需要其中部分本地依赖时，可直接调用
+`tools/script/etcd/`、`redis/` 或 `openobserve/` 下的管理脚本。
 `generate_config` 先用 Helm 更新打包的 chart 依赖，再调用发布的 atdtool，生成每实例 YAML 和启动脚本，以及 publish 根目录的
 `start_all`、`stop_all`、`kill_all`。检查服务日志和 etcd 注册后，再验证业务请求。
 依赖更新失败时停止生成。修改 libapp 源模板后，必须同步刷新各服务 `charts/libapp-*.tgz`，
 否则渲染仍会使用旧脚本。直接调用 atdtool 前，先运行 `tools/script/update_dependency.sh/.ps1`。
+
+### 本地 OpenObserve
+
+统一启动脚本使用 Docker、Podman 或 nerdctl 启动 OpenObserve OSS 单节点容器，端口只绑定 `127.0.0.1`。
+首次启动自动创建 `atsf4g` 组织，后续启动复用已有数据与凭据。打开 `http://127.0.0.1:5080`，
+使用账号 `admin@owent.net` 和以下文件中的密码登录：
+
+```text
+var/local-test-env/openobserve/openobserve-root-password.txt
+```
+
+密码由密码学安全随机数生成，POSIX 权限设为 `0600`。同一目录下的 `values/modules/telemetry.yaml`
+也包含凭据，不要提交或分发。`generate_config` 检测到该 values 目录后会在 `personal` 之后加载，
+因此先启动依赖再生成配置即可让 otelcol 使用相同账号、密码、组织和端口。
+
+数据位于 `var/local-test-env/openobserve/data`，通过独立 bind mount 持久化。`stop_local_test_env`
+只停止并移除容器，不删除数据或密码；显式执行 `tools/script/openobserve/openobserve.sh cleanup`
+（PowerShell 使用 `-Command cleanup`）才会删除这些文件和本地镜像。
+
+默认保留 14 天，容器限制为 2 CPU、3GB 内存。按每天存储不超过 5GB 估算，有效数据约为 70GB；
+WAL、索引、查询缓存和临时文件还会占用额外空间，建议至少准备 100GB 可用磁盘。保留策略按时间清理，
+不是 5GB/天的硬配额。Shell 管理脚本使用 `--retention-days`、`--memory`、`--cpus`、`--http-port`、
+`--organization` 等参数，PowerShell 对应 `-RetentionDays`、`-Memory`、`-Cpus`、`-HttpPort`、`-Organization`；
+在生成配置前完成这些调整。
 
 ## 按实例启动与重载
 
@@ -165,7 +190,8 @@ WSL 等没有激活系统 `network-online.target` 的环境，若镜像已缓存
 ## 打包与清理运行状态
 
 `pack_publish.sh` 的主包、debug 包和 otel 包都排除实例状态目录、PID/CID、启动失败标记、控制 socket、
-私有 Supervisor 配置及清理备份。etcd/Redis 在发布目录内部自定义的工作目录也会识别其托管状态；配置和数据目录保留。
+私有 Supervisor 配置及清理备份。OpenObserve 的本地密码、生成 values 和数据目录也整体排除。
+etcd/Redis/OpenObserve 在发布目录内部自定义的工作目录会识别其托管状态；配置和数据目录保留。
 打包只读取运行状态，不会停止服务或清除源目录中的记录。重新生成后的包可在另一部署目录初始化自己的状态。
 
 对于已经复制了运行状态的旧包，以部署用户在 Linux 上执行：
@@ -182,7 +208,7 @@ bash /path/to/publish/tools/script/reset-service-state.sh -d /path/to/publish --
 脚本不依赖生命周期记录有效，也不会根据复制来的控制器路径执行命令。发现活进程、等待中的 systemd 作业或运行容器时，
 会拒绝清理并要求先正常 stop。确认私有 Supervisor 没有活动程序后，才关闭它并移走配置。
 清理仅移除指向当前发布目录的实例注册链接，并在完成后刷新 systemd；其他部署的链接保留。
-备份位于 `var/service-manager/reset-backups/<时间戳>-<PID>/`；配置、二进制和依赖数据不移动。
+备份位于 `var/service-manager/reset-backups/<时间戳>-<PID>/`；配置、二进制、OpenObserve 密码和其他依赖数据不移动。
 目录外的依赖工作目录或 `ATF_SUPERVISOR_DIR` 不会清理，应单独处理对应部署的状态。
 
 ## 部署形态

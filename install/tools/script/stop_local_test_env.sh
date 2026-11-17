@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright 2026 atframework
-# Stop the local test environment (etcd, redis and otel collector) on Linux and macOS.
-# Windows users should use stop_local_test_env.ps1 instead.
+# Stop the local test environment (OpenObserve, etcd, and Redis) on Linux and macOS.
+# OpenObserve data and credentials are retained. Windows users should use the ps1 script.
 
 set -eu
 
@@ -15,6 +15,7 @@ esac
 
 SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
 
+"$SCRIPT_DIR/openobserve/openobserve.sh" stop
 "$SCRIPT_DIR/etcd/setup-etcd.sh" stop
 "$SCRIPT_DIR/redis/redis.sh" stop
 

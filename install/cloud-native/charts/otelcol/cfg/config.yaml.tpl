@@ -6,9 +6,11 @@ extensions:
 {{- /* ================== 准备上报分组 - begin ==================  */ -}}
 {{- $otelcol_groups := list (dict "name" "default" "configure" .Values.telemetry.opentelemetry "agent" .Values.telemetry.agent) -}}
 {{- $default_group_agent_shared_options := dig "agent" "shared_options" (dict) .Values.telemetry -}}
+{{- $default_group_agent_otelcol := dig "agent" "otelcol" (dict) .Values.telemetry -}}
 {{- range $group_name, $group_settings := .Values.telemetry.group }}
   {{- $current_group_agent_shared_options := dig "agent" "shared_options" (dict) $group_settings -}}
-  {{- $current_group_agent_settings := merge ($group_settings.agent | default (dict)) (dict "shared_options" (merge $current_group_agent_shared_options $default_group_agent_shared_options) ) -}}
+  {{- $current_group_agent_otelcol := dig "agent" "otelcol" (dict) $group_settings -}}
+  {{- $current_group_agent_settings := merge ($group_settings.agent | default (dict)) (dict "shared_options" (merge $current_group_agent_shared_options $default_group_agent_shared_options) "otelcol" (merge $current_group_agent_otelcol $default_group_agent_otelcol) ) -}}
   {{- $otelcol_groups = append $otelcol_groups (dict "name" $group_name "configure" (omit $group_settings "agent") "agent" $current_group_agent_settings ) -}}
 {{- end -}}
 {{- /* ================== 准备上报分组 - end ==================  */ -}}
@@ -56,7 +58,7 @@ receivers:
         {{- $otlp_http_exporter = merge $otlp_http_exporter (dict "tls" (dict "insecure" $group_settings.configure.trace.otlp.http.insecure)) -}}
       {{- end -}}
       {{- $otlp_http_exporter = merge $otlp_http_exporter (dig "agent" "shared_options" "exporters" "otlp" "http" (dict) $group_settings) -}}
-      {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlphttp/%v_%v" "trace" $group_settings.name) $otlp_http_exporter) -}}
+      {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlp_http/%v_%v" "trace" $group_settings.name) $otlp_http_exporter) -}}
     {{- end }}
     {{- /* File exporter */ -}}
     {{- if (dig "agent" "trace_exporters" "otlp" "file" "enable" false $group_settings) -}}
@@ -90,12 +92,12 @@ receivers:
         {{- $otlp_http_exporter = merge $otlp_http_exporter (dict "tls" (dict "insecure" $group_settings.configure.metrics.otlp.http.insecure)) -}}
       {{- end -}}
       {{- $otlp_http_exporter = merge $otlp_http_exporter (dig "agent" "shared_options" "exporters" "otlp" "http" (dict) $group_settings) -}}
-      {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlphttp/%v_%v" "metrics" $group_settings.name) $otlp_http_exporter) -}}
+      {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlp_http/%v_%v" "metrics" $group_settings.name) $otlp_http_exporter) -}}
 
       {{- /* Spanmetrics exporter */ -}}
       {{- range $spanmetrics_name, $spanmetrics_settings := (dig "agent" "trace_exporters" "spanmetrics" (dict) $group_settings) }}
         {{- if (dig "enable" false $spanmetrics_settings) -}}
-          {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlphttp/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) $otlp_http_exporter) -}}
+          {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlp_http/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) $otlp_http_exporter) -}}
         {{- end }}
       {{- end }}
     {{- end }}
@@ -112,8 +114,9 @@ receivers:
       {{- /* Spanmetrics exporter */ -}}
       {{- range $spanmetrics_name, $spanmetrics_settings := (dig "agent" "trace_exporters" "spanmetrics" (dict) $group_settings) }}
         {{- if (dig "enable" false $spanmetrics_settings) -}}
-          {{- $file_exporter = set $file_exporter "path" (printf "%v/otelcol-%v-%v-%v.log" $file_exporter_log_dir "spanmetrics" $group_settings.name $spanmetrics_name) -}}
-          {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "file/rotation_%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) $file_exporter) -}}
+          {{- $spanmetrics_file_exporter := deepCopy $file_exporter -}}
+          {{- $spanmetrics_file_exporter = set $spanmetrics_file_exporter "path" (printf "%v/otelcol-%v-%v-%v.log" $file_exporter_log_dir "spanmetrics" $group_settings.name $spanmetrics_name) -}}
+          {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "file/rotation_%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) $spanmetrics_file_exporter) -}}
         {{- end }}
       {{- end }}
     {{- end }}
@@ -136,7 +139,7 @@ receivers:
         {{- $otlp_http_exporter = merge $otlp_http_exporter (dict "tls" (dict "insecure" $group_settings.configure.logs.otlp.http.insecure)) -}}
       {{- end -}}
       {{- $otlp_http_exporter = merge $otlp_http_exporter (dig "agent" "shared_options" "exporters" "otlp" "http" (dict) $group_settings) -}}
-      {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlphttp/%v_%v" "logs" $group_settings.name) $otlp_http_exporter) -}}
+      {{- $group_exporters_settings = merge $group_exporters_settings (dict (printf "otlp_http/%v_%v" "logs" $group_settings.name) $otlp_http_exporter) -}}
     {{- end }}
     {{- /* File exporter */ -}}
     {{- if (dig "agent" "logs_exporters" "otlp" "file" "enable" false $group_settings) -}}
@@ -159,6 +162,11 @@ exporters:
 {{- /* ================== 生成 processors 配置 ==================  */ -}}
 {{- $otelcol_agent_settings_processors := dict -}}
 {{- range $group_settings := $otelcol_groups }}
+  {{- $otelcol_agent_settings_memory_limiter := dig "agent" "shared_options" "processors" "memory_limiter" (dict) $group_settings -}}
+  {{- if $otelcol_agent_settings_memory_limiter -}}
+    {{- $otelcol_agent_settings_processor_name := printf "memory_limiter/%v" $group_settings.name -}}
+    {{- $otelcol_agent_settings_processors = merge $otelcol_agent_settings_processors (dict $otelcol_agent_settings_processor_name $otelcol_agent_settings_memory_limiter) -}}
+  {{- end }}
   {{- if (dig "agent" "enable_trace" false $group_settings) -}}
     {{- $otelcol_agent_settings_processor_name := printf "batch/%v_%v" "trace" $group_settings.name -}}
     {{- $otelcol_agent_settings_processor_settings := merge (dict) (dig "agent" "shared_options" "processors" "batch" "trace" (dict) $group_settings) -}}
@@ -201,7 +209,9 @@ exporters:
           {{- $otelcol_agent_settings_resource_attributes = prepend $otelcol_agent_settings_resource_attributes (dict "action" "upsert" "key" $attribute_key "value" $attribute_value) -}}
         {{- end }}
       {{- end }}
-      {{- $otelcol_agent_settings_processors = merge $otelcol_agent_settings_processors (dict $otelcol_agent_settings_resource_name (dict "attributes" $otelcol_agent_settings_resource_attributes)) -}}
+      {{- if $otelcol_agent_settings_resource_attributes -}}
+        {{- $otelcol_agent_settings_processors = merge $otelcol_agent_settings_processors (dict $otelcol_agent_settings_resource_name (dict "attributes" $otelcol_agent_settings_resource_attributes)) -}}
+      {{- end -}}
     {{- end }}
   {{- end }}
 {{- end }}
@@ -216,7 +226,7 @@ processors:
   {{- /* Spanmetrics */ -}}
   {{- range $spanmetrics_name, $spanmetrics_settings := (dig "agent" "trace_exporters" "spanmetrics" (dict) $group_settings) }}
     {{- if (dig "enable" false $spanmetrics_settings) -}}
-      {{- $otelcol_agent_settings_spanmetrics_name := printf "spanmetrics/%v_%v" $group_settings.name $spanmetrics_name -}}
+      {{- $otelcol_agent_settings_spanmetrics_name := printf "span_metrics/%v_%v" $group_settings.name $spanmetrics_name -}}
       {{- $otelcol_agent_settings_spanmetrics_settings := merge (dict) (dig "agent" "shared_options" "connectors" "spanmetrics" $spanmetrics_name (dict) $group_settings) -}}
       {{- $otelcol_agent_settings_spanmetrics_settings = merge $otelcol_agent_settings_spanmetrics_settings (dig "agent" "shared_options" "connectors" "spanmetrics" "default" (dict) $group_settings) -}}
       {{- $otelcol_agent_settings_spanmetrics_settings = merge $otelcol_agent_settings_spanmetrics_settings (dict "namespace" (dig "configure" "trace" "additional_metrics_name" "atframework_trace" $group_settings) ) -}}
@@ -258,25 +268,28 @@ service:
         {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters (printf "otlp/%v_%v" "trace" $group_settings.name) -}}
       {{- end }}
       {{- if (dig "configure" "trace" "otlp" "http" "endpoint" false $group_settings) -}}
-        {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters (printf "otlphttp/%v_%v" "trace" $group_settings.name) -}}
+        {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters (printf "otlp_http/%v_%v" "trace" $group_settings.name) -}}
       {{- end }}
       {{- if (dig "agent" "trace_exporters" "otlp" "file" "enable" false $group_settings) -}}
         {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters (printf "file/rotation_%v_%v" "trace" $group_settings.name) -}}
       {{- end }}
     {{- end }}
-    {{- range $group_pipeline_metrics_custom_exporter,$_ := (dig "agent" "otelcol" "exporters" "trace" (dict) $group_settings) }}
-      {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters $group_pipeline_metrics_custom_exporter -}}
+    {{- range $group_pipeline_trace_custom_exporter,$_ := (dig "agent" "otelcol" "exporters" "trace" (dict) $group_settings) }}
+      {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters $group_pipeline_trace_custom_exporter -}}
     {{- end }}
     {{- /* Spanmetrics exporter */ -}}
     {{- range $spanmetrics_name, $spanmetrics_settings := (dig "agent" "trace_exporters" "spanmetrics" (dict) $group_settings) }}
       {{- if (dig "enable" false $spanmetrics_settings) -}}
-        {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters (printf "spanmetrics/%v_%v" $group_settings.name $spanmetrics_name) -}}
+        {{- $group_pipeline_trace_exporters = append $group_pipeline_trace_exporters (printf "span_metrics/%v_%v" $group_settings.name $spanmetrics_name) -}}
       {{- end }}
+    {{- end }}
+    {{- $group_pipeline_trace_processors := list (printf "batch/%v_%v" "trace" $group_settings.name) -}}
+    {{- if (dig "agent" "shared_options" "processors" "memory_limiter" (dict) $group_settings) -}}
+      {{- $group_pipeline_trace_processors = prepend $group_pipeline_trace_processors (printf "memory_limiter/%v" $group_settings.name) -}}
     {{- end }}
     {{- if and $group_pipeline_trace_receivers $group_pipeline_trace_exporters }}
     traces/{{- $group_settings.name -}}:
-      {{- $group_pipeline_trace_processor_name := printf "batch/%v_%v" "trace" $group_settings.name -}}
-      {{- toYaml (dict "receivers" $group_pipeline_trace_receivers "processors" (list $group_pipeline_trace_processor_name) "exporters" $group_pipeline_trace_exporters ) | trim | nindent 6 }}
+      {{- toYaml (dict "receivers" $group_pipeline_trace_receivers "processors" $group_pipeline_trace_processors "exporters" $group_pipeline_trace_exporters ) | trim | nindent 6 }}
     {{- end }}
   {{- end }}
 
@@ -293,7 +306,7 @@ service:
       {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters (printf "otlp/%v_%v" "metrics" $group_settings.name) -}}
     {{- end }}
     {{- if (dig "configure" "metrics" "otlp" "http" "endpoint" false $group_settings) -}}
-      {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters (printf "otlphttp/%v_%v" "metrics" $group_settings.name) -}}
+      {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters (printf "otlp_http/%v_%v" "metrics" $group_settings.name) -}}
     {{- end }}
     {{- if (dig "agent" "metrics_exporters" "otlp" "file" "enable" false $group_settings) -}}
       {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters (printf "file/rotation_%v_%v" "metrics" $group_settings.name) -}}
@@ -301,10 +314,13 @@ service:
     {{- range $group_pipeline_metrics_custom_exporter,$_ := (dig "agent" "otelcol" "exporters" "metrics" (dict) $group_settings) }}
       {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters $group_pipeline_metrics_custom_exporter -}}
     {{- end }}
+    {{- $group_pipeline_metrics_processors := list (printf "batch/%v_%v" "metrics" $group_settings.name) -}}
+    {{- if (dig "agent" "shared_options" "processors" "memory_limiter" (dict) $group_settings) -}}
+      {{- $group_pipeline_metrics_processors = prepend $group_pipeline_metrics_processors (printf "memory_limiter/%v" $group_settings.name) -}}
+    {{- end }}
     {{- if and $group_pipeline_metrics_receivers $group_pipeline_metrics_exporters }}
     metrics/{{- $group_settings.name -}}:
-      {{- $group_pipeline_metrics_processor_name := printf "batch/%v_%v" "metrics" $group_settings.name -}}
-      {{- toYaml (dict "receivers" $group_pipeline_metrics_receivers "processors" (list $group_pipeline_metrics_processor_name) "exporters" $group_pipeline_metrics_exporters ) | trim | nindent 6 }}
+      {{- toYaml (dict "receivers" $group_pipeline_metrics_receivers "processors" $group_pipeline_metrics_processors "exporters" $group_pipeline_metrics_exporters ) | trim | nindent 6 }}
     {{- end }}
   {{- end }}
 
@@ -321,18 +337,21 @@ service:
       {{- $group_pipeline_logs_exporters = append $group_pipeline_logs_exporters (printf "otlp/%v_%v" "logs" $group_settings.name) -}}
     {{- end }}
     {{- if (dig "configure" "logs" "otlp" "http" "endpoint" false $group_settings) -}}
-      {{- $group_pipeline_logs_exporters = append $group_pipeline_logs_exporters (printf "otlphttp/%v_%v" "logs" $group_settings.name) -}}
+      {{- $group_pipeline_logs_exporters = append $group_pipeline_logs_exporters (printf "otlp_http/%v_%v" "logs" $group_settings.name) -}}
     {{- end }}
     {{- if (dig "agent" "logs_exporters" "otlp" "file" "enable" false $group_settings) -}}
       {{- $group_pipeline_logs_exporters = append $group_pipeline_logs_exporters (printf "file/rotation_%v_%v" "logs" $group_settings.name) -}}
     {{- end }}
-    {{- range $group_pipeline_metrics_custom_exporter,$_ := (dig "agent" "otelcol" "exporters" "logs" (dict) $group_settings) }}
-      {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters $group_pipeline_metrics_custom_exporter -}}
+    {{- range $group_pipeline_logs_custom_exporter,$_ := (dig "agent" "otelcol" "exporters" "logs" (dict) $group_settings) }}
+      {{- $group_pipeline_logs_exporters = append $group_pipeline_logs_exporters $group_pipeline_logs_custom_exporter -}}
+    {{- end }}
+    {{- $group_pipeline_logs_processors := list (printf "batch/%v_%v" "logs" $group_settings.name) -}}
+    {{- if (dig "agent" "shared_options" "processors" "memory_limiter" (dict) $group_settings) -}}
+      {{- $group_pipeline_logs_processors = prepend $group_pipeline_logs_processors (printf "memory_limiter/%v" $group_settings.name) -}}
     {{- end }}
     {{- if and $group_pipeline_logs_receivers $group_pipeline_logs_exporters }}
     logs/{{- $group_settings.name -}}:
-      {{- $group_pipeline_logs_processor_name := printf "batch/%v_%v" "logs" $group_settings.name -}}
-      {{- toYaml (dict "receivers" $group_pipeline_logs_receivers "processors" (list $group_pipeline_logs_processor_name) "exporters" $group_pipeline_logs_exporters ) | trim | nindent 6 }}
+      {{- toYaml (dict "receivers" $group_pipeline_logs_receivers "processors" $group_pipeline_logs_processors "exporters" $group_pipeline_logs_exporters ) | trim | nindent 6 }}
     {{- end }}
   {{- end }}
 
@@ -342,19 +361,26 @@ service:
     {{- range $spanmetrics_name, $spanmetrics_settings := (dig "agent" "trace_exporters" "spanmetrics" (dict) $group_settings) }}
       {{- if (dig "enable" false $spanmetrics_settings) -}}
         {{- /* Receivers */ -}}
-        {{- $group_pipeline_spanmetrics_receivers := list (printf "spanmetrics/%v_%v" $group_settings.name $spanmetrics_name) -}}
+        {{- $group_pipeline_spanmetrics_receivers := list (printf "span_metrics/%v_%v" $group_settings.name $spanmetrics_name) -}}
         {{- range $receiver_name, $receiver_settings := (dig "agent" "receivers" "spanmetrics" (dict) $group_settings) }}
           {{- $group_pipeline_spanmetrics_receivers = append $group_pipeline_spanmetrics_receivers $receiver_name -}}
         {{- end }}
         {{- /* Processors */ -}}
-        {{- $group_pipeline_spanmetrics_processors := list (printf "resource/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) (printf "batch/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) -}}
+        {{- $group_pipeline_spanmetrics_processors := list (printf "batch/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) -}}
+        {{- $group_pipeline_spanmetrics_resource_name := printf "resource/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name -}}
+        {{- if hasKey $otelcol_agent_settings_processors $group_pipeline_spanmetrics_resource_name -}}
+          {{- $group_pipeline_spanmetrics_processors = prepend $group_pipeline_spanmetrics_processors $group_pipeline_spanmetrics_resource_name -}}
+        {{- end -}}
+        {{- if (dig "agent" "shared_options" "processors" "memory_limiter" (dict) $group_settings) -}}
+          {{- $group_pipeline_spanmetrics_processors = prepend $group_pipeline_spanmetrics_processors (printf "memory_limiter/%v" $group_settings.name) -}}
+        {{- end }}
         {{- /* Exporters */ -}}
         {{- $group_pipeline_spanmetrics_exporters := list -}}
         {{- if (dig "configure" "metrics" "otlp" "grpc" "endpoint" false $group_settings) -}}
           {{- $group_pipeline_spanmetrics_exporters = append $group_pipeline_spanmetrics_exporters (printf "otlp/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) -}}
         {{- end }}
         {{- if (dig "configure" "metrics" "otlp" "http" "endpoint" false $group_settings) -}}
-          {{- $group_pipeline_spanmetrics_exporters = append $group_pipeline_spanmetrics_exporters (printf "otlphttp/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) -}}
+          {{- $group_pipeline_spanmetrics_exporters = append $group_pipeline_spanmetrics_exporters (printf "otlp_http/%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) -}}
         {{- end }}
         {{- if (dig "agent" "metrics_exporters" "otlp" "file" "enable" false $group_settings) -}}
           {{- $group_pipeline_spanmetrics_exporters = append $group_pipeline_spanmetrics_exporters (printf "file/rotation_%v_%v_%v" "spanmetrics" $group_settings.name $spanmetrics_name) -}}

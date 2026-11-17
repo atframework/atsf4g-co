@@ -78,6 +78,9 @@ node_modules/
 # Workspace-local MCP caches, credentials, logs and verification fixtures
 .mcp-data/
 
+# Credentials and persistent data created by local dependency scripts run from the source tree
+/install/var/local-test-env/
+
 # external libs
 ## libiniloader
 

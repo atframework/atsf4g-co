@@ -15,6 +15,35 @@ title: Observability
 See [Observability and Dynamic Policies](../whitepaper/observability-policy) for design and recovery, and
 [application scenarios](../whitepaper/metric-driven-scenarios) for examples of metric uses in order matching, search indexes, and battle rooms.
 
+## Local OpenObserve
+
+`start_local_test_env.sh/.ps1` starts OpenObserve and writes an independent values layer, which `generate_config`
+merges automatically. The default exporters send OTLP/HTTP Protobuf with gzip to
+`http://127.0.0.1:5080/api/atsf4g`. Applications still send signals to the local otelcol first; the Collector then
+writes both local files and OpenObserve instead of looping the backend through an application OTLP receiver.
+The endpoint has no trailing `/`; the exporter appends `/v1/traces`, `/v1/metrics`, and `/v1/logs`.
+
+| Signal | OpenObserve stream |
+| --- | --- |
+| traces | `atframework_traces` |
+| metrics | `atframework_metrics` |
+| logs (including cs_actor and notification groups) | `atframework_logs` |
+| spanmetrics | `atframework_metrics` |
+
+Streams are created on their first write and use the global 14-day retention. OpenObserve exporters have distinct
+component names, a 15-second timeout, exponential-backoff retries, two consumers, and a bounded 4096-item queue.
+A full queue applies backpressure. Every Collector pipeline starts with `memory_limiter`, with default hard/soft
+limits of 512/384MiB.
+
+The `span_metrics/default_default` connector is enabled and emits RED metrics such as `atframework_trace.calls`
+and `atframework_trace.duration`. It uses delta temporality, millisecond histograms, and exemplars. The cardinality
+limit is 4096, and inactive metrics and series expire after 15 minutes. Process instance IDs are excluded from
+custom dimensions to avoid restart-driven cardinality growth; the connector's default `collector.instance.id`
+remains enabled to satisfy the single-writer constraint. File output remains enabled, with separate files for
+ordinary metrics and spanmetrics.
+
+See [run and deploy](../getting-started/run-deploy#local-openobserve) for local deployment and capacity details.
+
 ## Customization and Design
 
 ### OpenTelemetry Wrappers

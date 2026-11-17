@@ -1,7 +1,10 @@
 param (
     [ValidateRange(1, 65535)][int]$EtcdClientPort = 12379,
     [ValidateRange(1, 65535)][int]$EtcdPeerPort = 12380,
-    [ValidateRange(1, 65535)][int]$RedisPort = 6379
+    [ValidateRange(1, 65535)][int]$RedisPort = 6379,
+    [ValidateRange(1, 65535)][int]$OpenObserveHttpPort = 5080,
+    [ValidateRange(1, 65535)][int]$OpenObserveGrpcPort = 5081,
+    [string]$ContainerEngine = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,6 +88,7 @@ function Invoke-PwshScript {
 $script:PwshExecutable = Get-PwshExecutable
 
 Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'etcd/setup-etcd.ps1') -Command 'start' -ScriptArguments @('-ClientPort', $EtcdClientPort, '-PeerPort', $EtcdPeerPort)
-Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'redis/redis.ps1') -Command 'start' -ScriptArguments @('-ClientPort', $RedisPort)
+Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'redis/redis.ps1') -Command 'start' -ScriptArguments @('-ClientPort', $RedisPort, '-ContainerEngine', $ContainerEngine)
+Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'openobserve/openobserve.ps1') -Command 'start' -ScriptArguments @('-HttpPort', $OpenObserveHttpPort, '-GrpcPort', $OpenObserveGrpcPort, '-ContainerEngine', $ContainerEngine)
 
 exit $LASTEXITCODE

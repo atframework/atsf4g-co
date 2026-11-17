@@ -18,6 +18,10 @@ if ($LASTEXITCODE -ne 0) {
 $ValuesPaths = (Join-Path $PublishDir 'cloud-native/values/default') + ',' +
     (Join-Path $PublishDir 'cloud-native/values/dev') + ',' +
     (Join-Path $PublishDir 'cloud-native/values/personal')
+$LocalOpenObserveValues = Join-Path $PublishDir 'var/local-test-env/openobserve/values'
+if (Test-Path -LiteralPath (Join-Path $LocalOpenObserveValues 'modules/telemetry.yaml') -PathType Leaf) {
+    $ValuesPaths = $ValuesPaths + ',' + $LocalOpenObserveValues
+}
 
 & $AtdtoolExecutable template (Join-Path $PublishDir 'cloud-native/charts') `
     -o $PublishDir `

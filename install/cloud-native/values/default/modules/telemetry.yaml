@@ -50,7 +50,83 @@ opentelemetry:
         rotate_size: 3
 
 agent:
-  receivers:  # 默认Agent Receiver 配置
+  otelcol:
+    exporters:
+      # start_local_test_env 会生成 var/local-test-env/openobserve/values/modules/telemetry.yaml，
+      # 覆盖以下 endpoint 和 Authorization。endpoint 末尾不能带 /，由 exporter 自动追加 /v1/<signal>。
+      trace:
+        otlp_http/openobserve_trace:
+          endpoint: "http://127.0.0.1:5080/api/atsf4g"
+          headers:
+            stream-name: atframework_traces
+          timeout: 15s
+          compression: gzip
+          retry_on_failure:
+            enabled: true
+            initial_interval: 2s
+            max_interval: 30s
+            max_elapsed_time: 10m
+          sending_queue:
+            enabled: true
+            sizer: items
+            queue_size: 4096
+            num_consumers: 2
+            block_on_overflow: true
+      metrics:
+        otlp_http/openobserve_metrics:
+          endpoint: "http://127.0.0.1:5080/api/atsf4g"
+          headers:
+            stream-name: atframework_metrics
+          timeout: 15s
+          compression: gzip
+          retry_on_failure:
+            enabled: true
+            initial_interval: 2s
+            max_interval: 30s
+            max_elapsed_time: 10m
+          sending_queue:
+            enabled: true
+            sizer: items
+            queue_size: 4096
+            num_consumers: 2
+            block_on_overflow: true
+      logs:
+        otlp_http/openobserve_logs:
+          endpoint: "http://127.0.0.1:5080/api/atsf4g"
+          headers:
+            stream-name: atframework_logs
+          timeout: 15s
+          compression: gzip
+          retry_on_failure:
+            enabled: true
+            initial_interval: 2s
+            max_interval: 30s
+            max_elapsed_time: 10m
+          sending_queue:
+            enabled: true
+            sizer: items
+            queue_size: 4096
+            num_consumers: 2
+            block_on_overflow: true
+      spanmetrics:
+        otlp_http/openobserve_spanmetrics:
+          endpoint: "http://127.0.0.1:5080/api/atsf4g"
+          headers:
+            stream-name: atframework_metrics
+          timeout: 15s
+          compression: gzip
+          retry_on_failure:
+            enabled: true
+            initial_interval: 2s
+            max_interval: 30s
+            max_elapsed_time: 10m
+          sending_queue:
+            enabled: true
+            sizer: items
+            queue_size: 4096
+            num_consumers: 2
+            block_on_overflow: true
+  receivers: # 默认Agent Receiver 配置
     trace:
       otlp/default_trace:
         protocols:
@@ -76,7 +152,7 @@ agent:
     trace_blackhole: false
     spanmetrics:
       default:
-        enable: false
+        enable: true
       prometheus:
         enable: false
   enable_metrics: true
@@ -124,18 +200,23 @@ agent:
         format: json
         # compression: zstd
     processors:
+      # 裸机本地开发按 512MiB hard limit / 384MiB soft limit 限制 Collector 堆内存。
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
       batch:
         default:
           timeout: 10s
         trace:
           send_batch_size: 256
-          send_batch_max_size: 16384
+          send_batch_max_size: 2048
         metrics:
           send_batch_size: 256
-          send_batch_max_size: 4096
+          send_batch_max_size: 1024
         logs:
           send_batch_size: 256
-          send_batch_max_size: 8192
+          send_batch_max_size: 2048
         spanmetrics:
           send_batch_size: 32
           send_batch_max_size: 256
@@ -143,13 +224,17 @@ agent:
       spanmetrics:
         default:
           metrics_flush_interval: 45s
+          metrics_expiration: 15m
+          series_expiration: 15m
           histogram:
+            unit: ms
             explicit:
               buckets: [2ms, 8ms, 16ms, 64ms, 256ms, 1s, 8s]
-          exclude_dimensions:
-            ["service.identity", "process.pid", "bk.data.token"]
-          dimensions_cache_size: 4096
-          resource_metrics_cache_size: 4096
+          exclude_dimensions: ["service.identity", "process.pid"]
+          aggregation_cardinality_limit: 4096
+          resource_metrics_key_attributes: ["service.name"]
+          resource_metrics_cache_size: 1024
+          metric_timestamp_cache_size: 8192
           exemplars:
             enabled: true
           dimensions:
@@ -171,10 +256,8 @@ agent:
               default: NONE
             - name: service.area.zone_id
               default: "0"
-            - name: service.instance.name
-              default: UNKNOWN
-            - name: service.instance.id
-              default: UNKNOWN
+            # 不把进程实例 ID 放入维度，避免本地反复重启制造新的时间序列。
+            # collector.instance.id 由 connector 默认保留，用于满足 single-writer 约束。
             # - name: rpc.atrpc.kind
             # - name: span.name
             # - name: service.name

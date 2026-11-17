@@ -32,14 +32,40 @@ Set-Location ../..
 pwsh -NoLogo -NoProfile -File start_all.ps1
 ```
 
-When etcd/Redis are already available externally, omit temporary dependency startup and point values to those
-addresses. `generate_config` first refreshes packaged chart dependencies with Helm, then invokes the published atdtool,
+When dependencies are already available externally, omit the combined startup script and point values to those
+addresses. To start only selected local dependencies, invoke the management scripts under `tools/script/etcd/`,
+`redis/`, or `openobserve/` directly. `generate_config` first refreshes packaged chart dependencies with Helm, then invokes the published atdtool,
 renders instance YAML/startup scripts, and
 generates `start_all`, `stop_all`, and `kill_all` at the publish root.
 Dependency update failures stop generation. After editing libapp source templates, refresh each service's
 `charts/libapp-*.tgz`; otherwise rendering still uses the old scripts. Before invoking atdtool directly, run
 `tools/script/update_dependency.sh/.ps1`.
 Check logs and etcd registration before testing business requests.
+
+### Local OpenObserve
+
+The combined startup script runs a single-node OpenObserve OSS container through Docker, Podman, or nerdctl,
+with ports bound only to `127.0.0.1`. The first start creates the `atsf4g` organization; later starts reuse existing
+data and credentials. Open `http://127.0.0.1:5080` and log in as `admin@owent.net` with the password from:
+
+```text
+var/local-test-env/openobserve/openobserve-root-password.txt
+```
+
+The password is generated with a cryptographically secure random source and the POSIX mode is `0600`.
+`values/modules/telemetry.yaml` in the same runtime directory also contains credentials; do not commit or distribute it.
+When `generate_config` finds this values directory, it loads it after `personal`, so starting dependencies before
+rendering gives otelcol the same account, password, organization, and port.
+
+Data lives in `var/local-test-env/openobserve/data` on a separate bind mount. `stop_local_test_env` stops and removes
+the container but retains data and the password. Only an explicit `tools/script/openobserve/openobserve.sh cleanup`
+(or `-Command cleanup` in PowerShell) removes these files and the local image.
+
+The default retention is 14 days, with container limits of 2 CPUs and 3GB memory. At up to 5GB stored per day,
+retained data totals about 70GB. WAL, indexes, query caches, and temporary files need additional space, so provide
+at least 100GB of free disk. Retention is time-based, not a hard 5GB/day quota. Shell management scripts accept
+`--retention-days`, `--memory`, `--cpus`, `--http-port`, and `--organization`; PowerShell uses `-RetentionDays`,
+`-Memory`, `-Cpus`, `-HttpPort`, and `-Organization`. Adjust these options before generating configuration.
 
 ## Start and Reload Individual Instances
 
@@ -187,9 +213,9 @@ foreground container client cannot detect a server exit hidden by the old entryp
 ## Packaging and resetting runtime state
 
 All three `pack_publish.sh` archives exclude instance state, PID/CID files, startup errors, control sockets, private
-Supervisor configuration and reset backups. Managed etcd/Redis work directories inside the deployment are detected
-even with custom names; their configuration and data remain. Packing reads state without stopping services or clearing
-the source deployment. A regenerated package can initialize its own state in another deployment directory.
+Supervisor configuration and reset backups. OpenObserve local passwords, generated values, and data are excluded as
+a whole. Managed etcd/Redis/OpenObserve work directories inside the deployment are detected even with custom names;
+their configuration and data remain. Packing reads state without stopping services or clearing the source deployment. A regenerated package can initialize its own state in another deployment directory.
 
 For an older package containing copied runtime state, run as the deployment user on Linux:
 
@@ -206,8 +232,9 @@ The script does not require valid lifecycle records or execute controllers named
 pending systemd jobs and running containers cause cleanup to fail until normal stop completes. A private Supervisor
 daemon is shut down only after confirming that none of its programs are active. Only instance registration links
 targeting this deployment are removed, followed by a systemd reload; other deployments retain their links.
-Backups are stored under `var/service-manager/reset-backups/<timestamp>-<PID>/`. Configuration, binaries and dependency
-data are retained. Dependency work directories and `ATF_SUPERVISOR_DIR` outside the deployment require separate cleanup.
+Backups are stored under `var/service-manager/reset-backups/<timestamp>-<PID>/`. Configuration, binaries, OpenObserve
+passwords, and other dependency data are retained. Dependency work directories and `ATF_SUPERVISOR_DIR` outside
+the deployment require separate cleanup.
 
 ## Deployment Modes
 

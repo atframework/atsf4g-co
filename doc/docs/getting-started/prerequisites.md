@@ -23,6 +23,7 @@ title: 环境准备
 | Java Runtime | xresloader 导出 Excel 资源，配置时会检查 |
 | PowerShell 7+ | Windows 构建和运行辅助脚本 |
 | Bash | Linux/macOS 构建与运行辅助脚本 |
+| Docker / Podman / nerdctl | 本地 OpenObserve 容器；三选一，守护进程必须可用 |
 | git | 获取项目与框架子模块 |
 | Go | robot 模拟客户端；版本与构建由 robot 工具配置 |
 | vcpkg（可选） | 使用已有 Windows 依赖时可传入其 toolchain 文件 |
@@ -35,7 +36,7 @@ title: 环境准备
 ### etcd
 
 标准服务通过 etcd 注册与发现，atproxy 也使用它检测在线服务。本地环境可使用发布目录中的
-`tools/script/start_local_test_env.sh/.ps1` 同时启动 etcd 和 Redis，见[运行与部署](run-deploy)。
+`tools/script/start_local_test_env.sh/.ps1` 同时启动 etcd、Redis 和 OpenObserve，见[运行与部署](run-deploy)。
 
 仅需临时 etcd 测试实例时：
 
@@ -55,6 +56,11 @@ pwsh -NoLogo -NoProfile -File atframework/libatapp/ci/etcd/setup-etcd.ps1 -Comma
 使用用户数据、缓存、DTMQ、事务等持久化能力的服务需要 Redis。
 框架支持 cluster 和 raw/sentinel 连接；按所用服务选择配置。
 原始消息回显示例不要求启用完整数据层。
+
+### OpenObserve
+
+本地可观测性后端使用 OpenObserve OSS 容器。首次启动需要拉取镜像，并自动创建组织、生成管理密码和 otelcol
+本地 values；Python 3 用于这些初始化步骤。停止依赖脚本会保留数据和密码，不需要重复初始化。
 
 ## 目录约定
 

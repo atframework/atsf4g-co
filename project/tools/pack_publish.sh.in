@@ -21,7 +21,8 @@
 #     otel_bin package instead (relative paths inside both archives match the
 #     deploy tree, so either one can be extracted at the deploy root).
 #   * All archives omit lifecycle records, process/container IDs, startup errors,
-#     private Supervisor state and reset backups. Packing does not clear live state.
+#     private Supervisor state, reset backups, and OpenObserve local credentials/data.
+#     Packing does not clear live state.
 #     go-task and helm are not part of the deploy tree (they live in <build>/tools),
 #     so they do not appear in the archive and need no exclusion.
 #
@@ -160,6 +161,8 @@ COMMON_EXCLUDES=(
     --exclude='*.sock'
     --exclude='prepare-package.*.lock'
     --exclude='var/service-manager'
+    --exclude='var/local-test-env/openobserve'
+    --exclude='var/local-test-env/openobserve/*'
 )
 RUNTIME_EXCLUDES=(--no-wildcards --anchored)
 while IFS= read -r -d '' RUNTIME_PATH; do

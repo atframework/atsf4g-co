@@ -43,7 +43,12 @@ class Maintenance(unittest.TestCase):
                      "var/service-manager/reset-backups/old/state", "custom-etcd/service/backend",
                      "custom-etcd/service/key", "custom-etcd/service/unit", "custom-etcd/service/kind",
                      "custom-etcd/etcd.pid", "custom-redis/service/lifecycle.record", "custom-redis/redis.cid",
-                     "tools/script/prepare-package.old.lock", "app/log/runtime.log"):
+                     "tools/script/prepare-package.old.lock", "app/log/runtime.log",
+                     "var/local-test-env/openobserve/service/lifecycle.record",
+                     "var/local-test-env/openobserve/openobserve.cid",
+                     "var/local-test-env/openobserve/openobserve-root-password.txt",
+                     "var/local-test-env/openobserve/values/modules/telemetry.yaml",
+                     "var/local-test-env/openobserve/data/stream/keep.parquet"):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("copied runtime state\n")
@@ -75,6 +80,9 @@ class Maintenance(unittest.TestCase):
         self.assertIn("./lib/symbol with spaces.dbg", members["debug"])
         self.assertIn("./otelcol/bin/otelcol-contrib", members["otel"])
         self.assertIn("./bin/flatc", members["otel"])
+        for archive_members in members.values():
+            self.assertFalse(any("var/local-test-env/openobserve" in n for n in archive_members))
+        self.assertTrue((root / "var/local-test-env/openobserve/openobserve-root-password.txt").exists())
         self.assertTrue((root / "app/bin/app.pid.service/lifecycle.record").exists())
         self.assertFalse(any("/custom-etcd/service" in n or "/custom-redis/service" in n
                              for n in members["main"]))
@@ -104,15 +112,25 @@ class Maintenance(unittest.TestCase):
         (dependency / "lifecycle.record").write_bytes(b"invalid")
         (root / "redis/data").mkdir()
         (root / "redis/data/dump.rdb").write_text("keep data")
+        openobserve_state = root / "var/local-test-env/openobserve/service"
+        openobserve_state.mkdir(parents=True)
+        (openobserve_state / "lifecycle.record").write_bytes(b"invalid")
+        (root / "var/local-test-env/openobserve/data").mkdir()
+        (root / "var/local-test-env/openobserve/data/keep").write_text("keep telemetry")
+        (root / "var/local-test-env/openobserve/openobserve-root-password.txt").write_text("keep credential")
         reset = root / "tools/script/reset-service-state.sh"
         run("bash", reset)
         self.assertTrue(state.exists())
         run("bash", reset, "--force")
         self.assertFalse(state.exists())
         self.assertFalse(dependency.exists())
+        self.assertFalse(openobserve_state.exists())
         self.assertFalse((root / "app/bin/app.pid").exists())
         self.assertEqual((root / "app/cfg/config.yaml").read_text(), "keep: true\n")
         self.assertEqual((root / "redis/data/dump.rdb").read_text(), "keep data")
+        self.assertEqual((root / "var/local-test-env/openobserve/data/keep").read_text(), "keep telemetry")
+        self.assertEqual((root / "var/local-test-env/openobserve/openobserve-root-password.txt").read_text(),
+                         "keep credential")
         backups = list((root / "var/service-manager/reset-backups").glob("*/app/bin/app.pid.service"))
         self.assertTrue(backups)
         run("bash", reset, "--force")
