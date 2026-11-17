@@ -23,8 +23,8 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 ENV = dict(os.environ, ATF_SUPERVISOR_DIR=str(ROOT / "supervisor"), ATF_QUADLET_WAIT_NETWORK="0")
 
 
-def run(*args, env=None, check=True):
-    result = subprocess.run([str(a) for a in args], env=env or ENV, text=True,
+def run(*args, env=None, cwd=None, check=True):
+    result = subprocess.run([str(a) for a in args], env=env or ENV, cwd=cwd, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
     if check and result.returncode:
         raise AssertionError(f"{args}: exit {result.returncode}\n{result.stdout}")
@@ -48,6 +48,55 @@ def port():
 
 
 class Dependencies(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix" and shutil.which("sh"), "POSIX shell is required")
+    def test_default_workdirs_follow_script_location(self):
+        script_root = ROOT / "default-posix-paths/package/tools/script"
+        shutil.copytree(SCRIPTS, script_root, dirs_exist_ok=True)
+        cwd = ROOT / "default-posix-paths/unrelated-working-directory"
+        cwd.mkdir(parents=True, exist_ok=True)
+        env = dict(ENV)
+        env.pop("WORK_DIR", None)
+        cases = (
+            ("etcd", "etcd/setup-etcd.sh", "etcd.pid", "etcd PID file is empty.", ()),
+            ("redis", "redis/redis.sh", "redis.cid", "redis.cid",
+             ("--container-engine", "atsf4g-test-no-such-engine")),
+            ("openobserve", "openobserve/openobserve.sh", "openobserve.cid", "openobserve.cid",
+             ("--container-engine", "atsf4g-test-no-such-engine")),
+        )
+        for component, relative_script, marker_name, expected, extra_args in cases:
+            with self.subTest(component=component):
+                work = script_root / "var/local-test-env" / component
+                work.mkdir(parents=True, exist_ok=True)
+                marker = work / marker_name
+                marker.write_text("" if component == "etcd" else "fake-container-id\n")
+                result = run("sh", script_root / relative_script, "status", *extra_args, env=env, cwd=cwd)
+                self.assertIn(expected if component == "etcd" else str(marker), result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("pwsh"), "Windows PowerShell 7 is required")
+    def test_powershell_default_workdirs_follow_script_location(self):
+        script_root = ROOT / "default-powershell-paths/package/tools/script"
+        shutil.copytree(SCRIPTS, script_root, dirs_exist_ok=True)
+        cwd = ROOT / "default-powershell-paths/unrelated-working-directory"
+        cwd.mkdir(parents=True, exist_ok=True)
+        env = dict(ENV)
+        env.pop("WORK_DIR", None)
+        cases = (
+            ("etcd", "etcd/setup-etcd.ps1", "etcd.pid", "etcd PID file is empty.", ()),
+            ("redis", "redis/redis.ps1", "redis.pid", "Redis PID file is empty.", ()),
+            ("openobserve", "openobserve/openobserve.ps1", "openobserve.cid", "openobserve.cid",
+             ("-ContainerEngine", "atsf4g-test-no-such-engine")),
+        )
+        for component, relative_script, marker_name, expected, extra_args in cases:
+            with self.subTest(component=component):
+                work = script_root / "var/local-test-env" / component
+                work.mkdir(parents=True, exist_ok=True)
+                marker = work / marker_name
+                marker.write_text("" if component != "openobserve" else "fake-container-id\n")
+                result = run(shutil.which("pwsh"), "-NoLogo", "-NoProfile", "-NonInteractive",
+                             "-File", script_root / relative_script, "-Command", "status", *extra_args,
+                             env=env, cwd=cwd)
+                self.assertIn(expected if component != "openobserve" else str(marker), result.stdout)
+
     def test_existing_image_wrapper_restarts_when_background_service_crashes(self):
         engine = options.container_engine
         work = ROOT / "legacy-image"

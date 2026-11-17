@@ -49,6 +49,11 @@ class Maintenance(unittest.TestCase):
                      "var/local-test-env/openobserve/openobserve-root-password.txt",
                      "var/local-test-env/openobserve/values/modules/telemetry.yaml",
                      "var/local-test-env/openobserve/data/stream/keep.parquet",
+                     "tools/script/var/local-test-env/openobserve/service/lifecycle.record",
+                     "tools/script/var/local-test-env/openobserve/openobserve.cid",
+                     "tools/script/var/local-test-env/openobserve/openobserve-root-password.txt",
+                     "tools/script/var/local-test-env/openobserve/values/modules/telemetry.yaml",
+                     "tools/script/var/local-test-env/openobserve/data/stream/keep.parquet",
                      "custom-openobserve/service/lifecycle.record",
                      "custom-openobserve/openobserve.cid",
                      "custom-openobserve/openobserve-root-password.txt",
@@ -89,6 +94,7 @@ class Maintenance(unittest.TestCase):
             self.assertFalse(any("var/local-test-env/openobserve" in n for n in archive_members))
             self.assertFalse(any(n.startswith("./custom-openobserve/") for n in archive_members))
         self.assertTrue((root / "var/local-test-env/openobserve/openobserve-root-password.txt").exists())
+        self.assertTrue((root / "tools/script/var/local-test-env/openobserve/openobserve-root-password.txt").exists())
         self.assertTrue((root / "custom-openobserve/openobserve-root-password.txt").exists())
         self.assertTrue((root / "app/bin/app.pid.service/lifecycle.record").exists())
         self.assertFalse(any("/custom-etcd/service" in n or "/custom-redis/service" in n
@@ -119,12 +125,15 @@ class Maintenance(unittest.TestCase):
         (dependency / "lifecycle.record").write_bytes(b"invalid")
         (root / "redis/data").mkdir()
         (root / "redis/data/dump.rdb").write_text("keep data")
-        openobserve_state = root / "var/local-test-env/openobserve/service"
-        openobserve_state.mkdir(parents=True)
-        (openobserve_state / "lifecycle.record").write_bytes(b"invalid")
-        (root / "var/local-test-env/openobserve/data").mkdir()
-        (root / "var/local-test-env/openobserve/data/keep").write_text("keep telemetry")
-        (root / "var/local-test-env/openobserve/openobserve-root-password.txt").write_text("keep credential")
+        openobserve_roots = (root / "var/local-test-env/openobserve",
+                             root / "tools/script/var/local-test-env/openobserve")
+        for openobserve_root in openobserve_roots:
+            openobserve_state = openobserve_root / "service"
+            openobserve_state.mkdir(parents=True)
+            (openobserve_state / "lifecycle.record").write_bytes(b"invalid")
+            (openobserve_root / "data").mkdir()
+            (openobserve_root / "data/keep").write_text("keep telemetry")
+            (openobserve_root / "openobserve-root-password.txt").write_text("keep credential")
         custom_openobserve_state = root / "custom-openobserve/service"
         custom_openobserve_state.mkdir(parents=True)
         (custom_openobserve_state / "lifecycle.record").write_bytes(b"invalid")
@@ -139,14 +148,14 @@ class Maintenance(unittest.TestCase):
         run("bash", reset, "--force")
         self.assertFalse(state.exists())
         self.assertFalse(dependency.exists())
-        self.assertFalse(openobserve_state.exists())
         self.assertFalse(custom_openobserve_state.exists())
         self.assertFalse((root / "app/bin/app.pid").exists())
         self.assertEqual((root / "app/cfg/config.yaml").read_text(), "keep: true\n")
         self.assertEqual((root / "redis/data/dump.rdb").read_text(), "keep data")
-        self.assertEqual((root / "var/local-test-env/openobserve/data/keep").read_text(), "keep telemetry")
-        self.assertEqual((root / "var/local-test-env/openobserve/openobserve-root-password.txt").read_text(),
-                         "keep credential")
+        for openobserve_root in openobserve_roots:
+            self.assertFalse((openobserve_root / "service").exists())
+            self.assertEqual((openobserve_root / "data/keep").read_text(), "keep telemetry")
+            self.assertEqual((openobserve_root / "openobserve-root-password.txt").read_text(), "keep credential")
         self.assertEqual((root / "custom-openobserve/data/keep").read_text(), "keep custom telemetry")
         self.assertEqual((root / "custom-openobserve/openobserve-root-password.txt").read_text(),
                          "keep custom credential")

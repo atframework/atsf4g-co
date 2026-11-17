@@ -1191,6 +1191,7 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
         basic->set_type_id(1001);  // coin range: no grid occupancy, no excel row required
         basic->set_count(7);
         basic->mutable_position()->set_container_guid(container_guid);
+        basic->mutable_position()->mutable_grid_position()->set_virtual_inventory(true);
         google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> items;
         *items.Add() = std::move(dirty_item);
         auto checked = item_mgr.check_add(item_algorithm::make_item_readable_iterable(items),

@@ -8,7 +8,7 @@
 # The shared lifecycle controller requires Bash; daemon backends are optional.
 #
 # Usage: redis.sh <command> [options]
-#   --work-dir DIR           Working directory (default: ${TMPDIR:-/tmp}/redis-unit-test)
+#   --work-dir DIR           Working directory (default: <script>/var/local-test-env/redis)
 #   --client-port PORT       Listening port (default: 6379)
 #   --redis-version VER      Image tag to use (default: 7.2.16, the last
 #                            BSD-3-Clause release line)
@@ -18,11 +18,22 @@
 
 set -eu
 
-WORK_DIR="${WORK_DIR:-$PWD}/redis-unit-test"
+SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
+LOCAL_TEST_ENV_ROOT="$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd)"
+if [ -d "$LOCAL_TEST_ENV_ROOT/../../cloud-native" ]; then
+  ATF_SERVICE_MANAGER_ROOT="$(CDPATH='' cd "$LOCAL_TEST_ENV_ROOT/../.." && pwd)"
+else
+  ATF_SERVICE_MANAGER_ROOT="$LOCAL_TEST_ENV_ROOT"
+fi
+export ATF_SERVICE_MANAGER_ROOT
+if [ -n "${WORK_DIR:-}" ]; then
+  WORK_DIR="$WORK_DIR/redis-unit-test"
+else
+  WORK_DIR="$LOCAL_TEST_ENV_ROOT/var/local-test-env/redis"
+fi
 CLIENT_PORT=6379
 REDIS_VERSION="7.2.16"
 CONTAINER_ENGINE=""
-SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
 SERVICE_MANAGER="$SCRIPT_DIR/../service-manager.sh"
 
 # Parse command
@@ -345,7 +356,7 @@ case "$COMMAND" in
     echo "" >&2
     echo "Options:" >&2
     echo "  --service-manager MODE  auto (default), systemd, supervisord or none" >&2
-    echo "  --work-dir DIR           Working directory (default: \${TMPDIR:-/tmp}/redis-unit-test)" >&2
+    echo "  --work-dir DIR           Working directory (default: <script>/var/local-test-env/redis)" >&2
     echo "  --client-port PORT       Listening port (default: 6379)" >&2
     echo "  --redis-version VER      Image tag to use (default: 7.2.16)" >&2
     echo "  --container-engine ENG   Container engine (docker|podman|nerdctl; default: auto-detect)" >&2

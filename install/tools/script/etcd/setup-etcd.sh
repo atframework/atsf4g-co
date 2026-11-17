@@ -3,7 +3,7 @@
 # POSIX shell script to download, start, stop, and manage etcd for unit testing.
 # The command frontend uses /bin/sh; the shared lifecycle controller requires Bash.
 # Usage: setup-etcd.sh <command> [options]
-#   --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)
+#   --work-dir DIR        Working directory (default: <script>/var/local-test-env/etcd)
 #   --client-port PORT    Client port (default: 12379)
 #   --peer-port PORT      Peer port (default: 12380)
 #   --etcd-version VER    Specify version tag (default: latest)
@@ -11,11 +11,22 @@
 
 set -eu
 
-WORK_DIR="${WORK_DIR:-$PWD}/etcd-unit-test"
+SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
+LOCAL_TEST_ENV_ROOT="$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd)"
+if [ -d "$LOCAL_TEST_ENV_ROOT/../../cloud-native" ]; then
+  ATF_SERVICE_MANAGER_ROOT="$(CDPATH='' cd "$LOCAL_TEST_ENV_ROOT/../.." && pwd)"
+else
+  ATF_SERVICE_MANAGER_ROOT="$LOCAL_TEST_ENV_ROOT"
+fi
+export ATF_SERVICE_MANAGER_ROOT
+if [ -n "${WORK_DIR:-}" ]; then
+  WORK_DIR="$WORK_DIR/etcd-unit-test"
+else
+  WORK_DIR="$LOCAL_TEST_ENV_ROOT/var/local-test-env/etcd"
+fi
 CLIENT_PORT=12379
 PEER_PORT=12380
 ETCD_VERSION="latest"
-SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
 SERVICE_MANAGER="$SCRIPT_DIR/../service-manager.sh"
 
 # Parse command
@@ -346,7 +357,7 @@ case "$COMMAND" in
     echo "" >&2
     echo "Options:" >&2
     echo "  --service-manager MODE  auto (default), systemd, supervisord or none" >&2
-    echo "  --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)" >&2
+    echo "  --work-dir DIR        Working directory (default: <script>/var/local-test-env/etcd)" >&2
     echo "  --client-port PORT    Client port (default: 12379)" >&2
     echo "  --peer-port PORT      Peer port (default: 12380)" >&2
     echo "  --etcd-version VER    Specify version tag (default: latest)" >&2

@@ -1172,6 +1172,75 @@ CASE_TEST(lobbysvr_user_matching, confirm_rpc_preserves_ack_when_completed_snaps
       },
       rule_options);
   CASE_EXPECT_TRUE(!!rule);
+  if (!rule) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+
+  auto confirm_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT);
+  auto confirm_response = std::make_shared<PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp>();
+  auto task = test.run_task(
+      "matching.confirm_rpc_preserves_ack_when_completed_snapshot_arrives_first", std::chrono::seconds{2},
+      [user_inst, confirm_result, confirm_response](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(1);
+        data->mutable_view()->mutable_unit()->set_unit_id(1023);
+        data->mutable_view()->set_last_event_id(1);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+
+        auto& manager = user_inst->get_user_matching_manager();
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync confirmation;
+        confirmation.set_unit_id(1023);
+        *confirmation.mutable_unit_view() = data->view();
+        confirmation.mutable_unit_view()->set_last_event_id(2);
+        confirmation.mutable_unit_view()->set_status(
+            PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+        auto sync_result = manager.acknowledge_matching_sync(ctx, confirmation);
+        CASE_EXPECT_TRUE(sync_result.accepted);
+        CASE_EXPECT_EQ(2, sync_result.confirm_event_id);
+        if (!sync_result.accepted || sync_result.confirm_event_id != 2) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT);
+        }
+
+        PROJECT_NAMESPACE_ID::CSMatchingConfirmReq request;
+        request.set_unit_id(1023);
+        request.set_confirmed(true);
+        *confirm_result = RPC_AWAIT_CODE_RESULT(manager.confirm_matching(ctx, request, *confirm_response));
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (task.empty()) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+
+  auto task_result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_TRUE(task_result.task_exited);
+  CASE_EXPECT_FALSE(task_result.hard_timed_out);
+  CASE_EXPECT_EQ(0, task_result.result_code);
+  if (!task_result.task_exited || task_result.hard_timed_out) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::matching::packer::get_full_name_of_confirm_matching())));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SUCCESS, *confirm_result);
+  CASE_EXPECT_TRUE(confirm_response->has_view());
+  CASE_EXPECT_EQ(1023, confirm_response->view().unit_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED, confirm_response->view().status());
+
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto& manager = user_inst->get_user_matching_manager();
+  CASE_EXPECT_TRUE(manager.finish_matching_event(ctx, 1023, 2, true));
+  PROJECT_NAMESPACE_ID::table_user persisted;
+  CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+  CASE_EXPECT_EQ(2, persisted.matching_data().acknowledge_event_id());
+  CASE_EXPECT_EQ(4, persisted.matching_data().view().last_event_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED,
+                 persisted.matching_data().view().status());
+  CASE_EXPECT_EQ(0, test.stop());
 }
 
 CASE_TEST(lobbysvr_user_matching, old_confirm_rpc_cannot_ack_new_confirmation_after_rematching) {
@@ -1233,4 +1302,73 @@ CASE_TEST(lobbysvr_user_matching, old_confirm_rpc_cannot_ack_new_confirmation_af
       },
       rule_options);
   CASE_EXPECT_TRUE(!!rule);
+  if (!rule) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+
+  auto confirm_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  auto confirm_response = std::make_shared<PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp>();
+  auto task = test.run_task(
+      "matching.old_confirm_rpc_cannot_ack_new_confirmation_after_rematching", std::chrono::seconds{2},
+      [user_inst, confirm_result, confirm_response](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::table_user table;
+        auto* data = table.mutable_matching_data();
+        data->set_matchsvr_server_id(kMatchsvrId);
+        data->set_acknowledge_event_id(1);
+        data->mutable_view()->mutable_unit()->set_unit_id(1025);
+        data->mutable_view()->set_last_event_id(1);
+        data->mutable_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING);
+
+        auto& manager = user_inst->get_user_matching_manager();
+        manager.init_from_table_data(ctx, table);
+        PROJECT_NAMESPACE_ID::SSMatchingEventSync confirmation;
+        confirmation.set_unit_id(1025);
+        *confirmation.mutable_unit_view() = data->view();
+        confirmation.mutable_unit_view()->set_last_event_id(2);
+        confirmation.mutable_unit_view()->set_status(
+            PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING);
+        auto sync_result = manager.acknowledge_matching_sync(ctx, confirmation);
+        CASE_EXPECT_TRUE(sync_result.accepted);
+        CASE_EXPECT_EQ(2, sync_result.confirm_event_id);
+        if (!sync_result.accepted || sync_result.confirm_event_id != 2) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_CONFLICT);
+        }
+
+        PROJECT_NAMESPACE_ID::CSMatchingConfirmReq request;
+        request.set_unit_id(1025);
+        request.set_confirmed(true);
+        *confirm_result = RPC_AWAIT_CODE_RESULT(manager.confirm_matching(ctx, request, *confirm_response));
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (task.empty()) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+
+  auto task_result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_TRUE(task_result.task_exited);
+  CASE_EXPECT_FALSE(task_result.hard_timed_out);
+  CASE_EXPECT_EQ(0, task_result.result_code);
+  if (!task_result.task_exited || task_result.hard_timed_out) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::matching::packer::get_full_name_of_confirm_matching())));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_MATCHING_RESULT_UNIT_NOT_MATCHING, *confirm_result);
+
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto& manager = user_inst->get_user_matching_manager();
+  CASE_EXPECT_FALSE(manager.finish_matching_event(ctx, 1025, 2, true));
+  PROJECT_NAMESPACE_ID::table_user persisted;
+  CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+  CASE_EXPECT_EQ(3, persisted.matching_data().acknowledge_event_id());
+  CASE_EXPECT_EQ(5, persisted.matching_data().view().last_event_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE,
+                 persisted.matching_data().view().status());
+  CASE_EXPECT_TRUE(manager.finish_matching_event(ctx, 1025, 4, true));
+  CASE_EXPECT_EQ(0, manager.dump(ctx, persisted));
+  CASE_EXPECT_EQ(4, persisted.matching_data().acknowledge_event_id());
+  CASE_EXPECT_EQ(0, test.stop());
 }

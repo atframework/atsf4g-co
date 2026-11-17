@@ -80,6 +80,9 @@ node_modules/
 
 # Credentials and persistent data created by local dependency scripts run from the source tree
 /install/var/local-test-env/
+/install/tools/script/var/local-test-env/
+/install/tools/script/etcd-unit-test/
+/install/tools/script/redis-unit-test/
 
 # external libs
 ## libiniloader

@@ -5,7 +5,11 @@ umask 077
 
 # Keep the published path when tools/ is linked to the source tree by a local build.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -L)"
-PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -L)"
+if [[ -n "${ATF_SERVICE_MANAGER_ROOT:-}" ]]; then
+  PACKAGE_DIR="$(cd "$ATF_SERVICE_MANAGER_ROOT" && pwd -L)"
+else
+  PACKAGE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd -L)"
+fi
 source "$SCRIPT_DIR/common/service-manager-quadlet.sh"
 source "$SCRIPT_DIR/common/service-manager-state.sh"
 source "$SCRIPT_DIR/common/service-manager-locks.sh"

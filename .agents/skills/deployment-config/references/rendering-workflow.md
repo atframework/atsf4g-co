@@ -14,9 +14,10 @@ Use `helm` from `PATH` and `atdtool` from `<PUBLISH_DIR>/tools/atdtool/atdtool` 
 - Default values are under `<PUBLISH_DIR>/cloud-native/values/default/`: `global.yaml`, `modules/*.yaml`, and
   `non_cloud_native/deploy.yaml` are common inputs.
 - Multiple `--values`/`-p` inputs layer in order; later values win. Preserve explicitly supplied paths and `--set`
-  values. `generate_config` appends `<PUBLISH_DIR>/var/local-test-env/openobserve/values` after `personal` when
+  values. `generate_config` appends `<PUBLISH_DIR>/tools/script/var/local-test-env/openobserve/values` after `personal` when
   the local startup script has generated its `modules/telemetry.yaml`; this carries the per-installation OpenObserve
-  endpoint and Basic credential into otelcol. Values inputs are directories, and module files contain the module body
+  endpoint and Basic credential into otelcol and the HPA Prometheus query configuration. Values inputs are directories,
+  and module files contain the module body
   without repeating the top-level module key.
 
 ## Render

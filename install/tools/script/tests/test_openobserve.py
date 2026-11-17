@@ -58,6 +58,10 @@ class ObserveHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/healthz":
+            if self.server.state["health_disconnects"] > 0:
+                self.server.state["health_disconnects"] -= 1
+                self.close_connection = True
+                return
             if self.server.state["healthy"]:
                 self.reply(200, {"status": "ok"})
             else:
@@ -85,7 +89,9 @@ class ObserveHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(length))
         self.server.state["posts"].append(payload)
-        organization = {"identifier": payload["identifier"], "name": payload["name"]}
+        identifier = ("generated-org-id" if self.server.state["server_assigned_organization_id"]
+                      else payload["identifier"])
+        organization = {"identifier": identifier, "name": payload["name"]}
         if not any(item["identifier"] == organization["identifier"]
                    for item in self.server.state["organizations"]):
             self.server.state["organizations"].append(organization)
@@ -97,18 +103,22 @@ class ObserveHandler(BaseHTTPRequestHandler):
 
 def api_server():
     server = ThreadingHTTPServer(("127.0.0.1", 0), ObserveHandler)
-    server.state = {"healthy": True, "organization_failures": 0, "organizations": [], "posts": [], "token": ""}
+    server.state = {"healthy": True, "health_disconnects": 0, "organization_failures": 0,
+                    "server_assigned_organization_id": False, "organizations": [], "posts": [], "token": ""}
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
 
 
-def initialize(work, server, organization="acceptance_org", timeout=5, check=True):
-    return run(sys.executable, INITIALIZER, "initialize",
-               "--password-file", work / "openobserve-root-password.txt",
-               "--root-user-email", "admin@owent.net", "--organization", organization,
-               "--base-url", f"http://127.0.0.1:{server.server_address[1]}",
-               "--startup-timeout", timeout, check=check)
+def initialize(work, server, organization="acceptance_org", timeout=5, check=True, values_file=None):
+    args = [sys.executable, INITIALIZER, "initialize",
+            "--password-file", work / "openobserve-root-password.txt",
+            "--root-user-email", "admin@owent.net", "--organization", organization,
+            "--base-url", f"http://127.0.0.1:{server.server_address[1]}"]
+    if values_file is not None:
+        args.extend(("--values-file", values_file, "--http-port", server.server_address[1]))
+    args.extend(("--startup-timeout", timeout))
+    return run(*args, check=check)
 
 
 FAKE_POSIX_ENGINE = r'''#!/usr/bin/env python3
@@ -201,6 +211,9 @@ class OpenObserveAcceptance(unittest.TestCase):
         values = yaml.safe_load(values_file.read_text())
         self.assertNotIn("telemetry", values)  # atdtool supplies this key from modules/telemetry.yaml.
         token = "Basic " + base64.b64encode(f"admin@owent.net:{first}".encode()).decode()
+        http_api = values["opentelemetry"]["metrics"]["prometheus"]["http_api"]
+        self.assertEqual(http_api["url"], "http://127.0.0.1:15080/api/acceptance_org/prometheus/api/v1")
+        self.assertEqual(http_api["headers"], [{"key": "Authorization", "value": token}])
         exporters = values["agent"]["otelcol"]["exporters"]
         for signal, name, stream in (
                 ("trace", "otlp_http/openobserve_trace", "atframework_traces"),
@@ -246,6 +259,45 @@ class OpenObserveAcceptance(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_initialize_retries_when_server_closes_early_connections(self):
+        work = ROOT / "initialize-disconnects"
+        prepare(work)
+        server = api_server()
+        try:
+            password = (work / "openobserve-root-password.txt").read_text().strip()
+            server.state["token"] = "Basic " + base64.b64encode(
+                f"admin@owent.net:{password}".encode()).decode()
+            server.state["health_disconnects"] = 2
+            initialize(work, server, timeout=5)
+            self.assertEqual(server.state["health_disconnects"], 0)
+            self.assertEqual(len(server.state["posts"]), 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_initialize_uses_server_assigned_organization_identifier_in_values(self):
+        work = ROOT / "initialize-server-assigned-id"
+        _password_file, values_file, password = prepare(work)
+        server = api_server()
+        try:
+            server.state["token"] = "Basic " + base64.b64encode(
+                f"admin@owent.net:{password}".encode()).decode()
+            server.state["server_assigned_organization_id"] = True
+            initialize(work, server, values_file=values_file)
+            initialize(work, server, values_file=values_file)
+            self.assertEqual(len(server.state["posts"]), 1)
+            values = yaml.safe_load(values_file.read_text())
+            self.assertEqual(values["opentelemetry"]["metrics"]["prometheus"]["http_api"]["url"],
+                             f"http://127.0.0.1:{server.server_address[1]}/api/generated-org-id/prometheus/api/v1")
+            exporters = values["agent"]["otelcol"]["exporters"]
+            for signal in ("trace", "metrics", "logs", "spanmetrics"):
+                exporter = next(iter(exporters[signal].values()))
+                self.assertEqual(exporter["endpoint"],
+                                 f"http://127.0.0.1:{server.server_address[1]}/api/generated-org-id")
+        finally:
+            server.shutdown()
+            server.server_close()
+
     @unittest.skipUnless(options.atdtool and options.otelcol, "atdtool and otelcol paths are required")
     def test_rendered_otelcol_has_authenticated_signal_pipelines(self):
         work = ROOT / "render"
@@ -281,10 +333,28 @@ class OpenObserveAcceptance(unittest.TestCase):
                          "../log/otelcol-metrics-default.log")
         run(options.otelcol, "validate", f"--config={config_path}")
 
+    @unittest.skipUnless(os.name == "posix" and shutil.which("bash"), "Bash is required")
+    def test_generate_config_loads_script_local_values(self):
+        script_root = ROOT / "generate-config/tools/script"
+        shutil.copytree(SOURCE, script_root, dirs_exist_ok=True)
+        (script_root / "update_dependency.sh").write_text("#!/bin/bash\nexit 0\n")
+        atdtool = script_root.parent / "atdtool/atdtool"
+        atdtool.parent.mkdir(parents=True, exist_ok=True)
+        atdtool.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$ATDTOOL_LOG"\n')
+        atdtool.chmod(0o755)
+        values_file = script_root / "var/local-test-env/openobserve/values/modules/telemetry.yaml"
+        values_file.parent.mkdir(parents=True, exist_ok=True)
+        values_file.write_text("{}\n")
+        log = ROOT / "generate-config-atdtool.log"
+        run("bash", script_root / "generate_config.sh", env=dict(os.environ, ATDTOOL_LOG=str(log)))
+        calls = log.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(calls), 4)
+        for call in calls:
+            self.assertIn(",var/local-test-env/openobserve/values", call)
+
     @unittest.skipUnless(os.name == "posix" and shutil.which("sh") and shutil.which("bash"),
                          "POSIX shell and Bash are required")
     def test_posix_lifecycle_uses_service_manager_and_preserves_data(self):
-        work = ROOT / "posix-lifecycle"
         engine = ROOT / "fake-docker"
         engine.write_text(FAKE_POSIX_ENGINE, encoding="utf-8")
         engine.chmod(0o755)
@@ -293,11 +363,12 @@ class OpenObserveAcceptance(unittest.TestCase):
         env = dict(os.environ, FAKE_DOCKER_STATE=str(state), FAKE_DOCKER_LOG=str(log))
         script_root = ROOT / "posix-package/tools/script"
         shutil.copytree(SOURCE, script_root, dirs_exist_ok=True)
+        work = script_root / "var/local-test-env/openobserve"
         script = script_root / "openobserve/openobserve.sh"
         server = api_server()
         try:
             def invoke(command):
-                return run("sh", script, command, "--work-dir", work,
+                return run("sh", script, command,
                            "--http-port", server.server_address[1], "--container-engine", engine,
                            "--service-manager", "none", env=env, timeout=90)
 
@@ -307,6 +378,8 @@ class OpenObserveAcceptance(unittest.TestCase):
             start = invoke("start")
             self.assertIn("OpenObserve is ready", start.stdout)
             self.assertTrue(state.exists())
+            self.assertTrue((script_root / "var/service-manager/control").is_dir())
+            self.assertFalse((ROOT / "posix-package/var/service-manager").exists())
             data_file = work / "data/keep.txt"
             data_file.write_text("persistent data", encoding="utf-8")
             invoke("stop")

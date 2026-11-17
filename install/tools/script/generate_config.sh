@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 bash ./update_dependency.sh
 
 VALUES_PATHS="../../cloud-native/values/default,../../cloud-native/values/dev,../../cloud-native/values/personal"
-LOCAL_OPENOBSERVE_VALUES="../../var/local-test-env/openobserve/values"
+LOCAL_OPENOBSERVE_VALUES="var/local-test-env/openobserve/values"
 if [ -f "$LOCAL_OPENOBSERVE_VALUES/modules/telemetry.yaml" ]; then
   VALUES_PATHS="${VALUES_PATHS},${LOCAL_OPENOBSERVE_VALUES}"
 fi

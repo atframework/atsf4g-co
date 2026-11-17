@@ -1,6 +1,6 @@
 # Copyright 2026 atframework
 # Manage a single-node OpenObserve OSS container for local development.
-# The data directory, generated password, and otelcol values survive start/stop.
+# The data directory, generated password, and telemetry values survive start/stop.
 param(
   [Parameter(Mandatory = $true)]
   [ValidateSet('download', 'start', 'stop', 'kill', 'cleanup', 'status')]
@@ -23,9 +23,8 @@ $PSDefaultParameterValues['*:Encoding'] = 'UTF8'
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 $ErrorActionPreference = 'Stop'
 $IsWindowsHost = ($env:OS -eq 'Windows_NT')
-$PublishDir = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 if ([string]::IsNullOrEmpty($WorkDir)) {
-  $WorkDir = Join-Path $PublishDir 'var/local-test-env/openobserve'
+  $WorkDir = Join-Path $PSScriptRoot '../var/local-test-env/openobserve'
 }
 $WorkDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorkDir)
 $DataDir = Join-Path $WorkDir 'data'
@@ -135,7 +134,7 @@ function Invoke-Prepare {
       --organization $Organization `
       --http-port $HttpPort)
   if ($LASTEXITCODE -ne 0) {
-    Write-Error 'Failed to prepare the OpenObserve password and otelcol values.'
+    Write-Error 'Failed to prepare the OpenObserve password and telemetry values.'
     exit 1
   }
   return $passwordOutput[-1].ToString().Trim()
@@ -218,6 +217,8 @@ function Invoke-Start {
     --root-user-email $RootUserEmail `
     --organization $Organization `
     --base-url "http://127.0.0.1:${HttpPort}" `
+    --values-file $OtelValuesFile `
+    --http-port $HttpPort `
     --startup-timeout $StartupTimeout
   if ($LASTEXITCODE -ne 0) {
     Write-Host "OpenObserve initialization failed. Check '$engine logs $ContainerName' for details."
@@ -229,7 +230,7 @@ function Invoke-Start {
   Write-Host "  Root user: $RootUserEmail"
   Write-Host "  Password file: $PasswordFile"
   Write-Host "  Persistent data: $DataDir"
-  Write-Host "  otelcol values: $OtelValuesFile"
+  Write-Host "  Telemetry values: $OtelValuesFile"
   Write-Host '  Streams: atframework_traces, atframework_metrics (including spanmetrics), atframework_logs'
 }
 

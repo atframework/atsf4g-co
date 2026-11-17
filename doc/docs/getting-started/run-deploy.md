@@ -33,7 +33,9 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 ```
 
 已有外部依赖时可跳过统一启动脚本，但 values 必须使用对应地址；只需要其中部分本地依赖时，可直接调用
-`tools/script/etcd/`、`redis/` 或 `openobserve/` 下的管理脚本。
+`tools/script/etcd/`、`redis/` 或 `openobserve/` 下的管理脚本。三个组件的默认工作目录为
+`tools/script/var/local-test-env/` 下的 `etcd`、`redis` 和 `openobserve` 子目录，以脚本所在目录为基准，
+不受调用时当前目录影响；可用 `--work-dir` 或 `-WorkDir` 覆盖。
 `generate_config` 先用 Helm 更新打包的 chart 依赖，再调用发布的 atdtool，生成每实例 YAML 和启动脚本，以及 publish 根目录的
 `start_all`、`stop_all`、`kill_all`。检查服务日志和 etcd 注册后，再验证业务请求。
 依赖更新失败时停止生成。修改 libapp 源模板后，必须同步刷新各服务 `charts/libapp-*.tgz`，
@@ -46,14 +48,15 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 使用账号 `admin@owent.net` 和以下文件中的密码登录：
 
 ```text
-var/local-test-env/openobserve/openobserve-root-password.txt
+tools/script/var/local-test-env/openobserve/openobserve-root-password.txt
 ```
 
 密码由密码学安全随机数生成，POSIX 权限设为 `0600`。同一目录下的 `values/modules/telemetry.yaml`
 也包含凭据，不要提交或分发。`generate_config` 检测到该 values 目录后会在 `personal` 之后加载，
-因此先启动依赖再生成配置即可让 otelcol 使用相同账号、密码、组织和端口。
+因此先启动依赖再生成配置即可让 otelcol 使用相同账号、密码、组织和端口。同一 values 还配置 HPA
+使用的 Prometheus HTTP API 地址与凭据，HPA 通过 OpenObserve 的 `/prometheus/api/v1/query` 拉取指标。
 
-数据位于 `var/local-test-env/openobserve/data`，通过独立 bind mount 持久化。`stop_local_test_env`
+数据位于 `tools/script/var/local-test-env/openobserve/data`，通过独立 bind mount 持久化。`stop_local_test_env`
 只停止并移除容器，不删除数据或密码；显式执行 `tools/script/openobserve/openobserve.sh cleanup`
 （PowerShell 使用 `-Command cleanup`）才会删除这些文件和本地镜像。
 

@@ -1,14 +1,20 @@
 #!/bin/sh
 # Copyright 2026 atframework
 # Manage a single-node OpenObserve OSS container for local development.
-# The data directory, generated password, and otelcol values survive start/stop.
+# The data directory, generated password, and telemetry values survive start/stop.
 # Usage: openobserve.sh <download|start|stop|kill|cleanup|status> [options]
 
 set -eu
 
 SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
-PUBLISH_DIR="$(CDPATH='' cd "$SCRIPT_DIR/../../.." && pwd)"
-WORK_DIR="$PUBLISH_DIR/var/local-test-env/openobserve"
+LOCAL_TEST_ENV_ROOT="$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd)"
+if [ -d "$LOCAL_TEST_ENV_ROOT/../../cloud-native" ]; then
+  ATF_SERVICE_MANAGER_ROOT="$(CDPATH='' cd "$LOCAL_TEST_ENV_ROOT/../.." && pwd)"
+else
+  ATF_SERVICE_MANAGER_ROOT="$LOCAL_TEST_ENV_ROOT"
+fi
+export ATF_SERVICE_MANAGER_ROOT
+WORK_DIR="$LOCAL_TEST_ENV_ROOT/var/local-test-env/openobserve"
 HTTP_PORT=5080
 GRPC_PORT=5081
 OPENOBSERVE_IMAGE="public.ecr.aws/zinclabs/openobserve:v1.1.2"
@@ -286,6 +292,8 @@ do_start() {
       --root-user-email "$ROOT_USER_EMAIL" \
       --organization "$ORGANIZATION" \
       --base-url "http://127.0.0.1:${HTTP_PORT}" \
+      --values-file "$OTEL_VALUES_FILE" \
+      --http-port "$HTTP_PORT" \
       --startup-timeout "$STARTUP_TIMEOUT"; then
     echo "Error: OpenObserve initialization failed. Check '$engine logs $CONTAINER_NAME' for details." >&2
     do_stop
@@ -296,7 +304,7 @@ do_start() {
   echo "  Root user: $ROOT_USER_EMAIL"
   echo "  Password file: $PASSWORD_FILE"
   echo "  Persistent data: $DATA_DIR"
-  echo "  otelcol values: $OTEL_VALUES_FILE"
+  echo "  Telemetry values: $OTEL_VALUES_FILE"
   echo "  Streams: atframework_traces, atframework_metrics (including spanmetrics), atframework_logs"
 }
 
@@ -380,7 +388,7 @@ case "$COMMAND" in
   status) do_status ;;
   *)
     echo "Usage: $0 <download|start|stop|kill|cleanup|status> [options]" >&2
-    echo "  --work-dir DIR           Runtime directory (default: <publish>/var/local-test-env/openobserve)" >&2
+    echo "  --work-dir DIR           Runtime directory (default: <script>/var/local-test-env/openobserve)" >&2
     echo "  --http-port PORT         UI and OTLP/HTTP port (default: 5080)" >&2
     echo "  --grpc-port PORT         OTLP/gRPC port (default: 5081)" >&2
     echo "  --image IMAGE            OSS image (default: public.ecr.aws/zinclabs/openobserve:v1.1.2)" >&2

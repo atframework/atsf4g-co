@@ -2,7 +2,8 @@
 service_runtime_paths() {
   local root="$1" path parent
   for path in "$root"/*/bin/*.pid.service "$root/otelcol/bin/otelcol.service" \
-      "$root/var/service-manager/supervisor" "$root/var/local-test-env/openobserve/service"; do
+      "$root/var/service-manager/supervisor" "$root/var/local-test-env/openobserve/service" \
+      "$root/tools/script/var/local-test-env/openobserve/service"; do
     if [[ -e "$path" || -L "$path" ]]; then printf '%s\0' "$path"; fi
   done
   # Dependency work directories may have been selected with --work-dir.
@@ -29,13 +30,16 @@ service_runtime_paths() {
 
 # Emit OpenObserve work directories for pack_publish.sh only. Reset must retain credentials and data.
 service_openobserve_workdir_paths() {
-  local root="$1" path parent
-  local default_workdir="$root/var/local-test-env/openobserve"
-  if [[ -e "$default_workdir" || -L "$default_workdir" ]]; then printf '%s\0' "$default_workdir"; fi
+  local root="$1" path parent default_workdir
+  local legacy_workdir="$root/var/local-test-env/openobserve"
+  default_workdir="$root/tools/script/var/local-test-env/openobserve"
+  for path in "$legacy_workdir" "$default_workdir"; do
+    if [[ -e "$path" || -L "$path" ]]; then printf '%s\0' "$path"; fi
+  done
   # The password is created before container startup; the CID additionally covers a running custom work dir.
   while IFS= read -r -d '' path; do
     parent="$(dirname "$path")"
-    [[ "$parent" != "$default_workdir" ]] || continue
+    [[ "$parent" != "$legacy_workdir" && "$parent" != "$default_workdir" ]] || continue
     printf '%s\0' "$parent"
   done < <(find "$root" \( -type d \( -name '*.pid.service' -o -name otelcol.service -o -name log \
       -o -path "$root/var/service-manager" \) -prune \) -o \

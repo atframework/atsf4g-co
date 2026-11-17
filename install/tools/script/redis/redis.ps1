@@ -6,7 +6,7 @@
 #     Image is used through a local container engine (docker, podman or nerdctl,
 #     auto-detected in this order). No root or system packages are required.
 # Usage: redis.ps1 -Command <download|start|stop|cleanup|status>
-#   -WorkDir DIR          Working directory (default: <temp dir>/redis-unit-test)
+#   -WorkDir DIR          Working directory (default: <script>/var/local-test-env/redis)
 #   -ClientPort PORT      Listening port (default: 6379)
 #   -RedisVersion VER     Image tag to use on Linux/macOS (default: 7.2.16,
 #                         the last BSD-3-Clause release line; ignored on Windows)
@@ -47,7 +47,7 @@ if ([string]::IsNullOrEmpty($WorkDir)) {
     $WorkDir = Join-Path $env:WORK_DIR "redis-unit-test"
   }
   else {
-    $WorkDir = Join-Path (Get-Location) "redis-unit-test"
+    $WorkDir = Join-Path $PSScriptRoot '../var/local-test-env/redis'
   }
 }
 

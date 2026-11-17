@@ -52,8 +52,9 @@ opentelemetry:
 agent:
   otelcol:
     exporters:
-      # start_local_test_env 会生成 var/local-test-env/openobserve/values/modules/telemetry.yaml，
-      # 覆盖以下 endpoint 和 Authorization。endpoint 末尾不能带 /，由 exporter 自动追加 /v1/<signal>。
+      # start_local_test_env 会生成 tools/script/var/local-test-env/openobserve/values/modules/telemetry.yaml，
+      # 覆盖以下 endpoint 和 Authorization，并生成 HPA 的 Prometheus 查询配置。
+      # endpoint 末尾不能带 /，由 exporter 自动追加 /v1/<signal>。
       trace:
         otlp_http/openobserve_trace:
           endpoint: "http://127.0.0.1:5080/api/atsf4g"

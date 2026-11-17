@@ -2,7 +2,7 @@
 # PowerShell script to download, start, stop, and manage etcd for unit testing.
 # Works on Windows PowerShell 5.1 and pwsh 7+ on Windows/Linux/macOS.
 # Usage: setup-etcd.ps1 -Command <download|start|stop|cleanup|status>
-#   -WorkDir DIR          Working directory (default: <temp dir>/etcd-unit-test)
+#   -WorkDir DIR          Working directory (default: <script>/var/local-test-env/etcd)
 #   -ClientPort PORT      Client port (default: 12379)
 #   -PeerPort PORT        Peer port (default: 12380)
 #   -EtcdVersion VER      Specify version tag (default: latest)
@@ -41,7 +41,7 @@ if ([string]::IsNullOrEmpty($WorkDir)) {
     $WorkDir = Join-Path $env:WORK_DIR "etcd-unit-test"
   }
   else {
-    $WorkDir = Join-Path (Get-Location) "etcd-unit-test"
+    $WorkDir = Join-Path $PSScriptRoot '../var/local-test-env/etcd'
   }
 }
 

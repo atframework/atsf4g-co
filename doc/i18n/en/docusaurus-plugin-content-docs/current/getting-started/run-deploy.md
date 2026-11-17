@@ -34,8 +34,10 @@ pwsh -NoLogo -NoProfile -File start_all.ps1
 
 When dependencies are already available externally, omit the combined startup script and point values to those
 addresses. To start only selected local dependencies, invoke the management scripts under `tools/script/etcd/`,
-`redis/`, or `openobserve/` directly. `generate_config` first refreshes packaged chart dependencies with Helm, then invokes the published atdtool,
-renders instance YAML/startup scripts, and
+`redis/`, or `openobserve/` directly. Their default work directories are the `etcd`, `redis`, and `openobserve`
+subdirectories under `tools/script/var/local-test-env/`. These paths follow the script location rather than the
+caller's current directory; override them with `--work-dir` or `-WorkDir`. `generate_config` first refreshes packaged
+chart dependencies with Helm, then invokes the published atdtool, renders instance YAML/startup scripts, and
 generates `start_all`, `stop_all`, and `kill_all` at the publish root.
 Dependency update failures stop generation. After editing libapp source templates, refresh each service's
 `charts/libapp-*.tgz`; otherwise rendering still uses the old scripts. Before invoking atdtool directly, run
@@ -49,15 +51,16 @@ with ports bound only to `127.0.0.1`. The first start creates the `atsf4g` organ
 data and credentials. Open `http://127.0.0.1:5080` and log in as `admin@owent.net` with the password from:
 
 ```text
-var/local-test-env/openobserve/openobserve-root-password.txt
+tools/script/var/local-test-env/openobserve/openobserve-root-password.txt
 ```
 
 The password is generated with a cryptographically secure random source and the POSIX mode is `0600`.
 `values/modules/telemetry.yaml` in the same runtime directory also contains credentials; do not commit or distribute it.
 When `generate_config` finds this values directory, it loads it after `personal`, so starting dependencies before
-rendering gives otelcol the same account, password, organization, and port.
+rendering gives otelcol the same account, password, organization, and port. The values also configure the Prometheus
+HTTP API address and credential used by HPA, which queries metrics through OpenObserve's `/prometheus/api/v1/query`.
 
-Data lives in `var/local-test-env/openobserve/data` on a separate bind mount. `stop_local_test_env` stops and removes
+Data lives in `tools/script/var/local-test-env/openobserve/data` on a separate bind mount. `stop_local_test_env` stops and removes
 the container but retains data and the password. Only an explicit `tools/script/openobserve/openobserve.sh cleanup`
 (or `-Command cleanup` in PowerShell) removes these files and the local image.
 
