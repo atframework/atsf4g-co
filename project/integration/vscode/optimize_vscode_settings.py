@@ -17,6 +17,11 @@ Applied rules (existing user values are preserved unless a repair is required):
   migrated to ``cmake.environment``.
 * ``cpplint.cpplintPath`` is filled or repaired only when unset or pointing at a
   missing executable; a still-valid user path is kept.
+* ``cmakeFormat.exePath`` is filled or repaired the same way when the installed
+  ``cheshirekow.cmake-format`` extension contributes that setting. The executable is
+  resolved only from the Python interpreter running this script, so CMake's selected
+  ``Python3_EXECUTABLE`` determines the environment; unrelated ``PATH`` installations
+  are not used as fallbacks.
 * ``C_Cpp.clang_format_path`` is filled or repaired the same way, but only when
   ``C_Cpp.intelliSenseEngine`` is not ``disabled``.
 * When clangd is in use, ``clangd.arguments`` is normalized:
@@ -43,11 +48,13 @@ JSONC comments are not preserved on rewrite; a ``.bak`` copy is written before a
 
 import argparse
 import copy
+import importlib.util
 import json
 import os
 import re
 import shutil
 import sys
+import sysconfig
 
 # Env vars required during CMake configure only.
 DESIRED_CONFIGURE_ENVIRONMENT = (("CPRINTF_MODE", "none"),)
@@ -80,6 +87,15 @@ STATIC_EXCLUDE_GLOBS = (
     GENERIC_BUILD_EXCLUDE_GLOB,
     "**/.git/objects/**",
     "**/.git/subtree-cache/**",
+)
+
+CMAKE_FORMAT_EXTENSION_ID = "cheshirekow.cmake-format"
+CMAKE_FORMAT_PATH_SETTING = "cmakeFormat.exePath"
+VSCODE_EXTENSION_ROOTS = (
+    ".vscode/extensions",
+    ".vscode-insiders/extensions",
+    ".vscode-server/extensions",
+    ".vscode-server-insiders/extensions",
 )
 
 
@@ -174,6 +190,98 @@ def resolve_tool(hint, names):
         found = shutil.which(name)
         if found:
             return normalize_path(found)
+    return None
+
+
+def is_cmake_format_extension_available():
+    """Whether an installed VS Code extension contributes ``cmakeFormat.exePath``."""
+    for relative_root in VSCODE_EXTENSION_ROOTS:
+        root = os.path.expanduser("~/" + relative_root)
+        try:
+            extension_dirs = os.listdir(root)
+        except OSError:
+            continue
+
+        obsolete = {}
+        try:
+            with open(os.path.join(root, ".obsolete"), encoding="utf-8-sig") as handle:
+                loaded_obsolete = json.load(handle)
+            if isinstance(loaded_obsolete, dict):
+                obsolete = loaded_obsolete
+        except (OSError, ValueError):
+            pass
+
+        for extension_dir in extension_dirs:
+            normalized_dir = extension_dir.lower()
+            if not (
+                normalized_dir == CMAKE_FORMAT_EXTENSION_ID
+                or normalized_dir.startswith(CMAKE_FORMAT_EXTENSION_ID + "-")
+            ):
+                continue
+            if obsolete.get(extension_dir) is True:
+                continue
+
+            try:
+                with open(
+                    os.path.join(root, extension_dir, "package.json"),
+                    encoding="utf-8-sig",
+                ) as handle:
+                    manifest = json.load(handle)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(manifest, dict):
+                continue
+            extension_id = "%s.%s" % (
+                manifest.get("publisher", ""),
+                manifest.get("name", ""),
+            )
+            if extension_id.lower() != CMAKE_FORMAT_EXTENSION_ID:
+                continue
+
+            contributes = manifest.get("contributes")
+            if not isinstance(contributes, dict):
+                continue
+            configurations = contributes.get("configuration", [])
+            if isinstance(configurations, dict):
+                configurations = [configurations]
+            if not isinstance(configurations, list):
+                continue
+            for configuration in configurations:
+                if not isinstance(configuration, dict):
+                    continue
+                properties = configuration.get("properties")
+                if (
+                    isinstance(properties, dict)
+                    and CMAKE_FORMAT_PATH_SETTING in properties
+                ):
+                    return True
+    return False
+
+
+def resolve_python_cmake_format():
+    """Find cmake-format installed for the interpreter running this script."""
+    if importlib.util.find_spec("cmakelang") is None:
+        return None
+
+    script_dirs = [sysconfig.get_path("scripts")]
+    for scheme in sorted(sysconfig.get_scheme_names()):
+        if scheme.endswith("_user"):
+            script_dir = sysconfig.get_path("scripts", scheme=scheme)
+            if script_dir not in script_dirs:
+                script_dirs.append(script_dir)
+
+    executable_names = (
+        ("cmake-format.exe", "cmake-format")
+        if os.name == "nt"
+        else ("cmake-format",)
+    )
+    for script_dir in script_dirs:
+        if not script_dir:
+            continue
+        for executable_name in executable_names:
+            candidate = os.path.join(script_dir, executable_name)
+            if is_usable_program(candidate):
+                return normalize_path(candidate)
     return None
 
 
@@ -358,8 +466,10 @@ def apply_tool_path(data, key, hint, names, changes):
         return
     resolved = resolve_tool(hint, names)
     if resolved is None:
+        tool_name = names[0] if names else key
         print(
-            "[optimize-vscode] %s not found; leaving %s unchanged" % (names[0], key),
+            "[optimize-vscode] %s not found; leaving %s unchanged"
+            % (tool_name, key),
             file=sys.stderr,
         )
         return
@@ -522,6 +632,15 @@ def main(argv):
     apply_tool_path(
         data, "cpplint.cpplintPath", opts.cpplint, ["cpplint", "cpplint.exe"], changes
     )
+
+    if is_cmake_format_extension_available():
+        apply_tool_path(
+            data,
+            CMAKE_FORMAT_PATH_SETTING,
+            resolve_python_cmake_format(),
+            (),
+            changes,
+        )
 
     intellisense_disabled = (
         str(data.get("C_Cpp.intelliSenseEngine", "default")).strip().lower()
