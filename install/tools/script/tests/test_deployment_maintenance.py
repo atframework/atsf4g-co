@@ -48,7 +48,12 @@ class Maintenance(unittest.TestCase):
                      "var/local-test-env/openobserve/openobserve.cid",
                      "var/local-test-env/openobserve/openobserve-root-password.txt",
                      "var/local-test-env/openobserve/values/modules/telemetry.yaml",
-                     "var/local-test-env/openobserve/data/stream/keep.parquet"):
+                     "var/local-test-env/openobserve/data/stream/keep.parquet",
+                     "custom-openobserve/service/lifecycle.record",
+                     "custom-openobserve/openobserve.cid",
+                     "custom-openobserve/openobserve-root-password.txt",
+                     "custom-openobserve/values/modules/telemetry.yaml",
+                     "custom-openobserve/data/stream/keep.parquet"):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("copied runtime state\n")
@@ -82,7 +87,9 @@ class Maintenance(unittest.TestCase):
         self.assertIn("./bin/flatc", members["otel"])
         for archive_members in members.values():
             self.assertFalse(any("var/local-test-env/openobserve" in n for n in archive_members))
+            self.assertFalse(any(n.startswith("./custom-openobserve/") for n in archive_members))
         self.assertTrue((root / "var/local-test-env/openobserve/openobserve-root-password.txt").exists())
+        self.assertTrue((root / "custom-openobserve/openobserve-root-password.txt").exists())
         self.assertTrue((root / "app/bin/app.pid.service/lifecycle.record").exists())
         self.assertFalse(any("/custom-etcd/service" in n or "/custom-redis/service" in n
                              for n in members["main"]))
@@ -118,6 +125,14 @@ class Maintenance(unittest.TestCase):
         (root / "var/local-test-env/openobserve/data").mkdir()
         (root / "var/local-test-env/openobserve/data/keep").write_text("keep telemetry")
         (root / "var/local-test-env/openobserve/openobserve-root-password.txt").write_text("keep credential")
+        custom_openobserve_state = root / "custom-openobserve/service"
+        custom_openobserve_state.mkdir(parents=True)
+        (custom_openobserve_state / "lifecycle.record").write_bytes(b"invalid")
+        (root / "custom-openobserve/data").mkdir()
+        (root / "custom-openobserve/data/keep").write_text("keep custom telemetry")
+        (root / "custom-openobserve/openobserve-root-password.txt").write_text("keep custom credential")
+        (root / "custom-openobserve/values/modules").mkdir(parents=True)
+        (root / "custom-openobserve/values/modules/telemetry.yaml").write_text("keep custom values")
         reset = root / "tools/script/reset-service-state.sh"
         run("bash", reset)
         self.assertTrue(state.exists())
@@ -125,12 +140,18 @@ class Maintenance(unittest.TestCase):
         self.assertFalse(state.exists())
         self.assertFalse(dependency.exists())
         self.assertFalse(openobserve_state.exists())
+        self.assertFalse(custom_openobserve_state.exists())
         self.assertFalse((root / "app/bin/app.pid").exists())
         self.assertEqual((root / "app/cfg/config.yaml").read_text(), "keep: true\n")
         self.assertEqual((root / "redis/data/dump.rdb").read_text(), "keep data")
         self.assertEqual((root / "var/local-test-env/openobserve/data/keep").read_text(), "keep telemetry")
         self.assertEqual((root / "var/local-test-env/openobserve/openobserve-root-password.txt").read_text(),
                          "keep credential")
+        self.assertEqual((root / "custom-openobserve/data/keep").read_text(), "keep custom telemetry")
+        self.assertEqual((root / "custom-openobserve/openobserve-root-password.txt").read_text(),
+                         "keep custom credential")
+        self.assertEqual((root / "custom-openobserve/values/modules/telemetry.yaml").read_text(),
+                         "keep custom values")
         backups = list((root / "var/service-manager/reset-backups").glob("*/app/bin/app.pid.service"))
         self.assertTrue(backups)
         run("bash", reset, "--force")

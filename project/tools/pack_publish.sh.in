@@ -161,13 +161,15 @@ COMMON_EXCLUDES=(
     --exclude='*.sock'
     --exclude='prepare-package.*.lock'
     --exclude='var/service-manager'
-    --exclude='var/local-test-env/openobserve'
-    --exclude='var/local-test-env/openobserve/*'
 )
 RUNTIME_EXCLUDES=(--no-wildcards --anchored)
 while IFS= read -r -d '' RUNTIME_PATH; do
     RUNTIME_EXCLUDES+=("--exclude=./${RUNTIME_PATH#"$DEPLOY_DIR"/}")
 done < <(service_runtime_paths "$DEPLOY_DIR")
+# Unlike service_runtime_paths, this collector is pack-only: reset retains OpenObserve credentials and data.
+while IFS= read -r -d '' OPENOBSERVE_WORKDIR; do
+    RUNTIME_EXCLUDES+=("--exclude=./${OPENOBSERVE_WORKDIR#"$DEPLOY_DIR"/}")
+done < <(service_openobserve_workdir_paths "$DEPLOY_DIR")
 EXCLUDES=(
     --exclude='*.a'
     --exclude='*.dbg'

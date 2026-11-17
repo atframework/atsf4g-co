@@ -8,6 +8,7 @@
 // clang-format on
 
 #include <protocol/config/com.const.config.pb.h>
+#include <protocol/config/lobbysvr_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/distributed_transaction.pb.h>
 #include <protocol/pbdesc/lobby_service.pb.h>

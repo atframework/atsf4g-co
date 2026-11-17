@@ -878,5 +878,6 @@ global_mail_manager::make_mail_box_type_index_cleanup_guard() {
   }
 
   ret = atfw::memory::stl::make_strong_rc<global_mail_box_type_index_cleanup_guard>(*this);
+  mail_box_type_index_ref_ = ret;
   return ret;
 }

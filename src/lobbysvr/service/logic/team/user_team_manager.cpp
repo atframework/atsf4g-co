@@ -36,7 +36,6 @@
 
 #include "data/user.h"
 #include "logic/chat/user_chat_manager.h"
-#include "logic/team/user_team_algorithm.h"
 #include "logic/team/user_team_battle_library_function.h"
 
 class user_team_manager_utility {
@@ -384,8 +383,25 @@ bool user_team_manager::is_dirty() const { return is_dirty_; }
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
 
 void user_team_manager::send_dirty_data(rpc::context& ctx) {
-  if (!dirty_team_.empty() || !dirty_invitation_.empty() || !dirty_join_request_.empty() ||
-      !dirty_got_notification_.empty()) {
+  if (!dirty_team_.empty() || !dirty_invitation_.empty() || !dirty_join_request_.empty()) {
+    owner_->send_all_syn_msg(ctx);
+    return;
+  }
+
+  if (!is_pulled_) {
+    // 未拉取过则清理掉失效的通知
+    auto now = ctx.logical_now();
+    for (auto iter = dirty_got_notification_.begin(); iter != dirty_got_notification_.end();) {
+      if (protobuf_to_system_clock(iter->expired_timepoint()) < now) {
+        iter = dirty_got_notification_.erase(iter);
+      } else {
+        ++iter;
+      }
+    }
+    return;
+  }
+
+  if (!dirty_got_notification_.empty()) {
     owner_->send_all_syn_msg(ctx);
   }
 }
@@ -1252,9 +1268,10 @@ bool user_team_manager::insert_dirty_handle_for_join_request(const atfw::team::D
 
 bool user_team_manager::insert_dirty_handle_for_notification(
     const atfw::team::DTeamInvitationGotNotification& notification) {
+  dirty_got_notification_.push_back(notification);
+
   if (!insert_dirty_handle(false)) {
     return false;
   }
-  dirty_got_notification_.push_back(notification);
   return true;
 }
