@@ -23,7 +23,7 @@ constexpr const char* kOrbitStartTimeout = "--start_timeout";
 constexpr const char* kOrbitClientInstanceIdArg = "--orbit-client-instance-id";
 constexpr const char* kOrbitAgentInstanceIdArg = "--orbit-agent-instance-id";
 constexpr const char* kAtappMetadataScopeEnvKey = "ATAPP_METADATA_SCOPE";
-constexpr const char* kOrbitSeedMode = "--seed_mode";
+// constexpr const char* kOrbitSeedMode = "--seed_mode";
 constexpr const char* kStartClientCustomDataLogName = "log_name";
 
 static std::string render_string_template(const std::string& input,
