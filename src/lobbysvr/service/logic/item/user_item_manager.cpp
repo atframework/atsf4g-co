@@ -345,10 +345,6 @@ bool user_item_manager::check_offset_instance_match(
 void user_item_manager::on_gm_cmd_add_item(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
                                            const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp,
                                            ::util::cli::cmd_option_list& params) {
-  if (!user_inst) {
-    rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
-    return;
-  }
   if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 2)) {
     return;
   }

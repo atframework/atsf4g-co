@@ -1144,11 +1144,6 @@ void user_matching_manager::on_match_data_dirty(rpc::context& ctx) {
 void user_matching_manager::on_gm_cmd_start_matching(
     const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
     const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp, ::util::cli::cmd_option_list& params) {
-  if (!user_inst) {
-    rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
-    return;
-  }
-
   if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 2)) {
     return;
   }

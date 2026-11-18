@@ -81,10 +81,6 @@ static bool mail_should_remove_after_attachment(const mail_data_t &mail, bool ne
 static void global_mail_gm_add_global_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
                                            const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
                                            atfw::util::cli::cmd_option_list &params) {
-  if (!user_inst) {
-    rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
-    return;
-  }
   if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 1)) {
     return;
   }
@@ -134,10 +130,6 @@ static void global_mail_gm_add_global_mail(const std::shared_ptr<rpc::context> &
 static void global_mail_gm_remove_global_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
                                               const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
                                               atfw::util::cli::cmd_option_list &params) {
-  if (!user_inst) {
-    rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
-    return;
-  }
   if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 2)) {
     return;
   }
@@ -160,10 +152,6 @@ static void global_mail_gm_remove_global_mail(const std::shared_ptr<rpc::context
 static void user_mail_gm_add_user_mail(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
                                        const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body,
                                        atfw::util::cli::cmd_option_list &params) {
-  if (!user_inst) {
-    rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
-    return;
-  }
   if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 1)) {
     return;
   }
