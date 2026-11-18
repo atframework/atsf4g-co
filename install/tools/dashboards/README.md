@@ -12,7 +12,9 @@ python install/tools/dashboards/validate_dashboard.py install/tools/dashboards/a
 ```
 
 The generator rewrites the JSON file; make changes in `build_dashboard.py` rather than editing generated JSON by hand.
-The validator checks panel IDs, layout, stream/filter structure, and can execute every query on a target instance:
+The validator checks panel IDs, layout, and stream/filter structure. With `--live`, it executes every query with
+selected, multi-value, and All substitutions; when an RPC trace sample exists, it also requires the slow-span panel to
+return data in all three modes:
 
 ```bash
 export OPENOBSERVE_URL=http://127.0.0.1:5080
@@ -42,9 +44,10 @@ Use **Dashboards → Import** and select `atframework-observability.dashboard.js
 | Span kind | `span_kind` | `span_kind` |
 
 Filters are applied only where the label exists: HPA and coroutine panels use environment, zone, service type, and
-process; `span_kind` and `rpc_method` apply to the `atframework_trace_*` family. RPC System uses the stable
-`rpc.system.name` attribute (`rpc_system_name` in PromQL) in both SQL and PromQL. The removed `rpc.service` attribute
-is not used by any panel.
+process; `span_kind` and `rpc_method` apply to the `atframework_trace_*` family. Trace SQL uses
+`IN (${...:singlequote})` for exact multi-value matching and All-placeholder handling; PromQL uses regular-expression
+matchers with `${...:pipe}`. RPC System uses the stable `rpc.system.name` attribute (`rpc_system_name` in PromQL) in
+both SQL and PromQL. The removed `rpc.service` attribute is not used by any panel.
 
 `atframework_trace_calls` is a Counter for request rates. `atframework_trace_duration_*` is a millisecond histogram;
 aggregate bucket rates with `sum by (le)` before `histogram_quantile`. The default `span_kind=SPAN_KIND_SERVER` avoids

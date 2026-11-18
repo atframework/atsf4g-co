@@ -115,7 +115,8 @@ operational procedure rather than treating rendering permission as deployment pe
   Import with `POST /api/<org-id>/dashboards?folder=<folder-id>` or the UI Import action. Update with the returned
   dashboard ID and hash instead of creating duplicates.
 - Keep the dashboard at document v8 with a 192-column layout and `query_values` variables. Use `${name:pipe}` for
-  multi-select PromQL filters and `re_match` for trace SQL filters. Use Counter rates before aggregation, retain `le`
+  multi-select PromQL filters and `field IN (${name:singlequote})` for trace SQL filters so OpenObserve can remove the
+  `_o2_all_` placeholder; `re_match` does not support that placeholder. Use Counter rates before aggregation, retain `le`
   for histogram quantiles, and use `topk` to bound high-cardinality series. `count_distinct` is not available in
   PromQL; use `count(count by (label)(metric))` for distinct active label values. `atframework_inserver_rpc_*` are
   Gauges and must not be used with `rate()`. Default to `SPAN_KIND_SERVER` to avoid double-counting client and server

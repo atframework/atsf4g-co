@@ -15,14 +15,14 @@ COMMON = (
 )
 TRACE_METRIC_COMMON = COMMON + ',span_kind=~"${span_kind:pipe}",rpc_system_name=~"${rpc_system:pipe}",rpc_method=~"${rpc_method:pipe}"'
 TRACE_COMMON = (
-    "re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND "
-    "re_match(service_service_area_zone_id, '${zone_id:pipe}') AND "
-    "re_match(service_name, '${service_name:pipe}') AND "
-    "re_match(service_service_instance_id, '${process:pipe}')"
+    "service_deployment_environment_name IN (${deployment_environment:singlequote}) AND "
+    "service_service_area_zone_id IN (${zone_id:singlequote}) AND "
+    "service_name IN (${service_name:singlequote}) AND "
+    "service_service_instance_id IN (${process:singlequote})"
 )
 RPC_COMMON = (
-    TRACE_COMMON + " AND re_match(rpc_system_name, '${rpc_system:pipe}') AND "
-    "re_match(rpc_method, '${rpc_method:pipe}')"
+    TRACE_COMMON + " AND rpc_system_name IN (${rpc_system:singlequote}) AND "
+    "rpc_method IN (${rpc_method:singlequote})"
 )
 
 

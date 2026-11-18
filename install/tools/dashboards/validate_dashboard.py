@@ -18,6 +18,16 @@ SUBSTITUTIONS = {
     "rpc_method": ".*",
     "span_kind": "SPAN_KIND_SERVER",
 }
+ALL_SUBSTITUTIONS = {name: "_o2_all_" for name in SUBSTITUTIONS}
+MISSING_VALUE = "__atsf4g_validation_missing__"
+SQL_SAMPLE_COLUMNS = {
+    "deployment_environment": "service_deployment_environment_name",
+    "zone_id": "service_service_area_zone_id",
+    "service_name": "service_name",
+    "process": "service_service_instance_id",
+    "rpc_system": "rpc_system_name",
+    "rpc_method": "rpc_method",
+}
 
 
 def panels(document):
@@ -42,10 +52,17 @@ def validate_structure(document):
             assert query["query"]
 
 
-def substitute(query):
-    for name, value in SUBSTITUTIONS.items():
-        query = query.replace("${" + name + ":pipe}", value)
+def substitute(query, values):
+    for name, value in values.items():
+        selected = value if isinstance(value, list) else [value]
+        query = query.replace("${" + name + ":pipe}", "|".join(selected))
+        quoted = ",".join("'" + item.replace("'", "''") + "'" for item in selected)
+        query = query.replace("${" + name + ":singlequote}", quoted)
     return query
+
+
+def multi_values(values):
+    return {name: [value, MISSING_VALUE] for name, value in values.items()}
 
 
 def request_json(url, token, payload=None):
@@ -57,22 +74,48 @@ def request_json(url, token, payload=None):
         return json.load(response)
 
 
+def search_sql(base_url, organization, token, sql, start, end):
+    body = json.dumps({"query": {"start_time": start, "end_time": end, "sql": sql}}).encode()
+    result = request_json(f"{base_url}/api/{organization}/_search?type=traces", token, body)
+    assert "hits" in result, result
+    return result
+
+
+def find_sql_substitutions(base_url, organization, token, start, end):
+    columns = ", ".join(f"{column} AS {name}_value" for name, column in SQL_SAMPLE_COLUMNS.items())
+    required = " AND ".join(f"{column} IS NOT NULL" for column in SQL_SAMPLE_COLUMNS.values())
+    result = search_sql(base_url, organization, token,
+                        f"SELECT {columns} FROM atframework_traces WHERE {required} LIMIT 1", start, end)
+    if not result["hits"]:
+        return None
+    sample = result["hits"][0]
+    values = {name: str(sample[f"{name}_value"]) for name in SQL_SAMPLE_COLUMNS}
+    values["span_kind"] = SUBSTITUTIONS["span_kind"]
+    return values
+
+
 def validate_live(document, base_url, organization, email, password):
     token = base64.b64encode(f"{email}:{password}".encode()).decode()
     end = int(time.time() * 1_000_000)
     start = end - 3600 * 1_000_000
+    sql_values = find_sql_substitutions(base_url, organization, token, start, end)
     for tab, panel in panels(document):
+        selected_values = sql_values if panel["queryType"] == "sql" and sql_values else SUBSTITUTIONS
+        profiles = (("selected", selected_values), ("multi", multi_values(selected_values)),
+                    ("all", ALL_SUBSTITUTIONS))
         for query in panel["queries"]:
-            sql = substitute(query["query"])
-            if panel["queryType"] == "promql":
-                url = f"{base_url}/api/{organization}/prometheus/api/v1/query?" + urllib.parse.urlencode({"query": sql})
-                result = request_json(url, token)
-                assert result.get("status") == "success", f"{panel['title']}: {result}"
-            else:
-                body = json.dumps({"query": {"start_time": start, "end_time": end, "sql": sql}}).encode()
-                result = request_json(f"{base_url}/api/{organization}/_search?type=traces", token, body)
-                assert "hits" in result, f"{panel['title']}: {result}"
-        print(f"OK {tab['name']} / {panel['title']}")
+            for mode, values in profiles:
+                rendered = substitute(query["query"], values)
+                if panel["queryType"] == "promql":
+                    url = (f"{base_url}/api/{organization}/prometheus/api/v1/query?" +
+                           urllib.parse.urlencode({"query": rendered}))
+                    result = request_json(url, token)
+                    assert result.get("status") == "success", f"{panel['title']} ({mode}): {result}"
+                else:
+                    result = search_sql(base_url, organization, token, rendered, start, end)
+                    if panel["id"] == "rpc_slow_spans" and sql_values:
+                        assert result["hits"], f"{panel['title']} returned no RPC spans in {mode} mode"
+        print(f"OK {tab['name']} / {panel['title']} [selected, multi, all]")
 
 
 def main():

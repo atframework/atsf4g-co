@@ -59,6 +59,8 @@ double-counting client and server spans as separate RPC calls; switch it intenti
 spans, not guaranteed RPC totals. Business result codes are analyzed separately from `span_status`. Filters apply only
 to metric families that carry the corresponding label; HPA and coroutine series are not filtered by `span_kind`.
 RPC System uses the stable `rpc.system.name` attribute; the removed `rpc.service` and legacy `rpc.system` attributes are not used.
+Trace SQL uses `IN (${...:singlequote})` for multi-value filters so OpenObserve can remove the `_o2_all_` placeholder;
+do not replace it with `re_match`.
 
 `atframework_trace_calls` is a Counter and uses `rate()`. `atframework_trace_duration_*` is a millisecond histogram;
 aggregate bucket rates by `le` before `histogram_quantile`. `rpc_atrpc_result_code` is only a business result

@@ -5,7 +5,7 @@
   "description": "RED for RPC/traces and process-level utilization. Variables support environment, zone, service type, process instance, RPC system, method, and span kind.",
   "role": "",
   "owner": "admin@owent.net",
-  "created": "2026-11-18T10:49:01.683351Z",
+  "created": "2026-11-18T11:03:58.692195Z",
   "defaultDatetimeDuration": {
     "type": "relative",
     "relativeTimePeriod": "1h"
@@ -793,7 +793,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_system_name AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_system_name AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE service_deployment_environment_name IN (${deployment_environment:singlequote}) AND service_service_area_zone_id IN (${zone_id:singlequote}) AND service_name IN (${service_name:singlequote}) AND service_service_instance_id IN (${process:singlequote}) AND rpc_system_name IN (${rpc_system:singlequote}) AND rpc_method IN (${rpc_method:singlequote}) GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -870,7 +870,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT rpc_system_name, rpc_method, rpc_atrpc_result_code, COUNT(*) AS count FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY rpc_system_name, rpc_method, rpc_atrpc_result_code ORDER BY count DESC LIMIT 100",
+              "query": "SELECT rpc_system_name, rpc_method, rpc_atrpc_result_code, COUNT(*) AS count FROM atframework_traces WHERE service_deployment_environment_name IN (${deployment_environment:singlequote}) AND service_service_area_zone_id IN (${zone_id:singlequote}) AND service_name IN (${service_name:singlequote}) AND service_service_instance_id IN (${process:singlequote}) AND rpc_system_name IN (${rpc_system:singlequote}) AND rpc_method IN (${rpc_method:singlequote}) GROUP BY rpc_system_name, rpc_method, rpc_atrpc_result_code ORDER BY count DESC LIMIT 100",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -944,7 +944,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_method AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') AND span_status IN ('ERROR') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_method AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE service_deployment_environment_name IN (${deployment_environment:singlequote}) AND service_service_area_zone_id IN (${zone_id:singlequote}) AND service_name IN (${service_name:singlequote}) AND service_service_instance_id IN (${process:singlequote}) AND rpc_system_name IN (${rpc_system:singlequote}) AND rpc_method IN (${rpc_method:singlequote}) AND span_status IN ('ERROR') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -1021,7 +1021,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT start_time, trace_id, service_name, service_service_instance_id, rpc_system_name, rpc_method, rpc_atrpc_result_code, span_status, duration FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') ORDER BY duration DESC LIMIT 50",
+              "query": "SELECT start_time, trace_id, service_name, service_service_instance_id, rpc_system_name, rpc_method, rpc_atrpc_result_code, span_status, duration FROM atframework_traces WHERE service_deployment_environment_name IN (${deployment_environment:singlequote}) AND service_service_area_zone_id IN (${zone_id:singlequote}) AND service_name IN (${service_name:singlequote}) AND service_service_instance_id IN (${process:singlequote}) AND rpc_system_name IN (${rpc_system:singlequote}) AND rpc_method IN (${rpc_method:singlequote}) ORDER BY duration DESC LIMIT 50",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -1381,7 +1381,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY x_axis_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE service_deployment_environment_name IN (${deployment_environment:singlequote}) AND service_service_area_zone_id IN (${zone_id:singlequote}) AND service_name IN (${service_name:singlequote}) AND service_service_instance_id IN (${process:singlequote}) AND rpc_system_name IN (${rpc_system:singlequote}) AND rpc_method IN (${rpc_method:singlequote}) GROUP BY x_axis_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
