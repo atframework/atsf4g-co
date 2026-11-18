@@ -60,11 +60,6 @@ orbit_room::orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
 }
 
 void orbit_room::tick() {
-  if (!end_join_ && join_end_timepoint_ > 0 &&
-      util::time::time_utility::get_now() > join_end_timepoint_) {  // TODO(yousongyang) 删除
-    end_join_ = true;
-  }
-
   if (end_join_ && !end_join_send_) {
     send_room_end_join_to_match(logic_server_get_current_tick_context());
   }
@@ -206,7 +201,6 @@ int32_t orbit_room::create(rpc::context& ctx, uint64_t match_server_id) {
   match_server_id_ = match_server_id;
   // Loading 超时
   loading_timeout_ = create_timepoint_ + row->startup_timeout_sec() + 10;  // 容忍时间
-  end_join_sec_config_ = row->end_join_sec();                              // TODO(yousongyang) 删除
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED);
 
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
@@ -262,7 +256,6 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
   client_address_ = client_addr;
   loading_timeout_ = 0;
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING);
-  join_end_timepoint_ = util::time::time_utility::get_now() + end_join_sec_config_;  // TODO(yousongyang) 删除
 
   PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
   event_log.set_orbit_room_status(room_status_);
@@ -278,7 +271,6 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
         auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp>(child_ctx);
         req->set_matching_id(room_ptr->room_data_.match_id());
         req->set_start_success(true);
-        req->set_end_join_timepoint(room_ptr->join_end_timepoint_);  // TODO(yousongyang) 删除
         req->set_expired_timepoint(room_ptr->expired_timepoint_);
         int32_t ret = 0;
         ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::orbit_room_ready(child_ctx, room_ptr->match_server_id_, *req, *rsp));

@@ -54,7 +54,6 @@ message SSMatchingOrbitRoomReadyReq {
   string matching_id = 1;
   bool start_success = 2;
   int64 expired_timepoint = 3;
-  int64 end_join_timepoint = 4; // TODO(yousongyang) 删除
 }
 
 message SSMatchingOrbitRoomReadyRsp {
