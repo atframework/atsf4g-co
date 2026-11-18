@@ -46,6 +46,20 @@ Collector 各 pipeline 首先经过 `memory_limiter`，默认 hard/soft limit �
 
 本地部署和容量说明见[运行与部署](../getting-started/run-deploy#本地-openobserve)。
 
+## 仪表盘
+
+`install/tools/dashboards/atframework-observability.dashboard.json` 可直接导入 OpenObserve v8，包含 Overview、
+RPC Analysis 和 Process 三个页签。Overview 展示请求量、错误比例、平均/p95 耗时、预期副本和资源使用；
+RPC Analysis 展示方法级 RED、业务结果码和慢 span；Process 展示指定实例的 CPU、内存、任务与 trace。
+变量支持环境、`zone_id`、服务类型、完整进程实例名、RPC 系统、方法和 `span_kind` 的多选及全选。
+默认限定为 `SPAN_KIND_SERVER`，避免把 client/server 重复计为两次 RPC；可手动切换类型。计数是受采样影响的
+recording span 数，不是精确 RPC 总量，业务结果码与 `span_status` 分开分析。筛选条件只作用于具有对应标签的
+指标族，HPA/coroutine 不按 `span_kind` 过滤；RPC System 按实际方法前缀筛选，不使用值为 `NONE` 的 `rpc.system`。
+
+`atframework_trace_calls` 是 Counter，使用 `rate()` 计算速率；`atframework_trace_duration_*` 是毫秒直方图，
+先按 `le` 聚合速率，再计算 `histogram_quantile`。`rpc_atrpc_result_code` 仅用于业务结果分布，
+`span_status`/`status_code` 才表示 trace 错误。生成与逐条验证方法见 `install/tools/dashboards/README.md`。
+
 ## 定制与详细设计
 
 ### OpenTelemetry 封装

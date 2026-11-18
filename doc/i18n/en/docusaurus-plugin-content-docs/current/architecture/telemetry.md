@@ -48,6 +48,23 @@ ordinary metrics and spanmetrics.
 
 See [run and deploy](../getting-started/run-deploy#local-openobserve) for local deployment and capacity details.
 
+## Dashboard
+
+`install/tools/dashboards/atframework-observability.dashboard.json` can be imported directly into OpenObserve v8.
+The Overview tab covers request/error ratios, mean/p95 latency, expected replicas, and resource usage. RPC Analysis
+covers method-level RED, business result codes, and slow spans. Process covers CPU, memory, tasks, and traces for a
+selected process instance. Multi-select variables include environment, `zone_id`, service type, full process instance
+name, RPC system, method, and `span_kind`, each with an All option. `SPAN_KIND_SERVER` is selected by default to avoid
+double-counting client and server spans as separate RPC calls; switch it intentionally. Counts are sampled recording
+spans, not guaranteed RPC totals. Business result codes are analyzed separately from `span_status`. Filters apply only
+to metric families that carry the corresponding label; HPA and coroutine series are not filtered by `span_kind`.
+RPC System filters by verified method prefixes rather than the `rpc.system` label, whose value is `NONE`.
+
+`atframework_trace_calls` is a Counter and uses `rate()`. `atframework_trace_duration_*` is a millisecond histogram;
+aggregate bucket rates by `le` before `histogram_quantile`. `rpc_atrpc_result_code` is only a business result
+distribution; `span_status`/`status_code` identifies trace errors. See `install/tools/dashboards/README.md` for
+generation and per-query validation.
+
 ## Customization and Design
 
 ### OpenTelemetry Wrappers

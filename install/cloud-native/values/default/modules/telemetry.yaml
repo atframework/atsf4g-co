@@ -251,9 +251,7 @@ agent:
               default: "0"
             - name: rpc.method
               default: UNKNOWN
-            - name: rpc.service
-              default: NONE
-            - name: rpc.system
+            - name: rpc.system.name
               default: NONE
             - name: service.area.zone_id
               default: "0"

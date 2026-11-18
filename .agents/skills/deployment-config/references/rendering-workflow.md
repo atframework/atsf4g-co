@@ -105,3 +105,22 @@ operational procedure rather than treating rendering permission as deployment pe
   cache invalidation. Retain the maintenance suite's internal parallel-start scenario and inspect its warning output.
 - For cached-image, loopback-only tests on WSL without `network-online.target`, use `ATF_QUADLET_WAIT_NETWORK=0`.
   Keep the production default network dependency unless the deployment explicitly does not require it.
+
+## Dashboard authoring and import
+
+- Edit `install/tools/dashboards/build_dashboard.py` and run it to regenerate
+  `install/tools/dashboards/atframework-observability.dashboard.json`; do not hand-edit generated JSON.
+- Run `validate_dashboard.py <dashboard.json>` for structure checks and `--live` with `OPENOBSERVE_ORG`,
+  `OPENOBSERVE_URL`, `OPENOBSERVE_USER`, and `OPENOBSERVE_PASSWORD` to execute every SQL/PromQL query on the target.
+  Import with `POST /api/<org-id>/dashboards?folder=<folder-id>` or the UI Import action. Update with the returned
+  dashboard ID and hash instead of creating duplicates.
+- Keep the dashboard at document v8 with a 192-column layout and `query_values` variables. Use `${name:pipe}` for
+  multi-select PromQL filters and `re_match` for trace SQL filters. Use Counter rates before aggregation, retain `le`
+  for histogram quantiles, and use `topk` to bound high-cardinality series. `count_distinct` is not available in
+  PromQL; use `count(count by (label)(metric))` for distinct active label values. `atframework_inserver_rpc_*` are
+  Gauges and must not be used with `rate()`. Default to `SPAN_KIND_SERVER` to avoid double-counting client and server
+  spans as separate RPC calls, and document that counts are sampled recording spans rather than exact RPC totals.
+  Apply filters only to metric families that carry the corresponding label: HPA and coroutine panels do not use
+  `span_kind`, and trace/RPC method filters must not be forced onto unrelated resource metrics. Map RPC System to
+  verified method prefixes instead of the collector's `rpc.system=NONE` label, and apply that prefix in both SQL and
+  PromQL so a system selection cannot leave unrelated methods visible.
