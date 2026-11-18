@@ -5,7 +5,7 @@
   "description": "RED for RPC/traces and process-level utilization. Variables support environment, zone, service type, process instance, RPC system, method, and span kind.",
   "role": "",
   "owner": "admin@owent.net",
-  "created": "2026-11-18T10:01:23.650336Z",
+  "created": "2026-11-18T10:49:01.683351Z",
   "defaultDatetimeDuration": {
     "type": "relative",
     "relativeTimePeriod": "1h"
@@ -89,36 +89,18 @@
         "scope": "global"
       },
       {
-        "type": "custom",
+        "type": "query_values",
         "name": "rpc_system",
         "label": "RPC system",
+        "query_data": {
+          "stream_type": "traces",
+          "stream": "atframework_traces",
+          "field": "rpc_system_name",
+          "max_record_size": 100,
+          "filter": []
+        },
         "value": "",
-        "options": [
-          {
-            "label": "atrpc.db",
-            "value": "rpc.db"
-          },
-          {
-            "label": "atrpc.ss",
-            "value": "atframework"
-          },
-          {
-            "label": "atrpc.task",
-            "value": "no_dispatcher"
-          },
-          {
-            "label": "atrpc.dispatcher",
-            "value": ".*_msg_dispatcher"
-          },
-          {
-            "label": "atrpc.orbit",
-            "value": "atframework.shared.OrbitClientRpcService"
-          },
-          {
-            "label": "internal",
-            "value": ".*_msg_dispatcher/dispatch"
-          }
-        ],
+        "options": [],
         "multiSelect": true,
         "selectAllValueForMultiSelect": "all",
         "escapeSingleQuotes": true,
@@ -193,7 +175,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "sum by(service_name)(rate(atframework_trace_calls{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))",
+              "query": "sum by(service_name)(rate(atframework_trace_calls{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -244,7 +226,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "sum by(service_name)(rate(atframework_trace_calls{status_code=\"STATUS_CODE_ERROR\",deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])) / sum by(service_name)(rate(atframework_trace_calls{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))",
+              "query": "sum by(service_name)(rate(atframework_trace_calls{status_code=\"STATUS_CODE_ERROR\",deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])) / sum by(service_name)(rate(atframework_trace_calls{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -295,7 +277,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "histogram_quantile(0.95, sum by(service_name, le)(rate(atframework_trace_duration_bucket{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
+              "query": "histogram_quantile(0.95, sum by(service_name, le)(rate(atframework_trace_duration_bucket{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -346,7 +328,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "(sum by(service_name)(rate(atframework_trace_duration_sum{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])) / sum by(service_name)(rate(atframework_trace_duration_count{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))) > 0",
+              "query": "(sum by(service_name)(rate(atframework_trace_duration_sum{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])) / sum by(service_name)(rate(atframework_trace_duration_count{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))) > 0",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -607,7 +589,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "sum by(rpc_method)(rate(atframework_trace_calls{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))",
+              "query": "sum by(rpc_method)(rate(atframework_trace_calls{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m]))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -658,7 +640,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "topk(10, sum by(rpc_method)(rate(atframework_trace_calls{status_code=\"STATUS_CODE_ERROR\",deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
+              "query": "topk(10, sum by(rpc_method)(rate(atframework_trace_calls{status_code=\"STATUS_CODE_ERROR\",deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -709,7 +691,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "histogram_quantile(0.95, sum by(rpc_method, le)(rate(atframework_trace_duration_bucket{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
+              "query": "histogram_quantile(0.95, sum by(rpc_method, le)(rate(atframework_trace_duration_bucket{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -760,7 +742,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "histogram_quantile(0.95, sum by(rpc_method, le)(rate(atframework_trace_duration_bucket{status_code=\"STATUS_CODE_ERROR\",deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
+              "query": "histogram_quantile(0.95, sum by(rpc_method, le)(rate(atframework_trace_duration_bucket{status_code=\"STATUS_CODE_ERROR\",deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -811,7 +793,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_system_name AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_method, '${rpc_system:pipe}.*') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_system_name AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -888,7 +870,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT rpc_system_name, rpc_method, rpc_atrpc_result_code, COUNT(*) AS count FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_method, '${rpc_system:pipe}.*') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY rpc_system_name, rpc_method, rpc_atrpc_result_code ORDER BY count DESC LIMIT 100",
+              "query": "SELECT rpc_system_name, rpc_method, rpc_atrpc_result_code, COUNT(*) AS count FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY rpc_system_name, rpc_method, rpc_atrpc_result_code ORDER BY count DESC LIMIT 100",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -962,7 +944,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_method AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_method, '${rpc_system:pipe}.*') AND re_match(rpc_method, '${rpc_method:pipe}') AND span_status IN ('ERROR') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, rpc_method AS breakdown_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') AND span_status IN ('ERROR') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -1039,7 +1021,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT start_time, trace_id, service_name, service_service_instance_id, rpc_system_name, rpc_method, rpc_atrpc_result_code, span_status, duration FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_method, '${rpc_system:pipe}.*') AND re_match(rpc_method, '${rpc_method:pipe}') ORDER BY duration DESC LIMIT 50",
+              "query": "SELECT start_time, trace_id, service_name, service_service_instance_id, rpc_system_name, rpc_method, rpc_atrpc_result_code, span_status, duration FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') ORDER BY duration DESC LIMIT 50",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -1399,7 +1381,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_method, '${rpc_system:pipe}.*') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY x_axis_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, COUNT(*) AS y_axis_1 FROM atframework_traces WHERE re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND re_match(service_service_area_zone_id, '${zone_id:pipe}') AND re_match(service_name, '${service_name:pipe}') AND re_match(service_service_instance_id, '${process:pipe}') AND re_match(rpc_system_name, '${rpc_system:pipe}') AND re_match(rpc_method, '${rpc_method:pipe}') GROUP BY x_axis_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -1465,7 +1447,7 @@
           "queryType": "promql",
           "queries": [
             {
-              "query": "histogram_quantile(0.95, sum by(service_instance_id, le)(rate(atframework_trace_duration_bucket{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_method=~\"${rpc_system:pipe}.*\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
+              "query": "histogram_quantile(0.95, sum by(service_instance_id, le)(rate(atframework_trace_duration_bucket{deployment_environment_name=~\"${deployment_environment:pipe}\",service_area_zone_id=~\"${zone_id:pipe}\",service_name=~\"${service_name:pipe}\",service_instance_id=~\"${process:pipe}\",span_kind=~\"${span_kind:pipe}\",rpc_system_name=~\"${rpc_system:pipe}\",rpc_method=~\"${rpc_method:pipe}\"}[5m])))",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {

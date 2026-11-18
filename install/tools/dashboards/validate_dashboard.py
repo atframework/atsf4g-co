@@ -14,7 +14,7 @@ SUBSTITUTIONS = {
     "zone_id": "1",
     "service_name": ".*",
     "process": ".*",
-    "rpc_system": "rpc.db",
+    "rpc_system": "atrpc.db",
     "rpc_method": ".*",
     "span_kind": "SPAN_KIND_SERVER",
 }

@@ -37,15 +37,14 @@ Use **Dashboards → Import** and select `atframework-observability.dashboard.js
 | Zone ID | `service_service_area_zone_id` | `service_area_zone_id` |
 | Service type | `service_name` | `service_name` |
 | Process instance | `service_service_instance_id` | `service_instance_id` |
-| RPC system | method prefix mapped from `rpc_system_name` | method prefix mapped from `rpc_system_name` |
+| RPC system | `rpc_system_name` | `rpc_system_name` |
 | RPC method | `rpc_method` | `rpc_method` |
 | Span kind | `span_kind` | `span_kind` |
 
 Filters are applied only where the label exists: HPA and coroutine panels use environment, zone, service type, and
-process; `span_kind` and `rpc_method` apply to the `atframework_trace_*` family. RPC System is a custom variable that
-maps the system to verified method prefixes (`atrpc.db` → `rpc.db.*`, `atrpc.ss` → `atframework.*`,
-`atrpc.task` → `no_dispatcher.*`, `atrpc.dispatcher` → `.*_msg_dispatcher.*`). The same prefix rule is used in both
-SQL and PromQL because the collector's `rpc.system` label is `NONE` rather than a usable system value.
+process; `span_kind` and `rpc_method` apply to the `atframework_trace_*` family. RPC System uses the stable
+`rpc.system.name` attribute (`rpc_system_name` in PromQL) in both SQL and PromQL. The removed `rpc.service` attribute
+is not used by any panel.
 
 `atframework_trace_calls` is a Counter for request rates. `atframework_trace_duration_*` is a millisecond histogram;
 aggregate bucket rates with `sum by (le)` before `histogram_quantile`. The default `span_kind=SPAN_KIND_SERVER` avoids

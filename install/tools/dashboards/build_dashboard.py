@@ -13,7 +13,7 @@ COMMON = (
     'service_name=~"${service_name:pipe}",'
     'service_instance_id=~"${process:pipe}"'
 )
-TRACE_METRIC_COMMON = COMMON + ',span_kind=~"${span_kind:pipe}",rpc_method=~"${rpc_system:pipe}.*",rpc_method=~"${rpc_method:pipe}"'
+TRACE_METRIC_COMMON = COMMON + ',span_kind=~"${span_kind:pipe}",rpc_system_name=~"${rpc_system:pipe}",rpc_method=~"${rpc_method:pipe}"'
 TRACE_COMMON = (
     "re_match(service_deployment_environment_name, '${deployment_environment:pipe}') AND "
     "re_match(service_service_area_zone_id, '${zone_id:pipe}') AND "
@@ -21,7 +21,7 @@ TRACE_COMMON = (
     "re_match(service_service_instance_id, '${process:pipe}')"
 )
 RPC_COMMON = (
-    TRACE_COMMON + " AND re_match(rpc_method, '${rpc_system:pipe}.*') AND "
+    TRACE_COMMON + " AND re_match(rpc_system_name, '${rpc_system:pipe}') AND "
     "re_match(rpc_method, '${rpc_method:pipe}')"
 )
 
@@ -247,14 +247,7 @@ def main():
                 variable("zone_id", "Zone ID", "service_service_area_zone_id"),
                 variable("service_name", "Service type", "service_name"),
                 variable("process", "Process instance", "service_service_instance_id"),
-                variable("rpc_system", "RPC system", "rpc_system_name", variable_type="custom", options=[
-                    {"label": "atrpc.db", "value": "rpc.db"},
-                    {"label": "atrpc.ss", "value": "atframework"},
-                    {"label": "atrpc.task", "value": "no_dispatcher"},
-                    {"label": "atrpc.dispatcher", "value": ".*_msg_dispatcher"},
-                    {"label": "atrpc.orbit", "value": "atframework.shared.OrbitClientRpcService"},
-                    {"label": "internal", "value": ".*_msg_dispatcher/dispatch"},
-                ]),
+                variable("rpc_system", "RPC system", "rpc_system_name"),
                 variable("rpc_method", "RPC method", "rpc_method"),
                 variable("span_kind", "Span kind", "span_kind", "atframework_trace_calls", "metrics",
                          default="SPAN_KIND_SERVER"),

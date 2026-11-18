@@ -54,7 +54,8 @@ RPC Analysis 展示方法级 RED、业务结果码和慢 span；Process 展示�
 变量支持环境、`zone_id`、服务类型、完整进程实例名、RPC 系统、方法和 `span_kind` 的多选及全选。
 默认限定为 `SPAN_KIND_SERVER`，避免把 client/server 重复计为两次 RPC；可手动切换类型。计数是受采样影响的
 recording span 数，不是精确 RPC 总量，业务结果码与 `span_status` 分开分析。筛选条件只作用于具有对应标签的
-指标族，HPA/coroutine 不按 `span_kind` 过滤；RPC System 按实际方法前缀筛选，不使用值为 `NONE` 的 `rpc.system`。
+指标族，HPA/coroutine 不按 `span_kind` 过滤；RPC System 使用稳定属性 `rpc.system.name`，不再使用已移除的
+`rpc.service` 或旧 `rpc.system`。
 
 `atframework_trace_calls` 是 Counter，使用 `rate()` 计算速率；`atframework_trace_duration_*` 是毫秒直方图，
 先按 `le` 聚合速率，再计算 `histogram_quantile`。`rpc_atrpc_result_code` 仅用于业务结果分布，

@@ -121,6 +121,6 @@ operational procedure rather than treating rendering permission as deployment pe
   Gauges and must not be used with `rate()`. Default to `SPAN_KIND_SERVER` to avoid double-counting client and server
   spans as separate RPC calls, and document that counts are sampled recording spans rather than exact RPC totals.
   Apply filters only to metric families that carry the corresponding label: HPA and coroutine panels do not use
-  `span_kind`, and trace/RPC method filters must not be forced onto unrelated resource metrics. Map RPC System to
-  verified method prefixes instead of the collector's `rpc.system=NONE` label, and apply that prefix in both SQL and
-  PromQL so a system selection cannot leave unrelated methods visible.
+  `span_kind`, and trace/RPC method filters must not be forced onto unrelated resource metrics. Use the stable
+  `rpc.system.name` attribute (`rpc_system_name` in PromQL) for RPC System filters in both SQL and PromQL; do not use
+  the removed `rpc.service` or legacy `rpc.system` attributes.
