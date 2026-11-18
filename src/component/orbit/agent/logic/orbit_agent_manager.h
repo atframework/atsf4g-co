@@ -47,21 +47,17 @@ class context;
 }  // namespace rpc
 
 struct orbit_agent_client_record {
-  // Agent 拉起进程时分配的通信标识，进程存活期内不变；Client 与 Agent 之间的报文都用它
+  // Agent 拉起进程时分配的通信标识
   uint64_t client_instance_id = 0;
-  // 拉起时通过启动参数下发的 id：预启动为本地分配，普通启动就是真实 client_id
-  std::string local_client_id;
-  // 真实 client_id，由接入端传入；预启动未认领时为空
   std::string client_id;
   // 拉起时使用的模板
   int32_t client_template_id = 0;
-  bool seed_process = false;  // 是否为种子进程
-  bool pre_start = false;     // 是否预启动
-  // 是否已向 Client 下发 start_client：这是启动成功的唯一判定依据，
-  // 未置位就退出（进程退出/启动超时/主动 stop）一律按启动失败处理
-  bool start_client_sent = false;
-  // 启动失败是否已计数，避免 EXITING/EXITED 多次状态转换重复累加
-  bool startup_failure_counted = false;
+
+  bool seed_process = false;             // 是否为种子进程
+  bool pre_start = false;                // 是否曾经为预拉起
+  bool claimed = false;                  // 是否已认领 非预启动默认认领
+  bool start_client_sent = false;        // 是否发送启动请求
+  bool startup_failure_counted = false;  // 是否已经记录启动失败
 
   // Client 启动参数
   ::google::protobuf::RepeatedPtrField<::std::string> custom_args;  // 来自模板的启动参数
@@ -101,6 +97,26 @@ struct orbit_agent_server_info {
 };
 
 using orbit_agent_client_record_ptr = atfw::util::memory::strong_rc_ptr<orbit_agent_client_record>;
+
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
+template <class CharT>
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<orbit_agent_client_record, CharT>
+    : formatter<basic_string_view<CharT>, CharT> {
+  template <class FormatContext>
+  auto format(const orbit_agent_client_record& record, FormatContext& ctx) const {
+    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "client {}({})", record.client_id, record.client_instance_id);
+  }
+};
+
+template <class CharT>
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<orbit_agent_client_record_ptr, CharT>
+    : formatter<basic_string_view<CharT>, CharT> {
+  template <class FormatContext>
+  auto format(const orbit_agent_client_record_ptr& record, FormatContext& ctx) const {
+    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "client {}({})", record->client_id, record->client_instance_id);
+  }
+};
+ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END
 
 class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_manager> {
  public:
@@ -185,36 +201,34 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 找出该模板下已 ready 且未被认领的预启动进程
   orbit_agent_client_record_ptr find_idle_pre_start_client(int32_t client_template_id) noexcept;
   // 把预启动进程绑定到本次启动请求
-  void bind_pre_start_client(const orbit_agent_client_record_ptr& client_record,
-                             const atfw::orbit::CTAStartClientReq& request);
+  void claime_client(const orbit_agent_client_record_ptr& client_record, const atfw::orbit::CTAStartClientReq& request);
   // 异步下发 start_client 并通知 Controller（预启动认领）
   void schedule_start_claimed_client(const orbit_agent_client_record_ptr& client_record);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_claimed_client(rpc::context& ctx,
-                                                                    orbit_agent_client_record_ptr client_record);
+                                                                     orbit_agent_client_record_ptr client_record);
   // 异步下发 start_client（普通启动：Client 上报 Ready 后被接受时下发）
   void schedule_send_start_client(const orbit_agent_client_record_ptr& client_record);
   // 向 Client 下发 start_client
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_start_client(rpc::context& ctx,
-                                                                 orbit_agent_client_record_ptr client_record);
-  // 置位 start_client_sent，并按"启动成功"清理连续失败计数
-  void mark_start_client_sent(const orbit_agent_client_record_ptr& client_record);
+                                                                  orbit_agent_client_record_ptr client_record);
   // 未下发 start_client 就退出时，按"启动失败"累加计数
   void record_client_startup_failure(const orbit_agent_client_record_ptr& client_record);
+  // 启动成功
+  void record_client_startup_success(const orbit_agent_client_record_ptr& client_record);
   // 周期打印 Agent 运行情况（各模板的预启动/运行数量）
   void log_agent_running_summary(time_t now);
 
   void set_client_state(const orbit_agent_client_record_ptr& record, atfw::orbit::EnClientState state);
 
+  void fill_render_values(const orbit_agent_client_record_ptr& record,
+                          std::unordered_map<std::string, std::string>& render_values) const;
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
                                         std::vector<std::string>& output, bool remote_start) const;
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request,
                                   const client_template_t& client_template, orbit_agent_client_record_ptr& output);
-  int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::string& client_path,
-                           const std::vector<std::string>& command_line, bool seed_client);
+  int spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record, bool seed_client);
   rpc::result_code_type remote_spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record,
                                                     const std::vector<std::string>& command_line);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(rpc::context& ctx,
-                                                                          orbit_agent_client_record_ptr record);
   void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
                                      const std::unordered_map<std::string, std::string>& render_values,
                                      const std::string& client_path, const std::vector<std::string>& command_line,
@@ -281,13 +295,14 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 启动的Client数据，key 为通信标识
   std::unordered_map<uint64_t, orbit_agent_client_record_ptr> clients_;
+  // 种子进程 以 template_id 为key
+  std::unordered_map<int32_t, orbit_agent_client_record_ptr> seed_clients_;
   // 已认领的真实 client_id → 通信标识
   std::unordered_map<std::string, uint64_t> client_id_to_instance_id_;
   std::unordered_map<uint64_t, std::set<std::string>> server_unique_id_to_client_ids_;
-  orbit_agent_client_record_ptr seed_client_record_;  // 种子进程记录
-  int32_t batch_startup_count_ = 0;                   // 当前批次启动的Client数量
-  bool agent_online_ = false;                         // Agent是否可以开始分配
-  int32_t repeated_startup_failures_ = 0;             // Client 连续启动失败
+  int32_t batch_startup_count_ = 0;        // 当前批次启动的Client数量
+  bool agent_online_ = false;              // Agent是否可以开始分配
+  int32_t repeated_startup_failures_ = 0;  // Client 连续启动失败
 
   // Server唯一ID到ServerIdentity的映射 用于心跳和转发消息时更新路由信息
   std::unordered_map<uint64_t, orbit_agent_server_info> server_unique_id_to_identity_;
@@ -298,17 +313,17 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   std::string remote_agent_endpoint_;
   std::string tag_;
   std::string client_ip_;
+  std::string log_name_;
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
   time_t server_identity_timeout_sec_ = 0;
   time_t server_identity_check_interval_sec_ = 0;
   int32_t max_batch_startup_count_ = 0;
   bool seed_mode_enabled_ = false;
-  uint32_t seed_startup_timeout_sec_ = 0;
-  uint32_t seed_heartbeat_timeout_sec_ = 0;
   int32_t repeated_startup_failures_fatal_error_ = 0;
   std::atomic<double> load_usage_ = 0.0;
   std::atomic<double> load_limit_ = 0.0;
+  bool stop_running_client_ = true;
 
   // Agent 实例唯一标识，随启动参数下发给 Client
   std::string agent_instance_id_;
@@ -323,9 +338,6 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   std::string client_path_;
   std::vector<std::string> client_command_line_;
-
-  std::string seed_client_path_;
-  std::vector<std::string> seed_client_command_line_;
 
   atfw::orbit::DAgentIdentity agent_identity_;
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;

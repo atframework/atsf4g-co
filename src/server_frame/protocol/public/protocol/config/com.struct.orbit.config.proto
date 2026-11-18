@@ -34,5 +34,6 @@ message ExcelOrbitClientTemplate {
   bool remote_start_client = 10;
   uint32 pre_start_count = 11;
   uint32 load_percentage = 12;
+  bool seed_mode = 13;
   repeated string launch_args = 21;
 }

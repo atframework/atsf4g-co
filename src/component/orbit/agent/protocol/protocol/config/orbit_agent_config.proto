@@ -25,13 +25,9 @@ message orbit_agent_cfg {
   // 未认领的预启动进程连续启动失败达到该次数后，停止该模板的预启动；0 表示不限制
   uint32 pre_start_repeated_failures_limit = 14;
 
-  bool enable_seed_mode = 21;
-  uint32 seed_startup_timeout_sec = 22;
-  uint32 seed_heartbeat_timeout_sec = 23;
-
   string client_path = 31;
   string client_command_line = 32;
+  string log_name = 33;
 
-  string seed_client_path = 41;
-  string seed_client_command_line = 42;
+  bool enable_seed_mode = 40;
 }

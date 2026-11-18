@@ -41,6 +41,7 @@ service AgentToClientService {
 message ATDStartClientReq {
   // 真实 client_id。为空表示沿用拉起时下发的 Client 通信标识
   DClientId client_id = 1;
+  map<string, string> custom_data = 2;
 }
 message DTAStartClientRsp {
   int32 error_code = 1;
@@ -108,8 +109,6 @@ message ATDClientHeartbeatRsp {
   int32 error_code = 1;
   // Agent 实例唯一标识。Client 用于判断自己是否还属于当前 Agent 实例
   string agent_instance_id = 2;
-  // Client 已被认领时回填真实 client_id
-  DClientId client_id = 3;
 }
 
 message DTASendToServerReq {

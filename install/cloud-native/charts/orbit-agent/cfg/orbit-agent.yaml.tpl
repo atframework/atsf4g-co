@@ -16,10 +16,7 @@ orbit_agent:
   enable_pre_start: {{ .Values.orbit_agent.enable_pre_start }}
   pre_start_repeated_failures_limit: {{ .Values.orbit_agent.pre_start_repeated_failures_limit }}
   enable_seed_mode: {{ .Values.orbit_agent.enable_seed_mode }}
-  seed_startup_timeout_sec: {{ .Values.orbit_agent.seed_startup_timeout_sec }}
-  seed_heartbeat_timeout_sec: {{ .Values.orbit_agent.seed_heartbeat_timeout_sec }}
 
   client_path: {{ .Values.orbit_agent.client_path }}
   client_command_line: {{ .Values.orbit_agent.client_command_line }}
-  seed_client_path: {{ .Values.orbit_agent.seed_client_path }}
-  seed_client_command_line: {{ .Values.orbit_agent.seed_client_command_line }}
+  log_name: {{ .Values.orbit_agent.log_name }}

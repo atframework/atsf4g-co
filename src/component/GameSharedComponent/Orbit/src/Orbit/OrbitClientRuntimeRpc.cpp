@@ -759,16 +759,17 @@ int32_t OrbitClientRuntime::rpc_receive_start_client(const ::atframework::SSMsgH
   }
 
   if (enabled_io_thread()) {
-    post_to_caller_thread([this, client_id] {
-      ORBIT_LOG(OrbitClientLogLevel::kInfo, LOG_WRAPPER_FWAPI_FORMAT("start_client received, client_id={}", client_id));
+    post_to_caller_thread([this, request] {
+      ORBIT_LOG(OrbitClientLogLevel::kInfo,
+                LOG_WRAPPER_FWAPI_FORMAT("start_client received, client_id={}", request.client_id().client_id()));
       if (callbacks_.on_start_client) {
-        callbacks_.on_start_client(client_id);
+        callbacks_.on_start_client(request.client_id().client_id(), request.custom_data());
       }
     });
   } else {
     ORBIT_LOG(OrbitClientLogLevel::kInfo, LOG_WRAPPER_FWAPI_FORMAT("start_client received, client_id={}", client_id));
     if (callbacks_.on_start_client) {
-      callbacks_.on_start_client(client_id);
+      callbacks_.on_start_client(client_id, request.custom_data());
     }
   }
 

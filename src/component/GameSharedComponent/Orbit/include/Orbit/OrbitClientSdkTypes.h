@@ -83,7 +83,8 @@ using OrbitClientStopCallback = std::function<void()>;
 using OrbitClientSeedWaitingTickCallback = std::function<void()>;
 // 收到 Agent 的 start_client：调用方上报 Ready 且被接受后，Agent 一定会下发该通知，
 // 此时进程真正可用，可以开始对外服务；client_id 为空表示沿用拉起时下发的值
-using OrbitClientStartCallback = std::function<void(const std::string& client_id)>;
+using OrbitClientStartCallback = std::function<void(
+    const std::string& client_id, const google::protobuf::Map<std::string, std::string>& custom_data)>;
 
 template <class TResponse>
 using OrbitClientRpcCallback = std::function<void(int32_t, const TResponse& response)>;
