@@ -5,9 +5,17 @@
 #include <rpc/agenttoclientservice/agenttoclientservice.atfw.gen.h>
 #include <rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.h>
 
+#include <config/excel/config_easy_api.h>
+#include <config/logic_config.h>
+#include <log/log_wrapper.h>
 #include <logic/logic_server_setup.h>
+#include <memory/object_allocator.h>
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_shared_message.h>
+#include <time/time_utility.h>
+#include <utility/protobuf_mini_dumper.h>
 
+#include <cstring>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -23,7 +31,7 @@ constexpr const char* kOrbitStartTimeout = "--start_timeout";
 constexpr const char* kOrbitClientInstanceIdArg = "--orbit-client-instance-id";
 constexpr const char* kOrbitAgentInstanceIdArg = "--orbit-agent-instance-id";
 constexpr const char* kAtappMetadataScopeEnvKey = "ATAPP_METADATA_SCOPE";
-// constexpr const char* kOrbitSeedMode = "--seed_mode";
+constexpr const char* kOrbitSeedMode = "--seed_mode";
 constexpr const char* kStartClientCustomDataLogName = "log_name";
 
 static std::string render_string_template(const std::string& input,
@@ -106,23 +114,169 @@ static void on_uv_process_exit_callback(uv_process_t* handle, int64_t exit_statu
 }  // namespace
 
 int orbit_agent_manager::startup_seed_client() {
-  // 遍历表 找到需要SeedMode的客户端
-  // TODO(yousongyang)
-  // std::string client_id = atfw::util::log::format("seed_client_{}_{}", logic_config::me()->get_local_server_id(),
-  //                                                 util::time::time_utility::get_sys_now());
-  // auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
-  // record->client_instance_id = ++sequence_allocator_;
-  // record->client_id = client_id;
-  // clients_[record->client_instance_id] = record;
-  // record->seed_process = true;
-  // // record->startup_timeout_sec = seed_startup_timeout_sec_;
-  // // record->heartbeat_timeout_sec = seed_heartbeat_timeout_sec_;
+  if (!seed_mode_enabled_) {
+    // 非 Seed 模式不需要种子进程，Agent 直接可以对外服务
+    return 0;
+  }
 
-  // set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
-  // record->client_addr.clear();
+  // 遍历表，为本 Agent tag 匹配且开启 seed_mode 的模板各拉起一个种子进程
+  const auto& all_templates = excel::get_ExcelOrbitClientTemplate_all_of_client_template_id();
+  for (const auto& kv : all_templates) {
+    const auto& template_conf = kv.second;
+    if (template_conf == nullptr) {
+      continue;
+    }
 
-  // return spawn_client_process(logic_server_get_current_tick_context(), record, true);
+    client_template_t client_template;
+    if (!load_client_template(template_conf->client_template_id(), client_template)) {
+      FWLOGERROR("orbit agent seed client skipped: client_template_id {} not found",
+                 template_conf->client_template_id());
+      continue;
+    }
+
+    if (!client_template.seed_mode) {
+      continue;
+    }
+
+    // 只拉起本机负责的模板：tag 不匹配或远端启动的模板不在本机生成种子
+    if (client_template.match_tag != tag_ || client_template.remote_start) {
+      continue;
+    }
+
+    if (seed_clients_.find(client_template.client_template_id) != seed_clients_.end()) {
+      FWLOGWARNING("orbit agent seed client for client_template_id {} already exists, skip startup",
+                   client_template.client_template_id);
+      continue;
+    }
+
+    auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
+    record->client_instance_id = ++sequence_allocator_;
+    record->client_id =
+        atfw::util::log::format("seed_{}_{}", record->client_instance_id, logic_config::me()->get_local_server_id());
+    record->client_template_id = client_template.client_template_id;
+    record->seed_process = true;
+    // 种子进程不参与 Controller 通知与 start_client 流程
+    record->claimed = false;
+    record->remote_start = false;
+    record->expected_cpu = client_template.expected_cpu;
+    record->expected_memory_mb = client_template.expected_memory_mb;
+    record->startup_timeout_sec = client_template.startup_timeout_sec > 0 ? client_template.startup_timeout_sec : 120;
+    record->heartbeat_timeout_sec =
+        client_template.heartbeat_timeout_sec > 0 ? client_template.heartbeat_timeout_sec : 60;
+    record->custom_args.Clear();
+    for (const std::string& launch_arg : client_template.launch_args) {
+      *record->custom_args.Add() = launch_arg;
+    }
+    record->start_timepoint = util::time::time_utility::get_sys_now();
+    set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
+    record->client_addr.clear();
+
+    // 先入池再拉起，保证种子上报 Ready 时一定能查到记录
+    clients_[record->client_instance_id] = record;
+    seed_clients_[record->client_template_id] = record;
+    ++seed_startup_pending_count_;
+
+    int spawn_result = spawn_seed_client_process(record);
+    if (spawn_result < 0) {
+      FWLOGERROR("orbit agent spawn seed {} for client_template_id {} failed, res: {}", record,
+                 record->client_template_id, spawn_result);
+      delete_client(record);
+      continue;
+    }
+
+    FWLOGINFO("orbit agent seed {} for client_template_id {} spawned", record, record->client_template_id);
+  }
+
+  if (seed_startup_pending_count_ > 0) {
+    // 等种子进程上报启动结果，全部出结果后在 resolve_seed_client_startup 里转为可分配
+    return 0;
+  }
+
+  if (!agent_online_) {
+    if (seed_startup_failure_count_ == 0) {
+      FWLOGWARNING("orbit agent seed mode enabled but no client template needs a seed process, agent online directly");
+    }
+    agent_online_ = true;
+  }
   return 0;
+}
+
+int orbit_agent_manager::spawn_seed_client_process(const orbit_agent_client_record_ptr& record) {
+  if (!record) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  std::vector<std::string> launch_arguments;
+  std::unordered_map<std::string, std::string> render_values;
+  fill_render_values(record, render_values);
+  build_client_launch_arguments(record, render_values, client_path_, client_command_line_, launch_arguments, false);
+  launch_arguments.emplace_back(kOrbitSeedMode);
+
+  // 种子进程不 detach：它需要承接 Agent 的 stdio 并长期存活
+  int32_t spawn_result = spawn_client_async(record->client_instance_id, std::move(launch_arguments), false);
+  if (spawn_result < 0) {
+    FWLOGERROR("orbit agent submit seed spawn {} to worker pool failed, res: {}({})", record, spawn_result,
+               protobuf_mini_dumper_get_error_msg(spawn_result));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
+  }
+
+  FWLOGINFO("orbit agent submitted seed spawn {} to worker pool", record);
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+orbit_agent_client_record_ptr orbit_agent_manager::find_seed_client(int32_t client_template_id) noexcept {
+  auto iter = seed_clients_.find(client_template_id);
+  if (seed_clients_.end() == iter || !iter->second) {
+    return nullptr;
+  }
+
+  const auto& seed_record = iter->second;
+  // 只有已 Ready 且拿到 Client 通信节点的种子才能接收 Fork 请求
+  if (!seed_record->seed_ready || atfw::orbit::EN_CLIENT_STATE_RUNNING != seed_record->state ||
+      0 == seed_record->client_server_id) {
+    return nullptr;
+  }
+  return seed_record;
+}
+
+void orbit_agent_manager::resolve_seed_client_startup(const orbit_agent_client_record_ptr& record, bool success) {
+  if (!record || !record->seed_process || record->seed_startup_resolved) {
+    return;
+  }
+  record->seed_startup_resolved = true;
+  if (stoped_) {
+    // 退出流程中不再结算种子启动结果，也不把 Agent 重新置为在线
+    return;
+  }
+
+  if (success) {
+    ++seed_startup_success_count_;
+    FWLOGINFO("orbit agent seed {} for client_template_id={} is ready", record, record->client_template_id);
+  } else {
+    ++seed_startup_failure_count_;
+    FWLOGERROR(
+        "orbit agent seed {} for client_template_id={} failed to start, this template will fall back to local "
+        "process spawn",
+        record, record->client_template_id);
+  }
+
+  if (seed_startup_pending_count_ > 0) {
+    --seed_startup_pending_count_;
+  }
+  if (seed_startup_pending_count_ > 0 || agent_online_) {
+    return;
+  }
+
+  // 所有种子都出结果了：即使有失败也放行，让 Agent 继续接单，失败信息只体现在日志里
+  agent_online_ = true;
+  update_etcd_load_snapshot();
+  need_update_load_json_ = true;
+  if (seed_startup_failure_count_ > 0) {
+    FWLOGWARNING("orbit agent online with {} seed client(s) ready and {} failed", seed_startup_success_count_,
+                 seed_startup_failure_count_);
+  } else {
+    FWLOGINFO("orbit agent all {} seed client(s) ready, agent online", seed_startup_success_count_);
+  }
 }
 
 void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
@@ -439,52 +593,113 @@ rpc::result_code_type orbit_agent_manager::send_start_client(rpc::context& ctx,
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int orbit_agent_manager::spawn_client_process(rpc::context&, const orbit_agent_client_record_ptr& record,
-                                              bool seed_client) {
+rpc::result_code_type orbit_agent_manager::spawn_client_process(rpc::context& ctx,
+                                                                orbit_agent_client_record_ptr record) {
+  if (!record) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  // Seed 模式：同模板有可用种子时从种子进程 Fork，不再在本机拉起新进程
+  orbit_agent_client_record_ptr seed_record = find_seed_client(record->client_template_id);
+  if (seed_record != nullptr) {
+    int32_t fork_result = RPC_AWAIT_CODE_RESULT(fork_seed_client_process(ctx, record, seed_record));
+    if (fork_result < 0) {
+      RPC_RETURN_CODE(fork_result);
+    }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  if (seed_mode_enabled_) {
+    // 该模板的种子启动失败时退回本机拉起，保证 Client 仍然能被调度起来
+    FWLOGWARNING("orbit agent seed for client_template_id={} is unavailable, fall back to local spawn for {}",
+                 record->client_template_id, record);
+  }
+
   std::vector<std::string> launch_arguments;
 
   std::unordered_map<std::string, std::string> render_values;
   fill_render_values(record, render_values);
 
   build_client_launch_arguments(record, render_values, client_path_, client_command_line_, launch_arguments, false);
-  bool detached = !seed_client && !stop_running_client_;
+  bool detached = !stop_running_client_;
   int32_t spawn_result = spawn_client_async(record->client_instance_id, std::move(launch_arguments), detached);
   if (spawn_result < 0) {
     FWLOGERROR("orbit agent submit spawn {} to worker pool failed, res: {}({})", record, spawn_result,
                protobuf_mini_dumper_get_error_msg(spawn_result));
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
 
   FWLOGINFO("orbit agent submitted spawn {} to worker pool", record);
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
 
-  // TODO(yousongyang)
-  // // 种子模式 发送消息给种子进程
-  // if (nullptr == seed_client_record_) {
-  //   FWLOGERROR("orbit agent spawn_seed_client_process failed: seed_client_record_ is null");
-  //   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
-  // }
+void orbit_agent_manager::schedule_spawn_client_process(const orbit_agent_client_record_ptr& client_record) {
+  if (!client_record) {
+    return;
+  }
 
-  // uint64_t app_id = ++sequence_allocator_;
-  // auto req = rpc::make_shared_message<atfw::orbit::ATDForkSeedClientReq>(ctx);
-  // auto rsp = rpc::make_shared_message<atfw::orbit::DTAForkSeedClientRsp>(ctx);
-  // req->set_app_id(app_id);
-  // req->mutable_start_args()->mutable_client_id()->set_client_id(record->client_id);
-  // *req->mutable_start_args()->mutable_custom_args() = record->custom_args;
+  auto invoke_result = rpc::async_invoke(
+      logic_server_get_current_tick_context(), "orbit_agent_manager.spawn_client_process",
+      [client_record](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+        int32_t spawn_result =
+            RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->spawn_client_process(sub_ctx, client_record));
+        if (spawn_result < 0) {
+          FWLOGERROR("orbit agent spawn {} failed, res: {}", client_record, spawn_result);
+          orbit_agent_manager::me()->delete_client(client_record);
+        }
+        RPC_RETURN_CODE(spawn_result);
+      });
+  if (!invoke_result.is_success()) {
+    FWLOGERROR("orbit agent failed to schedule spawn {} for {}, res: {}({})", client_record,
+               client_record->client_template_id, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    delete_client(client_record);
+  }
+}
 
-  // int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-  //     rpc::agenttoclientservice::fork_seed_client(ctx, seed_client_record_->client_server_id, *req, *rsp));
-  // if (rpc_result == 0) {
-  //   rpc_result = rsp->error_code();
-  // }
-  // if (rpc_result < 0) {
-  //   FWLOGERROR("orbit agent fork_seed_client failed for {} to client node {:#x}, res: {}",
-  //              seed_client_record_->client_id, seed_client_record_->client_server_id, rpc_result);
-  //   RPC_RETURN_CODE(rpc_result);
-  // } else {
-  //   record->process_id = rsp->pid();
-  // }
-  // RPC_RETURN_CODE(rsp->error_code());
+rpc::result_code_type orbit_agent_manager::fork_seed_client_process(rpc::context& ctx,
+                                                                    orbit_agent_client_record_ptr record,
+                                                                    orbit_agent_client_record_ptr seed_record) {
+  if (!record || !seed_record) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  uint64_t app_id = ++sequence_allocator_;
+  auto req = rpc::make_shared_message<atfw::orbit::ATDForkSeedClientReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::DTAForkSeedClientRsp>(ctx);
+  req->set_app_id(app_id);
+  req->mutable_start_args()->mutable_client_id()->set_client_id(record->client_id);
+  // 子进程必须用自己的通信标识回报 client_start，不能沿用种子进程的
+  req->mutable_start_args()->set_client_instance_id(record->client_instance_id);
+
+  // Fork 出的子进程复用种子进程的连接信息，只需要重建应用级启动参数：
+  // 基础命令行 + 模板自定义参数，逐个渲染 ${field} 占位符
+  std::unordered_map<std::string, std::string> render_values;
+  fill_render_values(record, render_values);
+  for (const std::string& command_arg : client_command_line_) {
+    req->mutable_start_args()->add_custom_args(render_string_template(command_arg, render_values));
+  }
+  for (const std::string& custom_arg : record->custom_args) {
+    req->mutable_start_args()->add_custom_args(render_string_template(custom_arg, render_values));
+  }
+
+  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
+      rpc::agenttoclientservice::fork_seed_client(ctx, seed_record->client_server_id, *req, *rsp));
+  if (0 == rpc_result) {
+    rpc_result = rsp->error_code();
+  }
+  if (0 != rpc_result) {
+    FWLOGERROR("orbit agent fork_seed_client failed for {} by seed {} to client node {:#x}, res: {}", record,
+               seed_record, seed_record->client_server_id, rpc_result);
+    RPC_RETURN_CODE(rpc_result);
+  }
+
+  // 种子进程先回包再执行 fork，pid 通常拿不到；子进程靠上报 client_start 完成接管
+  if (rsp->pid() > 0) {
+    record->process_id = static_cast<int64_t>(rsp->pid());
+  }
+  FWLOGINFO("orbit agent {} forked by seed {}", record, seed_record);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(rpc::context& ctx,
@@ -560,9 +775,16 @@ void orbit_agent_manager::on_uv_process_exit(uv_process_t* process_handle, int64
   uv_action_t action;
   action.is_spawn_completion_ = false;
   auto* data = static_cast<orbit_agent_process_exit_data*>(process_handle->data);
+  if (nullptr == data) {
+    // 句柄已被 worker 退出流程处理并登记关闭，这里不再重复处理
+    return;
+  }
   action.process_exit_action_ = {
       .client_instance_id = data->client_instance_id, .exit_status_ = exit_status, .term_signal_ = term_signal};
   uint64_t worker_unique_id = data->worker_unique_id;
+  // 进程已经退出，排队中的 kill 请求作废：句柄地址之后可能被新的 spawn 复用，
+  // 留着这条记录会让新进程被误杀
+  orbit_agent_manager::me()->need_kill_process_.erase(process_handle);
   // close handle
   delete_uv_process_handle(process_handle);
   {
@@ -668,8 +890,9 @@ void orbit_agent_manager::on_client_process_exit(const orbit_agent_client_record
   async_notify_client_exit(record);
   delete_client(record);
   if (record->seed_process) {
-    if (!stoped_) {
-      // 种子进程意外退出
+    // 已经作为 Fork 源的种子进程退出，本 Agent 无法再拉起新 Client；
+    // 启动阶段就失败的种子只记录启动失败，不影响 Agent 上线
+    if (!stoped_ && record->seed_ready) {
       FWLOGERROR("orbit agent seed client exited unexpectedly");
       agent_fatal_error();
     }

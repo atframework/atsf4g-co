@@ -50,8 +50,9 @@ bash start_all.sh
 端口由 `atgateway.listen.begin_port` 与实例号计算，不是所有实例都使用 8001。
 
 Orbit 被管理进程的路径与启动参数在 values 的 `orbit-agent.yaml` 中设置：
-`orbit_agent.client_path`、`orbit_agent.client_command_line`；seed 模式使用相应的
-`seed_client_path`、`seed_client_command_line`。修改后重新生成配置并重启对应 agent。
+`orbit_agent.client_path`、`orbit_agent.client_command_line`，日志文件名模板用 `orbit_agent.log_name`。
+Seed 模式由 Excel 模板的 `seed_mode` 列开启，种子进程复用同一套路径与启动参数。
+修改后重新生成配置并重启对应 agent。
 
 ## 停止
 

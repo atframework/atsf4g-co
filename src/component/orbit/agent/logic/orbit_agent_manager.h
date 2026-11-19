@@ -54,6 +54,8 @@ struct orbit_agent_client_record {
   int32_t client_template_id = 0;
 
   bool seed_process = false;             // 是否为种子进程
+  bool seed_ready = false;               // 种子进程是否已 Ready，可作为 Fork 源
+  bool seed_startup_resolved = false;    // 种子进程的启动结果是否已记录，避免重复结算
   bool pre_start = false;                // 是否曾经为预拉起
   bool claimed = false;                  // 是否已认领 非预启动默认认领
   bool start_client_sent = false;        // 是否发送启动请求
@@ -174,7 +176,15 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   const atfw::orbit::DAgentEtcdLoadRecord& get_load_record() const noexcept { return load_record_; }
 
  private:
+  // ---- 种子进程 ----
+  // 遍历 Excel，为本 Agent tag 匹配且开启 seed_mode 的模板各拉起一个种子进程
   int startup_seed_client();
+  // 本机拉起种子进程：不走 RPC，供 init 阶段调用
+  int spawn_seed_client_process(const orbit_agent_client_record_ptr& record);
+  // 按模板查找可作为 Fork 源的种子进程
+  orbit_agent_client_record_ptr find_seed_client(int32_t client_template_id) noexcept;
+  // 记录种子进程启动结果；所有种子都出结果后把 Agent 置为可对外服务
+  void resolve_seed_client_startup(const orbit_agent_client_record_ptr& record, bool success);
 
   // ---- 预启动 ----
   // 从 Excel 读出的客户端模板参数
@@ -186,6 +196,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
     uint32_t heartbeat_timeout_sec = 0;
     uint32_t pre_start_count = 0;
     bool remote_start = false;
+    bool seed_mode = false;
     std::string match_tag;
     std::vector<std::string> launch_args;
   };
@@ -226,7 +237,15 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                         std::vector<std::string>& output, bool remote_start) const;
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request,
                                   const client_template_t& client_template, orbit_agent_client_record_ptr& output);
-  int spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record, bool seed_client);
+  // 拉起 Client：Seed 模式下从同模板种子进程 Fork，否则本机 spawn
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_client_process(rpc::context& ctx,
+                                                                     orbit_agent_client_record_ptr record);
+  // 异步调度 spawn_client_process，失败时清理记录
+  void schedule_spawn_client_process(const orbit_agent_client_record_ptr& client_record);
+  // 从种子进程 Fork 出子进程
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type fork_seed_client_process(rpc::context& ctx,
+                                                                         orbit_agent_client_record_ptr record,
+                                                                         orbit_agent_client_record_ptr seed_record);
   rpc::result_code_type remote_spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record,
                                                     const std::vector<std::string>& command_line);
   void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
@@ -295,8 +314,12 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 启动的Client数据，key 为通信标识
   std::unordered_map<uint64_t, orbit_agent_client_record_ptr> clients_;
-  // 种子进程 以 template_id 为key
+  // 种子进程 以 template_id 为key；就绪后作为该模板的 Fork 源，进程退出时移除
   std::unordered_map<int32_t, orbit_agent_client_record_ptr> seed_clients_;
+  // 尚未出启动结果的种子进程数量：全部出结果（成功或失败）后 Agent 才置为可分配
+  int32_t seed_startup_pending_count_ = 0;
+  int32_t seed_startup_success_count_ = 0;
+  int32_t seed_startup_failure_count_ = 0;
   // 已认领的真实 client_id → 通信标识
   std::unordered_map<std::string, uint64_t> client_id_to_instance_id_;
   std::unordered_map<uint64_t, std::set<std::string>> server_unique_id_to_client_ids_;

@@ -727,6 +727,9 @@ int32_t OrbitClientRuntime::process_fork_request() {
   options_.seed_mode = false;
   pending_fork_requests_.clear();
   options_.client_id = request.start_args().client_id().client_id();
+  if (request.start_args().client_instance_id() != 0) {
+    options_.client_instance_id = request.start_args().client_instance_id();
+  }
   options_.custom_launch_arguments =
       std::vector<std::string>(request.start_args().custom_args().begin(), request.start_args().custom_args().end());
   return init(request.app_id(), options_,
