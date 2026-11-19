@@ -2,7 +2,7 @@
   "repo_url": "https://github.com/microsoft/tgrep.git",
   "source_commit": "1a846b3abc9bf3a196a426b23e547a91e803aecb",
   "declared_version": "1.2.8",
-  "integration_revision": "mcp-stdio-v3",
+  "integration_revision": "mcp-stdio-v4",
   "rust_edition": "2024",
   "rust_minimum": "1.88",
   "patches": [
@@ -21,6 +21,7 @@
     "index_invalid_error_code": -32002,
     "lock_conflict": "serve.lock exclusive lock fails at startup",
     "max_count_semantics": "per-file limit, not a global result cap",
+    "stdio_search_limit": "7 MiB encoded search records; return complete records in candidate order and set truncated when more cannot fit",
     "transport": "serve --transport stdio (integration patch); newline-delimited JSON-RPC over private pipes; stdin EOF stops the server"
   }
 }

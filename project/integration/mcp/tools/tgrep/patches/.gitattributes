@@ -1,2 +1,3 @@
+0001-serve-add-private-stdio-transport.patch text eol=lf whitespace=-blank-at-eol
 # Preserve CR bytes in hunks for the pinned upstream gitignore.rs (stored as CRLF).
 0002-bound-inherited-ignore-matching-to-served-root.patch -text whitespace=cr-at-eol

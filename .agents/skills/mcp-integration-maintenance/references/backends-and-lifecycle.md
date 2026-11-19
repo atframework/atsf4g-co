@@ -52,7 +52,10 @@ before relying on them after an upgrade.
 - tgrep speaks newline JSON-RPC (`search`/`files`/`status`; `reload` never
   exposed) through the integration patch adding `--transport stdio`. The patch
   keeps `serve.lock` exclusivity and uses upstream search budgeting with a
-  7 MiB stdio search reply budget. Revision `mcp-stdio-v3` preserves the
+  7 MiB stdio search reply budget. Revision `mcp-stdio-v4` returns complete
+  rows that fit and sets `truncated: true` if the query has more rows. Run
+  `tools/tgrep/tools/search-limit-smoke.mjs <binary> <build-scratch-dir>`
+  for multi-file and single-file overflow. The patch also preserves the
   inherited ignore fix above an explicit
   served root: the walk enters that root, so watcher parent checks must stop
   there while preserving rules for descendants. Patch 0002 covers `.gitignore`,

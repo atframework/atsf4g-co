@@ -11,7 +11,7 @@ index c18593b..9eacfa9 100644
 +        #[arg(long, value_enum, default_value = "tcp", value_name = "TRANSPORT")]
 +        transport: serve::ServeTransport,
      },
-
+ 
      /// Explicit shared-worktree attachment lifecycle (JSON output).
 @@ -1447,12 +1451,17 @@ fn run_cli() {
              exclude,
@@ -41,13 +41,13 @@ index c18593b..9eacfa9 100644
                          poll_interval: Duration::from_secs(poll_interval),
                          watch_budget: watch_budget as usize,
 diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
-index 3d237d9..bc43fe4 100644
+index 3d237d9..f6d37d0 100644
 --- a/tgrep-cli/src/serve.rs
 +++ b/tgrep-cli/src/serve.rs
 @@ -911,8 +911,17 @@ impl SearchOpts {
      }
  }
-
+ 
 +/// Transport for the per-workspace server.
 +#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 +pub enum ServeTransport {
@@ -73,7 +73,7 @@ index 3d237d9..bc43fe4 100644
 @@ -1063,30 +1073,40 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
          stale_refresh_hook: Mutex::new(build_tests::startup_hook()),
      });
-
+ 
 -    // Bind TCP listener on a random port
 -    let listener = TcpListener::bind("127.0.0.1:0")?;
 -    let port = listener.local_addr()?.port();
@@ -101,7 +101,7 @@ index 3d237d9..bc43fe4 100644
 +            ServerInfo::cleanup(&shutdown_index_dir);
 +            std::process::exit(0);
 +        });
-
+ 
 -    // Write server info
 -    let info = ServerInfo::new(port)?;
 -    info.save(&index_dir)?;
@@ -117,7 +117,7 @@ index 3d237d9..bc43fe4 100644
 +            "stdio (private pipes; EOF stops the server)".to_string(),
 +        )
 +    };
-
+ 
      eprintln!(
 -        "[trace] serve ready in {:.1}ms. TCP on port {}. Cache: max {} entries / {} MiB \
 +        "[trace] serve ready in {:.1}ms. {}. Cache: max {} entries / {} MiB \
@@ -132,7 +132,7 @@ index 3d237d9..bc43fe4 100644
 @@ -1158,6 +1178,10 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
          });
      }
-
+ 
 +    let Some((listener, instance)) = tcp_server else {
 +        return serve_stdio(&state);
 +    };
@@ -140,7 +140,7 @@ index 3d237d9..bc43fe4 100644
      // Accept connections. Each is served on its own thread, but only up to
      // `MAX_CONNECTIONS` at once: past that the accept loop waits for a slot,
      // and further clients queue in the listen backlog rather than each
-@@ -1710,7 +1734,12 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
+@@ -1710,7 +1734,13 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
              part_lost.set(!sent);
              sent
          };
@@ -150,14 +150,15 @@ index 3d237d9..bc43fe4 100644
 +            state,
 +            &send_part,
 +            tgrep_core::managed::MAX_RESPONSE_BYTES,
++            false,
 +        );
          if part_lost.get() {
              // Nobody is left to read the rest of the reply.
              break;
-@@ -1722,6 +1751,22 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
+@@ -1722,6 +1752,21 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
      Ok(())
  }
-
+ 
 +// Stay below the wrapper's 8 MiB frame limit, including the RPC envelope.
 +const STDIO_SEARCH_REPLY_BYTES: usize = 7 * 1024 * 1024;
 +
@@ -165,9 +166,8 @@ index 3d237d9..bc43fe4 100644
 +    let mut reader = BufReader::new(std::io::stdin().lock());
 +    let mut writer = std::io::stdout().lock();
 +    while let Some(line) = read_bounded_line(&mut reader)? {
-+        // The embedding client sends ordinary requests without streaming.
 +        let response =
-+            process_request_streaming(&line, state, &|_| false, STDIO_SEARCH_REPLY_BYTES);
++            process_request_streaming(&line, state, &|_| false, STDIO_SEARCH_REPLY_BYTES, true);
 +        writeln!(writer, "{response}")?;
 +        writer.flush()?;
 +    }
@@ -177,8 +177,8 @@ index 3d237d9..bc43fe4 100644
  fn is_timeout(error: &anyhow::Error) -> bool {
      error.downcast_ref::<std::io::Error>().is_some_and(|error| {
          matches!(
-@@ -1750,7 +1795,12 @@ fn with_instance<'a>(response: &'a str, instance: &str) -> std::borrow::Cow<'a,
-
+@@ -1750,7 +1795,13 @@ fn with_instance<'a>(response: &'a str, instance: &str) -> std::borrow::Cow<'a,
+ 
  #[cfg(test)]
  fn process_request(request: &str, state: &Arc<ServerState>) -> String {
 -    process_request_streaming(request, state, &|_| true)
@@ -187,28 +187,37 @@ index 3d237d9..bc43fe4 100644
 +        state,
 +        &|_| true,
 +        tgrep_core::managed::MAX_RESPONSE_BYTES,
++        false,
 +    )
  }
-
+ 
  /// Serve one request. `send_part` sends an early part of a reply that the
-@@ -1761,6 +1811,7 @@ fn process_request_streaming(
+@@ -1761,6 +1812,8 @@ fn process_request_streaming(
      request: &str,
      state: &Arc<ServerState>,
      send_part: &dyn Fn(&str) -> bool,
 +    reply_budget: usize,
++    truncate_response: bool,
  ) -> String {
      let req: serde_json::Value = match serde_json::from_str(request) {
          Ok(v) => v,
-@@ -1777,7 +1828,7 @@ fn process_request_streaming(
+@@ -1777,7 +1830,14 @@ fn process_request_streaming(
          .unwrap_or(serde_json::Value::Null);
-
+ 
      match method {
 -        "search" => handle_search_streaming(id, &params, state, send_part),
-+        "search" => search_with_budget(id, &params, state, send_part, reply_budget),
++        "search" => search_with_budget(
++            id,
++            &params,
++            state,
++            send_part,
++            reply_budget,
++            truncate_response,
++        ),
          "files" => handle_files(id, &params, state),
          "status" => handle_status(id, state),
          "reload" => handle_reload(id, state),
-@@ -2200,27 +2251,17 @@ fn handle_search(
+@@ -2200,33 +2260,25 @@ fn handle_search(
      id: Option<serde_json::Value>,
      params: &serde_json::Value,
      state: &ServerState,
@@ -229,15 +238,199 @@ index 3d237d9..bc43fe4 100644
 -        send_part,
 +        &|_| true,
          tgrep_core::managed::MAX_RESPONSE_BYTES,
++        false,
      )
  }
-
+ 
 -/// [`handle_search_streaming`] with the size one reply may have as a
 -/// parameter, so that tests can reach it with a few files.
 +/// Limit the serialized search reply and accumulated rows as results are collected.
  fn search_with_budget(
      id: Option<serde_json::Value>,
      params: &serde_json::Value,
+     state: &ServerState,
+     send_part: &dyn Fn(&str) -> bool,
+     reply_budget: usize,
++    truncate_response: bool,
+ ) -> String {
+     let start = Instant::now();
+     // Marks the server as in use, so the periodic reconcile waits for a gap
+@@ -2248,7 +2300,7 @@ fn search_with_budget(
+     let pattern = req.pattern;
+     let case_insensitive = req.case_insensitive;
+     let scope = req.scope;
+-    let stream = req.stream;
++    let stream = req.stream && !truncate_response;
+ 
+     // Skip redundant prefilter stats when the index used an equally strict cap.
+     // This is only an optimization: disk reads and cached source lengths must
+@@ -2501,16 +2553,16 @@ fn search_with_budget(
+     // Resolve and search in bounded chunks, in candidate order, so a broad
+     // query over a large tree never holds every candidate's decoded contents
+     // at once. Every row is charged against one response budget shared by the
+-    // parallel workers; a reply that would exceed it fails, and the client
+-    // falls back to its local index rather than the server buffering an
+-    // unbounded response. A streamed search sends each chunk's rows as a
+-    // reply of their own, and the budget starts afresh for the next.
++    // parallel workers. TCP can fail an oversized reply and let the client
++    // fall back to its local index. Stdio keeps the prefix of rows that fits.
++    // A streamed TCP search starts a fresh budget for each reply.
+     let remaining = std::sync::atomic::AtomicUsize::new(reply_budget);
+     let mut resolve_time = Duration::ZERO;
+     let mut search_time = Duration::ZERO;
+     let mut matches = Vec::new();
+     let mut file_stats = Vec::new();
+     let mut search_stats = Vec::new();
++    let mut truncated = false;
+     let mut sent_rows = 0usize;
+     let mut searched = 0usize;
+     // Whether a chunk has been searched whose rows are not yet with the client.
+@@ -2560,17 +2612,20 @@ fn search_with_budget(
+ 
+         // Parallel regex matching across candidate files
+         let t_search = Instant::now();
++        let chunk_budget = remaining.load(Ordering::Acquire);
++        let truncate_file = truncate_response && chunk.len() == 1;
+         let per_file: anyhow::Result<Vec<FileSearchResult>> = candidate_contents
+             .par_iter()
+             .map(|(rel_path, content)| {
+                 let cap = remaining.load(Ordering::Acquire);
+                 let mut budget = JsonBudget { remaining: cap };
+-                let found = search_file_matches_bounded(
++                let found = search_file_matches_with_budget(
+                     rel_path,
+                     content,
+                     &matcher,
+                     &opts,
+                     Some(&mut budget),
++                    truncate_file,
+                 )?;
+                 let used = cap - budget.remaining;
+                 let mut left = remaining.load(Ordering::Acquire);
+@@ -2594,25 +2649,34 @@ fn search_with_budget(
+         search_time += t_search.elapsed();
+         let per_file = match per_file {
+             Ok(per_file) => per_file,
+-            // Earlier parts are already with the client, which therefore
+-            // cannot search again another way. A chunk whose rows overflow
+-            // one reply is searched again as a smaller one, down to a single
+-            // file; only a file whose own rows overflow a reply cannot be
+-            // sent. Chunks grow again once one fits.
+-            Err(e) if stream && chunk.len() > 1 && e.downcast_ref::<ResponseLimit>().is_some() => {
++            // Split an oversized chunk to retain the candidate-order prefix.
++            // Discard charges from this attempt while keeping earlier chunks.
++            Err(e)
++                if (stream || truncate_response)
++                    && chunk.len() > 1
++                    && e.downcast_ref::<ResponseLimit>().is_some() =>
++            {
+                 searched -= chunk.len();
+                 unsearched = &candidate_info[searched..];
+                 chunk_files = chunk.len() / 2;
+-                remaining.store(reply_budget, Ordering::Release);
++                remaining.store(chunk_budget, Ordering::Release);
+                 continue;
+             }
++            Err(e) if truncate_response && e.downcast_ref::<ResponseLimit>().is_some() => {
++                truncated = true;
++                break;
++            }
+             Err(e) => return json_rpc_error(id, -32603, &format!("{e}")),
+         };
+         for file in per_file {
++            truncated |= file.truncated;
+             matches.extend(file.rows);
+             file_stats.extend(file.stats);
+             search_stats.extend(file.search_stats);
+         }
++        if truncated {
++            break;
++        }
+         if stream {
+             part_ready = true;
+             chunk_files = (chunk_files * 4).min(SEARCH_CHUNK_FILES);
+@@ -2652,6 +2716,9 @@ fn search_with_budget(
+         "multiline_replace": true,
+         "report_replacements": true,
+     });
++    if truncate_response {
++        result["truncated"] = serde_json::json!(truncated);
++    }
+     if opts.stats || opts.count_matches {
+         result["file_stats"] = serde_json::json!(file_stats);
+     }
+@@ -2718,6 +2785,7 @@ struct FileSearchResult {
+     rows: Vec<serde_json::Value>,
+     stats: Option<crate::search::FileMatchStats>,
+     search_stats: Option<crate::search::FileSearchStats>,
++    truncated: bool,
+ }
+ 
+ /// A shared response would exceed its encoded size cap.
+@@ -2795,11 +2863,22 @@ fn search_file_matches(
+ }
+ 
+ fn search_file_matches_bounded(
++    rel_path: &str,
++    file: &DecodedFile,
++    matcher: &crate::matching::SearchMatcher,
++    opts: &SearchOpts,
++    budget: Option<&mut JsonBudget>,
++) -> anyhow::Result<FileSearchResult> {
++    search_file_matches_with_budget(rel_path, file, matcher, opts, budget, false)
++}
++
++fn search_file_matches_with_budget(
+     rel_path: &str,
+     file: &DecodedFile,
+     matcher: &crate::matching::SearchMatcher,
+     opts: &SearchOpts,
+     mut budget: Option<&mut JsonBudget>,
++    truncate_rows: bool,
+ ) -> anyhow::Result<FileSearchResult> {
+     use crate::matching::FileMatches;
+ 
+@@ -2845,6 +2924,7 @@ fn search_file_matches_bounded(
+     let mut result = FileSearchResult {
+         rows: Vec::new(),
+         search_stats,
++        truncated: false,
+         stats: (opts.stats || opts.count_matches).then(|| {
+             let (matches, matched_lines) = found.match_totals();
+             crate::search::FileMatchStats {
+@@ -2895,7 +2975,7 @@ fn search_file_matches_bounded(
+         return Ok(result);
+     }
+ 
+-    collect_match_rows_bounded(
++    let collected = collect_match_rows_bounded(
+         &found,
+         &match_opts,
+         matcher,
+@@ -2906,7 +2986,14 @@ fn search_file_matches_bounded(
+         opts.positions,
+         &mut result.rows,
+         budget,
+-    )?;
++    );
++    if let Err(error) = collected {
++        if !truncate_rows || error.downcast_ref::<ResponseLimit>().is_none() {
++            return Err(error);
++        }
++        // Rows already charged to the budget are complete and can be sent.
++        result.truncated = true;
++    }
+     Ok(result)
+ }
+ 
+@@ -10223,6 +10310,7 @@ mod tests {
+                 true
+             },
+             budget,
++            false,
+         );
+         let mut replies: Vec<serde_json::Value> = parts.into_inner();
+         replies.push(serde_json::from_str(&last).unwrap());
 diff --git a/tgrep-cli/src/serve/build_tests.rs b/tgrep-cli/src/serve/build_tests.rs
 index bac7797..93d6f3d 100644
 --- a/tgrep-cli/src/serve/build_tests.rs

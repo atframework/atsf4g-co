@@ -135,7 +135,7 @@ test('an existing patched tgrep can be prepared offline without a source checkou
   const execute = argv => {
     calls.push(argv);
     assert.equal(argv[0], binary);
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)\n' : '--transport <tcp|stdio>\n', stderr: '' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v4)\n' : '--transport <tcp|stdio>\n', stderr: '' };
   };
   const state = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute });
   assert.equal(state.binary, binary);
@@ -153,19 +153,54 @@ test('an explicit TCP-only tgrep is rejected before any source download', t => {
   assert.equal(fs.existsSync(path.join(w.paths.upstreamDir, 'tgrep-src')), false);
 });
 
-test('a stdio-only older integration binary is rejected before source download', t => {
+test('a binary with the preceding stdio patch revision is rejected before source download', t => {
   const w = fixture(t);
   const binary = w.write('local/tgrep.exe', 'old stdio binary');
-  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8' : '--transport tcp stdio', stderr: '' });
-  assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /mcp-stdio-v3/);
+  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio', stderr: '' });
+  assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /mcp-stdio-v4/);
   assert.equal(fs.existsSync(w.paths.upstreamDir), true);
   assert.equal(fs.existsSync(path.join(w.paths.upstreamDir, 'tgrep-src')), false);
+});
+
+test('a new tgrep patch revision fetches the pinned commit from the previous checkout offline', t => {
+  const w = fixture(t);
+  const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
+  const prior = path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
+  const current = `${prior}-${lock.integration_revision}`;
+  const oldFile = w.write(path.relative(w.root, path.join(prior, 'Cargo.toml')), 'previous patch plus a local edit');
+  fs.mkdirSync(path.join(prior, '.git'));
+  let fetchedFrom = null;
+  const result = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, execute: (argv, options) => {
+    if (argv[0] === 'git') {
+      if (argv.includes('rev-parse')) return { status: 0, stdout: lock.source_commit };
+      assert.notEqual(argv[2], prior, 'the previous checkout is read only');
+      if (argv.includes('fetch')) {
+        assert.equal(argv.at(-1), lock.source_commit);
+        fetchedFrom = argv.at(-2);
+      }
+      return { status: argv.includes('--reverse') ? 1 : 0 };
+    }
+    if (argv[0] === 'cargo') {
+      assert.equal(options.cwd, current);
+      assert.ok(argv.includes('--offline'));
+      const binary = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
+      w.write(path.relative(w.root, path.join(current, 'target/release', binary)), 'rebuilt binary');
+      return { status: 0 };
+    }
+    if (!path.resolve(argv[0]).startsWith(current + path.sep)) return { status: 1, stdout: '' };
+    return { status: 0, stdout: argv.includes('--version')
+      ? `tgrep ${lock.declared_version} (${lock.integration_revision})` : '--transport tcp stdio' };
+  } });
+  assert.equal(fetchedFrom, prior);
+  assert.equal(result.acquisition, 'build');
+  assert.equal(result.integration_revision, lock.integration_revision);
+  assert.equal(fs.readFileSync(oldFile, 'utf8'), 'previous patch plus a local edit');
 });
 
 test('cached stdio source receives the missing watcher patch and rebuilds stale output offline', t => {
   const w = fixture(t);
   const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
-  const srcDir = path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
+  const srcDir = path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}-${lock.integration_revision}`);
   const output = w.write(path.relative(w.root, path.join(srcDir, 'target/release', process.platform === 'win32' ? 'tgrep.exe' : 'tgrep')), 'old executable');
   const applied = new Set([path.basename(lock.patches[0])]);
   let builds = 0;
@@ -189,7 +224,7 @@ test('cached stdio source receives the missing watcher patch and rebuilds stale 
       return { status: 0 };
     }
     return { status: 0, stdout: argv.includes('--version')
-      ? `tgrep 1.2.8${builds ? ' (mcp-stdio-v3)' : ''}` : '--transport tcp stdio' };
+      ? `tgrep ${lock.declared_version}${builds ? ` (${lock.integration_revision})` : ''}` : '--transport tcp stdio' };
   };
   const result = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, execute });
   assert.equal(builds, 1);
@@ -201,7 +236,7 @@ test('cached stdio source receives the missing watcher patch and rebuilds stale 
 test('conflicting cached tgrep source is neither patched nor built', t => {
   const w = fixture(t);
   const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
-  fs.mkdirSync(path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}`), { recursive: true });
+  fs.mkdirSync(path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}-${lock.integration_revision}`), { recursive: true });
   const execute = argv => {
     if (argv[0] !== 'git') return { status: 1, stdout: '' };
     if (argv.includes('rev-parse')) return { status: 0, stdout: lock.source_commit };

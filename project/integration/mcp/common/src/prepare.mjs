@@ -231,7 +231,8 @@ export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], ca
 
 export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs = [], cargoIsolated = false, binary = null, execute = run, log = silentLog } = {}) {
   const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tools/tgrep', 'upstream-lock.json'), 'utf8'));
-  const srcDir = path.join(paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
+  const previousSrcDir = path.join(paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
+  const srcDir = `${previousSrcDir}-${lock.integration_revision}`;
   const patchPaths = lock.patches.map(patch => path.join(mcpRoot, 'tools/tgrep', patch));
   const binaryName = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
   const runtimeBinary = path.join(paths.runtimeDir, `tgrep-${lock.declared_version}-${lock.integration_revision}`, binaryName);
@@ -262,7 +263,17 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
     }
   }
 
-  if (!fs.existsSync(srcDir)) {
+  let cachedGitSource = null;
+  if (!fs.existsSync(srcDir) && fs.existsSync(path.join(previousSrcDir, '.git'))) {
+    validateWorkspaceBuildDir(paths.repoRoot, previousSrcDir);
+    const previousHead = execute(['git', '-C', previousSrcDir, 'rev-parse', 'HEAD'], { check: false });
+    if (previousHead.status === 0 && previousHead.stdout?.trim() === lock.source_commit) {
+      // Fetch just the pinned commit. The previous patch revision and any
+      // other working tree edits stay in their original checkout.
+      cachedGitSource = previousSrcDir;
+    }
+  }
+  if (!fs.existsSync(srcDir) && !cachedGitSource) {
     const oldSource = paths.readPath('downloads/sources/tgrep-src', ['upstream/tgrep-src']);
     if (fs.existsSync(oldSource)) {
       if (fs.existsSync(path.join(oldSource, '.git')) && !fs.statSync(path.join(oldSource, '.git')).isDirectory()) {
@@ -277,17 +288,17 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
     }
   }
   if (!fs.existsSync(srcDir)) {
-    if (offline) {
+    if (offline && !cachedGitSource) {
       throw new Error('tgrep source missing and --offline given');
     }
-    log(`cloning tgrep at ${lock.source_commit.slice(0, 12)}`);
+    log(`cloning tgrep at ${lock.source_commit.slice(0, 12)}${cachedGitSource ? ' from the previous patch cache' : ''}`);
     validateWorkspaceBuildDir(paths.repoRoot, srcDir);
     fs.mkdirSync(path.dirname(srcDir), { recursive: true });
     const stage = fs.mkdtempSync(path.join(paths.agentTmpDir, 'tgrep-src-'));
     try {
       execute(['git', 'init', stage]);
       execute(['git', '-C', stage, 'remote', 'add', 'origin', lock.repo_url]);
-      execute(['git', '-C', stage, 'fetch', '--quiet', '--depth', '1', 'origin', lock.source_commit]);
+      execute(['git', '-C', stage, 'fetch', '--quiet', '--depth', '1', cachedGitSource ?? 'origin', lock.source_commit]);
       execute(['git', '-C', stage, 'checkout', '--quiet', 'FETCH_HEAD']);
       fs.renameSync(stage, srcDir);
     } finally {

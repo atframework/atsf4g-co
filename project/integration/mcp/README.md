@@ -28,7 +28,7 @@ Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents
 | 依赖 | 固定版本 |
 | --- | --- |
 | MCP TypeScript Client / Server / Core | 2.4.0，[npm Server](https://www.npmjs.com/package/@modelcontextprotocol/server) · [npm Client](https://www.npmjs.com/package/@modelcontextprotocol/client) |
-| tgrep | [1.2.8](https://github.com/microsoft/tgrep/releases/tag/v1.2.8)，集成补丁 `mcp-stdio-v3` |
+| tgrep | [1.2.8](https://github.com/microsoft/tgrep/releases/tag/v1.2.8)，集成补丁 `mcp-stdio-v4` |
 | CodeGraph | [1.6.3](https://github.com/colbymchenry/codegraph/releases/tag/v1.6.3) |
 | Sirchmunk、jsonc-parser | [0.2.0](https://pypi.org/project/sirchmunk/) 和 [3.3.1](https://www.npmjs.com/package/jsonc-parser)，已是最新稳定版 |
 | ripgrep、ripgrep-all | [15.2.0](https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0) 和 [0.10.10](https://github.com/phiresky/ripgrep-all/releases/tag/v0.10.10)。Windows x64 延用最后提供预编译包的 [0.10.9](https://github.com/phiresky/ripgrep-all/releases/tag/v0.10.9) |
@@ -156,10 +156,12 @@ node <MCP_DIR>/setup.js --backend=codegraph --npm-mirror=official --agents=vscod
 时必须通过检查，不匹配即报错。自动发现依次检查已准备记录、PATH、工程中的安装和旧缓存；
 CodeGraph 还检查 npm 全局安装、用户 npx 缓存与本工作空间 npx 缓存。
 
-- tgrep 需要固定版本、`serve --transport stdio` 和 `--version` 中的 `mcp-stdio-v3` 标记。
+- tgrep 需要固定版本、`serve --transport stdio` 和 `--version` 中的 `mcp-stdio-v4` 标记。
   安装器按顺序检查全部补丁，升级旧源码并重编译；旧的 stdio-only 制品也不能继续复用。
   MCP 启动时同样检查版本；遇到旧制品会提示重新执行 `setup.js --backend=tgrep`。
-  无可用本地文件时，从固定提交拉源码并用上游 Cargo 锁文件构建。源码目录按提交区分，二进制目录按版本和补丁版本区分，旧缓存可保留。构建后记录二进制 SHA-256。
+  无可用本地文件时，从固定提交拉源码并用上游 Cargo 锁文件构建。源码和二进制目录也按补丁版本区分。
+  从 v3 升级时，可从旧源码缓存提取同一提交，保留旧目录和其中的修改。构建后记录二进制 SHA-256。
+  搜索结果达到 stdio 的 7 MiB 字节预算时返回能装入的完整记录，并设置 `truncated: true`。
 - CodeGraph 支持已编译的同版本源码仓库、npm 安装和历史平台包；必须同时具备 CLI、
   `dist/index.js` 库及兼容运行时，检查版本、库接口和 `node:sqlite`，不会只凭 PATH 名称接受。
   已编译源码使用系统 Node 22.5+，平台包使用其自带运行时。
@@ -864,6 +866,15 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 没有把镜像域名写进 `resolved`。
 
 ## 已验证平台
+
+### tgrep 大结果截断（Issue #378）
+
+用真实 tgrep 二进制测试单个大文件和跨文件累计超限。两个查询都应返回完整记录并标记
+`truncated: true`，随后的小查询应返回完整结果。
+
+```bash
+node <MCP_DIR>/tools/tgrep/tools/search-limit-smoke.mjs <TGREP_BIN> <BUILD_DIR>/_agent_tmp
+```
 
 ### 依赖与根配置更新（2026-11-19）
 

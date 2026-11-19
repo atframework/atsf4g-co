@@ -1,5 +1,5 @@
 diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
-index 9eacfa9..a21cff9 100644
+index 9eacfa9..0b78e4a 100644
 --- a/tgrep-cli/src/main.rs
 +++ b/tgrep-cli/src/main.rs
 @@ -36,7 +36,7 @@ static ERRORED: AtomicBool = AtomicBool::new(false);
@@ -7,7 +7,7 @@ index 9eacfa9..a21cff9 100644
      name = "tgrep",
      about = "Trigram-indexed grep — fast regex search for large codebases",
 -    version
-+    version = concat!(env!("CARGO_PKG_VERSION"), " (mcp-stdio-v3)")
++    version = concat!(env!("CARGO_PKG_VERSION"), " (mcp-stdio-v4)")
  )]
  struct Cli {
      #[command(subcommand)]

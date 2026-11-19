@@ -32,7 +32,7 @@ for (const oldLayout of [false, true]) test(`offline tgrep rebuild imports legac
   const crate = write(cargo + '/registry/cache/registry/test.crate', 'cached crate');
   write(cargo + '/registry/index/registry/config.json', '{}');
   write(cargo + '/config.toml', 'must not inherit old configuration');
-  const src = path.join(paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
+  const src = path.join(paths.upstreamDir, `tgrep-src-${lock.source_commit}-${lock.integration_revision}`);
   let builds = 0;
   const result = prepareTgrep(paths, INTEGRATION_ROOT, { offline: true, cargoIsolated: true, execute: (argv, options) => {
     if (argv[0] === 'git') {
@@ -51,7 +51,7 @@ for (const oldLayout of [false, true]) test(`offline tgrep rebuild imports legac
       write(path.relative(paths.repoRoot, path.join(src, 'target/release', process.platform === 'win32' ? 'tgrep.exe' : 'tgrep')), 'new binary');
       return { status: 0 };
     }
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v4)' : '--transport tcp stdio' };
   } });
   assert.equal(builds, 1);
   assert.equal(result.acquisition, 'build');
@@ -66,7 +66,7 @@ for (const relative of ['runtime', `downloads/bin/${process.platform}-${process.
     const binary = write('old-build/integration/mcp/' + relative + '/' + (process.platform === 'win32' ? 'tgrep.exe' : 'tgrep'), 'verified binary');
     const result = prepareTgrep(paths, INTEGRATION_ROOT, { offline: true, execute: argv => {
       assert.equal(argv[0], binary);
-      return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio' };
+      return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v4)' : '--transport tcp stdio' };
     } });
     assert.equal(result.binary, binary);
     assert.equal(result.acquisition, 'local');
@@ -107,7 +107,7 @@ test('verified current artifacts take priority over ambiguous unrelated legacy c
   write('.mcp-data/state/prepared-state.json', JSON.stringify({ tgrep: { binary }, codegraph: { package_root: path.dirname(path.dirname(library)) } }));
   assert.equal(prepareTgrep(paths, INTEGRATION_ROOT, { offline: true, execute: argv => {
     assert.equal(argv[0], binary);
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v4)' : '--transport tcp stdio' };
   } }).binary, binary);
   assert.equal(prepareCodegraph(paths, INTEGRATION_ROOT, { offline: true, execute: argv => ({ status: 0,
     stdout: argv.includes('--eval') ? 'MCP_CODEGRAPH_LIBRARY_OK' : argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.3' : 'v24.0.0' }) }).library_entry, library);
