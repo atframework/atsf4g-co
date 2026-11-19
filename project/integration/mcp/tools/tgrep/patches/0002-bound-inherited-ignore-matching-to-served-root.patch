@@ -1,21 +1,21 @@
 diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
-index 8def457b..4c2c4720 100644
+index 9eacfa9..a21cff9 100644
 --- a/tgrep-cli/src/main.rs
 +++ b/tgrep-cli/src/main.rs
-@@ -34,7 +34,7 @@ static ERRORED: AtomicBool = AtomicBool::new(false);
+@@ -36,7 +36,7 @@ static ERRORED: AtomicBool = AtomicBool::new(false);
  #[command(
      name = "tgrep",
      about = "Trigram-indexed grep — fast regex search for large codebases",
 -    version
-+    version = concat!(env!("CARGO_PKG_VERSION"), " (mcp-stdio-v2)")
++    version = concat!(env!("CARGO_PKG_VERSION"), " (mcp-stdio-v3)")
  )]
  struct Cli {
      #[command(subcommand)]
 diff --git a/tgrep-core/src/gitignore.rs b/tgrep-core/src/gitignore.rs
-index 92b42ca..229d227 100644
+index 89240ba..503042f 100644
 --- a/tgrep-core/src/gitignore.rs
 +++ b/tgrep-core/src/gitignore.rs
-@@ -239,6 +239,29 @@ impl IgnoreMatcher {
+@@ -283,6 +283,29 @@ impl IgnoreMatcher {
          let rel = path.to_string_lossy().replace('\\', "/");
          let rel = rel.trim_start_matches("./").trim_start_matches('/');
  
@@ -45,7 +45,7 @@ index 92b42ca..229d227 100644
          // The ignore crate resolves each source independently, then gives
          // `.ignore` files precedence over every `.gitignore`, regardless of
          // directory depth.
-@@ -260,12 +283,7 @@ impl IgnoreMatcher {
+@@ -304,12 +327,7 @@ impl IgnoreMatcher {
              }
  
              for entry in self.ancestors.iter().filter(|entry| entry.kind == kind) {
@@ -59,8 +59,8 @@ index 92b42ca..229d227 100644
                      standard_decision = Some(decision);
                      break;
                  }
-@@ -284,12 +302,7 @@ impl IgnoreMatcher {
-         if standard_decision.is_none()
+@@ -329,12 +347,7 @@ impl IgnoreMatcher {
+             && excludes
              && let Some((prefix, matcher)) = &self.repo_exclude
          {
 -            let path = if prefix.is_empty() {
@@ -72,8 +72,8 @@ index 92b42ca..229d227 100644
 +            standard_decision = matched_ancestor(matcher, prefix);
          }
  
-         if standard_decision.is_none() {
-@@ -1021,6 +1034,75 @@ mod tests {
+         if excludes && standard_decision.is_none() {
+@@ -1236,6 +1249,75 @@ mod tests {
      use super::*;
      use tempfile::TempDir;
  

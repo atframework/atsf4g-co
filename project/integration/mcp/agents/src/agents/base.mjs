@@ -41,6 +41,7 @@ function normalizeTarget(target) {
   if (target.legacyDirectory) descriptor.legacyDirectory = target.legacyDirectory;
   if (target.legacyFileSuffix) descriptor.legacyFileSuffix = target.legacyFileSuffix;
   if (target.copyLegacyRemainder) descriptor.copyLegacyRemainder = true;
+  if (target.companionMap) descriptor.companionMap = target.companionMap;
   if (target.legacyFiles) {
     descriptor.legacyFiles = target.legacyFiles.map((entry) => (typeof entry === 'string' || Array.isArray(entry)
       ? toPlatformFile(entry)

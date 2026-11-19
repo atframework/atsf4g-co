@@ -44,15 +44,16 @@ before relying on them after an upgrade.
   status.auto_sync rather than inferring successful watching from a handshake.
   Initialization obeys abort and stdin EOF too; closing during first indexing
   must stop its helper before releasing the wrapper lock.
-- CodeGraph 1.6.0 hides `codegraph_status` from `tools/list` for indexes with
+- CodeGraph 1.6.3 hides `codegraph_status` from `tools/list` for indexes with
   fewer than 500 files, even with an explicit tool allowlist. The wrapper
   probes that read-only handler before using its pinned schema; a missing
   handler still fails readiness. Keep both cases in protocol tests and run a
   real small-workspace smoke test.
 - tgrep speaks newline JSON-RPC (`search`/`files`/`status`; `reload` never
   exposed) through the integration patch adding `--transport stdio`. The patch
-  keeps `serve.lock` exclusivity and adds a backend-side 20 000-row cap.
-  Revision `mcp-stdio-v2` also fixes inherited ignore matching above an explicit
+  keeps `serve.lock` exclusivity and uses upstream search budgeting with a
+  7 MiB stdio search reply budget. Revision `mcp-stdio-v3` preserves the
+  inherited ignore fix above an explicit
   served root: the walk enters that root, so watcher parent checks must stop
   there while preserving rules for descendants. Patch 0002 covers `.gitignore`,
   `.ignore` and repository excludes; preserve its CR bytes (pinned core source
@@ -63,16 +64,14 @@ before relying on them after an upgrade.
 
 ## Upgrade flow (pinned upstream)
 
-1. Update the tool's `upstream-lock.json` (commit, version, shasums). For a new
-   tgrep pin, delete `<PROJECT_DIR>/.mcp-data/downloads/sources/tgrep-src` so prepare
-   re-clones; re-apply the patch (regenerate it if it no longer fits) and record
-   the new patch sha.
+1. Update the tool's `upstream-lock.json` (commit, version, shasums). For tgrep,
+   verify both patches in a fresh checkout and use the release's Cargo lockfile.
+   Prepare stores source and binaries by pin, so existing caches can stay in place.
 2. Re-verify the facts listed above against the new sources before changing
    wrapper code (especially stdin-EOF behavior, `CODEGRAPH_DIR` semantics, tool
    schemas, and the internal RPC shapes). The pinned npm artifacts are the
-   authority when they differ from the inspected source tree (the tree has
-   been ahead of the release before: 1.6.0 artifacts lack the `ui` subcommand
-   the source has) — check the actual artifact's `--help`, not only the repo.
+   authority for CLI behavior. Check the actual artifact's `--help`. The
+   Windows 1.6.3 package has no public `ui` command.
 3. Run `node project/integration/mcp/setup.js` (or the prepare library) and the
    five test suites; then a real-backend smoke per README platform table.
 4. Update the README verified-platform table with what was actually measured.
@@ -103,7 +102,7 @@ before relying on them after an upgrade.
   enclosing the toolkit, falling back to cwd discovery if none exists. Never
   reintroduce a fixed installer path or project name. Prepare resolves toolkit
   files separately from workspace state. UE CodeGraph setup plans `codegraph.json` includes/excludes in the same
-  guarded batch as client configs; pinned 1.6.0 `project-config.js` confirms that
+  guarded batch as client configs; pinned 1.6.3 `project-config.js` confirms that
   explicit excludes override includes, including in Perforce-only source trees.
 - CodeGraph index: repository-root `.codegraph-<project>-<platform>`, where
   project is normalized from metadata by `projectInfo`. Reuse an existing

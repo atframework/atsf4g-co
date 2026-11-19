@@ -55,7 +55,7 @@ mirrors, agent config writing, switching, and uninstall.
   restores the terminal on Escape/Ctrl+C/EOF/render errors; empty menus fail
   immediately and a closed stdin never confirms a default.
 - `agents/src/guidance/ideExports.mjs` — explicit-load snippets for clients
-  without a verified project file (Cline IDE, CodeBuddy IDE, JetBrains Copilot,
+  without a verified project file (Cline IDE, JetBrains Copilot,
   JetBrains AI Assistant) and DSH's native Cordis patch: derived JSON/YAML in
   `<PROJECT_DIR>/.mcp-data/exports/`, written on apply, removed on
   uninstall or deselection. Plan these in the same batch as configs and root
@@ -147,11 +147,12 @@ mirrors, agent config writing, switching, and uninstall.
   Plain JSON clients never gain comments from us. Same-backend updates preserve
   optional settings and extra arguments; primary same-name foreign entries abort.
 - Enable defaults are product-specific: target/import `entryDefaults` supply Roo/Cline
-  `disabled: false` and Zed/OMP `enabled: true`; Codex TOML supplies `enabled = true`.
+  `disabled: false` and Zed `enabled: true`; Codex TOML supplies `enabled = true`.
   OpenCode-shaped entries already default to enabled. Fill missing fields only;
   preserve explicit disable, tool restrictions and approval settings. Do not inject
-  another client's flags into the shared JSON format. Visual Studio tools require
-  manual enablement; VS Code enablement is stored outside mcp.json. Product modules
+  another client's activation flags into the shared JSON format. Copilot
+  `mcpServers` uses `tools: ["*"]` by default and retains explicit tool lists.
+  Visual Studio tools require manual enablement. Product modules
   own these pending actions and JetBrains AI Assistant's automatic-enable UI hint.
 - Codex `.codex/config.toml` is edited textually between
   `# BEGIN/END atsf4g-mcp` markers; legacy marker-less `[mcp_servers.atsf4g-*]`
@@ -243,31 +244,23 @@ mirrors, agent config writing, switching, and uninstall.
   since a final output marker alone does not prove handle cleanup. Cancellation
   after preparation preserves downloaded dependencies; do not call it zero writes.
 
-## Agent matrix (formats verified against each vendor's docs at 2026-09-20, re-verified live before the P9.3 implementation)
+## Client config paths
 
-| Agent | File (repo-relative) | Shape |
-| --- | --- | --- |
-| Claude Code + pi + CodeBuddy CLI (shared file, one group) | `.mcp.json` (legacy root `mcp.json` fallback for CodeBuddy) | `mcpServers` |
-| Codex | `.codex/config.toml` | `[mcp_servers.<id>]` + `cwd` + repo-relative args; shared by CLI and IDE |
-| GitHub Copilot: VS Code / Visual Studio (id `vscode`) | `.vscode/mcp.json` | `servers` + absolute args; aliases `copilot`, `copilot-vscode`, `copilot-visual-studio`, `visual-studio`; same target/code |
-| TRAE / TraeCode IDE and CLI (id `trae`) | `.trae/mcp.json` | `mcpServers`; IDE project-MCP toggle required |
-| JetBrains Copilot (id `copilot-jetbrains`, includes Rider) | guided import | `servers` JSON; use plugin's Add MCP Tools; no assumed internal disk path |
-| JetBrains AI Assistant (id `jetbrains-ai`, includes Rider) | guided import | `mcpServers` JSON; MCP settings / STDIO / project server level |
-| DSH (id `dsh`, alias `deepseek-harness`) | explicit `--patch` | generated YAML overlay, official MCP plugin must be resolvable in the selected profile |
-| Cursor | `.cursor/mcp.json` | `mcpServers` |
-| Gemini CLI | `.gemini/settings.json` | `mcpServers` |
-| OpenCode | `opencode.json(c)` (multiple existing candidates abort) | `mcp`, `type: "local"`, `command: [prog, ...args]`, `environment`, `enabled` |
-| Kilo (id `kilo`, alias `kilocode`; migrates from `.kilocode/mcp.json`) | Default `.kilo/kilo.jsonc`, then `.kilo/kilo.json`; root managed entries migrate here | Prefer JSONC for new/dual candidates; edit a lone JSON in place; root and directory layers may coexist |
-| Roo Code (migrates from `.roo/mcp_settings.json`) | `.roo/mcp.json` | `mcpServers` |
-| ZCode | `.zcode/config.json` | `mcp.servers` |
-| oh-my-pi | `.omp/mcp.json` | `mcpServers` |
-| Zed | `.zed/settings.json` (JSONC) | `context_servers`, flat `command` + `args` |
-| Kimi Code | `.kimi-code/mcp.json` | `mcpServers` + `cwd` + repo-relative args |
-| Qwen Code | `.qwen/settings.json` | `mcpServers` + `cwd` + repo-relative args |
-| WorkBuddy | `.workbuddy/mcp.json` | `mcpServers` |
-| MiMo Code | `mimocode.json(c)` / `.mimocode/mimocode.json(c)`, new default the latter | OpenCode shape |
-| Cline CLI | `.cline/mcp.json` (installer-defined export; Cline does not discover it) | `mcpServers` + explicit launcher |
-| Cline IDE / CodeBuddy IDE (`cline-ide`, `codebuddy-ide`) | none (guided import) | build-dir snippet + panel steps; excluded from `--agents=all` |
+Use the [client compatibility table](../../../../project/integration/mcp/README.md#支持的-agent)
+for current discovery paths, versions, and upstream evidence. Verify stable release
+support before changing a path. Use the project root when a client supports it.
+
+- Claude Code, CodeBuddy (CLI and IDE), pi with its adapter, oh-my-pi, and
+  Copilot for VS Code/Visual Studio share a single project-root file.
+  VS Code Copilot uses `mcpServers`. Visual Studio uses `servers`; plan both
+  maps in the same file edit to retain rollback and ownership checks.
+- Only migrate recognized wrapper entries from old editor files. Preserve
+  foreign servers and comments in those files. Reject VS Code-specific inputs or
+  substitutions that cannot be carried to the portable map.
+- Kilo and MiMo use their native root JSON/JSONC files. Keep foreign content in
+  the old directory layer and clean verified managed entries after the root write.
+- CodeBuddy IDE uses the shared target. Continue to recognize its old generated
+  snippet for preflight and cleanup.
 
 Use product names for verified shared CLI/IDE configuration targets; keep
 existing ids stable. `Codex` shares host configuration between CLI and IDE.
@@ -385,9 +378,8 @@ npm only exists in login shells (corepack/nvm PATH) — drive scripts through
 script file under `/mnt/d` instead; a leftover client hub daemon (e.g. an
 orphaned `cline --cline-hub-daemon`) keeps wrapper+backend alive and makes
 tgrep runtime copies fail with ETXTBSY — trace holders via `/proc/*/maps`,
-SIGTERM the daemon root, and the stdin lifeline cascades. npmmirror does not
-carry `@colbymchenry/codegraph-<platform>-<arch>` 1.6.0: codegraph prepare
-under `--mirror=cn` fails with ETARGET; use `--mirror=official`.
+SIGTERM the daemon root, and the stdin lifeline cascades. A mirror can lag a new CodeGraph platform package. For ETARGET, verify the
+selected registry and use `--npm-mirror=official` when it lacks the pin.
 
 ## Lockfile policy
 

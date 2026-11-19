@@ -40,16 +40,21 @@ async function until(label, predicate) {
 function backend() { return new TgrepBackend({ paths, binary, stderrLog: path.join(fixture, 'backend.log') }); }
 async function ready(service) {
   await service.start();
-  await until('ready', async () => { const s = await service.status(); return !s.indexing && s.hidden_complete; });
+  await until('ready', async () => {
+    const s = await service.status();
+    return !s.indexing && s.hidden_complete && s.last_reconcile_at !== null;
+  });
   const status = await service.status();
   assert.equal(status.watch_mode_active, 'native');
   assert.equal(status.watcher_active, true);
   assert.ok(status.poll_interval_secs >= 120);
+  assert.equal(fs.existsSync(path.join(service.indexDir, 'serve.json')), false);
 }
 async function matches(service, pattern) { return (await service.search({ pattern, fixed_string: true })).matches; }
 let service = backend();
 try {
   await ready(service);
+  const initialReconcile = (await service.status()).last_reconcile_at;
   assert.equal((await matches(service, 'NativeOriginal')).length, 1);
   assert.equal((await matches(service, 'NativeCacheExcluded')).length, 0);
   fs.writeFileSync(cached, 'int NativeCacheExcludedChanged() { return 2; }\n');
@@ -75,7 +80,7 @@ try {
     && !(await service.files({})).files.includes('Source/Renamed.cpp'));
   assert.equal((await matches(service, 'NativeIgnoredAgain')).length, 0);
   assert.equal((await matches(service, 'NativeCacheExcludedChanged')).length, 0);
-  assert.equal((await service.status()).last_reconcile_at, null, 'online updates must not depend on periodic reconcile');
+  assert.equal((await service.status()).last_reconcile_at, initialReconcile, 'online updates must not depend on periodic reconcile');
   await service.stop();
   assert.equal(service.alive(), false);
 

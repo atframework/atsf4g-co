@@ -39,7 +39,7 @@ test('moving tools preserves offline reuse of matching legacy npm dependencies',
 test('a compiled local CodeGraph tries another Node runtime after rejecting an incompatible one', t => {
   const w = fixture(t);
   const libraryRoot = path.join(w.root, 'compiled-codegraph');
-  w.write('compiled-codegraph/package.json', JSON.stringify({ name: '@colbymchenry/codegraph', version: '1.6.0' }));
+  w.write('compiled-codegraph/package.json', JSON.stringify({ name: '@colbymchenry/codegraph', version: '1.6.3' }));
   w.write('compiled-codegraph/dist/index.js');
   w.write('compiled-codegraph/dist/bin/codegraph.js');
   const alternate = w.write('alternate/' + (process.platform === 'win32' ? 'node.exe' : 'node'));
@@ -52,7 +52,7 @@ test('a compiled local CodeGraph tries another Node runtime after rejecting an i
     attempted.push(argv);
     if (argv.length === 2 && argv[1] === '--version') return { status: 0, stdout: argv[0] === alternate ? 'v24.21.0\n' : 'v20.19.2\n' };
     if (argv.includes('--eval')) return { status: 0, stdout: 'MCP_CODEGRAPH_LIBRARY_OK\n' };
-    return { status: 0, stdout: '1.6.0\n' };
+    return { status: 0, stdout: '1.6.3\n' };
   } });
   assert.equal(result.runtime, alternate);
   assert.equal(result.acquisition, 'local');
@@ -135,7 +135,7 @@ test('an existing patched tgrep can be prepared offline without a source checkou
   const execute = argv => {
     calls.push(argv);
     assert.equal(argv[0], binary);
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9 (mcp-stdio-v2)\n' : '--transport <tcp|stdio>\n', stderr: '' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)\n' : '--transport <tcp|stdio>\n', stderr: '' };
   };
   const state = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute });
   assert.equal(state.binary, binary);
@@ -148,7 +148,7 @@ test('an existing patched tgrep can be prepared offline without a source checkou
 test('an explicit TCP-only tgrep is rejected before any source download', t => {
   const w = fixture(t);
   const binary = w.write('local/tgrep.exe', 'fixture binary');
-  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9' : 'serve --port 8787', stderr: '' });
+  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8' : 'serve --port 8787', stderr: '' });
   assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /stdio/);
   assert.equal(fs.existsSync(path.join(w.paths.upstreamDir, 'tgrep-src')), false);
 });
@@ -156,8 +156,8 @@ test('an explicit TCP-only tgrep is rejected before any source download', t => {
 test('a stdio-only older integration binary is rejected before source download', t => {
   const w = fixture(t);
   const binary = w.write('local/tgrep.exe', 'old stdio binary');
-  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9' : '--transport tcp stdio', stderr: '' });
-  assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /mcp-stdio-v2/);
+  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8' : '--transport tcp stdio', stderr: '' });
+  assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /mcp-stdio-v3/);
   assert.equal(fs.existsSync(w.paths.upstreamDir), true);
   assert.equal(fs.existsSync(path.join(w.paths.upstreamDir, 'tgrep-src')), false);
 });
@@ -165,7 +165,7 @@ test('a stdio-only older integration binary is rejected before source download',
 test('cached stdio source receives the missing watcher patch and rebuilds stale output offline', t => {
   const w = fixture(t);
   const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
-  const srcDir = path.join(w.paths.upstreamDir, 'tgrep-src');
+  const srcDir = path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
   const output = w.write(path.relative(w.root, path.join(srcDir, 'target/release', process.platform === 'win32' ? 'tgrep.exe' : 'tgrep')), 'old executable');
   const applied = new Set([path.basename(lock.patches[0])]);
   let builds = 0;
@@ -189,7 +189,7 @@ test('cached stdio source receives the missing watcher patch and rebuilds stale 
       return { status: 0 };
     }
     return { status: 0, stdout: argv.includes('--version')
-      ? `tgrep 1.0.9${builds ? ' (mcp-stdio-v2)' : ''}` : '--transport tcp stdio' };
+      ? `tgrep 1.2.8${builds ? ' (mcp-stdio-v3)' : ''}` : '--transport tcp stdio' };
   };
   const result = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, execute });
   assert.equal(builds, 1);
@@ -200,8 +200,8 @@ test('cached stdio source receives the missing watcher patch and rebuilds stale 
 
 test('conflicting cached tgrep source is neither patched nor built', t => {
   const w = fixture(t);
-  fs.mkdirSync(path.join(w.paths.upstreamDir, 'tgrep-src'), { recursive: true });
   const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
+  fs.mkdirSync(path.join(w.paths.upstreamDir, `tgrep-src-${lock.source_commit}`), { recursive: true });
   const execute = argv => {
     if (argv[0] !== 'git') return { status: 1, stdout: '' };
     if (argv.includes('rev-parse')) return { status: 0, stdout: lock.source_commit };
@@ -214,14 +214,14 @@ test('conflicting cached tgrep source is neither patched nor built', t => {
 test('a compiled CodeGraph checkout is reused without npm or a platform download', t => {
   const w = fixture(t);
   const source = path.join(w.root, 'codegraph source');
-  w.write('codegraph source/package.json', '{"name":"@colbymchenry/codegraph","version":"1.6.0"}');
+  w.write('codegraph source/package.json', '{"name":"@colbymchenry/codegraph","version":"1.6.3"}');
   w.write('codegraph source/dist/index.js');
   w.write('codegraph source/dist/bin/codegraph.js');
   const calls = [];
   const execute = argv => {
     calls.push(argv);
     if (argv.includes('--eval')) return { status: 0, stdout: 'MCP_CODEGRAPH_LIBRARY_OK\n', stderr: '' };
-    return { status: 0, stdout: argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.0\n' : 'v24.0.0\n', stderr: '' };
+    return { status: 0, stdout: argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.3\n' : 'v24.0.0\n', stderr: '' };
   };
   const state = prepareCodegraph(w.paths, INTEGRATION_ROOT, { offline: true, localPath: source, execute });
   assert.equal(state.acquisition, 'local');
@@ -232,17 +232,17 @@ test('a compiled CodeGraph checkout is reused without npm or a platform download
 
 test('npx preparation uses the selected registry and proves the cache works offline', t => {
   const w = fixture(t);
-  const lock = { npm_package: '@colbymchenry/codegraph', npm_platform_prefix: '@colbymchenry/codegraph', version: '1.6.0' };
+  const lock = { npm_package: '@colbymchenry/codegraph', npm_platform_prefix: '@colbymchenry/codegraph', version: '1.6.3' };
   const calls = [];
   const state = prepareCodegraphNpxCache(w.paths, lock, { registry: 'https://registry.npmmirror.com', execute: (argv, options) => {
     calls.push({ argv, options });
-    return { status: 0, stdout: '1.6.0\n', stderr: '' };
+    return { status: 0, stdout: '1.6.3\n', stderr: '' };
   } });
   assert.equal(calls.length, 2);
   assert.ok(calls[0].argv.includes('--prefer-offline'));
   assert.ok(calls[1].argv.includes('--offline'));
   for (const { argv, options } of calls) {
-    assert.ok(argv.includes('--package=@colbymchenry/codegraph@1.6.0'));
+    assert.ok(argv.includes('--package=@colbymchenry/codegraph@1.6.3'));
     assert.ok(argv.includes('https://registry.npmmirror.com'));
     assert.equal(options.env.CODEGRAPH_NO_DOWNLOAD, '1');
     assert.deepEqual(argv.slice(-3), ['--', 'codegraph', '--version']);
@@ -255,9 +255,9 @@ test('npx preparation uses the selected registry and proves the cache works offl
 test('a cache that only works online cannot be accepted as prepared', t => {
   const w = fixture(t);
   let calls = 0;
-  assert.throws(() => prepareCodegraphNpxCache(w.paths, { npm_package: '@colbymchenry/codegraph', version: '1.6.0' }, { execute: argv => {
+  assert.throws(() => prepareCodegraphNpxCache(w.paths, { npm_package: '@colbymchenry/codegraph', version: '1.6.3' }, { execute: argv => {
     calls++;
-    return argv.includes('--offline') ? { status: 1, stdout: '', stderr: 'ENOTCACHED' } : { status: 0, stdout: '1.6.0' };
+    return argv.includes('--offline') ? { status: 1, stdout: '', stderr: 'ENOTCACHED' } : { status: 0, stdout: '1.6.3' };
   } }), /offline cache verification/);
   assert.equal(calls, 2);
   assert.equal(fs.existsSync(w.paths.preparedStatePath()), false);
@@ -266,7 +266,7 @@ test('a cache that only works online cannot be accepted as prepared', t => {
 test('offline cache failures never try an online fallback', t => {
   const w = fixture(t);
   let calls = 0;
-  assert.throws(() => prepareCodegraphNpxCache(w.paths, { npm_package: '@colbymchenry/codegraph', version: '1.6.0' }, { offline: true, execute: argv => {
+  assert.throws(() => prepareCodegraphNpxCache(w.paths, { npm_package: '@colbymchenry/codegraph', version: '1.6.3' }, { offline: true, execute: argv => {
     calls++;
     assert.ok(argv.includes('--offline'));
     return { status: 1, stdout: '', stderr: 'cache missing' };
@@ -276,7 +276,7 @@ test('offline cache failures never try an online fallback', t => {
 
 test('a successful process reporting the wrong package version is not a valid cache', t => {
   const w = fixture(t);
-  assert.throws(() => prepareCodegraphNpxCache(w.paths, { npm_package: '@colbymchenry/codegraph', version: '1.6.0' }, {
+  assert.throws(() => prepareCodegraphNpxCache(w.paths, { npm_package: '@colbymchenry/codegraph', version: '1.6.3' }, {
     execute: () => ({ status: 0, stdout: '2.0.0' }),
   }), /cache preparation failed/);
 });

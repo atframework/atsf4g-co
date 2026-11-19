@@ -90,7 +90,10 @@ function resolveTargetFile({ repoRoot, target, group, contents, existing, launch
     return { file: target.file, before: null, legacyCleanups: [existing[0]] };
   }
 
-  return { file: existing[0] ?? target.file, before: existing.length > 0 ? contents.get(existing[0]) : null, legacyCleanups: [] };
+  const file = existing[0] ?? target.file;
+  const fallback = target.legacyFallback?.candidate;
+  const legacyCleanups = file !== fallback && existing.includes(fallback) ? [fallback] : [];
+  return { file, before: contents.get(file) ?? null, legacyCleanups };
 }
 
 function planTarget({ repoRoot, group, readFile, ownsFile, launch }) {
@@ -109,6 +112,8 @@ function planTarget({ repoRoot, group, readFile, ownsFile, launch }) {
   let before;
   let input;
   let sources = [];
+  const companion = target.companionMap;
+  let configureCompanion = configuring && group.agents.has(companion?.agentId);
   if (target.candidatesMode === 'exclusive') {
     if (!configuring) {
       if (existing.length === 0) {
@@ -143,25 +148,22 @@ function planTarget({ repoRoot, group, readFile, ownsFile, launch }) {
   // steps stay after that write in the same guarded, rollback-capable batch.
   const cleanupSteps = [];
   for (const { file, format } of legacy) {
+    if (configuring && companion && effective !== target.file) continue;
     const relative = file.split(path.sep).join('/');
     const step = planLegacyCleanup({
       repoRoot, format, configuring, relative, filePath: path.join(repoRoot, file), readFile, ownsFile, notes, launch,
+      keepRemovedComments: Boolean(companion),
       migrate(id, entry) {
+        if (format === companion?.format) configureCompanion = true;
         if (backendForServerId(id) !== backend) {
           if (hasCustomOptions(entry, repoRoot, launch)) throw new AgentConfigError(`${relative}: ${id} has custom settings for a different backend; migrate them manually (no files written)`, 'legacy-options-conflict');
           return;
         }
-        const migrated = migrateLegacyEntry({ entry, from: format, to: target.format, repoRoot, backend, relative, launch });
-        let document = jsonDocument.parseJsonDocument(input ?? '{\n}\n', effective);
-        const destinationMap = jsonDocument.walkServerMap(document.root, target.format, effective);
-        const destinationEntry = destinationMap?.[BACKENDS[backend].serverId];
-        if (destinationEntry && isOurServerEntry(destinationEntry, repoRoot, launch)) {
-          const normalized = migrateLegacyEntry({ entry: destinationEntry, from: target.format, to: target.format, repoRoot, backend, relative: effective, launch });
-          document = jsonDocument.parseJsonDocument(jsonDocument.upsertServerEntry(document.text, target.format, BACKENDS[backend].serverId, normalized), effective);
+        const context = { repoRoot, backend, relative, launch };
+        input = mergeMigratedEntry(input, effective, entry, format, target.format, context);
+        if (format === companion?.format) {
+          input = mergeMigratedEntry(input, effective, entry, format, companion.format, context);
         }
-        const mapKey = jsonDocument.serverMapRootKey(target.format);
-        const merged = mergeJsonValues(document.text, { [mapKey]: { [BACKENDS[backend].serverId]: migrated } }, { destination: effective, source: relative });
-        input = `${document.hadBom ? '\uFEFF' : ''}${merged}`;
         notes.push(`${relative}: 将 ${id} 的兼容选项迁移到 ${effective}，成功写入后清理旧条目`);
       },
     });
@@ -172,15 +174,33 @@ function planTarget({ repoRoot, group, readFile, ownsFile, launch }) {
         input = mergeJsonValues(input ?? '{\n}\n', jsonDocument.parseJsonDocument(step.after, relative).root,
           { destination: effective, source: relative });
       }
-      if (configuring) input = appendMigratedComments(input ?? '{\n}\n', relative, removedComments(step.before, step.after));
+      if (configuring && !companion) input = appendMigratedComments(input ?? '{\n}\n', relative, removedComments(step.before, step.after));
       cleanupSteps.push(step);
     }
   }
   if (effective !== undefined) {
-    const primary = planFileEdit({ repoRoot, relative: effective.split(path.sep).join('/'), filePath: path.join(repoRoot, effective), target, group, before: input, ownsFile, launch });
+    const edit = { repoRoot, relative: effective.split(path.sep).join('/'), filePath: path.join(repoRoot, effective), target, group, before: input, ownsFile, launch };
+    if (companion && effective === target.file) {
+      const map = input === null ? null : jsonDocument.walkServerMap(jsonDocument.parseJsonDocument(input, effective).root, companion.format, effective);
+      const hasCompanion = Object.entries(map ?? {}).some(([id, entry]) => backendForServerId(id) && isOurServerEntry(entry, repoRoot, launch, backendForServerId(id)));
+      if (configureCompanion || hasCompanion) {
+        const secondary = planFileEdit({ ...edit, target: { ...target, format: companion.format }, ownsFile: () => false });
+        edit.before = secondary.after;
+        if (configuring) edit.target = { ...target, entryDefaults: { ...target.entryDefaults, ...companion.primaryDefaults } };
+      }
+    }
+    const primary = planFileEdit(edit);
     // Both the action and concurrency/rollback bytes must refer to the real
     // destination, not the temporary merged document used as edit input.
     primary.before = before;
+    if (before === null && configuring && companion && effective === target.file) {
+      primary.after = `${JSON.stringify(jsonDocument.parseJsonDocument(primary.after, effective).root, null, 2)}\n`;
+    }
+    if (!configuring && companion && primary.after !== before && before !== null
+      && jsonDocument.documentIsEmptySkeleton(primary.after, target.format, companion.format) && ownsFile(edit.relative)) {
+      primary.action = 'delete';
+      primary.deleteFile = true;
+    }
     if (!primary.deleteFile) primary.action = primary.after === before ? 'unchanged' : before === null ? 'create' : 'update';
     if (sources.length) primary.consolidatedFrom = sources.map((file) => file.split(path.sep).join('/'));
     steps.push(primary);
@@ -194,6 +214,20 @@ function planTarget({ repoRoot, group, readFile, ownsFile, launch }) {
   }
   steps.push(...cleanupSteps);
   return { steps, notes };
+}
+
+function mergeMigratedEntry(input, destination, entry, from, to, { repoRoot, backend, relative, launch }) {
+  const migrated = migrateLegacyEntry({ entry, from, to, repoRoot, backend, relative, launch });
+  const id = BACKENDS[backend].serverId;
+  let document = jsonDocument.parseJsonDocument(input ?? '{\n}\n', destination);
+  const destinationEntry = jsonDocument.walkServerMap(document.root, to, destination)?.[id];
+  if (destinationEntry && isOurServerEntry(destinationEntry, repoRoot, launch)) {
+    const normalized = migrateLegacyEntry({ entry: destinationEntry, from: to, to, repoRoot, backend, relative: destination, launch });
+    document = jsonDocument.parseJsonDocument(jsonDocument.upsertServerEntry(document.text, to, id, normalized), destination);
+  }
+  const mapKey = jsonDocument.serverMapRootKey(to);
+  const merged = mergeJsonValues(document.text, { [mapKey]: { [id]: migrated } }, { destination, source: relative });
+  return `${document.hadBom ? '\uFEFF' : ''}${merged}`;
 }
 
 function planFileEdit({ repoRoot, relative, filePath, target, group, before, ownsFile, launch }) {
@@ -257,7 +291,7 @@ function planFileEdit({ repoRoot, relative, filePath, target, group, before, own
     return { target, relative, file: filePath, agents: [...group.agents], ops: group.ops, before, after, action: 'unchanged', deleteFile: false };
   }
   if (!backend && before !== null) {
-    const empty = format === 'codexToml' ? after.trim() === '' : jsonDocument.documentIsEmptySkeleton(after, format);
+    const empty = format === 'codexToml' ? after.trim() === '' : jsonDocument.documentIsEmptySkeleton(after, format, target.companionMap?.format);
     // A whole-file delete additionally requires the ownership record: a
     // pre-existing empty object the user wrote is never "ours".
     if (empty && ownsFile(relative)) {
@@ -267,7 +301,7 @@ function planFileEdit({ repoRoot, relative, filePath, target, group, before, own
   return { target, relative, file: filePath, agents: [...group.agents], ops: group.ops, before, after, action: before === null ? 'create' : 'update', deleteFile: false };
 }
 
-function planLegacyCleanup({ repoRoot, format, configuring, relative, filePath, readFile, ownsFile, notes, migrate, launch }) {
+function planLegacyCleanup({ repoRoot, format, configuring, relative, filePath, readFile, ownsFile, notes, migrate, launch, keepRemovedComments }) {
   const before = readFile(filePath);
   if (before === null) {
     return null;
@@ -294,6 +328,7 @@ function planLegacyCleanup({ repoRoot, format, configuring, relative, filePath, 
   if (!touched) {
     return null;
   }
+  if (keepRemovedComments) after = appendMigratedComments(after, relative, removedComments(document.text, after));
   if (document.hadBom) after = `\uFEFF${after}`;
   if (jsonDocument.documentIsEmptySkeleton(after, format) && ownsFile(relative)) {
     return { relative, file: filePath, agents: [], ops: [], before, after, action: 'delete', deleteFile: true, legacy: true };

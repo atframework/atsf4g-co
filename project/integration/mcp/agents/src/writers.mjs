@@ -67,6 +67,7 @@ export function agentStates(repoRoot, launch = {}) {
     // Legacy descriptors carry their own format; missing locations are normal.
     const scanFiles = [
       ...existing.map((relative) => ({ relative, format: target.format })),
+      ...(target.companionMap && existing.includes(target.file) ? [{ relative: target.file, format: target.companionMap.format }] : []),
       ...legacyLocations(target, repoRoot).map(({ file, format }) => ({ relative: file, format })),
     ];
     for (const { relative, format } of scanFiles) {

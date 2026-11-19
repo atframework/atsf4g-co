@@ -118,7 +118,7 @@ test('CLI installs all targets, repeats without writes, switches twice and unins
   for (let i = 0; i < 2; i++) {
     const result = run(['--yes', '--uninstall', '--all-agents']);
     assert.equal(result.status, 0, result.stderr + result.stdout);
-    assert.match(result.stdout, /claude \/ pi \/ codebuddy 共用/);
+    assert.match(result.stdout, /codebuddy-ide 共用/);
     for (const agent of agentDefinitions()) {
       const target = targetFor(agent);
       if (!target) continue;
@@ -326,7 +326,7 @@ test('CLI cline export installs, repeats unchanged, and uninstalls', (t) => {
 test('CLI guided imports write build-dir snippets only and clean up on uninstall', (t) => {
   const { root, run } = fixture(t);
   const exportsDir = path.join(root, '.mcp-data', 'exports');
-  const args = ['--yes', '--skip-prepare', '--backend=codegraph', '--agents=cline-ide,codebuddy-ide'];
+  const args = ['--yes', '--skip-prepare', '--backend=codegraph', '--agents=cline-ide,jetbrains-ai'];
   const dry = run([...args, '--dry-run']);
   assert.equal(dry.status, 0, dry.stderr + dry.stdout);
   assert.match(dry.stdout, /拟生成 IDE 导入片段/);
@@ -334,7 +334,7 @@ test('CLI guided imports write build-dir snippets only and clean up on uninstall
 
   const installed = run(args);
   assert.equal(installed.status, 0, installed.stderr + installed.stdout);
-  assert.deepEqual(fs.readdirSync(exportsDir).sort(), ['cline-ide-mcp-servers.json', 'codebuddy-ide-mcp-servers.json']);
+  assert.deepEqual(fs.readdirSync(exportsDir).sort(), ['cline-ide-mcp-servers.json', 'jetbrains-ai-mcp-servers.json']);
   for (const file of fs.readdirSync(exportsDir)) {
     const parsed = JSON.parse(fs.readFileSync(path.join(exportsDir, file), 'utf8'));
     assert.deepEqual(Object.keys(parsed.mcpServers), ['workspace-codegraph']);
@@ -346,9 +346,27 @@ test('CLI guided imports write build-dir snippets only and clean up on uninstall
   assert.equal(fs.existsSync(path.join(root, '.cline')), false, 'guided ids never create repo config files');
   assert.equal(fs.existsSync(path.join(root, '.mcp.json')), false);
 
-  const removed = run(['--yes', '--uninstall', '--agents=cline-ide,codebuddy-ide']);
+  const removed = run(['--yes', '--uninstall', '--agents=cline-ide,jetbrains-ai']);
   assert.equal(removed.status, 0, removed.stderr + removed.stdout);
   assert.deepEqual(fs.readdirSync(exportsDir), []);
+});
+
+test('CodeBuddy IDE migrates a previously generated export to the shared project config', t => {
+  const { root, integration, run } = fixture(t);
+  const exportsDir = path.join(root, '.mcp-data', 'exports');
+  fs.mkdirSync(exportsDir, { recursive: true });
+  const legacy = path.join(exportsDir, 'codebuddy-ide-mcp-servers.json');
+  fs.writeFileSync(legacy, `${JSON.stringify({ mcpServers: {
+    'workspace-tgrep': {
+      type: 'stdio',
+      command: process.execPath,
+      args: [path.join(integration, 'tools/tgrep/src/server.mjs'), '--repo-root', root],
+    },
+  } }, null, 2)}\n`);
+  const installed = run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=codebuddy-ide']);
+  assert.equal(installed.status, 0, installed.stderr + installed.stdout);
+  assert.equal(fs.existsSync(legacy), false);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'))).mcpServers['workspace-tgrep']);
 });
 
 test('CLI pi selection reports .pi/mcp.json conflicts without touching that file', (t) => {
@@ -418,8 +436,8 @@ test('unreadable IDE export aborts config writes during preflight', (t) => {
 
 test('CLI previews and applies Kilo consolidation plus legacy options, then reruns without writes', (t) => {
   const { root, run } = fixture(t);
-  const native = path.join(root, '.kilo/kilo.jsonc');
-  const candidate = path.join(root, '.kilo/kilo.json');
+  const native = path.join(root, 'kilo.jsonc');
+  const candidate = path.join(root, 'kilo.json');
   const legacy = path.join(root, '.kilocode/mcp.json');
   fs.mkdirSync(path.dirname(native), { recursive: true });
   fs.mkdirSync(path.dirname(legacy), { recursive: true });

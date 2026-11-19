@@ -22,10 +22,9 @@ for (const [agentId, relative, mapKey, flag, enabledValue] of [
   ['roo', '.roo/mcp.json', 'mcpServers', 'disabled', false],
   ['cline', '.cline/mcp.json', 'mcpServers', 'disabled', false],
   ['zed', '.zed/settings.json', 'context_servers', 'enabled', true],
-  ['omp', '.omp/mcp.json', 'mcpServers', 'enabled', true],
   ['opencode', 'opencode.json', 'mcp', 'enabled', true],
-  ['kilo', '.kilo/kilo.jsonc', 'mcp', 'enabled', true],
-  ['mimocode', '.mimocode/mimocode.json', 'mcp', 'enabled', true],
+  ['kilo', 'kilo.jsonc', 'mcp', 'enabled', true],
+  ['mimocode', 'mimocode.jsonc', 'mcp', 'enabled', true],
 ]) {
   test(`${agentId}: default activation fills missing fields and preserves explicit disable`, t => {
     const w = workspace(t);
@@ -76,8 +75,9 @@ test('Codex defaults enabled in the parent table and retains explicit disable an
 test('shared JSON formats do not gain another client activation field', t => {
   const w = workspace(t);
   for (const [agentId, relative, mapKey] of [
-    ['vscode', '.vscode/mcp.json', 'servers'],
+    ['vscode', '.mcp.json', 'servers'],
     ['claude', '.mcp.json', 'mcpServers'],
+    ['omp', '.mcp.json', 'mcpServers'],
     ['gemini', '.gemini/settings.json', 'mcpServers'],
   ]) {
     assert.equal(w.run(agentId).applied, true);

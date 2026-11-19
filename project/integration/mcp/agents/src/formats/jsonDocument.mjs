@@ -213,7 +213,7 @@ export function removeServerEntry(text, format, serverId) {
  * requires the ownership record (fileStore), so a pre-existing empty object
  * the user wrote is never deleted.
  */
-export function documentIsEmptySkeleton(text, format) {
+export function documentIsEmptySkeleton(text, format, companionFormat) {
   const stripped = text.replace(/^\uFEFF/, '');
   const errors = [];
   const root = jsonc.parse(stripped, errors, { allowTrailingComma: true });
@@ -222,6 +222,14 @@ export function documentIsEmptySkeleton(text, format) {
   }
   if (hasComments(stripped)) {
     return false;
+  }
+  if (companionFormat) {
+    const companionKey = serverMapRootKey(companionFormat);
+    if (Object.hasOwn(root, companionKey)) {
+      const companion = root[companionKey];
+      if (!companion || typeof companion !== 'object' || Array.isArray(companion) || Object.keys(companion).length > 0) return false;
+      delete root[companionKey];
+    }
   }
   let container = root;
   for (const key of ROOT_PATHS[format]) {

@@ -21,6 +21,19 @@ Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents
 重跑安装器会把确认属于当前工作区的配置迁移到 `tools/`，保留额外参数、注释和显式禁用设置。
 旧目录的 `npm test` 也会转发到新目录。实现、测试、补丁与依赖清单只维护新目录的一份。
 
+## 依赖版本
+
+2026-11-19 核对发布源。npm 锁文件同时更新了兼容范围内的传递依赖；tgrep 沿用发布提交的 Cargo 锁文件。
+
+| 依赖 | 固定版本 |
+| --- | --- |
+| MCP TypeScript Client / Server / Core | 2.4.0，[npm Server](https://www.npmjs.com/package/@modelcontextprotocol/server) · [npm Client](https://www.npmjs.com/package/@modelcontextprotocol/client) |
+| tgrep | [1.2.8](https://github.com/microsoft/tgrep/releases/tag/v1.2.8)，集成补丁 `mcp-stdio-v3` |
+| CodeGraph | [1.6.3](https://github.com/colbymchenry/codegraph/releases/tag/v1.6.3) |
+| Sirchmunk、jsonc-parser | [0.2.0](https://pypi.org/project/sirchmunk/) 和 [3.3.1](https://www.npmjs.com/package/jsonc-parser)，已是最新稳定版 |
+| ripgrep、ripgrep-all | [15.2.0](https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0) 和 [0.10.10](https://github.com/phiresky/ripgrep-all/releases/tag/v0.10.10)。Windows x64 延用最后提供预编译包的 [0.10.9](https://github.com/phiresky/ripgrep-all/releases/tag/v0.10.9) |
+| Sirchmunk embedding 模型 | 官方仓库最新提交 `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`。[模型仓库](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) |
+
 ## 安装（推荐入口）
 
 ```bash
@@ -143,15 +156,15 @@ node <MCP_DIR>/setup.js --backend=codegraph --npm-mirror=official --agents=vscod
 时必须通过检查，不匹配即报错。自动发现依次检查已准备记录、PATH、工程中的安装和旧缓存；
 CodeGraph 还检查 npm 全局安装、用户 npx 缓存与本工作空间 npx 缓存。
 
-- tgrep 需要固定版本、`serve --transport stdio` 和 `--version` 中的 `mcp-stdio-v2` 标记。
+- tgrep 需要固定版本、`serve --transport stdio` 和 `--version` 中的 `mcp-stdio-v3` 标记。
   安装器按顺序检查全部补丁，升级旧源码并重编译；旧的 stdio-only 制品也不能继续复用。
   MCP 启动时同样检查版本；遇到旧制品会提示重新执行 `setup.js --backend=tgrep`。
-  无可用本地文件才从固定提交拉源码、打补丁、用 Cargo 构建，并记录二进制 SHA-256。
+  无可用本地文件时，从固定提交拉源码并用上游 Cargo 锁文件构建。源码目录按提交区分，二进制目录按版本和补丁版本区分，旧缓存可保留。构建后记录二进制 SHA-256。
 - CodeGraph 支持已编译的同版本源码仓库、npm 安装和历史平台包；必须同时具备 CLI、
   `dist/index.js` 库及兼容运行时，检查版本、库接口和 `node:sqlite`，不会只凭 PATH 名称接受。
   已编译源码使用系统 Node 22.5+，平台包使用其自带运行时。
 - 无本地 CodeGraph 时，通过 `npm exec`（[npx 的执行机制](https://docs.npmjs.com/cli/v11/commands/npm-exec/)）
-  准备 `@colbymchenry/codegraph@1.6.0`，随后以 `--offline` 再执行一次，再检查实际库依赖。
+  准备 `@colbymchenry/codegraph@1.6.3`，随后以 `--offline` 再执行一次，再检查实际库依赖。
   缓存在 `<PROJECT_DIR>/.mcp-data/downloads/cache/npm/<platform>-<arch>`；失败时不写 Agent 配置。
   正常 MCP 启动直接运行验证后的缓存入口，避免每个会话再次调用 npm。
 
@@ -227,7 +240,7 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
   CodeGraph 上游实际运行时需支持 `node:sqlite`（Node 22.5+），平台包可提供自己的 Node。
   这与面向 Agent 的 MCP 包装进程运行时独立：使用 Bun/Deno 安装不会把 Node 专用参数
   错传给 Bun/Deno，也不会改变已验证的上游后端运行时。
-- 无可复用的 tgrep 时才需要 Git 和 Rust 工具链（edition 2024，rustc 1.98 验证过）。
+- 无可复用的 tgrep 时才需要 Git 和 Rust 工具链（edition 2024，上游最低 rustc 1.88，Windows 使用 1.99.1 验证）。
 - 缺少依赖时需要联网准备固定版本；本地文件和缓存齐全时可用 `--offline`。
 
 ## Sirchmunk 安装与模型准备
@@ -298,41 +311,51 @@ Git/P4 排除 `.mcp-data/`，并保留旧 `integration/mcp/{downloads,private,st
 
 ## 支持的 Agent
 
-以下 Agent 的配置由 `setup.js` 自动写入（均为仓库内项目级文件，保留其中已有的其他条目；
-`--list-agents` 查看全部可选 id）。条目形状均按各家官方文档核验（2026-09-20，含实施前实时复核）：
+下面的项目级路径按 2026-11-19 可查的稳定版发布说明、官方文档或发行源码核对。
+根配置使用绝对启动参数。客户端的发现、信任和实际工具调用分别验收。
 
-| Agent | 配置文件 | 格式要点 |
+| Agent | 安装器写入位置 | 已核实的发现方式 |
 | --- | --- | --- |
-| Claude Code / pi / CodeBuddy Code CLI（共用一个文件） | `.mcp.json` | `mcpServers`；选任一 id 即保留整组，卸载任一 id 影响全组（输出会标注） |
-| Codex | `.codex/config.toml` | `[mcp_servers.<name>]` + `cwd`；CLI 与 IDE 扩展共用 |
-| GitHub Copilot（VS Code / Visual Studio） | `.vscode/mcp.json` | `servers` + 绝对路径；共用 id `vscode` |
-| Cursor | `.cursor/mcp.json` | `mcpServers` |
-| Gemini CLI | `.gemini/settings.json` | `mcpServers` |
-| OpenCode | `opencode.json` 或 `opencode.jsonc` | `mcp` / `type:local` / `command` 数组 |
-| Kilo Code（id `kilo`，兼容旧 id `kilocode`） | 默认 `.kilo/kilo.jsonc`，兼容 `.kilo/kilo.json`；根 `kilo.json(c)` 的托管条目迁入此目录 | 同 OpenCode 形状；两种格式并存时合并到 JSONC；仅有 JSON 时原地更新，保留设置与注释 |
-| Roo Code | `.roo/mcp.json` | `mcpServers` |
-| ZCode | `.zcode/config.json` | `mcp.servers` |
-| oh-my-pi (omp) | `.omp/mcp.json` | `mcpServers` |
-| Zed | `.zed/settings.json`（JSONC，保留注释） | `context_servers` / 扁平 `command` + `args` |
-| Kimi Code | `.kimi-code/mcp.json` | `mcpServers` + `cwd` + 相对 args；使用当前 Kimi Code 运行时 |
-| Qwen Code | `.qwen/settings.json` | `mcpServers` + `cwd` + 相对 args |
-| WorkBuddy | `.workbuddy/mcp.json` | `mcpServers` |
-| TRAE / TraeCode（IDE 与 CLI） | `.trae/mcp.json` | `mcpServers`；IDE 需启用项目级 MCP |
-| MiMo Code | `mimocode.json(c)` 或 `.mimocode/mimocode.json(c)`；新建默认后者 | 同 OpenCode 形状 |
-| Cline CLI | `.cline/mcp.json`（安装器自定义导出文件） | `mcpServers`；Cline 不自动发现它，需经下方启动器显式接入 |
+| VS Code GitHub Copilot（`vscode`） | `.mcp.json` | 1.140 提供可移植配置入口，1.147 稳定版的 Copilot harness 读取根文件的 `mcpServers`。旧 Local harness 使用编辑器配置。 [发布说明](https://code.visualstudio.com/updates/v1_140#_add-mcp-servers-to-portable-configuration-files) · [配置参考](https://code.visualstudio.com/docs/agents/reference/mcp-configuration) |
+| Visual Studio GitHub Copilot（同一 `vscode` 接入项） | 解决方案目录 `.mcp.json` | 2022 17.14 最新维护版及 2026 支持此路径。18.12.0 的读取器使用 `servers`，因此同一根文件包含两种映射。 [Microsoft Learn](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers?view=visualstudio) · [发行历史](https://learn.microsoft.com/en-us/visualstudio/releases/2026/release-history) |
+| Claude Code（`claude`） | `.mcp.json` | 项目作用域，`mcpServers`，首次使用需批准。 [官方文档](https://code.claude.com/docs/en/mcp) |
+| CodeBuddy Code CLI（`codebuddy`） | `.mcp.json` | `mcpServers`。旧的根 `mcp.json` 是回退文件，优先读取第一个存在的文件。 [官方文档](https://www.codebuddy.cn/docs/cli/mcp) |
+| CodeBuddy IDE（`codebuddy-ide`） | `.mcp.json` | 4.0 起支持项目根文件，使用 `mcpServers`。 [IDE 发布说明](https://www.codebuddy.cn/docs/ide/release-notes/release-notes) · [配置文档](https://www.codebuddy.cn/docs/ide/User-guide/MCP) |
+| pi（`pi`） | `.mcp.json` | 需 pi-mcp-adapter，核对了 v7.0.1，`.pi/mcp.json` 优先。 [扩展文档](https://github.com/nicobailon/pi-mcp-adapter/tree/v7.0.1) |
+| oh-my-pi（`omp`） | `.mcp.json` | v19.0.0 支持根文件；原生配置、兼容导入及根 `mcp.json` 中的同名定义优先。 [发行文档](https://github.com/can1357/oh-my-pi/blob/v19.0.0/docs/mcp-config.md) |
+| Codex CLI / IDE 扩展 | `.codex/config.toml` | 受信任项目加载 `[mcp_servers.<name>]`。 [官方文档](https://developers.openai.com/codex/config-basic) |
+| Cursor | `.cursor/mcp.json` | 原生项目文件用 `mcpServers`。 [Cursor MCP 文档](https://cursor.com/docs/mcp) |
+| Gemini CLI | `.gemini/settings.json` | 原生项目设置用 `mcpServers`。 [官方文档](https://geminicli.com/docs/tools/mcp-server/) |
+| OpenCode | `opencode.json(c)` | 本地服务用 `type: "local"` 和 `command` 数组。v1.19.6 会迁移旧的扁平 `mcp` 映射。 [官方文档](https://opencode.ai/docs/config/) · [v1.19.6 迁移源码](https://github.com/anomalyco/opencode/blob/v1.19.6/packages/core/src/v1/config/migrate.ts) |
+| Kilo Code（`kilo`、`kilocode`） | `kilo.json(c)` | CLI、VS Code、JetBrains 共用根配置；`.kilo/` 同名配置优先。 [官方文档](https://kilo.ai/docs/getting-started/settings) |
+| Zoo Code / Roo Code（`roo`、`zoo`、`zoocode`） | `.roo/mcp.json` | 当前 Zoo Code 延续 Roo 的项目路径，`mcpServers`。 [官方文档](https://docs.zoocode.dev/features/mcp/using-mcp-in-roo) |
+| ZCode | `.zcode/config.json` | `mcp.servers`。 [官方文档](https://www.zcode.network/en/docs/mcp-services/) |
+| Zed | `.zed/settings.json` | Zed Agent 使用 `context_servers`，外部 Agent 可另读自身原生配置。 [官方文档](https://zed.dev/docs/ai/mcp) |
+| Kimi Code | `.kimi-code/mcp.json` | `mcpServers`，支持服务器 `cwd`。 [官方文档](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/customization/mcp.md) |
+| Qwen Code | `.qwen/settings.json` | `mcpServers`，支持服务器 `cwd`。 [官方文档](https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/) |
+| WorkBuddy | `.workbuddy/mcp.json` | WorkBuddy 的工作区 MCP 使用专用文件。 [官方文档](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide) |
+| TRAE IDE / TraeCode CLI | `.trae/mcp.json` | `mcpServers`，IDE 需启用项目级 MCP。 [IDE 文档](https://docs.trae.cn/ide_add-mcp-servers) · [CLI 文档](https://docs.trae.cn/cli_model-context-protocol) |
+| MiMo Code | `mimocode.json(c)` | v0.1.17 读取该原生根文件，Claude 兼容导入读取 `.claude.json`。 [发行源码](https://github.com/XiaomiMiMo/MiMo-Code/blob/v0.1.17/packages/cli/src/config/config.ts) |
+| Cline CLI | `.cline/mcp.json` | 安装器生成的显式配置，通过下面的启动器传入 `CLINE_MCP_SETTINGS_PATH`。 [Cline 配置文档](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx) |
 
-新增接入方式按 2026-09-22 官方文档核对：
+`claude`、`codebuddy`、`codebuddy-ide`、`pi`、`omp`、`vscode` 共用根文件。
+安装选中其中一项即可保留整组。卸载任一项会移除整组的本集成条目。
+`vscode` 保留 `copilot`、`copilot-vscode`、`copilot-visual-studio`、`visual-studio` 等别名。
+选中 `vscode` 或迁移其旧条目时，同时写入 Visual Studio 的 `servers`；后续换后端会同步已有映射。
+VS Code 的 `chat.mcp.workspaceRootConfig.enabled` 控制添加服务器对话框是否提供根文件选项，
+已有根文件可直接被 Copilot harness 读取。
+
+以下接入项通过面板导入或显式加载：
 
 | 接入项 | 生成内容和启用方式 |
 | --- | --- |
-| `vscode` | 保留旧 id；别名 `copilot`、`copilot-vscode`、`copilot-visual-studio`、`visual-studio`。Visual Studio 2022 17.14+ / 2026 可发现解决方案目录的 `.vscode/mcp.json`，因此共用文件和代码；使用双方均支持的绝对参数路径，避免依赖 VS Code 变量。见 [Microsoft 文档](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers?view=visualstudio)。 |
+| `cline-ide` | 从 MCP Servers → Configure 打开扩展自己的配置并导入 `mcpServers` 片段。 [Cline 配置文档](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx) |
 | `copilot-jetbrains` | Rider 与其他 JetBrains IDE 的 Copilot 插件共用一个接入项，别名 `copilot-rider` / `rider-copilot`。生成 `servers` JSON，按 Copilot Chat → Agent → Add MCP Tools 导入插件打开的配置；有 Workspace 选项时选择当前工作区。官方已支持工作区服务器，但未在配置文档明确稳定的自动写入路径，安装器不猜测内部路径。见 [配置文档](https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/extend-copilot-chat-with-mcp?tool=jetbrains) 与 [工作区支持公告](https://github.blog/changelog/2026-07-07-codex-as-agent-provider-and-agentic-enhancements-in-jetbrains-ides/)。 |
 | `jetbrains-ai` | Rider 等 IDE 的 AI Assistant；别名 `rider-ai` / `rider`。生成 `mcpServers` JSON，进入 Settings → Tools → AI Assistant → MCP → Add → STDIO，Server level 选当前项目。与 Copilot 插件是两个独立入口。见 [JetBrains 文档](https://www.jetbrains.com/help/ai-assistant/mcp.html)。 |
 | `trae` | IDE 与 CLI 共用 `.trae/mcp.json`，别名 `trae-ide` / `trae-cli` / `traecode`。IDE 需打开 Settings → MCP → 启用项目级 MCP。见 [IDE 文档](https://docs.trae.cn/ide_add-mcp-servers) 与 [CLI 文档](https://docs.trae.cn/cli_model-context-protocol)。 |
 | `dsh` | DeepSeek Harness，别名 `deepseek-harness`。生成 `dsh-mcp.cordis.yml`，使用官方 `@deepseek-ai/dsh-mcp-client` 的 `insert/config/serverName/transport` 结构。按安装器输出执行 `dsh web --patch "<生成路径>"`；当前 profile 必须能解析匹配宿主版本的插件。见 [官方接入示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/mcp-memory.md)。 |
 
-三个显式导入项（`copilot-jetbrains`、`jetbrains-ai`、`dsh`）的文件在
-`<PROJECT_DIR>/.mcp-data/exports/`，与已有 Cline IDE / CodeBuddy IDE 共用规划、
+显式导入文件位于 `<PROJECT_DIR>/.mcp-data/exports/`，与 Cline IDE 同用规划、
 损坏检测、备份、回滚和卸载代码。它们不在 `--agents=all` 内，须显式选择；`--agents` 仍表示
 本次最终集合，添加时请同时列出需要保留的其他客户端。DSH 的 `--patch` 是原生显式加载，
 不会覆盖用户 YAML 或自动安装 DSH 插件。移除导出文件后，已导入 IDE 的服务器仍需在 IDE 中移除。
@@ -347,11 +370,11 @@ Git/P4 排除 `.mcp-data/`，并保留旧 `integration/mcp/{downloads,private,st
 | 客户端 | 安装器行为 / 仍需操作 |
 | --- | --- |
 | Codex | 写入 `enabled = true`；项目配置仍需项目受信任。见 [配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)。 |
-| Zed、oh-my-pi | 分别在 `context_servers` / `mcpServers` 条目写入 `enabled: true`；Zed 的 Agent profile 工具选择、OMP profile 的禁用列表仍生效。见 [Zed 配置源](https://github.com/zed-industries/zed/blob/main/crates/project/src/project_settings.rs)、[OMP 文档](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md)。 |
+| Zed、oh-my-pi | Zed 的 `context_servers` 写入 `enabled: true`，Agent profile 仍控制工具选择。oh-my-pi 读取根文件，保留迁移来的显式启用状态，profile 禁用列表仍生效。 [Zed 配置源](https://github.com/zed-industries/zed/blob/main/crates/project/src/project_settings.rs) · [OMP 文档](https://github.com/can1357/oh-my-pi/blob/v19.0.0/docs/mcp-config.md) |
 | OpenCode、Kilo、MiMo | 保持原有 `enabled: true` 默认配置，保留用户明确关闭的状态。 |
 | Roo、Cline CLI / IDE | 写入 `disabled: false`；Cline CLI 仍须通过启动器加载，IDE 仍须导入片段。见 [Roo 文档](https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo/)、[Cline 文档](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx)。 |
 | Visual Studio Copilot | 官方规定新发现的 MCP 工具默认关闭，且没有文档化的项目配置字段打开该开关。进入 Copilot **Agent → 工具 → 已添加**，打开所选的 `workspace-tgrep` / `workspace-codegraph` / `workspace-sirchmunk`，按提示信任服务器；工具列表变化后可能需要重新确认。见 [Microsoft 文档](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers?view=visualstudio#tool-lifecycle)。 |
-| VS Code Copilot | 与 Visual Studio 共用 `.vscode/mcp.json`，但启用状态另行保存。已禁用时运行 **MCP: List Servers → 服务器 → Enable**；`chat.mcp.autostart` 不会重新启用已禁用服务器，首次使用仍有信任提示。见 [VS Code 文档](https://code.visualstudio.com/docs/agent-customization/mcp-servers#enable-or-disable-mcp-servers)。 |
+| VS Code Copilot | 可移植条目默认写入 `tools: ["*"]`，保留已有工具列表。在 **Chat: Open Customizations → MCP Servers** 查看配置和连接，调用仍受信任和授权设置控制。 [VS Code 配置参考](https://code.visualstudio.com/docs/agents/reference/mcp-configuration) |
 | JetBrains AI Assistant（含 Rider） | 导入项目服务器并 Apply；如需自动启用后续新增或修改的服务器，可在 MCP 设置页勾选 **Automatically enable new and changed MCP servers**。见 [JetBrains 文档](https://www.jetbrains.com/help/ai-assistant/mcp.html)。 |
 
 其他客户端沿用原生配置和安装器输出的加载步骤，不写入未经核验的启用字段。TRAE 的
@@ -402,13 +425,12 @@ node ... --agent=cline --cline <cline 包 bin/cline 脚本或原生可执行文�
 显式路径替换 Cline 本次进程的默认 MCP 配置源，不合并全局服务器；导出文件中的用户补充
 条目会被保留。这是显式接入，不等于已自动接入。
 
-**面板导入类（无已核实项目级写入路径，不写任何项目配置文件）**：Cline IDE（`cline-ide`）、
-CodeBuddy IDE（`codebuddy-ide`）。选择它们时安装器在
+**面板导入**（Cline IDE、JetBrains 插件）在
 `<PROJECT_DIR>/.mcp-data/exports/` 生成本机导入片段（只含本次条目与绝对路径），
 并打印各家面板的导入步骤；卸载/取消选择时删除片段。它们不参与 `--agents=all`。
 片段与项目配置一起预检、写入和失败回滚；片段被手工修改、不可读或经链接指向仓库外时，整批中止。
 修改过的片段需先移走再生成。省略 `--agents` 的更新会保留已有片段选择；重复生成无写入。
-卸载片段不会移除已经手动导入 IDE 的条目，后者需在对应面板清理。
+曾为 CodeBuddy IDE 生成的旧片段会按其原始格式识别并清理。已经手工导入 IDE 的服务器需在面板清理。
 
 以下工具只有用户级（仓库外）配置文件，不自动写入，参考文末示例手工添加：
 Windsurf（`~/.codeium/windsurf/mcp_config.json`，支持变量插值）。
@@ -444,18 +466,21 @@ Roo/Zed/WorkBuddy 为 GUI 客户端，同样只在文档层覆盖。
   与冗余文件删除；卸载只原地清理托管条目，不整合文件。
 - **不同目录保持分层**：Kilo 根配置与 `.kilo/`，以及 MiMo 根配置与 `.mimocode/`，
   都可以同时存在。外来字段、插件和服务器留在各自层级，仅迁移已确认属于本集成的条目。
-  MiMo 优先在已有 `.mimocode/` 层写入；只有根候选存在时原地编辑根文件。
+  新条目默认写入根 JSONC；根目录只有 JSON 时原地编辑。
 - **Kilo / Roo 迁移**：旧 `.kilocode/mcp.json`、`.roo/mcp_settings.json` 中的本集成条目
   会在新目标写入成功后被清理（先验证条目的 command/args 确实指向本仓库包装层；同名但
   指向其他程序的用户条目保留不动并提示）。旧文件里的外来条目始终保留。
-  根 `kilo.json(c)` 按其实际 OpenCode 形状迁移。同格式迁移保留自定义选项；旧 Kilo stdio
+  `.kilo/kilo.json(c)` 按原有 OpenCode 形状迁移。同格式迁移保留自定义选项；旧 Kilo stdio
   的 `env`、`disabled` 转为 `environment`、`enabled`，附加启动参数一并保留。
   不同值冲突、未知跨格式字段、自定义工作目录、`{file:...}` 引用以及其他后端的自定义选项
   会中止整批写入并指出来源，需要人工处理后重跑。显式卸载仍可清理这些托管条目。
+- **Copilot / oh-my-pi 迁移**：经核验的 `.vscode/mcp.json`、`.omp/mcp.json` 和 `.omp/.mcp.json`
+  托管条目移到根文件，保留旧文件中的其他内容。VS Code 的输入提示、编辑器专用字段或
+  变量替换需要人工调整，安装器遇到这类托管选项会在任何配置写入前中止。
 - **CodeBuddy 旧根 `mcp.json`**：仅它存在且只选 CodeBuddy 时原地编辑；需要创建
   `.mcp.json` 而旧文件含外来服务器时会中止（避免新文件遮蔽旧配置，预览式迁移未实现）；
-  旧文件只含本集成条目时创建 `.mcp.json` 并清理旧条目；两文件并存时按官方优先级只编辑
-  `.mcp.json`，旧文件原样保留。仅旧文件存在时，卸载在旧文件中执行并保留外来服务，不新建配置。
+  旧文件只含本集成条目时创建 `.mcp.json` 并清理旧条目。两文件并存时使用 `.mcp.json`，
+  旧文件只清理已核验的托管条目，避免 oh-my-pi 命中旧条目。仅旧文件存在时，卸载在旧文件中执行并保留外来服务。
 
 ## 配置条目示例
 
@@ -483,10 +508,18 @@ Roo/Zed/WorkBuddy 为 GUI 客户端，同样只在文档层覆盖。
 claude mcp add --transport stdio --scope project workspace-tgrep -- node <MCP_DIR>/tools/tgrep/src/server.mjs --repo-root <PROJECT_DIR>
 ```
 
-### GitHub Copilot：VS Code / Visual Studio（`.vscode/mcp.json`，键名为 `servers`）
+### GitHub Copilot 共用的根配置
 
 ```json
 {
+  "mcpServers": {
+    "workspace-codegraph": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["<MCP_DIR>/tools/codegraph/src/server.mjs", "--repo-root", "<PROJECT_DIR>"],
+      "tools": ["*"]
+    }
+  },
   "servers": {
     "workspace-codegraph": {
       "type": "stdio",
@@ -543,7 +576,7 @@ enabled = true
 
 | 客户端 | 官方支持 | setup.js 写入 |
 | --- | --- | --- |
-| VS Code / Visual Studio Copilot | 两者可发现 `.vscode/mcp.json` | 共用绝对 args；已有 `${workspaceFolder}` 条目可迁移 |
+| VS Code / Visual Studio Copilot | 根 `.mcp.json` 中分别读取 `mcpServers` / `servers` | 共用绝对 args；原 wrapper 参数中的 `${workspaceFolder}` 可迁移 |
 | Codex / Kimi Code / Qwen Code | `cwd` 字段 | 本机绝对 `cwd`；工具在工程内用相对 args，外部工具用绝对 args |
 | Cursor | `${workspaceFolder}` 等变量插值 | 当前使用本机绝对 args |
 | Gemini CLI | `cwd` 字段 | 当前使用本机绝对 args |
@@ -565,7 +598,7 @@ enabled = true
   复制到新工程后，应把这些索引、依赖和缓存加入该工程的版本管理排除规则。
 - 同一缓存的多个 Agent 共享后端；旧版独占实例或外部写入者占用索引时仍返回 `INDEX_IN_USE`，
   不接管或杀死已有实例。升级后先断开旧版 MCP，再重新连接各 Agent。
-- 固定 CodeGraph 1.6.0 对不足 500 个索引文件的工程隐藏状态工具的发现条目，但保留处理器。
+- 固定 CodeGraph 1.6.3 对不足 500 个索引文件的工程隐藏状态工具的发现条目，但保留处理器。
   包装层会验证该只读处理器后使用自己的状态 schema；真正缺失或失败仍报告降级。
 
 ### 多个 Agent 共享缓存服务
@@ -622,7 +655,7 @@ Windows/Linux 已验证；其他 POSIX 平台的普通 socket 在强杀后可能
 共享服务拥有后台子进程：首次通过库 API 建索引，然后启动同版本 `serve --mcp`。
 该服务自带文件监听和连接时的补同步，因此无需额外启动一个写同一数据库的 watcher/daemon。
 文件增删改由这个服务增量同步；重连后先补齐离线变更，再响应代码查询。
-这是固定 1.6.0 制品的实测行为，升级时需重新验证。
+CodeGraph 的监听与追赶行为以实际制品为准，升级时需重新验证。
 
 后台进程在最后一个 MCP 连接退出后停止，首次索引也支持取消；全部 Agent 关闭期间不常驻。
 这保留 stdio 的进程清理和单写者约束。上游独立 daemon 会跨会话存活，不用于本接入。
@@ -686,7 +719,7 @@ codegraph explore "<symbol names or question>"
 `codegraph` 仅在已安装且版本匹配时使用；否则使用已准备的捆绑入口。不要为执行提示词临时运行
 无版本约束的 `npx`。CLI 可用性、索引占用或 schema 不匹配导致失败时回退普通源码工具，不自行解锁或重建。
 
-常用命令（下表基于固定版本 1.6.0 制品的 `--help` 实测；命令普遍接受位置参数
+常用命令（下表基于固定版本 1.6.3 制品的 `--help` 实测；命令普遍接受位置参数
 `[path]` 或 `-p/--path` 选项定位项目——`status`/`sync`/`index` 用位置参数，
 `query`/`callers`/`files` 等用 `-p`；多数支持 `--json` 输出）：
 
@@ -712,11 +745,7 @@ sqlite3 "file:<PROJECT_DIR>/.codegraph-<project>-windows/codegraph.db?mode=ro" "
 没有 sqlite3 CLI 时，Node 22.5+ 自带的 `node:sqlite` 也能只读查询
 （`new DatabaseSync(path, { readOnly: true })`）。
 
-**图形界面现状**：截至固定的 1.6.0（也是 npm latest，2026-08），上游**尚未发布**任何
-GUI；官方浏览器图查看器（`codegraph ui`，别名 `web`）已在上游源码树实现但未随版本
-发布——按上游设计它只监听 127.0.0.1、只读打开现有索引、跟随文件变更刷新，支持符号
-调用关系视图、全项目模块依赖图（Map）和 `A -> B` 流程查询。后续版本发布后，按
-“测试与维护”的升级流程更新固定版本即可使用。在那之前的替代：
+**图形界面**：1.6.3 的 Windows npm 制品未提供公开的 `ui` 命令。需可视化时可以使用以下方式：
 
 - **查数据库**：用任意 SQLite GUI（DB Browser for SQLite、DBeaver、DataGrip、VS Code
   SQLite 插件等）只读打开 `codegraph.db`（WAL 模式，`-wal`/`-shm` 是正常组成），
@@ -835,6 +864,15 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 没有把镜像域名写进 `resolved`。
 
 ## 已验证平台
+
+### 依赖与根配置更新（2026-11-19）
+
+- Windows x64 隔离工程启用两种根配置映射，完成 CodeGraph 1.6.3 在线安装、离线缓存校验、
+  首次建索引、符号检索和断开清理。tgrep 1.2.8 通过 release 构建、两项忽略规则测试、
+  MCP 文本检索及原生 watcher 的增删改、重命名和重启恢复。
+- 安装、切换后端和卸载的 dry-run 保持配置内容和 mtime。客户端发现路径和格式另见
+  [兼容表](#支持的-agent)。本轮端到端验证使用 Windows stdio 客户端，IDE 登录后的交互、
+  Sirchmunk 真实 LLM 调用及 Linux/macOS 运行留待独立验收。
 
 ### Issue #259：隐藏输入取消与终端清理（2026-09-23）
 

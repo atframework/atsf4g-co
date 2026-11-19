@@ -1,18 +1,22 @@
 {
   "npm_package": "@colbymchenry/codegraph",
   "npm_platform_prefix": "@colbymchenry/codegraph",
-  "version": "1.6.0",
-  "source_commit": "ba3c21e50d9129d2f5f3843ec3728868ae6d47a1",
-  "source_commit_note": "source tree inspected as the behavior reference for the pinned 1.6.0 artifacts; it is AHEAD of the 1.6.0 release, so installed-binary behavior wins on differences (verified example: no `ui` subcommand in the 1.6.0 platform package while the source tree has one). Re-check `--help` output of the actual artifact when upgrading.",
-  "dist_shasum": "d04bc0c93a86186d3ebcb55c74cc15166a50b46e",
+  "version": "1.6.3",
+  "source_commit": "ef4bd058d97020a2b2a74a89f1bf21b84e9f5b30",
+  "source_commit_note": "Git tag v1.6.3 and npm gitHead agree. Installed Windows artifact still has no public ui subcommand.",
+  "dist_shasum": "1a7327f0685123f365276f3b3a7505a2a523e7ea",
   "dist_shasum_note": "the main npm package is a thin installer: dist/ ships only .d.ts types, the compiled app lives in per-platform optionalDependencies",
   "platform_packages": "@colbymchenry/codegraph-<platform>-<arch>",
   "platform_dist_shasums": {
-    "win32-x64": "6d49e4421b96a5e6dfec90f7efbddbc1b69652f2",
-    "linux-x64": "3f3c67189914a93ddf9b643233bd0163920c3cdd"
+    "darwin-arm64": "f9a9806013389c76417a53367ab798726152bbd8",
+    "darwin-x64": "96380438c6aef40be8d198aab4a4b31a55f1aa3c",
+    "linux-arm64": "07ca0c35913b34caa9aca18a3af32ff946bae1a5",
+    "linux-x64": "c713a1fa28aca98148fd3b01017b540d868cabc9",
+    "win32-arm64": "775bdfd6cebc5402954c6f6caaf3e4702c081855",
+    "win32-x64": "ccc5f2846ca15329abe40207e6f4e3385780eb51"
   },
-  "platform_dist_shasums_note": "historical verified artifact references; current acquisition uses pinned npm exec and npm integrity checks, never manual binary extraction",
-  "acquisition": "compatible local compiled library/runtime first; otherwise npm exec --package=@colbymchenry/codegraph@1.6.0, offline verification and library probe; CODEGRAPH_NO_DOWNLOAD=1 disables the shim's GitHub binary fallback",
+  "platform_dist_shasums_note": "public npm registry metadata; acquisition uses pinned npm exec and npm integrity checks",
+  "acquisition": "compatible local compiled library/runtime first; otherwise npm exec --package=@colbymchenry/codegraph@1.6.3, offline verification and library probe; CODEGRAPH_NO_DOWNLOAD=1 disables the shim's GitHub binary fallback",
   "engines_note": "the library needs node:sqlite (Node 22.5+). Both serve and initialize use the same verified runtime: bundled Node for platform packages, system Node for a compiled source checkout. Wrapper/setup require Node >=20.",
   "bundle_layout": {
     "common": {

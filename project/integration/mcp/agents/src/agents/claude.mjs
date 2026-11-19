@@ -3,6 +3,6 @@ import { SHARED_MCP_JSON_TARGET } from './mcp-json-group.mjs';
 
 export default new JsonServerMapConfigurator({
   id: 'claude',
-  label: 'Claude Code (与 pi、CodeBuddy CLI 共用 .mcp.json)',
+  label: 'Claude Code (共用 .mcp.json)',
   target: SHARED_MCP_JSON_TARGET,
 });

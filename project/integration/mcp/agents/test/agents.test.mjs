@@ -36,7 +36,7 @@ test('configureAgent writes every supported agent shape', () => {
     assert.equal(claude.mcpServers['workspace-tgrep'].command, process.execPath);
     assert.equal(claude.mcpServers['workspace-tgrep'].type, 'stdio');
 
-    const vscode = JSON.parse(fs.readFileSync(path.join(repo, '.vscode', 'mcp.json'), 'utf8'));
+    const vscode = JSON.parse(fs.readFileSync(path.join(repo, '.mcp.json'), 'utf8'));
     // Visual Studio and VS Code share this file; use the common absolute path
     // form instead of relying on an IDE-specific variable expansion contract.
     assert.equal(vscode.servers['workspace-tgrep'].args[0], path.join(repo, 'tools/mcp/tools/tgrep/src/server.mjs'));
@@ -70,11 +70,11 @@ test('configureAgent writes every supported agent shape', () => {
     assert.equal(workbuddy.mcpServers['workspace-tgrep'].type, 'stdio');
     assert.ok(workbuddy.mcpServers['workspace-tgrep'].args[0].startsWith(repo));
 
-    const mimo = JSON.parse(fs.readFileSync(path.join(repo, '.mimocode', 'mimocode.json'), 'utf8'));
+    const mimo = JSON.parse(fs.readFileSync(path.join(repo, 'mimocode.jsonc'), 'utf8'));
     assert.equal(mimo.mcp['workspace-tgrep'].type, 'local');
     assert.deepEqual(mimo.mcp['workspace-tgrep'].command.slice(0, 1), [process.execPath]);
 
-    const kilo = JSON.parse(fs.readFileSync(path.join(repo, '.kilo', 'kilo.jsonc'), 'utf8'));
+    const kilo = JSON.parse(fs.readFileSync(path.join(repo, 'kilo.jsonc'), 'utf8'));
     assert.equal(kilo.mcp['workspace-tgrep'].type, 'local');
     assert.deepEqual(kilo.mcp['workspace-tgrep'].command.slice(0, 1), [process.execPath]);
 
@@ -188,7 +188,7 @@ test('removeAgentServers deletes skeleton-only files and preserves real ones', (
     assert.deepEqual(gemini, { mcpServers: {}, theme: 'dark' });
 
     // A PRE-EXISTING empty object is not ours: uninstall keeps the file.
-    const ompFile = path.join(repo, '.omp', 'mcp.json');
+    const ompFile = path.join(repo, '.mcp.json');
     fs.mkdirSync(path.dirname(ompFile), { recursive: true });
     fs.writeFileSync(ompFile, '{\n  "mcpServers": {}\n}\n', 'utf8');
     configureAgent({ repoRoot: repo, agentId: 'omp', backend: 'tgrep' });
@@ -258,7 +258,7 @@ test('configureAgent refuses non-object server maps instead of replacing them', 
   try {
     const cases = [
       ['claude', '.mcp.json'],
-      ['vscode', path.join('.vscode', 'mcp.json')],
+      ['vscode', '.mcp.json'],
       ['zcode', path.join('.zcode', 'config.json')],
       ['opencode', 'opencode.json'],
     ];

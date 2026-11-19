@@ -2,7 +2,7 @@
 /**
  * Fake CodeGraph MCP backend for tests: a minimal stdio MCP server exposing
  * the tools named in CODEGRAPH_MCP_TOOLS (default: the full upstream set,
- * each with the pinned v1.6.0 shape including an optional projectPath).
+ * each with the upstream shape including an optional projectPath).
  *
  * Behavior switches via environment:
  *   CODEGRAPH_FAKE_RECORD=<path>  append one JSON line per tools/call
@@ -68,7 +68,7 @@ const allowlist = (process.env.CODEGRAPH_MCP_TOOLS ?? Object.keys(ALL).join(',')
   .map((name) => name.trim())
   .filter((name) => name && (name !== 'codegraph_status' || !noStatus));
 
-const server = new Server({ name: 'fake-codegraph', version: '1.6.0-fake' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'fake-codegraph', version: '1.6.3-fake' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler('tools/list', () => ({
   tools: allowlist.filter((name) => name !== 'codegraph_status' || process.env.CODEGRAPH_FAKE_HIDE_STATUS !== '1').map((name) => ({

@@ -60,7 +60,7 @@ readline.on('line', async (line) => {
           hidden_complete: !neverReady,
           files: 3,
           watch_mode: neverReady ? 'none' : 'native',
-          version: 'fake-1.0.9',
+          version: 'fake-1.2.8',
         },
       });
       return;

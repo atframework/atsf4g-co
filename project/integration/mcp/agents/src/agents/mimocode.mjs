@@ -5,8 +5,12 @@ export default new OpenCodeShapeConfigurator({
   label: 'MiMo Code',
   target: {
     id: 'mimocode-json',
-    file: ['.mimocode', 'mimocode.json'],
-    candidates: ['mimocode.json', 'mimocode.jsonc', ['.mimocode', 'mimocode.json'], ['.mimocode', 'mimocode.jsonc']],
-    evidence: 'https://mimo.xiaomi.com/mimocode/mcp-servers + https://github.com/XiaomiMiMo/MiMo-Code/blob/main/packages/opencode/src/config/config.ts',
+    file: 'mimocode.jsonc',
+    candidates: ['mimocode.jsonc', 'mimocode.json'],
+    legacyFiles: [
+      { file: ['.mimocode', 'mimocode.json'], format: 'opencode' },
+      { file: ['.mimocode', 'mimocode.jsonc'], format: 'opencode' },
+    ],
+    evidence: 'https://github.com/XiaomiMiMo/MiMo-Code/blob/v0.1.17/packages/cli/src/config/config.ts',
   },
 });

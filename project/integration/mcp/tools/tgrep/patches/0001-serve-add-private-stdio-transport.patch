@@ -1,23 +1,19 @@
 diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
-index 447fb5d..8def457 100644
+index c18593b..9eacfa9 100644
 --- a/tgrep-cli/src/main.rs
 +++ b/tgrep-cli/src/main.rs
-@@ -691,6 +691,14 @@ enum Command {
+@@ -786,6 +786,10 @@ enum Command {
              value_parser = clap::value_parser!(u64).range(1..=usize::MAX as u64)
          )]
          watcher_queue_cap: Option<u64>,
 +
-+        /// RPC transport: TCP listener (default) or private stdio pipes.
-+        ///
-+        /// stdio serves the same JSON-RPC over inherited pipes without
-+        /// binding a listener or publishing serve.json; stdin EOF stops the
-+        /// server. Used by embedding integrations that own the process.
++        /// Serve over private stdin/stdout pipes; stdin EOF stops the server.
 +        #[arg(long, value_enum, default_value = "tcp", value_name = "TRANSPORT")]
 +        transport: serve::ServeTransport,
      },
- 
-     /// Search for a pattern.
-@@ -1146,6 +1154,7 @@ fn run_cli() {
+
+     /// Explicit shared-worktree attachment lifecycle (JSON output).
+@@ -1447,12 +1451,17 @@ fn run_cli() {
              exclude,
              auto_save_mutations,
              watcher_queue_cap,
@@ -25,23 +21,34 @@ index 447fb5d..8def457 100644
          }) => {
              let memory_cap = max_memory_mb
                  .map(|mb| mb.saturating_mul(1024 * 1024))
-@@ -1156,6 +1165,7 @@ fn run_cli() {
-                 cli.index_path.as_deref(),
-                 serve::ServeOptions {
-                     no_watch,
-+                    transport,
-                     watch_mode,
-                     poll_interval: Duration::from_secs(poll_interval),
-                     watch_budget: watch_budget as usize,
+                 .unwrap_or_else(mem::default_memory_cap_bytes);
+             let index_threads = cpu::index_thread_count(max_cpu_percent.unwrap_or(50));
+-            if cli.shared {
++            if cli.shared && transport == serve::ServeTransport::Stdio {
++                Err(anyhow::anyhow!(
++                    "serve --transport stdio cannot be combined with --shared"
++                ))
++            } else if cli.shared {
+                 match shared_storage {
+                     Some(storage) => {
+                         let options = serve::shared::Options {
+@@ -1480,6 +1489,7 @@ fn run_cli() {
+                     cli.index_path.as_deref(),
+                     serve::ServeOptions {
+                         no_watch,
++                        transport,
+                         watch_mode,
+                         poll_interval: Duration::from_secs(poll_interval),
+                         watch_budget: watch_budget as usize,
 diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
-index a41e24d..cb4fb60 100644
+index 3d237d9..bc43fe4 100644
 --- a/tgrep-cli/src/serve.rs
 +++ b/tgrep-cli/src/serve.rs
-@@ -134,6 +134,14 @@ pub enum WatchMode {
-     Poll,
+@@ -911,8 +911,17 @@ impl SearchOpts {
+     }
  }
- 
-+/// RPC transport for `serve`: TCP listener (default) or private stdio pipes.
+
++/// Transport for the per-workspace server.
 +#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 +pub enum ServeTransport {
 +    #[default]
@@ -49,18 +56,13 @@ index a41e24d..cb4fb60 100644
 +    Stdio,
 +}
 +
- struct RefreshControl {
-     requested: WatchMode,
-     poll_interval: Duration,
-@@ -776,6 +784,7 @@ impl SearchOpts {
- 
  pub struct ServeOptions<'a> {
      pub no_watch: bool,
 +    pub transport: ServeTransport,
      pub watch_mode: WatchMode,
      pub poll_interval: Duration,
      pub watch_budget: usize,
-@@ -796,6 +805,7 @@ pub struct ServeOptions<'a> {
+@@ -933,6 +942,7 @@ pub struct ServeOptions<'a> {
  pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) -> Result<()> {
      let ServeOptions {
          no_watch,
@@ -68,38 +70,54 @@ index a41e24d..cb4fb60 100644
          watch_mode,
          poll_interval,
          watch_budget,
-@@ -929,23 +939,34 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
-         stale_refresh_hook: Mutex::new(None),
+@@ -1063,30 +1073,40 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         stale_refresh_hook: Mutex::new(build_tests::startup_hook()),
      });
- 
+
 -    // Bind TCP listener on a random port
 -    let listener = TcpListener::bind("127.0.0.1:0")?;
 -    let port = listener.local_addr()?.port();
 -
--    // Write server info
--    let info = ServerInfo {
--        pid: std::process::id(),
--        port,
-+    // Bind TCP listener on a random port. stdio mode binds nothing and
-+    // publishes no serve.json: the private pipes are the only channel. The
-+    // index exclusivity lock (serve.lock) is held either way.
-+    let (listener, port) = match transport {
-+        ServeTransport::Tcp => {
-+            let listener = TcpListener::bind("127.0.0.1:0")?;
-+            let port = listener.local_addr()?.port();
+-    // Handle shutdown signals before advertising the server, so a signal can
+-    // never strand the `serve.json` written below.
+-    let shutdown_index_dir = index_dir.clone();
+-    ctrlc_handler(move || {
+-        eprintln!("\n[trace] shutting down...");
+-        ServerInfo::cleanup(&shutdown_index_dir);
+-        std::process::exit(0);
+-    });
++    // The shared serve.lock is held for either transport. In stdio mode
++    // nothing listens on a socket and no discoverable endpoint is published.
++    let (tcp_server, endpoint) = if transport == ServeTransport::Tcp {
++        // Bind TCP listener on a random port
++        let listener = TcpListener::bind("127.0.0.1:0")?;
++        let port = listener.local_addr()?.port();
 +
-+            // Write server info
-+            let info = ServerInfo {
-+                pid: std::process::id(),
-+                port,
-+            };
-+            info.save(&index_dir)?;
-+            (Some(listener), port)
-+        }
-+        ServeTransport::Stdio => (None, 0),
-     };
++        // Handle shutdown signals before advertising the server, so a signal can
++        // never strand the `serve.json` written below.
++        let shutdown_index_dir = index_dir.clone();
++        ctrlc_handler(move || {
++            eprintln!("\n[trace] shutting down...");
++            ServerInfo::cleanup(&shutdown_index_dir);
++            std::process::exit(0);
++        });
+
+-    // Write server info
+-    let info = ServerInfo::new(port)?;
 -    info.save(&index_dir)?;
- 
+-    let instance: Arc<str> = Arc::from(info.instance.as_deref().unwrap_or_default());
++        // Write server info
++        let info = ServerInfo::new(port)?;
++        info.save(&index_dir)?;
++        let instance: Arc<str> = Arc::from(info.instance.as_deref().unwrap_or_default());
++        (Some((listener, instance)), format!("TCP on port {port}"))
++    } else {
++        (
++            None,
++            "stdio (private pipes; EOF stops the server)".to_string(),
++        )
++    };
+
      eprintln!(
 -        "[trace] serve ready in {:.1}ms. TCP on port {}. Cache: max {} entries / {} MiB \
 +        "[trace] serve ready in {:.1}ms. {}. Cache: max {} entries / {} MiB \
@@ -107,118 +125,128 @@ index a41e24d..cb4fb60 100644
           Memory cap: {} MB. Index threads: {}. Watcher queue cap: {}.",
          serve_start.elapsed().as_secs_f64() * 1000.0,
 -        port,
-+        match transport {
-+            ServeTransport::Tcp => format!("TCP on port {port}"),
-+            ServeTransport::Stdio => "stdio (private pipes; EOF stops the server)".to_string(),
-+        },
++        endpoint,
          CACHE_CAPACITY,
          CACHE_MAX_BYTES / (1024 * 1024),
          CACHE_MAX_ENTRY_BYTES / (1024 * 1024),
-@@ -1025,22 +1046,27 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+@@ -1158,6 +1178,10 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
          });
      }
- 
--    // Accept connections
--    for stream in listener.incoming() {
--        match stream {
--            Ok(stream) => {
--                let state = Arc::clone(&state);
--                thread::spawn(move || {
--                    if let Err(e) = handle_connection(stream, &state) {
--                        eprintln!("[trace] connection error: {e}");
-+    // Serve requests
-+    match transport {
-+        ServeTransport::Tcp => {
-+            let listener = listener.expect("tcp transport binds a listener");
-+            for stream in listener.incoming() {
-+                match stream {
-+                    Ok(stream) => {
-+                        let state = Arc::clone(&state);
-+                        thread::spawn(move || {
-+                            if let Err(e) = handle_connection(stream, &state) {
-+                                eprintln!("[trace] connection error: {e}");
-+                            }
-+                        });
-                     }
--                });
-+                    Err(e) => eprintln!("[trace] accept error: {e}"),
-+                }
-             }
--            Err(e) => eprintln!("[trace] accept error: {e}"),
-+            Ok(())
-         }
-+        ServeTransport::Stdio => serve_stdio(state),
-     }
--
--    Ok(())
- }
- 
- #[derive(Default)]
-@@ -1392,6 +1418,46 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>) -> Result<()>
+
++    let Some((listener, instance)) = tcp_server else {
++        return serve_stdio(&state);
++    };
++
+     // Accept connections. Each is served on its own thread, but only up to
+     // `MAX_CONNECTIONS` at once: past that the accept loop waits for a slot,
+     // and further clients queue in the listen backlog rather than each
+@@ -1710,7 +1734,12 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
+             part_lost.set(!sent);
+             sent
+         };
+-        let response = process_request_streaming(&line, state, &send_part);
++        let response = process_request_streaming(
++            &line,
++            state,
++            &send_part,
++            tgrep_core::managed::MAX_RESPONSE_BYTES,
++        );
+         if part_lost.get() {
+             // Nobody is left to read the rest of the reply.
+             break;
+@@ -1722,6 +1751,22 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>, instance: &str
      Ok(())
  }
- 
-+/// Maximum accepted stdin request line, in bytes. The private client caps
-+/// its frames far below this; the limit only bounds a malformed peer.
-+const STDIN_MAX_LINE_BYTES: usize = 1024 * 1024;
+
++// Stay below the wrapper's 8 MiB frame limit, including the RPC envelope.
++const STDIO_SEARCH_REPLY_BYTES: usize = 7 * 1024 * 1024;
 +
-+/// Global search row cap applied before serialization. The per-file
-+/// `max_count` never bounds the whole reply; private-protocol integrations
-+/// need a hard ceiling on accumulated rows.
-+const SEARCH_RESULT_ROW_CAP: usize = 20_000;
-+
-+/// Serve requests over private stdio pipes.
-+///
-+/// One request at a time, newline-delimited JSON-RPC, dispatched by the same
-+/// `process_request` as TCP. stdin EOF (or a stdout write failure) returns
-+/// `Ok(())` so `run` unwinds: the server lock is dropped and the process
-+/// exits, stopping the watcher, auto-save and reconcile threads with the
-+/// same semantics as the SIGINT handler.
-+fn serve_stdio(state: Arc<ServerState>) -> Result<()> {
-+    let stdin = std::io::stdin();
-+    let mut reader = BufReader::new(stdin.lock());
-+    let stdout = std::io::stdout();
-+    let mut writer = stdout.lock();
-+    let mut line = String::new();
-+    loop {
-+        line.clear();
-+        let read = reader.read_line(&mut line)?;
-+        if read == 0 {
-+            return Ok(());
-+        }
-+        if line.len() > STDIN_MAX_LINE_BYTES {
-+            let response = json_rpc_error(None, -32600, "request frame too large");
-+            writeln!(writer, "{response}")?;
-+            writer.flush()?;
-+            continue;
-+        }
-+        let response = process_request(line.trim_end_matches(['\n', '\r']), &state);
++fn serve_stdio(state: &Arc<ServerState>) -> Result<()> {
++    let mut reader = BufReader::new(std::io::stdin().lock());
++    let mut writer = std::io::stdout().lock();
++    while let Some(line) = read_bounded_line(&mut reader)? {
++        // The embedding client sends ordinary requests without streaming.
++        let response =
++            process_request_streaming(&line, state, &|_| false, STDIO_SEARCH_REPLY_BYTES);
 +        writeln!(writer, "{response}")?;
 +        writer.flush()?;
 +    }
++    Ok(())
 +}
 +
+ fn is_timeout(error: &anyhow::Error) -> bool {
+     error.downcast_ref::<std::io::Error>().is_some_and(|error| {
+         matches!(
+@@ -1750,7 +1795,12 @@ fn with_instance<'a>(response: &'a str, instance: &str) -> std::borrow::Cow<'a,
+
+ #[cfg(test)]
  fn process_request(request: &str, state: &Arc<ServerState>) -> String {
+-    process_request_streaming(request, state, &|_| true)
++    process_request_streaming(
++        request,
++        state,
++        &|_| true,
++        tgrep_core::managed::MAX_RESPONSE_BYTES,
++    )
+ }
+
+ /// Serve one request. `send_part` sends an early part of a reply that the
+@@ -1761,6 +1811,7 @@ fn process_request_streaming(
+     request: &str,
+     state: &Arc<ServerState>,
+     send_part: &dyn Fn(&str) -> bool,
++    reply_budget: usize,
+ ) -> String {
      let req: serde_json::Value = match serde_json::from_str(request) {
          Ok(v) => v,
-@@ -1942,6 +2008,12 @@ fn handle_search(
-         matches.extend(file.rows);
-         file_stats.extend(file.stats);
-     }
-+    // Backend-side accumulation cap: applied before building the response so
-+    // neither the server nor a private client buffers an unbounded reply.
-+    let truncated = matches.len() > SEARCH_RESULT_ROW_CAP;
-+    if truncated {
-+        matches.truncate(SEARCH_RESULT_ROW_CAP);
-+    }
- 
-     let search_ms = t_search.elapsed().as_secs_f64() * 1000.0;
-     let elapsed = start.elapsed();
-@@ -1969,6 +2041,7 @@ fn handle_search(
-         "num_matches": matches.len(),
-         "elapsed_ms": elapsed_ms,
-         "hidden_complete": true,
-+        "truncated": truncated,
-     });
-     if opts.stats {
-         result["file_stats"] = serde_json::json!(file_stats);
+@@ -1777,7 +1828,7 @@ fn process_request_streaming(
+         .unwrap_or(serde_json::Value::Null);
+
+     match method {
+-        "search" => handle_search_streaming(id, &params, state, send_part),
++        "search" => search_with_budget(id, &params, state, send_part, reply_budget),
+         "files" => handle_files(id, &params, state),
+         "status" => handle_status(id, state),
+         "reload" => handle_reload(id, state),
+@@ -2200,27 +2251,17 @@ fn handle_search(
+     id: Option<serde_json::Value>,
+     params: &serde_json::Value,
+     state: &ServerState,
+-) -> String {
+-    handle_search_streaming(id, params, state, &|_| true)
+-}
+-
+-fn handle_search_streaming(
+-    id: Option<serde_json::Value>,
+-    params: &serde_json::Value,
+-    state: &ServerState,
+-    send_part: &dyn Fn(&str) -> bool,
+ ) -> String {
+     search_with_budget(
+         id,
+         params,
+         state,
+-        send_part,
++        &|_| true,
+         tgrep_core::managed::MAX_RESPONSE_BYTES,
+     )
+ }
+
+-/// [`handle_search_streaming`] with the size one reply may have as a
+-/// parameter, so that tests can reach it with a few files.
++/// Limit the serialized search reply and accumulated rows as results are collected.
+ fn search_with_budget(
+     id: Option<serde_json::Value>,
+     params: &serde_json::Value,
+diff --git a/tgrep-cli/src/serve/build_tests.rs b/tgrep-cli/src/serve/build_tests.rs
+index bac7797..93d6f3d 100644
+--- a/tgrep-cli/src/serve/build_tests.rs
++++ b/tgrep-cli/src/serve/build_tests.rs
+@@ -425,6 +425,7 @@ fn checkpoint_child_process() {
+         &root,
+         None,
+         ServeOptions {
++            transport: ServeTransport::Tcp,
+             no_watch: true,
+             watch_mode: WatchMode::Auto,
+             poll_interval: Duration::from_secs(120),

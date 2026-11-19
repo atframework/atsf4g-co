@@ -35,6 +35,17 @@ export function migrateLegacyEntry({ entry, from, to, repoRoot, backend, relativ
     else result.args.push(...extras);
     return result;
   }
+  if (from === 'servers' && to === 'mcpServers') {
+    const portableFields = ['type', 'command', 'args', 'cwd', 'env'];
+    if (Object.keys(entry).some((key) => !portableFields.includes(key))) refuse('editor-only server fields');
+    if (entry.type !== undefined && entry.type !== 'stdio') refuse('unsupported transport type');
+    if (entry.env !== undefined && (!entry.env || typeof entry.env !== 'object' || Array.isArray(entry.env)
+      || Object.values(entry.env).some((value) => typeof value !== 'string' || value.includes('${')))) {
+      refuse('env must contain portable literal strings');
+    }
+    if (extras.some((value) => typeof value !== 'string' || value.includes('${'))) refuse('editor-only argument substitutions');
+    return { ...base, args: [...base.args, ...extras], ...(entry.env === undefined ? {} : { env: entry.env }) };
+  }
   if (from !== 'mcpServers' || to !== 'opencode') refuse(`unsupported conversion ${from} -> ${to}`);
   const supported = ['type', 'command', 'args', 'cwd', 'env', 'disabled'];
   if (Object.keys(entry).some((key) => !supported.includes(key))) refuse('unknown cross-format fields');

@@ -53,13 +53,13 @@ test('IDE export rename failures roll back configs and earlier snippets', (t) =>
   const exportsDir = path.join(w.repoRoot, 'build/exports');
   const rename = fs.renameSync;
   t.mock.method(fs, 'renameSync', (source, destination) => {
-    if (destination.endsWith('codebuddy-ide-mcp-servers.json')) throw new Error('injected export failure');
+    if (destination.endsWith('jetbrains-ai-mcp-servers.json')) throw new Error('injected export failure');
     return rename(source, destination);
   });
   assert.throws(() => runAgentConfigBatch({
     ...w, operations: [{ type: 'configure', agentId: 'claude', backend: 'codegraph' }],
     codegraphGuidance: true,
-    ideExports: ['cline-ide', 'codebuddy-ide'].map((agentId) => ({ exportsDir, agentId, backend: 'codegraph' })),
+    ideExports: ['cline-ide', 'jetbrains-ai'].map((agentId) => ({ exportsDir, agentId, backend: 'codegraph' })),
   }), /injected export failure/);
   assert.equal(fs.existsSync(path.join(w.repoRoot, '.mcp.json')), false);
   assert.equal(fs.existsSync(path.join(w.repoRoot, 'AGENTS.md')), false);
@@ -236,15 +236,15 @@ test('same-named foreign JSON and TOML servers abort a batch without any writes'
   }
 });
 
-test('Kilo layers coexist, root managed entries migrate using their declared format and retain BOM', (t) => {
+test('Kilo layers coexist, directory managed entries migrate using their declared format and retain BOM', (t) => {
   const w = workspace(t);
   const command = ['node', path.join(w.repoRoot, 'tools/mcp/tgrep/src/server.mjs')];
-  const root = w.write('kilo.jsonc', '\uFEFF' + JSON.stringify({ model: 'keep', mcp: { 'workspace-tgrep': { type: 'local', command, enabled: true }, user: { type: 'local', command: ['x'] } } }));
-  w.write('.kilo/kilo.jsonc', '{}');
+  const old = w.write('.kilo/kilo.jsonc', '\uFEFF' + JSON.stringify({ model: 'keep', mcp: { 'workspace-tgrep': { type: 'local', command, enabled: true }, user: { type: 'local', command: ['x'] } } }));
+  w.write('kilo.jsonc', '{}');
   configureAgent({ ...w, agentId: 'kilocode', backend: 'tgrep' });
-  const text = fs.readFileSync(root, 'utf8');
+  const text = fs.readFileSync(old, 'utf8');
   assert.equal(text[0], '\uFEFF');
-  assert.deepEqual(parseJsonDocument(text, root).root, { model: 'keep', mcp: { user: { type: 'local', command: ['x'] } } });
+  assert.deepEqual(parseJsonDocument(text, old).root, { model: 'keep', mcp: { user: { type: 'local', command: ['x'] } } });
   assert.deepEqual(agentStates(w.repoRoot).kilo.configured, ['workspace-tgrep']);
 });
 

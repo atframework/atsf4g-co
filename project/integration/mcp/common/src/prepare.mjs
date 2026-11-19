@@ -231,10 +231,10 @@ export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], ca
 
 export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs = [], cargoIsolated = false, binary = null, execute = run, log = silentLog } = {}) {
   const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tools/tgrep', 'upstream-lock.json'), 'utf8'));
-  const srcDir = path.join(paths.upstreamDir, 'tgrep-src');
+  const srcDir = path.join(paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
   const patchPaths = lock.patches.map(patch => path.join(mcpRoot, 'tools/tgrep', patch));
   const binaryName = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
-  const runtimeBinary = path.join(paths.runtimeDir, binaryName);
+  const runtimeBinary = path.join(paths.runtimeDir, `tgrep-${lock.declared_version}-${lock.integration_revision}`, binaryName);
 
   const prepared = readJson(paths.preparedStateReadPath());
   function* localCandidates() {
@@ -243,6 +243,7 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
     yield runtimeBinary;
     yield path.join(srcDir, 'target/release', binaryName);
     // Discover old caches only when no verified current artifact was found.
+    yield path.join(paths.runtimeDir, binaryName);
     yield paths.readPath(`downloads/bin/${process.platform}-${process.arch}/${binaryName}`, [`runtime/${binaryName}`]);
     yield path.join(paths.readPath('downloads/sources/tgrep-src', ['upstream/tgrep-src']), 'target/release', binaryName);
   }
@@ -267,7 +268,12 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
       if (fs.existsSync(path.join(oldSource, '.git')) && !fs.statSync(path.join(oldSource, '.git')).isDirectory()) {
         throw new Error('legacy tgrep source uses an external Git directory; prepare a standalone checkout');
       }
-      importDirectory(paths, oldSource, srcDir, relative => relative.split(path.sep)[0] !== 'target');
+      const oldHead = String(execute(['git', '-C', oldSource, 'rev-parse', 'HEAD'], { check: false }).stdout ?? '').trim();
+      if (oldHead === lock.source_commit) {
+        importDirectory(paths, oldSource, srcDir, relative => relative.split(path.sep)[0] !== 'target');
+      } else if (offline) {
+        throw new Error(`cached tgrep checkout is at ${oldHead || 'an unknown revision'}, expected ${lock.source_commit}; prepare the new version online`);
+      }
     }
   }
   if (!fs.existsSync(srcDir)) {
@@ -275,11 +281,18 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
       throw new Error('tgrep source missing and --offline given');
     }
     log(`cloning tgrep at ${lock.source_commit.slice(0, 12)}`);
+    validateWorkspaceBuildDir(paths.repoRoot, srcDir);
     fs.mkdirSync(path.dirname(srcDir), { recursive: true });
-    execute(['git', 'init', srcDir]);
-    execute(['git', '-C', srcDir, 'remote', 'add', 'origin', lock.repo_url]);
-    execute(['git', '-C', srcDir, 'fetch', '--quiet', '--depth', '1', 'origin', lock.source_commit]);
-    execute(['git', '-C', srcDir, 'checkout', '--quiet', 'FETCH_HEAD']);
+    const stage = fs.mkdtempSync(path.join(paths.agentTmpDir, 'tgrep-src-'));
+    try {
+      execute(['git', 'init', stage]);
+      execute(['git', '-C', stage, 'remote', 'add', 'origin', lock.repo_url]);
+      execute(['git', '-C', stage, 'fetch', '--quiet', '--depth', '1', 'origin', lock.source_commit]);
+      execute(['git', '-C', stage, 'checkout', '--quiet', 'FETCH_HEAD']);
+      fs.renameSync(stage, srcDir);
+    } finally {
+      fs.rmSync(stage, { recursive: true, force: true });
+    }
   }
   const head = execute(['git', '-C', srcDir, 'rev-parse', 'HEAD']).stdout.trim();
   if (head !== lock.source_commit) {
@@ -313,7 +326,8 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
   }
 
   const version = probeTgrep(buildOutput, lock.declared_version, execute, lock.integration_revision);
-  fs.mkdirSync(paths.runtimeDir, { recursive: true });
+  validateWorkspaceBuildDir(paths.repoRoot, path.dirname(runtimeBinary));
+  fs.mkdirSync(path.dirname(runtimeBinary), { recursive: true });
   fs.copyFileSync(buildOutput, runtimeBinary);
   return {
     binary: runtimeBinary,

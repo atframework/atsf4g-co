@@ -25,7 +25,7 @@ test('JSON and command-array clients switch runtimes while preserving wrapper op
     const selected = runtime(root, kind);
     const result = runAgentConfigBatch({ repoRoot: root, launch: { integrationRoot: INTEGRATION_ROOT, runtime: selected }, operations });
     assert.equal(result.applied, true, JSON.stringify(result.plan.problems));
-    for (const [file, field] of [['.vscode/mcp.json', 'servers'], ['.kilo/kilo.jsonc', 'mcp']]) {
+    for (const [file, field] of [['.mcp.json', 'servers'], ['kilo.jsonc', 'mcp']]) {
       const absolute = path.join(root, file);
       const config = JSON.parse(fs.readFileSync(absolute));
       const entry = config[field]['workspace-tgrep'];

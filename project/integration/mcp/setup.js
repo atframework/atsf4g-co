@@ -331,7 +331,23 @@ async function runSetup(options, ui) {
   if (!runtimeSupported(runtime)) throw new Error('需要 Node.js >= 20、Bun >= 1 或 Deno >= 2');
   paths.launch = { integrationRoot, runtime, ...(options.buildDir ? { buildDir } : {}) };
   const exportsDir = exportsDirFor(paths.integrationDir);
-  const scanStates = () => ({ ...agentStates(repoRoot, paths.launch), ...ideExportStates(repoRoot, exportsDir, paths.launch) });
+  const scanStates = () => {
+    const states = agentStates(repoRoot, paths.launch);
+    for (const [id, exported] of Object.entries(ideExportStates(repoRoot, exportsDir, paths.launch))) {
+      if (agentById(id).targetId) {
+        const project = states[id];
+        states[id] = {
+          present: project.present || exported.present,
+          configured: [...new Set([...project.configured, ...exported.configured])],
+          error: project.error || exported.error,
+          legacyExport: exported.present,
+        };
+      } else {
+        states[id] = exported;
+      }
+    }
+    return states;
+  };
 
   ui.line(`${projectInfo(repoRoot).name} MCP 集成安装`);
   ui.line(`仓库：${repoRoot}`);
@@ -361,7 +377,7 @@ async function runSetup(options, ui) {
     // Guided-import products hold no repo config; their delivery is the
     // build-dir snippet removed below.
     const repoTargets = targets.filter((agentId) => agentById(agentId)?.targetId);
-    const guidedTargets = targets.filter((agentId) => agentById(agentId) && !agentById(agentId).targetId);
+    const guidedTargets = targets.filter((agentId) => Object.hasOwn(GUIDED_IMPORTS, agentId));
     if (!runConfigBatch(ui, paths, repoTargets.map((agentId) => ({ type: 'remove', agentId })), {
       dryRun: options.dryRun, ideExports: guidedTargets.map((agentId) => ({ agentId, exportsDir })),
     })) {
@@ -485,6 +501,9 @@ async function runSetup(options, ui) {
   const ideExports = guidedAgents()
     .filter((agent) => selectedIds.has(agent.id) || states[agent.id]?.present)
     .map((agent) => ({ agentId: agent.id, exportsDir, backend: selectedIds.has(agent.id) ? backend : null }));
+  for (const [agentId, state] of Object.entries(states)) {
+    if (state.legacyExport) ideExports.push({ agentId, exportsDir });
+  }
   if (!runConfigBatch(ui, paths, operations, { dryRun: options.dryRun, ideExports })) {
     return 1;
   }

@@ -32,12 +32,12 @@ for (const oldLayout of [false, true]) test(`offline tgrep rebuild imports legac
   const crate = write(cargo + '/registry/cache/registry/test.crate', 'cached crate');
   write(cargo + '/registry/index/registry/config.json', '{}');
   write(cargo + '/config.toml', 'must not inherit old configuration');
-  const src = path.join(paths.upstreamDir, 'tgrep-src');
+  const src = path.join(paths.upstreamDir, `tgrep-src-${lock.source_commit}`);
   let builds = 0;
   const result = prepareTgrep(paths, INTEGRATION_ROOT, { offline: true, cargoIsolated: true, execute: (argv, options) => {
     if (argv[0] === 'git') {
-      assert.equal(argv[2], src, 'git must only mutate the imported source');
       if (argv.includes('rev-parse')) return { status: 0, stdout: lock.source_commit };
+      assert.equal(argv[2], src, 'git must only mutate the imported source');
       assert.ok(argv.includes('apply'), 'no clone/fetch on offline migration');
       return { status: argv.includes('--reverse') ? 1 : 0 };
     }
@@ -51,7 +51,7 @@ for (const oldLayout of [false, true]) test(`offline tgrep rebuild imports legac
       write(path.relative(paths.repoRoot, path.join(src, 'target/release', process.platform === 'win32' ? 'tgrep.exe' : 'tgrep')), 'new binary');
       return { status: 0 };
     }
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9 (mcp-stdio-v2)' : '--transport tcp stdio' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio' };
   } });
   assert.equal(builds, 1);
   assert.equal(result.acquisition, 'build');
@@ -66,7 +66,7 @@ for (const relative of ['runtime', `downloads/bin/${process.platform}-${process.
     const binary = write('old-build/integration/mcp/' + relative + '/' + (process.platform === 'win32' ? 'tgrep.exe' : 'tgrep'), 'verified binary');
     const result = prepareTgrep(paths, INTEGRATION_ROOT, { offline: true, execute: argv => {
       assert.equal(argv[0], binary);
-      return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9 (mcp-stdio-v2)' : '--transport tcp stdio' };
+      return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio' };
     } });
     assert.equal(result.binary, binary);
     assert.equal(result.acquisition, 'local');
@@ -103,14 +103,14 @@ test('verified current artifacts take priority over ambiguous unrelated legacy c
   const binary = write('.mcp-data/downloads/bin/current-tgrep', 'verified binary');
   const library = write('.mcp-data/downloads/sources/current-codegraph/dist/index.js');
   write('.mcp-data/downloads/sources/current-codegraph/dist/bin/codegraph.js');
-  write('.mcp-data/downloads/sources/current-codegraph/package.json', '{"name":"@colbymchenry/codegraph","version":"1.6.0"}');
+  write('.mcp-data/downloads/sources/current-codegraph/package.json', '{"name":"@colbymchenry/codegraph","version":"1.6.3"}');
   write('.mcp-data/state/prepared-state.json', JSON.stringify({ tgrep: { binary }, codegraph: { package_root: path.dirname(path.dirname(library)) } }));
   assert.equal(prepareTgrep(paths, INTEGRATION_ROOT, { offline: true, execute: argv => {
     assert.equal(argv[0], binary);
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9 (mcp-stdio-v2)' : '--transport tcp stdio' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.2.8 (mcp-stdio-v3)' : '--transport tcp stdio' };
   } }).binary, binary);
   assert.equal(prepareCodegraph(paths, INTEGRATION_ROOT, { offline: true, execute: argv => ({ status: 0,
-    stdout: argv.includes('--eval') ? 'MCP_CODEGRAPH_LIBRARY_OK' : argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.0' : 'v24.0.0' }) }).library_entry, library);
+    stdout: argv.includes('--eval') ? 'MCP_CODEGRAPH_LIBRARY_OK' : argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.3' : 'v24.0.0' }) }).library_entry, library);
 });
 
 for (const relative of ['upstream/codegraph-bundle', 'downloads/sources/codegraph-bundle',
@@ -119,14 +119,14 @@ for (const relative of ['upstream/codegraph-bundle', 'downloads/sources/codegrap
   test(`offline CodeGraph reuses ${relative} without prepared-state`, t => {
     const { paths, write } = fixture(t);
     const base = 'old-build/integration/mcp/' + relative;
-    write(base + '/package.json', '{"name":"@colbymchenry/codegraph","version":"1.6.0"}');
+    write(base + '/package.json', '{"name":"@colbymchenry/codegraph","version":"1.6.3"}');
     const library = write(base + '/dist/index.js');
     write(base + '/dist/bin/codegraph.js');
     const result = prepareCodegraph(paths, INTEGRATION_ROOT, { offline: true, execute: argv => {
       assert.ok(!argv.includes('exec'), 'a verified old installation needs no npm acquisition');
       if (argv.includes('--eval')) return { status: 0, stdout: 'MCP_CODEGRAPH_LIBRARY_OK' };
       if (argv.includes('root') || argv.includes('config')) return { status: 1, stdout: '' };
-      return { status: 0, stdout: argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.0' : 'v24.0.0' };
+      return { status: 0, stdout: argv.some(arg => arg.endsWith('codegraph.js')) ? '1.6.3' : 'v24.0.0' };
     } });
     assert.equal(result.library_entry, library);
     assert.equal(result.acquisition, 'local');

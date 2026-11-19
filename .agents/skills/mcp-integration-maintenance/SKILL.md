@@ -16,11 +16,10 @@ or call the MCP tools do not need this Skill.
    behavior, wrapper code, the tgrep patch, agent config writing, index/lifecycle
    issues). Otherwise stop; ordinary repository work does not load this Skill.
 2. Read the current state before editing: `project/integration/mcp/README.md`
-   (user-facing install/config surface and acceptance records) plus the two
-   reference pages below (design contracts and verified upstream facts).
+   (install/config surface, client evidence, and acceptance records).
    Check the dirty tree, then run
    `node project/integration/mcp/common/tools/doctor.mjs` for live state.
-3. Route to one reference, not both:
+3. Load the references that cover the change:
    - Installer, agent selection/uninstall, mirror behavior, or per-agent config
      formats → read `references/installer-and-agents.md`. Keep product-specific
      targets, prerequisites, import steps, and launch notes in that product's

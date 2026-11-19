@@ -77,7 +77,7 @@ test('Sirchmunk requires all LLM settings and keeps secrets out of generated Age
   writeConfig(paths, config);
   assert.equal(fs.statSync(configPath(paths)).mtimeMs, modified);
   for (const agentId of ['claude', 'codex', 'vscode', 'kilo', 'qwen', 'zed']) configureAgent({ repoRoot: paths.repoRoot, agentId, backend: 'sirchmunk', launch: { integrationRoot: INTEGRATION_ROOT } });
-  for (const relative of ['.mcp.json', '.codex/config.toml', '.vscode/mcp.json', '.kilo/kilo.jsonc', '.qwen/settings.json', '.zed/settings.json']) {
+  for (const relative of ['.mcp.json', '.codex/config.toml', 'kilo.jsonc', '.qwen/settings.json', '.zed/settings.json']) {
     const content = fs.readFileSync(path.join(paths.repoRoot, relative), 'utf8');
     assert.match(content, /workspace-sirchmunk/);
     assert.equal(content.includes(config.apiKey), false);

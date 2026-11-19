@@ -8,10 +8,10 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "^2.0.0"
+    "@modelcontextprotocol/client": "^2.4.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/server": "^2.0.0"
+    "@modelcontextprotocol/server": "^2.4.0"
   },
   "scripts": {
     "test": "node --test test/backend.test.mjs test/server.test.mjs"

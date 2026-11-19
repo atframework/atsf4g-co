@@ -273,7 +273,7 @@ class CodeGraphService {
       const listed = await backend.listTools();
       if (this.startupAbort.signal.aborted) return;
       const byName = new Map((listed.tools ?? []).map((tool) => [tool.name, tool]));
-      // Pinned 1.6.0 hides status from tools/list for projects below 500 files,
+      // CodeGraph hides status from tools/list for projects below 500 files,
       // even with an explicit allowlist, while retaining its read-only handler.
       // Our status endpoint has a local schema. Verify the handler before
       // accepting this discovery omission; an absent/broken handler still fails.

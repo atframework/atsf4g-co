@@ -45,41 +45,41 @@ function ourEntry(w, backend = 'tgrep') {
 test('kilo consolidates the real-world dual-candidate layout ($schema files)', (t) => {
   const w = workspace(t);
   // Byte shapes taken from the repository that triggered the feature request.
-  w.write('.kilo/kilo.jsonc', '{\n  "$schema": "https://app.kilo.ai/config.json"\n}\n');
-  w.write('.kilo/kilo.json', '{\n  "$schema": "https://app.kilo.ai/config.json",\n  "snapshot": false\n}\n');
+  w.write('kilo.jsonc', '{\n  "$schema": "https://app.kilo.ai/config.json"\n}\n');
+  w.write('kilo.json', '{\n  "$schema": "https://app.kilo.ai/config.json",\n  "snapshot": false\n}\n');
   const statesBefore = agentStates(w.repoRoot);
   assert.equal(statesBefore.kilo.error, undefined, 'multi-candidate is no longer a scan error');
 
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  const merged = JSON.parse(w.read('.kilo/kilo.jsonc'));
+  const merged = JSON.parse(w.read('kilo.jsonc'));
   assert.equal(merged.$schema, 'https://app.kilo.ai/config.json');
   assert.equal(merged.snapshot, false, 'foreign key carried over from the jsonc candidate');
   assert.equal(merged.mcp[SERVER_IDS.tgrep].type, 'local');
-  assert.equal(w.exists('.kilo/kilo.json'), false, 'redundant candidate deleted');
+  assert.equal(w.exists('kilo.json'), false, 'redundant candidate deleted');
   assert.deepEqual(agentStates(w.repoRoot).kilo.configured, [SERVER_IDS.tgrep]);
 });
 
 test('dry-run previews consolidation without touching any candidate', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{"a":1}\n');
-  w.write('.kilo/kilo.json', '{"b":{"nested":true}}\n');
+  w.write('kilo.jsonc', '{"a":1}\n');
+  w.write('kilo.json', '{"b":{"nested":true}}\n');
   const result = runAgentConfigBatch({
     ...w, dryRun: true, operations: [{ type: 'configure', agentId: 'kilo', backend: 'tgrep' }],
   });
   assert.equal(result.applied, false);
   const actions = result.plan.steps.map((step) => [step.relative, step.action, step.consolidation ?? false]);
-  assert.deepEqual(actions, [['.kilo/kilo.jsonc', 'update', false], ['.kilo/kilo.json', 'delete', true]]);
+  assert.deepEqual(actions, [['kilo.jsonc', 'update', false], ['kilo.json', 'delete', true]]);
   assert.match(result.plan.notes.join('\n'), /合并/);
-  assert.equal(w.read('.kilo/kilo.jsonc'), '{"a":1}\n');
-  assert.equal(w.read('.kilo/kilo.json'), '{"b":{"nested":true}}\n');
+  assert.equal(w.read('kilo.jsonc'), '{"a":1}\n');
+  assert.equal(w.read('kilo.json'), '{"b":{"nested":true}}\n');
 });
 
 test('commented destinations keep their comments through consolidation', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{\n  // kilo note\n  "mcp": { "user": { "type": "local", "command": ["x"] } }\n}\n');
-  w.write('.kilo/kilo.json', '{ "mcp": { "other": { "type": "local", "command": ["y"] } } }\n');
+  w.write('kilo.jsonc', '{\n  // kilo note\n  "mcp": { "user": { "type": "local", "command": ["x"] } }\n}\n');
+  w.write('kilo.json', '{ "mcp": { "other": { "type": "local", "command": ["y"] } } }\n');
   configureAgent({ ...w, agentId: 'kilo', backend: 'codegraph' });
-  const text = w.read('.kilo/kilo.jsonc');
+  const text = w.read('kilo.jsonc');
   assert.match(text, /\/\/ kilo note/);
   const merged = JSON.parse(text.replace(/\/\/[^\n\r]*/g, ''));
   assert.ok(merged.mcp.user && merged.mcp.other, 'foreign entries from both candidates kept');
@@ -88,20 +88,20 @@ test('commented destinations keep their comments through consolidation', (t) => 
 
 test('differing foreign values between candidates abort with zero writes', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{"snapshot": true}\n');
-  w.write('.kilo/kilo.json', '{"snapshot": false}\n');
+  w.write('kilo.jsonc', '{"snapshot": true}\n');
+  w.write('kilo.json', '{"snapshot": false}\n');
   assert.throws(
     () => configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' }),
     (error) => error.kind === 'consolidation-conflict' && /snapshot/.test(error.message),
   );
-  assert.equal(w.read('.kilo/kilo.jsonc'), '{"snapshot": true}\n');
-  assert.equal(w.read('.kilo/kilo.json'), '{"snapshot": false}\n');
+  assert.equal(w.read('kilo.jsonc'), '{"snapshot": true}\n');
+  assert.equal(w.read('kilo.json'), '{"snapshot": false}\n');
 });
 
 test('differing foreign server entries abort; managed entries are normalized instead', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{"mcp":{"user":{"command":["a"]}}}\n');
-  w.write('.kilo/kilo.json', '{"mcp":{"user":{"command":["b"]}}}\n');
+  w.write('kilo.jsonc', '{"mcp":{"user":{"command":["a"]}}}\n');
+  w.write('kilo.json', '{"mcp":{"user":{"command":["b"]}}}\n');
   assert.throws(
     () => configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' }),
     (error) => error.kind === 'consolidation-conflict' && /user/.test(error.message),
@@ -110,19 +110,19 @@ test('differing foreign server entries abort; managed entries are normalized ins
   const w2 = workspace(t);
   // Managed ids present in both candidates with different shapes: the planner
   // normalizes them into the selected backend entry — not a conflict.
-  w2.write('.kilo/kilo.jsonc', JSON.stringify({ mcp: { [SERVER_IDS.codegraph]: ourEntry(w2, 'codegraph') } }));
-  w2.write('.kilo/kilo.json', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w2, 'tgrep') } }));
+  w2.write('kilo.jsonc', JSON.stringify({ mcp: { [SERVER_IDS.codegraph]: ourEntry(w2, 'codegraph') } }));
+  w2.write('kilo.json', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w2, 'tgrep') } }));
   configureAgent({ ...w2, agentId: 'kilo', backend: 'tgrep' });
-  const merged = JSON.parse(w2.read('.kilo/kilo.jsonc'));
+  const merged = JSON.parse(w2.read('kilo.jsonc'));
   assert.ok(merged.mcp[SERVER_IDS.tgrep], 'selected backend wins');
   assert.equal(merged.mcp[SERVER_IDS.codegraph], undefined, 'other managed backend removed');
-  assert.equal(w2.exists('.kilo/kilo.json'), false);
+  assert.equal(w2.exists('kilo.json'), false);
 });
 
 test('a foreign same-name managed entry aborts the consolidation batch', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{}\n');
-  w.write('.kilo/kilo.json', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: { type: 'local', command: ['node', 'elsewhere.mjs'] } } }));
+  w.write('kilo.jsonc', '{}\n');
+  w.write('kilo.json', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: { type: 'local', command: ['node', 'elsewhere.mjs'] } } }));
   const result = runAgentConfigBatch({
     ...w, operations: [
       { type: 'configure', agentId: 'claude', backend: 'tgrep' },
@@ -132,37 +132,37 @@ test('a foreign same-name managed entry aborts the consolidation batch', (t) => 
   assert.equal(result.applied, false);
   assert.equal(result.plan.problems[0].error.kind, 'server-conflict');
   assert.equal(w.exists('.mcp.json'), false, 'the whole batch wrote nothing');
-  assert.equal(w.read('.kilo/kilo.jsonc'), '{}\n');
+  assert.equal(w.read('kilo.jsonc'), '{}\n');
 });
 
 test('a damaged candidate keeps the old abort semantics (zero writes)', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{"ok":true}\n');
-  w.write('.kilo/kilo.json', '{ broken');
+  w.write('kilo.jsonc', '{"ok":true}\n');
+  w.write('kilo.json', '{ broken');
   const result = runAgentConfigBatch({ ...w, operations: [{ type: 'configure', agentId: 'kilo', backend: 'tgrep' }] });
   assert.equal(result.applied, false);
   assert.equal(result.plan.problems[0].error.kind, 'invalid-json');
-  assert.equal(w.read('.kilo/kilo.jsonc'), '{"ok":true}\n');
-  assert.equal(w.read('.kilo/kilo.json'), '{ broken');
+  assert.equal(w.read('kilo.jsonc'), '{"ok":true}\n');
+  assert.equal(w.read('kilo.json'), '{ broken');
 });
 
 test('removal-only batches clean managed entries from every candidate', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w), user: { command: ['x'] } } }));
-  w.write('.kilo/kilo.json', JSON.stringify({ mcp: { [SERVER_IDS.codegraph]: ourEntry(w, 'codegraph') }, other: 1 }));
+  w.write('kilo.jsonc', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w), user: { command: ['x'] } } }));
+  w.write('kilo.json', JSON.stringify({ mcp: { [SERVER_IDS.codegraph]: ourEntry(w, 'codegraph') }, other: 1 }));
   const states = agentStates(w.repoRoot);
   assert.deepEqual(states.kilo.configured.sort(), [SERVER_IDS.codegraph, SERVER_IDS.tgrep], 'scan unions all candidates');
   removeAgentServers({ ...w, agentId: 'kilo' });
-  assert.deepEqual(JSON.parse(w.read('.kilo/kilo.jsonc')), { mcp: { user: { command: ['x'] } } }, 'foreign entry kept');
-  assert.deepEqual(JSON.parse(w.read('.kilo/kilo.json')), { mcp: {}, other: 1 }, 'both files cleaned in place, nothing consolidated on removal');
+  assert.deepEqual(JSON.parse(w.read('kilo.jsonc')), { mcp: { user: { command: ['x'] } } }, 'foreign entry kept');
+  assert.deepEqual(JSON.parse(w.read('kilo.json')), { mcp: {}, other: 1 }, 'both files cleaned in place, nothing consolidated on removal');
 });
 
 test('a failure after the merged write rolls back destination and redundant candidate', (t) => {
   const w = workspace(t);
   const beforeJson = '{"a":1}\n';
   const beforeJsonc = '{"b":2}\n';
-  w.write('.kilo/kilo.jsonc', beforeJson);
-  w.write('.kilo/kilo.json', beforeJsonc);
+  w.write('kilo.jsonc', beforeJson);
+  w.write('kilo.json', beforeJsonc);
   // Also configure claude so a SECOND target follows the consolidation steps;
   // its rename is mocked to fail, forcing a rollback of everything before it.
   const rename = fs.renameSync;
@@ -176,8 +176,8 @@ test('a failure after the merged write rolls back destination and redundant cand
       { type: 'configure', agentId: 'claude', backend: 'tgrep' },
     ],
   }), /injected later-target failure/);
-  assert.equal(w.read('.kilo/kilo.jsonc'), beforeJson, 'destination restored to its original bytes');
-  assert.equal(w.read('.kilo/kilo.json'), beforeJsonc, 'deleted redundant candidate restored');
+  assert.equal(w.read('kilo.jsonc'), beforeJson, 'destination restored to its original bytes');
+  assert.equal(w.read('kilo.json'), beforeJsonc, 'deleted redundant candidate restored');
   assert.equal(w.exists('.mcp.json'), false);
 });
 
@@ -195,21 +195,22 @@ test('OpenCode combines same-directory candidates while MiMo preserves separate 
   w2.write('mimocode.jsonc', '{"model":"m"}\n');
   w2.write(path.join('.mimocode', 'mimocode.json'), '{"mcp":{"team":{"command":["t"]}}}\n');
   configureAgent({ ...w2, agentId: 'mimocode', backend: 'tgrep' });
-  assert.equal(w2.read('mimocode.jsonc'), '{"model":"m"}\n');
-  const mimo = JSON.parse(w2.read(path.join('.mimocode', 'mimocode.json')));
-  assert.ok(mimo.mcp.team && mimo.mcp[SERVER_IDS.tgrep]);
+  const mimo = JSON.parse(w2.read('mimocode.jsonc'));
+  assert.equal(mimo.model, 'm');
+  assert.ok(mimo.mcp[SERVER_IDS.tgrep]);
+  assert.equal(w2.read('.mimocode/mimocode.json'), '{"mcp":{"team":{"command":["t"]}}}\n');
   assert.equal(w2.exists(path.join('.mimocode', 'mimocode.json')), true);
 });
 
 test('consolidated writes appear in backups and the journal', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '{"a":1}\n');
-  w.write('.kilo/kilo.json', '{"b":2}\n');
+  w.write('kilo.jsonc', '{"a":1}\n');
+  w.write('kilo.json', '{"b":2}\n');
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
   const journal = fs.readFileSync(path.join(w.tmpDir, 'agent-config-journal.jsonl'), 'utf8');
-  assert.match(journal, /"file":"\.kilo\/kilo\.json"/);
-  assert.match(journal, /"file":"\.kilo\/kilo\.jsonc"/);
-  assert.match(journal, /"action":"deleted","file":"\.kilo\/kilo\.json"/);
+  const records = journal.trimEnd().split('\n').map(line => JSON.parse(line));
+  assert.ok(records.some(record => record.action === 'updated' && record.file === 'kilo.jsonc'));
+  assert.ok(records.some(record => record.action === 'deleted' && record.file === 'kilo.json'));
   const backups = fs.readdirSync(path.join(w.tmpDir, 'agent-config-backups'));
   assert.equal(backups.length, 2, 'both the destination rewrite and the redundant deletion are backed up');
 });
@@ -217,41 +218,41 @@ test('consolidated writes appear in backups and the journal', (t) => {
 test('an already configured destination still writes merged foreign data before deleting the source', (t) => {
   const w = workspace(t);
   const destination = '// keep destination\n' + JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w) } }) + '\n';
-  w.write('.kilo/kilo.jsonc', destination);
-  w.write('.kilo/kilo.json', '{"snapshot":false}');
+  w.write('kilo.jsonc', destination);
+  w.write('kilo.json', '{"snapshot":false}');
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  const merged = parseJsonDocument(w.read('.kilo/kilo.jsonc'), 'test').root;
+  const merged = parseJsonDocument(w.read('kilo.jsonc'), 'test').root;
   assert.equal(merged.snapshot, false);
-  assert.equal(w.exists('.kilo/kilo.json'), false);
+  assert.equal(w.exists('kilo.json'), false);
 });
 
 test('consolidation preserves source comments, destination BOM and CRLF, and is idempotent', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', '\uFEFF{\r\n  "snapshot": false\r\n}\r\n');
-  w.write('.kilo/kilo.json', '// why this server exists\n{"mcp":{"team":{/* keep its reason */"command":["tool"]}}}\n// final note');
+  w.write('kilo.jsonc', '\uFEFF{\r\n  "snapshot": false\r\n}\r\n');
+  w.write('kilo.json', '// why this server exists\n{"mcp":{"team":{/* keep its reason */"command":["tool"]}}}\n// final note');
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  const merged = w.read('.kilo/kilo.jsonc');
+  const merged = w.read('kilo.jsonc');
   assert.ok(merged.startsWith('\uFEFF'));
   assert.match(merged, /why this server exists/);
   assert.match(merged, /keep its reason/);
   assert.match(merged, /final note/);
   assert.equal(merged.replace(/\r\n/g, '').includes('\n'), false);
-  const before = fs.statSync(path.join(w.repoRoot, '.kilo/kilo.jsonc')).mtimeMs;
+  const before = fs.statSync(path.join(w.repoRoot, 'kilo.jsonc')).mtimeMs;
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  assert.equal(w.read('.kilo/kilo.jsonc'), merged);
-  assert.equal(fs.statSync(path.join(w.repoRoot, '.kilo/kilo.jsonc')).mtimeMs, before);
+  assert.equal(w.read('kilo.jsonc'), merged);
+  assert.equal(fs.statSync(path.join(w.repoRoot, 'kilo.jsonc')).mtimeMs, before);
 });
 
 test('compatible nested settings and managed options merge without losing fields', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', JSON.stringify({ provider: { one: { options: { keep: true } } }, mcp: {
+  w.write('kilo.jsonc', JSON.stringify({ provider: { one: { options: { keep: true } } }, mcp: {
     [SERVER_IDS.tgrep]: { ...ourEntry(w), environment: { FIRST: 'one' } },
   } }));
-  w.write('.kilo/kilo.json', JSON.stringify({ provider: { two: { options: { keep: true } } }, mcp: {
+  w.write('kilo.json', JSON.stringify({ provider: { two: { options: { keep: true } } }, mcp: {
     [SERVER_IDS.tgrep]: { ...ourEntry(w), environment: { SECOND: 'two' } },
   } }));
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  const merged = parseJsonDocument(w.read('.kilo/kilo.jsonc'), 'test').root;
+  const merged = parseJsonDocument(w.read('kilo.jsonc'), 'test').root;
   assert.deepEqual(Object.keys(merged.provider).sort(), ['one', 'two']);
   assert.deepEqual(merged.mcp[SERVER_IDS.tgrep].environment, { FIRST: 'one', SECOND: 'two' });
 });
@@ -260,11 +261,11 @@ test('conflicting managed options abort rather than silently choosing a candidat
   const w = workspace(t);
   const first = JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: { ...ourEntry(w), enabled: false } } });
   const second = JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w) } });
-  w.write('.kilo/kilo.jsonc', first);
-  w.write('.kilo/kilo.json', second);
+  w.write('kilo.jsonc', first);
+  w.write('kilo.json', second);
   assert.throws(() => configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' }), (error) => error.kind === 'consolidation-conflict');
-  assert.equal(w.read('.kilo/kilo.jsonc'), first);
-  assert.equal(w.read('.kilo/kilo.json'), second);
+  assert.equal(w.read('kilo.jsonc'), first);
+  assert.equal(w.read('kilo.json'), second);
 });
 
 test('MiMo keeps root and directory settings in their original layers', (t) => {
@@ -274,11 +275,14 @@ test('MiMo keeps root and directory settings in their original layers', (t) => {
   w.write('mimocode.jsonc', root);
   w.write('.mimocode/mimocode.json', directory);
   configureAgent({ ...w, agentId: 'mimocode', backend: 'tgrep' });
-  assert.equal(w.read('mimocode.jsonc'), root);
+  const updated = JSON.parse(w.read('mimocode.jsonc'));
+  assert.deepEqual(updated.plugin, ['./root-plugin.mjs']);
+  assert.equal(updated.model, 'root');
+  assert.ok(updated.mcp[SERVER_IDS.tgrep]);
   const local = parseJsonDocument(w.read('.mimocode/mimocode.json'), 'test').root;
   assert.deepEqual(local.plugin, ['./local-plugin.mjs']);
   assert.equal(local.model, 'local');
-  assert.ok(local.mcp[SERVER_IDS.tgrep]);
+  assert.equal(w.read('.mimocode/mimocode.json'), directory);
 });
 
 test('legacy Kilo stdio options migrate into the current native format', (t) => {
@@ -289,7 +293,7 @@ test('legacy Kilo stdio options migrate into the current native format', (t) => 
     foreign: { command: 'company-tool' },
   } }));
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  const migrated = parseJsonDocument(w.read('.kilo/kilo.jsonc'), 'test').root.mcp[SERVER_IDS.tgrep];
+  const migrated = parseJsonDocument(w.read('kilo.jsonc'), 'test').root.mcp[SERVER_IDS.tgrep];
   assert.deepEqual(migrated.command, [process.execPath, path.join(w.repoRoot, 'tools/mcp/tools/tgrep/src/server.mjs'), '--repo-root', w.repoRoot, ...args.slice(1)]);
   assert.deepEqual(migrated.environment, { LIMIT: 'one' });
   assert.equal(migrated.enabled, false);
@@ -310,10 +314,10 @@ test('same-format legacy migration retains custom options and comments', (t) => 
 
 test('omitted legacy defaults preserve explicit native disabled state', (t) => {
   const w = workspace(t);
-  w.write('.kilo/kilo.jsonc', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: { ...ourEntry(w), enabled: false } } }));
+  w.write('kilo.jsonc', JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: { ...ourEntry(w), enabled: false } } }));
   w.write('.kilocode/mcp.json', JSON.stringify({ mcpServers: { [SERVER_IDS.tgrep]: { command: 'node', args: ourEntry(w).command.slice(1), env: { KEEP: 'yes' } } } }));
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
-  const entry = JSON.parse(w.read('.kilo/kilo.jsonc')).mcp[SERVER_IDS.tgrep];
+  const entry = JSON.parse(w.read('kilo.jsonc')).mcp[SERVER_IDS.tgrep];
   assert.equal(entry.enabled, false);
   assert.deepEqual(entry.environment, { KEEP: 'yes' });
 });
@@ -335,7 +339,7 @@ test('unsupported legacy fields and file substitutions abort every write', (t) =
     assert.equal(result.applied, false);
     assert.equal(result.plan.problems[0].error.kind, 'legacy-options-conflict');
     assert.equal(w.read('.kilocode/mcp.json'), legacy);
-    assert.equal(w.exists('.kilo/kilo.jsonc'), false);
+    assert.equal(w.exists('kilo.jsonc'), false);
     assert.equal(w.exists('.mcp.json'), false);
     assert.equal(w.exists('tmp'), false);
   }
@@ -345,10 +349,10 @@ test('legacy option conflicts never overwrite native settings or clean the sourc
   const w = workspace(t);
   const native = JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: { ...ourEntry(w), environment: { KEEP: 'native' } } } });
   const legacy = JSON.stringify({ mcpServers: { [SERVER_IDS.tgrep]: { command: 'node', args: ourEntry(w).command.slice(1), env: { KEEP: 'legacy' } } } });
-  w.write('.kilo/kilo.jsonc', native);
+  w.write('kilo.jsonc', native);
   w.write('.kilocode/mcp.json', legacy);
   assert.throws(() => configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' }), (error) => error.kind === 'consolidation-conflict');
-  assert.equal(w.read('.kilo/kilo.jsonc'), native);
+  assert.equal(w.read('kilo.jsonc'), native);
   assert.equal(w.read('.kilocode/mcp.json'), legacy);
 });
 
@@ -366,15 +370,15 @@ test('legacy migration restores both files after a later target fails', (t) => {
     { type: 'configure', agentId: 'claude', backend: 'tgrep' },
   ] }), /later write failed/);
   assert.equal(w.read('.kilocode/mcp.json'), legacy);
-  assert.equal(w.exists('.kilo/kilo.jsonc'), false);
+  assert.equal(w.exists('kilo.jsonc'), false);
 });
 
 test('a concurrently edited consolidation source survives and the destination rolls back', (t) => {
   const w = workspace(t);
   const original = '{"snapshot":false}';
   const concurrent = '{"model":"changed externally"}';
-  const destination = w.write('.kilo/kilo.jsonc', original);
-  const source = w.write('.kilo/kilo.json', '{"model":"original"}');
+  const destination = w.write('kilo.jsonc', original);
+  const source = w.write('kilo.json', '{"model":"original"}');
   const rename = fs.renameSync;
   let injected = false;
   t.mock.method(fs, 'renameSync', (from, to) => {
@@ -386,25 +390,25 @@ test('a concurrently edited consolidation source survives and the destination ro
     return result;
   });
   assert.throws(() => configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' }), (error) => error.cause?.kind === 'concurrent-modification');
-  assert.equal(w.read('.kilo/kilo.jsonc'), original);
-  assert.equal(w.read('.kilo/kilo.json'), concurrent);
+  assert.equal(w.read('kilo.jsonc'), original);
+  assert.equal(w.read('kilo.json'), concurrent);
 });
 
 test('cleanup requires the merged destination even when its planned action is unchanged', (t) => {
   for (const legacy of [false, true]) {
     const w = workspace(t);
     const entry = { ...ourEntry(w), command: [process.execPath, path.join(w.repoRoot, 'tools/mcp/tools/tgrep/src/server.mjs'), '--repo-root', w.repoRoot] };
-    w.write('.kilo/kilo.jsonc', JSON.stringify({ snapshot: false, mcp: { [SERVER_IDS.tgrep]: entry } }));
-    const source = legacy ? 'kilo.jsonc' : '.kilo/kilo.json';
+    w.write('kilo.jsonc', JSON.stringify({ snapshot: false, mcp: { [SERVER_IDS.tgrep]: entry } }));
+    const source = legacy ? '.kilo/kilo.jsonc' : 'kilo.json';
     const sourceText = legacy ? JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: entry } }) : '{"snapshot":false}';
     w.write(source, sourceText);
     const plan = planAgentConfigChanges({ ...w, operations: [{ type: 'configure', agentId: 'kilo', backend: 'tgrep' }] });
     assert.deepEqual(plan.problems, []);
     assert.equal(plan.steps[0].action, 'unchanged');
     const concurrent = '{"model":"changed concurrently"}';
-    w.write('.kilo/kilo.jsonc', concurrent);
+    w.write('kilo.jsonc', concurrent);
     assert.throws(() => applyAgentConfigChanges({ ...w, plan }), (error) => error.cause?.kind === 'concurrent-modification');
-    assert.equal(w.read('.kilo/kilo.jsonc'), concurrent);
+    assert.equal(w.read('kilo.jsonc'), concurrent);
     assert.equal(w.read(source), sourceText);
     assert.equal(w.exists('tmp'), false, 'dependency validation runs before backing up or deleting the source');
   }
