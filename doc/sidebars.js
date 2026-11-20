@@ -64,6 +64,7 @@ const sidebars = {
         'development/excel-config',
         'development/testing',
         'development/rpc-unit-test',
+        'development/atgateway-linux-benchmark',
         'development/diagrams',
       ],
     },

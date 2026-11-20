@@ -94,6 +94,25 @@ enum atgateway_compression_algorithm {
   EN_ATGW_COMPRESSION_ZLIB = 40 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "zlib" case_sensitive: false }];
 }
 
+// Compression level for outgoing session data. Values mirror
+// compression_level_t in libatgw_protocol_sdk.fbs (same numeric values).
+enum atgateway_compression_level {
+  EN_ATGW_COMPRESSION_LEVEL_DEFAULT = 0
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kDefault" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LEVEL_STORAGE = 10
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kStorage" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LEVEL_FAST = 20
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kFast" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LEVEL_LOW_CPU = 30
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kLowCpu" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LEVEL_BALANCED = 40
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kBalanced" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LEVEL_HIGH_RATIO = 50
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kHighRatio" case_sensitive: false }];
+  EN_ATGW_COMPRESSION_LEVEL_MAX_RATIO = 60
+      [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "kMaxRatio" case_sensitive: false }];
+}
+
 // KDF algorithm for key derivation
 enum atgateway_kdf_algorithm {
   EN_ATGW_KDF_HKDF_SHA256 = 0
@@ -122,6 +141,11 @@ message atgateway_client_crypto_cfg {
 
   // Maximum post message size in bytes (default 2MB, sent to client during handshake)
   uint64 max_post_message_size = 7 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2MB" size_mode: true }];
+
+  // Compression level used by this endpoint when compressing outgoing data
+  // (the decompressing side does not need this value)
+  atgateway_compression_level compression_level = 8
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "kDefault" }];
 }
 
 enum atgateway_router_policy {
@@ -163,6 +187,9 @@ message atgateway_cfg {
   atgateway_listen_cfg listen = 1;
   atgateway_client_cfg client = 2;
 
-  // Let atgateway act as an echo server for testing (echoes back any received message)
+  // Run atgateway as a test echo server instead of routing client messages.
   bool echo_server = 3;
+
+  // Reply with the three bytes "got" for each message when echo_server is enabled.
+  bool echo_server_ack_only = 4;
 }

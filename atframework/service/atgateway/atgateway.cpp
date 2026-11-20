@@ -216,12 +216,53 @@ class gateway_module : public ::atfw::atapp::module_impl {
       }
     }
 
+    // Map protobuf compression level (values mirror compression_level_t in the fbs schema)
+    switch (gw_mgr_.get_conf().origin_conf.client().crypto().compression_level()) {
+      case ::atframework::gateway::EN_ATGW_COMPRESSION_LEVEL_STORAGE:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kStorage);
+        break;
+      case ::atframework::gateway::EN_ATGW_COMPRESSION_LEVEL_FAST:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kFast);
+        break;
+      case ::atframework::gateway::EN_ATGW_COMPRESSION_LEVEL_LOW_CPU:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kLowCpu);
+        break;
+      case ::atframework::gateway::EN_ATGW_COMPRESSION_LEVEL_BALANCED:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kBalanced);
+        break;
+      case ::atframework::gateway::EN_ATGW_COMPRESSION_LEVEL_HIGH_RATIO:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kHighRatio);
+        break;
+      case ::atframework::gateway::EN_ATGW_COMPRESSION_LEVEL_MAX_RATIO:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kMaxRatio);
+        break;
+      default:
+        crypto_conf.compression_level =
+            ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kDefault);
+        break;
+    }
+
     // Max post message size
     if (gw_mgr_.get_conf().origin_conf.client().crypto().max_post_message_size() > 0) {
       crypto_conf.max_post_message_size = gw_mgr_.get_conf().origin_conf.client().crypto().max_post_message_size();
     } else {
       crypto_conf.max_post_message_size = 2 * 1024 * 1024;  // Default 2MB
     }
+
+    // Log the effective crypto configuration for operations/verification
+    FWLOGINFO(
+        "atgateway crypto configured: key_exchange_type={}, algorithms_count={}, compression_count={}, "
+        "compression_level={}",
+        static_cast<int>(gw_mgr_.get_conf().origin_conf.client().crypto().key_exchange()),
+        gw_mgr_.get_conf().origin_conf.client().crypto().algorithms().size(),
+        gw_mgr_.get_conf().origin_conf.client().crypto().compression_algorithms().size(),
+        static_cast<int>(gw_mgr_.get_conf().origin_conf.client().crypto().compression_level()));
 
     // protocol reload
     if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("inner", gw_mgr_.get_conf().origin_conf.listen().type().c_str()) ||
@@ -425,13 +466,17 @@ class gateway_module : public ::atfw::atapp::module_impl {
       return -1;
     }
 
-    // echo server mode
-    if (gw_mgr_.get_conf().origin_conf.echo_server()) {
-      int ret = sess->send_to_client(buffer);
+    const auto &config = gw_mgr_.get_conf().origin_conf;
+    if (config.echo_server()) {
+      static constexpr unsigned char kAcknowledgment[] = {'g', 'o', 't'};
+      auto response = config.echo_server_ack_only()
+                          ? gsl::span<const unsigned char>{kAcknowledgment, sizeof(kAcknowledgment)}
+                          : buffer;
+      int ret = sess->send_to_client(response);
       if (ret < 0) {
-        FWLOGERROR("{} send {} bytes data to client failed, error_code: {}(echo server)", *sess, buffer.size(), ret);
+        FWLOGERROR("{} send {} bytes data to client failed, error_code: {}(echo server)", *sess, response.size(), ret);
       } else {
-        FWLOGDEBUG("{} send {} bytes data to client(echo server)", *sess, buffer.size());
+        FWLOGDEBUG("{} send {} bytes data to client(echo server)", *sess, response.size());
       }
       return ret;
     }

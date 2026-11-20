@@ -363,9 +363,14 @@ message atgateway_client_cfg {
 message atgateway_cfg {
   atgateway_listen_cfg listen = 1;
   atgateway_client_cfg client = 2;
-  bool echo_server = 3;   // echo-back mode for testing
+  bool echo_server = 3;
+  bool echo_server_ack_only = 4;
 }
 ```
+
+Set `echo_server: true` to run a test server. It returns each request payload by default.
+Set `echo_server_ack_only: true` as well to return the three ASCII bytes `got` for each request.
+Both replies use the normal client protocol, including encryption when negotiated.
 
 ## Server Protocol (gateway ↔ logic server)
 

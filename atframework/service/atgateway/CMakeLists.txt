@@ -28,6 +28,22 @@ atframework_add_executable(
 
 set_target_properties(${ATSF4G_APP_NAME} PROPERTIES OUTPUT_NAME "atgatewayd")
 
+# ============ benchmark client tool ============
+if(PROJECT_ENABLE_TOOLS)
+  set(ATSF4G_APP_BENCHMARK_CLIENT_NAME atgateway_benchmark_client)
+  echowithcolor(COLOR GREEN "-- Configure ${ATSF4G_APP_BENCHMARK_CLIENT_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
+
+  add_executable(${ATSF4G_APP_BENCHMARK_CLIENT_NAME})
+  target_sources(${ATSF4G_APP_BENCHMARK_CLIENT_NAME}
+                 PRIVATE "${CMAKE_CURRENT_LIST_DIR}/tools/atgateway_benchmark_client.cpp")
+  target_include_directories(${ATSF4G_APP_BENCHMARK_CLIENT_NAME}
+                             PRIVATE "${CMAKE_CURRENT_LIST_DIR}"
+                                     "$<TARGET_PROPERTY:${ATFRAMEWORK_SERVICE_GATEWAY_CLIENT_SDK},INTERFACE_INCLUDE_DIRECTORIES>")
+  target_link_libraries(${ATSF4G_APP_BENCHMARK_CLIENT_NAME} PRIVATE ${ATFRAMEWORK_SERVICE_GATEWAY_CLIENT_SDK}
+                                                                    ${ATFRAMEWORK_LIBATAPP_LINK_NAME})
+  set_target_properties(${ATSF4G_APP_BENCHMARK_CLIENT_NAME} PROPERTIES FOLDER "atframework/atgateway/service")
+endif()
+
 # ============ unit tests ============
 if(PROJECT_ENABLE_UNITTEST)
   atframework_atframe_utils_populate()
