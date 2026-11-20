@@ -7,6 +7,7 @@
 
 // @ts-ignore
 const {themes: prismThemes} = require('prism-react-renderer');
+const diagrams = require('./plugins/diagrams/index.cjs');
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -22,13 +23,15 @@ const config = {
 
   onBrokenLinks: 'warn',
 
+  // The static page and browser bundle must reference the same rendered assets.
+  future: {faster: {mdxCrossCompilerCache: true}},
+
   markdown: {
-    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },
   },
-  themes: ['@docusaurus/theme-mermaid'],
+  plugins: [diagrams.watch],
 
   headTags: [
     {
@@ -96,6 +99,7 @@ const config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: './sidebars.js',
+          beforeDefaultRemarkPlugins: [diagrams.remark],
           editUrl: 'https://github.com/atframework/atsf4g-co/edit/main/doc/',
         },
         blog: false,

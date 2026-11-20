@@ -61,6 +61,34 @@ jobs:
         # No --frozen-lockfile: doc/pnpm-lock.yaml is not committed, so pnpm
         # resolves the dependency graph from package.json on each run.
         run: pnpm install
+      - name: Install Chromium for diagrams
+        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install D2 and PlantUML
+        env:
+          D2_VERSION: v0.9.0
+          PLANTUML_VERSION: '1.2026.8'
+          PLANTUML_SHA256: 5e1ecfa8ecd32c90b03bbf3b1eb6f020943f98ab0fcf4032be31a0002ee2c462
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y graphviz fonts-noto-cjk
+          cd "$RUNNER_TEMP"
+          d2_archive="d2-${D2_VERSION}-linux-amd64.tar.gz"
+          d2_release="https://github.com/d2lang/d2/releases/download/${D2_VERSION}"
+          curl --fail --location --retry 3 "$d2_release/$d2_archive" --output "$d2_archive"
+          curl --fail --location --retry 3 "$d2_release/SHA256SUMS" --output d2-SHA256SUMS
+          grep " $d2_archive$" d2-SHA256SUMS | sha256sum --check --strict
+          tar -xzf "$d2_archive"
+          echo "$RUNNER_TEMP/d2-${D2_VERSION}/bin" >> "$GITHUB_PATH"
+
+          jar="$RUNNER_TEMP/plantuml.jar"
+          curl --fail --location --retry 3 "https://github.com/plantuml/plantuml/releases/download/v${PLANTUML_VERSION}/plantuml-${PLANTUML_VERSION}.jar" --output "$jar"
+          echo "$PLANTUML_SHA256  $jar" | sha256sum --check --strict
+          echo "PLANTUML_JAR=$jar" >> "$GITHUB_ENV"
       - name: Build site
         run: pnpm build
       - name: Configure SSH deploy key

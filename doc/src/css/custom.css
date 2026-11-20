@@ -62,7 +62,38 @@ samp {
   font-family: var(--docs-font-mono);
 }
 
-/* Mermaid diagrams should use the same font stacks. */
-.mermaid {
-  font-family: var(--docs-font-sans);
+.diagram {
+  display: block;
+  margin-block: 1rem;
+}
+
+.diagram img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.diagram-dark,
+[data-theme="dark"] .diagram-light {
+  display: none;
+}
+
+[data-theme="dark"] .diagram-dark {
+  display: block;
+}
+
+.diagram-inline {
+  overflow-x: auto;
+}
+
+.diagram-inline > svg {
+  display: block;
+  max-width: none;
+  background-color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagram-inline svg * {
+    animation: none !important;
+  }
 }
