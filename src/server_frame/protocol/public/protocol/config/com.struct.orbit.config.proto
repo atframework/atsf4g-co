@@ -35,5 +35,6 @@ message ExcelOrbitClientTemplate {
   uint32 pre_start_count = 11;
   uint32 load_percentage = 12;
   bool seed_mode = 13;
+  repeated string pre_launch_args = 20;
   repeated string launch_args = 21;
 }

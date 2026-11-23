@@ -167,16 +167,16 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   seed_mode_enabled_ = false;
 #endif
   {
-    if (!split_command_line(config.client_path(), client_command_line_)) {
+    if (!split_command_line(config.client_path(), pre_client_command_line_)) {
       FWLOGERROR("split_command_line failed for {}", config.client_path());
       return -3;
     }
-    if (client_command_line_.empty()) {
-      FWLOGERROR("client_command_line_ is empty after splitting client_path");
+    if (pre_client_command_line_.empty()) {
+      FWLOGERROR("pre_client_command_line_ is empty after splitting client_path");
       return -3;
     }
-    client_path_ = client_command_line_.front();
-    client_command_line_.erase(client_command_line_.begin());
+    client_path_ = pre_client_command_line_.front();
+    pre_client_command_line_.erase(pre_client_command_line_.begin());
 
     if (client_path_.empty()) {
       FWLOGERROR("orbit agent seed_client_path is empty");
@@ -195,6 +195,9 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
     // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数)
     FWLOGINFO("orbit agent launch path: {}", client_path_);
+    for (const auto& arg : pre_client_command_line_) {
+      FWLOGINFO("orbit agent launch pre command argument: {}", arg);
+    }
     for (const auto& arg : client_command_line_) {
       FWLOGINFO("orbit agent launch command argument: {}", arg);
     }
@@ -433,7 +436,7 @@ void orbit_agent_manager::tick() {
   check_client_force_kill(now);
 
   // 按表补齐预启动进程，并周期打印运行情况
-  tick_pre_start(now);
+  tick_pre_start();
   log_agent_running_summary(now);
 
   // 定期将负载快照写入 etcd（每5秒更新一次）
@@ -573,8 +576,8 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
   client_record->remote_start = remote_start;
 
   if (remote_start) {
-    // 远程启动模式 不需要Agent相关的参数
-    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(ctx, client_record, client_command_line_));
+    // 远程启动模式
+    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(ctx, client_record));
     if (spawn_result < 0) {
       delete_client(client_record);
       RPC_RETURN_CODE(spawn_result);
@@ -1117,6 +1120,7 @@ bool orbit_agent_manager::load_client_template(int32_t client_template_id, clien
   output.remote_start = row->remote_start_client();
   output.seed_mode = row->seed_mode();
   output.match_tag = row->match_tag();
+  output.pre_launch_args.assign(row->pre_launch_args().begin(), row->pre_launch_args().end());
   output.launch_args.assign(row->launch_args().begin(), row->launch_args().end());
   return true;
 }
@@ -1288,7 +1292,7 @@ void orbit_agent_manager::disable_pre_start_template(int32_t client_template_id)
       client_template_id, pre_start_repeated_failures_limit_, pre_start_template_ids_.size());
 }
 
-void orbit_agent_manager::tick_pre_start(time_t now) {
+void orbit_agent_manager::tick_pre_start() {
   if (!enable_pre_start_ || !agent_online_ || pre_start_template_ids_.empty()) {
     return;
   }
@@ -1333,26 +1337,12 @@ void orbit_agent_manager::tick_pre_start(time_t now) {
     }
 
     auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
-    record->client_instance_id = ++sequence_allocator_;
+    fill_orbit_agent_client_record(client_template, record);
     record->client_id = atfw::util::log::format("prestart_{}_{}", record->client_instance_id,
                                                 logic_config::me()->get_local_server_id());
-    record->client_template_id = client_template.client_template_id;
     record->remote_start = false;
     record->pre_start = true;
     record->claimed = false;
-    record->expected_cpu = client_template.expected_cpu;
-    record->expected_memory_mb = client_template.expected_memory_mb;
-    record->startup_timeout_sec = client_template.startup_timeout_sec > 0 ? client_template.startup_timeout_sec : 120;
-    record->heartbeat_timeout_sec =
-        client_template.heartbeat_timeout_sec > 0 ? client_template.heartbeat_timeout_sec : 60;
-    record->custom_args.Clear();
-    for (const std::string& launch_arg : client_template.launch_args) {
-      *record->custom_args.Add() = launch_arg;
-    }
-    record->start_timepoint = now;
-    set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
-    record->client_addr.clear();
-    clients_[record->client_instance_id] = record;
 
     // 异步拉起：Seed 模式下要走 Fork 的 RPC，不能在这里同步等待结果
     schedule_spawn_client_process(record);

@@ -113,6 +113,26 @@ static void on_uv_process_exit_callback(uv_process_t* handle, int64_t exit_statu
 
 }  // namespace
 
+void orbit_agent_manager::fill_orbit_agent_client_record(const client_template_t& client_template,
+                                                         orbit_agent_client_record_ptr record) {
+  record->client_instance_id = ++sequence_allocator_;
+  record->client_template_id = client_template.client_template_id;
+  record->expected_cpu = client_template.expected_cpu;
+  record->expected_memory_mb = client_template.expected_memory_mb;
+  record->startup_timeout_sec = client_template.startup_timeout_sec > 0 ? client_template.startup_timeout_sec : 120;
+  record->heartbeat_timeout_sec =
+      client_template.heartbeat_timeout_sec > 0 ? client_template.heartbeat_timeout_sec : 60;
+  for (const std::string& launch_arg : client_template.pre_launch_args) {
+    *record->pre_custom_args.Add() = launch_arg;
+  }
+  for (const std::string& launch_arg : client_template.launch_args) {
+    *record->custom_args.Add() = launch_arg;
+  }
+  record->start_timepoint = util::time::time_utility::get_sys_now();
+  set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
+  clients_[record->client_instance_id] = record;
+}
+
 int orbit_agent_manager::startup_seed_client() {
   if (!seed_mode_enabled_) {
     // 非 Seed 模式不需要种子进程，Agent 直接可以对外服务
@@ -150,29 +170,14 @@ int orbit_agent_manager::startup_seed_client() {
     }
 
     auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
-    record->client_instance_id = ++sequence_allocator_;
+    fill_orbit_agent_client_record(client_template, record);
     record->client_id =
         atfw::util::log::format("seed_{}_{}", record->client_instance_id, logic_config::me()->get_local_server_id());
-    record->client_template_id = client_template.client_template_id;
     record->seed_process = true;
     // 种子进程不参与 Controller 通知与 start_client 流程
     record->claimed = false;
     record->remote_start = false;
-    record->expected_cpu = client_template.expected_cpu;
-    record->expected_memory_mb = client_template.expected_memory_mb;
-    record->startup_timeout_sec = client_template.startup_timeout_sec > 0 ? client_template.startup_timeout_sec : 120;
-    record->heartbeat_timeout_sec =
-        client_template.heartbeat_timeout_sec > 0 ? client_template.heartbeat_timeout_sec : 60;
-    record->custom_args.Clear();
-    for (const std::string& launch_arg : client_template.launch_args) {
-      *record->custom_args.Add() = launch_arg;
-    }
-    record->start_timepoint = util::time::time_utility::get_sys_now();
-    set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
-    record->client_addr.clear();
-
     // 先入池再拉起，保证种子上报 Ready 时一定能查到记录
-    clients_[record->client_instance_id] = record;
     seed_clients_[record->client_template_id] = record;
     ++seed_startup_pending_count_;
 
@@ -209,7 +214,8 @@ int orbit_agent_manager::spawn_seed_client_process(const orbit_agent_client_reco
   std::vector<std::string> launch_arguments;
   std::unordered_map<std::string, std::string> render_values;
   fill_render_values(record, render_values);
-  build_client_launch_arguments(record, render_values, client_path_, client_command_line_, launch_arguments, false);
+  build_client_launch_arguments(record, render_values, client_path_, pre_client_command_line_, client_command_line_,
+                                launch_arguments, false);
   launch_arguments.emplace_back(kOrbitSeedMode);
 
   // 种子进程不 detach：它需要承接 Agent 的 stdio 并长期存活
@@ -317,35 +323,12 @@ int orbit_agent_manager::prepare_start_client_record(const atfw::orbit::CTAStart
   }
 
   auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
-  record->client_instance_id = ++sequence_allocator_;
+  fill_orbit_agent_client_record(client_template, record);
   record->client_id = client_id;
-  record->client_template_id = client_template.client_template_id;
-  clients_[record->client_instance_id] = record;
   client_id_to_instance_id_[client_id] = record->client_instance_id;
-
-  record->custom_args.Clear();
-  for (const std::string& launch_arg : client_template.launch_args) {
-    *record->custom_args.Add() = launch_arg;
-  }
-
   record->claimed = true;
   record->pre_start = false;
-  record->expected_cpu = client_template.expected_cpu;
-  record->expected_memory_mb = client_template.expected_memory_mb;
-  record->startup_timeout_sec = client_template.startup_timeout_sec;
-  record->heartbeat_timeout_sec = client_template.heartbeat_timeout_sec;
-  if (record->startup_timeout_sec <= 0) {
-    record->startup_timeout_sec = 120;  // 默认120秒保底
-  }
-  if (record->heartbeat_timeout_sec <= 0) {
-    record->heartbeat_timeout_sec = 60;  // 默认60秒保底
-  }
   record->server_unique_id = request.server_identity().unique_id();
-
-  set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
-  record->client_addr.clear();
-
-  record->start_timepoint = util::time::time_utility::get_sys_now();
   server_unique_id_to_client_ids_[record->server_unique_id].insert(record->client_id);
 
   output = record;
@@ -354,13 +337,19 @@ int orbit_agent_manager::prepare_start_client_record(const atfw::orbit::CTAStart
 
 void orbit_agent_manager::build_client_launch_arguments(
     const orbit_agent_client_record_ptr& record, const std::unordered_map<std::string, std::string>& render_values,
-    const std::string& client_path, const std::vector<std::string>& command_line, std::vector<std::string>& output,
-    bool remote_start) {
+    const std::string& client_path, const std::vector<std::string>& pre_command_line,
+    const std::vector<std::string>& command_line, std::vector<std::string>& output, bool remote_start) {
   uint64_t app_id = ++sequence_allocator_;
   output.clear();
 
   if (!client_path.empty()) {
     output.emplace_back(client_path);
+  }
+  for (const std::string& arg : pre_command_line) {
+    output.emplace_back(render_string_template(arg, render_values));
+  }
+  for (const std::string& custom_arg : record->pre_custom_args) {
+    output.emplace_back(render_string_template(custom_arg, render_values));
   }
   // 渲染启动参数中的 ${field} 占位符，用 render_values 中的实际值替换
   for (const std::string& arg : command_line) {
@@ -620,7 +609,8 @@ rpc::result_code_type orbit_agent_manager::spawn_client_process(rpc::context& ct
   std::unordered_map<std::string, std::string> render_values;
   fill_render_values(record, render_values);
 
-  build_client_launch_arguments(record, render_values, client_path_, client_command_line_, launch_arguments, false);
+  build_client_launch_arguments(record, render_values, client_path_, pre_client_command_line_, client_command_line_,
+                                launch_arguments, false);
   bool detached = !stop_running_client_;
   int32_t spawn_result = spawn_client_async(record->client_instance_id, std::move(launch_arguments), detached);
   if (spawn_result < 0) {
@@ -703,14 +693,13 @@ rpc::result_code_type orbit_agent_manager::fork_seed_client_process(rpc::context
 }
 
 rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(rpc::context& ctx,
-                                                                       const orbit_agent_client_record_ptr& record,
-                                                                       const std::vector<std::string>& command_line) {
+                                                                       const orbit_agent_client_record_ptr& record) {
   std::vector<std::string> launch_arguments;
 
   // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
   std::unordered_map<std::string, std::string> render_values;
   fill_render_values(record, render_values);
-  build_client_launch_arguments(record, render_values, "", command_line, launch_arguments, true);
+  build_client_launch_arguments(record, render_values, "", {}, client_command_line_, launch_arguments, true);
 
   auto req = rpc::make_shared_message<atfw::orbit::ATCRemoteStartClientReq>(ctx);
   auto rsp = rpc::make_shared_message<atfw::orbit::CTARemoteStartClientRsp>(ctx);

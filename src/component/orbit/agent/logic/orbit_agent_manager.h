@@ -62,7 +62,8 @@ struct orbit_agent_client_record {
   bool startup_failure_counted = false;  // 是否已经记录启动失败
 
   // Client 启动参数
-  ::google::protobuf::RepeatedPtrField<::std::string> custom_args;  // 来自模板的启动参数
+  ::google::protobuf::RepeatedPtrField<::std::string> pre_custom_args;  // 前置启动参数
+  ::google::protobuf::RepeatedPtrField<::std::string> custom_args;      // 来自模板的启动参数
   double expected_cpu = 0.0f;
   double expected_memory_mb = 0.0f;
 
@@ -198,6 +199,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
     bool remote_start = false;
     bool seed_mode = false;
     std::string match_tag;
+    std::vector<std::string> pre_launch_args;
     std::vector<std::string> launch_args;
   };
 
@@ -206,7 +208,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 按 client_template_id 读表
   bool load_client_template(int32_t client_template_id, client_template_t& output) const;
   // tick 内按表补齐预启动进程
-  void tick_pre_start(time_t now);
+  void tick_pre_start();
   // 连续启动失败后停掉某个模板的预启动
   void disable_pre_start_template(int32_t client_template_id);
   // 找出该模板下已 ready 且未被认领的预启动进程
@@ -229,6 +231,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 周期打印 Agent 运行情况（各模板的预启动/运行数量）
   void log_agent_running_summary(time_t now);
 
+  void fill_orbit_agent_client_record(const client_template_t& client_template, orbit_agent_client_record_ptr record);
+
   void set_client_state(const orbit_agent_client_record_ptr& record, atfw::orbit::EnClientState state);
 
   void fill_render_values(const orbit_agent_client_record_ptr& record,
@@ -246,12 +250,12 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type fork_seed_client_process(rpc::context& ctx,
                                                                          orbit_agent_client_record_ptr record,
                                                                          orbit_agent_client_record_ptr seed_record);
-  rpc::result_code_type remote_spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record,
-                                                    const std::vector<std::string>& command_line);
+  rpc::result_code_type remote_spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record);
   void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
                                      const std::unordered_map<std::string, std::string>& render_values,
-                                     const std::string& client_path, const std::vector<std::string>& command_line,
-                                     std::vector<std::string>& output, bool remote_start);
+                                     const std::string& client_path, const std::vector<std::string>& pre_command_line,
+                                     const std::vector<std::string>& command_line, std::vector<std::string>& output,
+                                     bool remote_start);
 
   void fill_client_identity(atfw::orbit::DClientIdentity& output, const orbit_agent_client_record_ptr& client) const;
   void stop_client_process(const orbit_agent_client_record_ptr& client_record,
@@ -359,8 +363,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 连续失败到该次数后停止该模板的预启动，0 表示不限制
   uint32_t pre_start_repeated_failures_limit_ = 0;
 
-  std::string client_path_;
-  std::vector<std::string> client_command_line_;
+  std::string client_path_;                           // 第一个参数
+  std::vector<std::string> pre_client_command_line_;  // client_path 后续参数
+  std::vector<std::string> client_command_line_;      // Agent参数
 
   atfw::orbit::DAgentIdentity agent_identity_;
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;
