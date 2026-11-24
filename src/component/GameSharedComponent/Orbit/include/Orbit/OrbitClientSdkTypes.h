@@ -81,6 +81,8 @@ using OrbitClientLogCallback = std::function<void(const OrbitClientLogRecord& re
 using OrbitClientMessageCallback = std::function<void(const std::string& payload)>;
 using OrbitClientStopCallback = std::function<void()>;
 using OrbitClientSeedWaitingTickCallback = std::function<void()>;
+// Fork 阶段回调：>0 表示还没完成（SDK 继续轮询），==0 成功，<0 失败
+using OrbitClientForkPhaseCallback = std::function<int32_t()>;
 // 收到 Agent 的 start_client：调用方上报 Ready 且被接受后，Agent 一定会下发该通知，
 // 此时进程真正可用，可以开始对外服务；client_id 为空表示沿用拉起时下发的值
 using OrbitClientStartCallback = std::function<void(
@@ -100,14 +102,13 @@ struct OrbitClientCallbacks {
   // 普通启动与预启动认领统一：只要进程真正可用就会回调，调用方不需要区分是否预启动
   OrbitClientStartCallback on_start_client = nullptr;
 
-  // Seed模式下 调用方需要在这个回调里准备好要Fork的数据 然后主动调用 notify_seed_process_ready
-  // Seed: init -> 加载资源但不Begin -> notify_seed_process_ready(SDK开始等待Fork通知 此处阻塞)
-  //    -> 循环on_seed_waiting_tick -> Fork通知 -> notify_seed_process_ready(Child返回 之后流程可视为 Seed继续阻塞)
-  //    -> child notify_process_ready -> child 收到 start_client 后回调 on_start_client
-  // Normal: init -> 等待地图加载完成 -> notify_process_ready(通知Agent进程已准备好)
-  //    -> 收到 start_client 后回调 on_start_client
   // 等待Fork时需要注册的Tick回调
   OrbitClientSeedWaitingTickCallback on_seed_waiting_tick = nullptr;
+
+  // Seed：进入阻塞等待之前调用，返回 0 之后 SDK 才上报种子就绪
+  OrbitClientForkPhaseCallback on_before_fork = nullptr;
+  // Child：SDK 完成自身重建之后调用，返回 0 表示子进程已可对外服务
+  OrbitClientForkPhaseCallback on_after_fork = nullptr;
 };
 
 }  // namespace orbit_client_sdk

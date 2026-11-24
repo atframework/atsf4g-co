@@ -654,6 +654,76 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_seed_process_ready() {
   return notify_seed_process_ready_inner();
 }
 
+void OrbitClientRuntime::advance_seed_fork() {
+  switch (seed_fork_state_) {
+    case OrbitClientSeedForkState::kNone:
+    case OrbitClientSeedForkState::kWaitingFork:
+    case OrbitClientSeedForkState::kDone:
+      return;
+
+    case OrbitClientSeedForkState::kBeforeFork: {
+      int32_t before_result = callbacks_.on_before_fork ? callbacks_.on_before_fork()
+                                                        : ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+      if (before_result < 0) {
+        ORBIT_LOG(OrbitClientLogLevel::kError,
+                  LOG_WRAPPER_FWAPI_FORMAT("before_fork failed, code={}", before_result));
+        seed_fork_state_ = OrbitClientSeedForkState::kDone;
+        request_end(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, before_result, "Before Fork Failed");
+        return;
+      }
+      if (before_result > 0) {
+        return;
+      }
+
+      // 预热完成：上报种子就绪，然后进入阻塞等待 fork
+      seed_fork_state_ = OrbitClientSeedForkState::kWaitingFork;
+      int32_t ready_result = notify_seed_process_ready_inner();
+      if (ready_result != 0) {
+        ORBIT_LOG(OrbitClientLogLevel::kError,
+                  LOG_WRAPPER_FWAPI_FORMAT("notify_seed_process_ready failed, code={}", ready_result));
+        seed_fork_state_ = OrbitClientSeedForkState::kDone;
+        request_end(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, ready_result, "Notify Seed Process Failed");
+        return;
+      }
+
+      ORBIT_LOG(OrbitClientLogLevel::kInfo, "seed ready, blocking until fork");
+      int32_t wait_result = blocking_seed_process();
+      if (wait_result < 0) {
+        ORBIT_LOG(OrbitClientLogLevel::kError,
+                  LOG_WRAPPER_FWAPI_FORMAT("blocking_seed_process failed, code={}", wait_result));
+        seed_fork_state_ = OrbitClientSeedForkState::kDone;
+        request_end(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, wait_result, "Wait Fork Failed");
+        return;
+      }
+
+      if (is_seed_process()) {
+        seed_fork_state_ = OrbitClientSeedForkState::kDone;
+        request_end(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "End Seed Blocking");
+      } else {
+        seed_fork_state_ = OrbitClientSeedForkState::kAfterFork;
+      }
+      return;
+    }
+
+    case OrbitClientSeedForkState::kAfterFork: {
+      // 子进程侧
+      int32_t after_result = callbacks_.on_after_fork ? callbacks_.on_after_fork()
+                                                      : ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+      if (after_result < 0) {
+        ORBIT_LOG(OrbitClientLogLevel::kError,
+                  LOG_WRAPPER_FWAPI_FORMAT("after_fork failed, code={}", after_result));
+        seed_fork_state_ = OrbitClientSeedForkState::kDone;
+        return;
+      }
+      if (after_result == 0) {
+        ORBIT_LOG(OrbitClientLogLevel::kInfo, "after_fork done");
+        seed_fork_state_ = OrbitClientSeedForkState::kDone;
+      }
+      return;
+    }
+  }
+}
+
 int32_t OrbitClientRuntime::blocking_seed_process() {
   while (true) {
     OrbitClientRuntimeState state = state_.load();
@@ -786,6 +856,17 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(int32_t po
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
+  if (is_seed_process()) {
+    if (seed_fork_state_ != OrbitClientSeedForkState::kNone) {
+      ORBIT_LOG(OrbitClientLogLevel::kWarning, "notify_process_ready ignored: seed fork flow already started");
+      return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    }
+    seed_fork_state_ = OrbitClientSeedForkState::kBeforeFork;
+    ORBIT_LOG(OrbitClientLogLevel::kInfo,
+              LOG_WRAPPER_FWAPI_FORMAT("seed process: waiting for before_fork on external tick, port={}", port));
+    return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+
   if (enabled_io_thread()) {
     post_to_io_thread([this, port, custom_data] { notify_process_ready_inner(port, custom_data); });
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
@@ -819,6 +900,7 @@ ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
       task();
     }
   }
+  advance_seed_fork();
 }
 
 void OrbitClientRuntime::io_tick() {

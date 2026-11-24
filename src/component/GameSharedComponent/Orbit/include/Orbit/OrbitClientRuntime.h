@@ -110,6 +110,19 @@ class OrbitClientRuntime {
   int32_t request_end_inner(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
                             const std::string& custom_data);
 
+  // 种子流程状态
+  enum class OrbitClientSeedForkState : uint8_t {
+    kNone = 0,
+    kBeforeFork,
+    kWaitingFork,
+    kAfterFork,
+    kDone,
+  };
+
+  void advance_seed_fork();
+
+  OrbitClientSeedForkState seed_fork_state_ = OrbitClientSeedForkState::kNone;
+
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options);
   void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output,
                                      const std::string& config_path) const;
