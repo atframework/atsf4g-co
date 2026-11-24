@@ -35,7 +35,6 @@ constexpr auto kTickInterval = std::chrono::milliseconds{500};
 constexpr auto kReadyDelay = std::chrono::seconds{10};
 constexpr auto kPingDelay = std::chrono::seconds{1};
 constexpr auto kExitDelay = std::chrono::seconds{30};
-constexpr auto kSeedReadyDelay = std::chrono::seconds{15};
 
 int get_process_id() {
 #if defined(_WIN32)
