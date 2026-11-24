@@ -666,6 +666,9 @@ rpc::result_code_type orbit_agent_manager::fork_seed_client_process(rpc::context
   // 基础命令行 + 模板自定义参数，逐个渲染 ${field} 占位符
   std::unordered_map<std::string, std::string> render_values;
   fill_render_values(record, render_values);
+  for (const std::string& custom_arg : record->pre_custom_args) {
+    req->mutable_start_args()->add_custom_args(render_string_template(custom_arg, render_values));
+  }
   for (const std::string& command_arg : client_command_line_) {
     req->mutable_start_args()->add_custom_args(render_string_template(command_arg, render_values));
   }
