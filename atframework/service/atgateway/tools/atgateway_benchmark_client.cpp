@@ -92,6 +92,40 @@ std::unordered_map<::atframework::gateway::libatgw_protocol_api *, connection_t 
 ::atframework::gateway::libatgw_protocol_sdk::proto_callbacks_t g_proto_callbacks;
 std::shared_ptr<::atframework::gateway::v2::crypto_shared_context_t> g_shared_context;
 
+static void close_handle_if_open(uv_handle_t *handle) {
+  if (nullptr != handle && !uv_is_closing(handle)) {
+    uv_close(handle, nullptr);
+  }
+}
+
+static void stop_benchmark(const char *reason) {
+  if (g_stats.stopped) {
+    return;
+  }
+  g_stats.stopped = true;
+  g_stats.stop_time = std::chrono::steady_clock::now();
+  for (auto &conn : g_connections) {
+    if (conn->proto && !conn->closed) {
+      conn->proto->close(0, false, 0, reason);
+    }
+    // Closing the tcp handle is required or the libuv loop never drains
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
+    conn->closed = true;
+  }
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_tick_timer))) {
+    uv_timer_stop(&g_tick_timer);
+    uv_close(reinterpret_cast<uv_handle_t *>(&g_tick_timer), nullptr);
+  }
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_stop_timer))) {
+    uv_timer_stop(&g_stop_timer);
+    uv_close(reinterpret_cast<uv_handle_t *>(&g_stop_timer), nullptr);
+  }
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_send_pump))) {
+    uv_prepare_stop(&g_send_pump);
+    uv_close(reinterpret_cast<uv_handle_t *>(&g_send_pump), nullptr);
+  }
+}
+
 void build_payload(connection_t &conn) {
   conn.payload.resize(g_conf.payload_size);
   // Reserve the first 8 bytes for the per-connection sequence counter.
@@ -150,6 +184,12 @@ int32_t proto_on_write(::atframework::gateway::libatgw_protocol_api *proto, gsl:
     return -1;
   }
   connection_t &conn = *iter->second;
+  if (g_stats.stopped || uv_is_closing(reinterpret_cast<uv_handle_t *>(&conn.tcp_sock))) {
+    if (nullptr != is_done) {
+      *is_done = true;
+    }
+    return UV_ECANCELED;
+  }
 
   char *buffer_start = reinterpret_cast<char *>(buffer.data());
   unsigned int buffer_len = static_cast<unsigned int>(buffer.size());
@@ -177,7 +217,7 @@ int32_t proto_on_write(::atframework::gateway::libatgw_protocol_api *proto, gsl:
         if (iter != g_proto_to_conn.end()) {
           iter->second->write_pending = false;
           iter->second->proto->write_done(status);
-          if (0 != status) {
+          if (0 != status && !(g_stats.stopped && UV_ECANCELED == status)) {
             ++iter->second->errors;
             ++g_stats.errors;
           }
@@ -200,7 +240,7 @@ int32_t proto_on_write(::atframework::gateway::libatgw_protocol_api *proto, gsl:
   conn.sent_bytes += g_conf.payload_size;
   g_stats.sent_bytes += g_conf.payload_size;
   if (nullptr != is_done) {
-    *is_done = 0;  // libuv owns the write now; write_done arrives in the completion callback
+    *is_done = false;  // libuv owns the write now; write_done arrives in the completion callback
   }
   return 0;
 }
@@ -240,6 +280,7 @@ int32_t proto_on_close(::atframework::gateway::libatgw_protocol_api *proto, int3
   auto iter = g_proto_to_conn.find(proto);
   if (iter != g_proto_to_conn.end()) {
     iter->second->closed = true;
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&iter->second->tcp_sock));
   }
   return 0;
 }
@@ -265,6 +306,9 @@ int32_t proto_on_handshake_update(::atframework::gateway::libatgw_protocol_api *
 
 int32_t proto_on_error(::atframework::gateway::libatgw_protocol_api *proto, const char *filename, uint32_t line,
                        int errcode, const char *errmsg) {
+  if (g_stats.stopped && UV_ECANCELED == errcode) {
+    return 0;
+  }
   auto iter = g_proto_to_conn.find(proto);
   if (iter != g_proto_to_conn.end()) {
     ++iter->second->errors;
@@ -287,55 +331,38 @@ void on_tick_timer(uv_timer_t *) {
           .count();
   if (elapsed >= g_conf.duration_sec && !g_stats.stopped) {
     fprintf(stderr, "[dbg] duration reached, stopping\n");
-    g_stats.stopped = true;
-    g_stats.stop_time = std::chrono::steady_clock::now();
-    for (auto &conn : g_connections) {
-      if (conn->proto && !conn->closed) {
-        conn->proto->close(0, 0, "benchmark finished");
-      }
-      // Closing the tcp handle is required or the libuv loop never drains
-      if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock))) {
-        uv_close(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock), nullptr);
-        conn->closed = true;
-      }
-    }
-    uv_timer_stop(&g_stop_timer);
-    uv_prepare_stop(&g_send_pump);
-    if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_send_pump))) {
-      uv_close(reinterpret_cast<uv_handle_t *>(&g_send_pump), nullptr);
-    }
+    stop_benchmark("benchmark finished");
   }
 }
 
 void on_stop_timer(uv_timer_t *) {
   // Safety net: hard-stop if the drain phase takes too long
   if (!g_stats.stopped) {
-    g_stats.stopped = true;
-    g_stats.stop_time = std::chrono::steady_clock::now();
-    for (auto &conn : g_connections) {
-      if (conn->proto && !conn->closed) {
-        conn->proto->close(0, 0, "hard timeout");
-      }
-    }
-    uv_timer_stop(&g_stop_timer);
+    stop_benchmark("hard timeout");
   }
 }
 
 void on_connect(uv_connect_t *req, int status) {
   auto *conn = static_cast<connection_t *>(req->data);
   conn->connect_pending = false;
+  if (g_stats.stopped) {
+    conn->closed = true;
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
+    return;
+  }
   if (0 != status) {
     fprintf(stderr, "[connect] %s:%d failed: %s\n", g_conf.host.c_str(), g_conf.port, uv_strerror(status));
     ++conn->errors;
     ++g_stats.errors;
     conn->closed = true;
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
     return;
   }
 
   conn->proto = std::make_unique<::atframework::gateway::libatgw_protocol_sdk>(g_shared_context);
   conn->proto->set_callbacks(&g_proto_callbacks);
   g_proto_to_conn[conn->proto.get()] = conn;
-  conn->tcp_sock.data = conn->proto.get();
+  conn->tcp_sock.data = conn;
   conn->proto->set_receive_buffer_limit(2 * 1024 * 1024, 0);
   conn->proto->set_send_buffer_limit(2 * 1024 * 1024, 0);
 
@@ -343,12 +370,12 @@ void on_connect(uv_connect_t *req, int status) {
       reinterpret_cast<uv_stream_t *>(&conn->tcp_sock),
       [](uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
         auto *c = static_cast<connection_t *>(handle->data);
-        if (nullptr == c || !c->proto) {
+        if (nullptr == c || !c->proto || g_stats.stopped) {
           buf->base = nullptr;
           buf->len = 0;
           return;
         }
-        uint64_t len = 0;
+        size_t len = 0;
         char *base = nullptr;
         c->proto->alloc_receive_buffer(suggested_size, base, len);
         buf->base = base;
@@ -360,11 +387,14 @@ void on_connect(uv_connect_t *req, int status) {
       },
       [](uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         auto *c = static_cast<connection_t *>(stream->data);
-        if (nullptr == c || !c->proto) {
+        if (nullptr == c || !c->proto || g_stats.stopped) {
           return;
         }
         if (nread < 0) {
-          c->proto->close(0, 0, "peer closed");
+          c->proto->close(0, false, 0, "peer closed");
+          c->closed = true;
+          uv_read_stop(stream);
+          close_handle_if_open(reinterpret_cast<uv_handle_t *>(stream));
           return;
         }
         if (nread > 0) {
@@ -379,6 +409,10 @@ void on_connect(uv_connect_t *req, int status) {
     fprintf(stderr, "uv_read_start failed: %s\n", uv_strerror(res));
     ++conn->errors;
     ++g_stats.errors;
+    conn->proto->close(0, false, 0, "uv_read_start failed");
+    conn->closed = true;
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
+    return;
   }
 
   res = conn->proto->start_session();
@@ -386,6 +420,9 @@ void on_connect(uv_connect_t *req, int status) {
     fprintf(stderr, "start_session failed: %d\n", res);
     ++conn->errors;
     ++g_stats.errors;
+    conn->closed = true;
+    uv_read_stop(reinterpret_cast<uv_stream_t *>(&conn->tcp_sock));
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
   }
 }
 
@@ -406,6 +443,7 @@ void setup_shared_context() {
         ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kSecp256r1);
   }
 
+  config.supported_algorithms.clear();
   if (g_conf.crypto != "none") {
     // aes-256-gcm is the benchmark target
     config.supported_algorithms.push_back(
@@ -415,6 +453,7 @@ void setup_shared_context() {
         ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kNone));
   }
 
+  config.compression_algorithms.clear();
   if (g_conf.compression == "zstd") {
     config.compression_algorithms.push_back(
         ::atframework::gateway::v2::ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kZstd));
@@ -479,13 +518,13 @@ void write_json() {
           g_stats.sent_msgs, g_stats.sent_bytes, g_stats.recv_msgs, g_stats.recv_bytes, g_stats.errors,
           g_stats.handshake_done_count, g_stats.reconnects, elapsed);
   fprintf(out, "  \"per_conn\": [\n");
-  bool first = true;
-  for (auto &conn : g_connections) {
+  for (size_t i = 0; i < g_connections.size(); ++i) {
+    const auto &conn = g_connections[i];
     fprintf(out,
             "    {\"sent\": %" PRIu64 ", \"recv\": %" PRIu64 ", \"bytes_sent\": %" PRIu64 ", \"bytes_recv\": %" PRIu64
             ", \"errors\": %" PRIu64 "}%s\n",
-            conn->sent_msgs, conn->recv_msgs, conn->sent_bytes, conn->recv_bytes, conn->errors, first ? "" : ",");
-    first = false;
+            conn->sent_msgs, conn->recv_msgs, conn->sent_bytes, conn->recv_bytes, conn->errors,
+            (i + 1 < g_connections.size()) ? "," : "");
   }
   fprintf(out, "  ]\n}\n");
   if (out != stdout) {
@@ -572,7 +611,8 @@ int main(int argc, char *argv[]) {
   uv_timer_init(&loop, &g_tick_timer);
   uv_timer_start(&g_tick_timer, on_tick_timer, 1000, 1000);
   uv_timer_init(&loop, &g_stop_timer);
-  uv_timer_start(&g_stop_timer, on_stop_timer, static_cast<uint64_t>(g_conf.duration_sec * 1000) + 30000, 30000);
+  double stop_delay_ms = g_conf.duration_sec > 0.0 ? g_conf.duration_sec * 1000.0 : 0.0;
+  uv_timer_start(&g_stop_timer, on_stop_timer, static_cast<uint64_t>(stop_delay_ms) + 30000, 30000);
 
   g_stats.start_time = std::chrono::steady_clock::now();
 
@@ -591,7 +631,9 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "uv_tcp_connect failed: %s\n", uv_strerror(res));
       conn->connect_pending = false;
       conn->closed = true;
+      ++conn->errors;
       ++g_stats.errors;
+      close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
     }
   }
 
@@ -617,16 +659,28 @@ int main(int argc, char *argv[]) {
   write_json();
   fprintf(stderr, "[dbg] json written\n");
 
-  uv_prepare_stop(&g_send_pump);
-  uv_close(reinterpret_cast<uv_handle_t *>(&g_send_pump), nullptr);
-  uv_close(reinterpret_cast<uv_handle_t *>(&g_tick_timer), nullptr);
-  uv_close(reinterpret_cast<uv_handle_t *>(&g_stop_timer), nullptr);
-  for (auto &conn : g_connections) {
-    if (!conn->closed) {
-      uv_close(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock), nullptr);
-    }
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_send_pump))) {
+    uv_prepare_stop(&g_send_pump);
+    uv_close(reinterpret_cast<uv_handle_t *>(&g_send_pump), nullptr);
   }
-  uv_run(&loop, UV_RUN_NOWAIT);
-  uv_loop_close(&loop);
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_tick_timer))) {
+    uv_timer_stop(&g_tick_timer);
+    uv_close(reinterpret_cast<uv_handle_t *>(&g_tick_timer), nullptr);
+  }
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t *>(&g_stop_timer))) {
+    uv_timer_stop(&g_stop_timer);
+    uv_close(reinterpret_cast<uv_handle_t *>(&g_stop_timer), nullptr);
+  }
+  for (auto &conn : g_connections) {
+    close_handle_if_open(reinterpret_cast<uv_handle_t *>(&conn->tcp_sock));
+  }
+  uv_run(&loop, UV_RUN_DEFAULT);
+  int close_result = uv_loop_close(&loop);
+  if (0 != close_result) {
+    fprintf(stderr, "uv_loop_close failed: %s\n", uv_strerror(close_result));
+  }
+  g_proto_to_conn.clear();
+  g_connections.clear();
+  g_loop = nullptr;
   return 0;
 }
