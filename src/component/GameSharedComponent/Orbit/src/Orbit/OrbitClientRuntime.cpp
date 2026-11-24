@@ -322,7 +322,7 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char *argv[], const 
 
 ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::enabled() const { return enabled_; }
 
-ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::enabled_io_thread() const { return options_.io_thread; }
+ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::enabled_io_thread() const { return io_thread_enabled_.load(); }
 
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::post_to_io_thread(std::function<void()> task) {
   if (!task) {
@@ -520,7 +520,8 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
 
   app_ = std::make_unique<::atframework::atapp::app>();
   install_app_callbacks();
-  // 把 atapp 的停止流程接到 Orbit 的退出流程（进程被 kill 时 atapp 会走 module stop）
+  // 把 atapp 的停止流程接到 Orbit 的退出流程（进程被 kill 时 atapp 会走 module
+  // stop）
   app_->add_module(std::make_shared<stop_module_t>());
   app_->add_log_sink_maker("orbit_client", atapp_log_maker_for_orbit(callbacks.on_log));
   int app_init_result =
@@ -548,13 +549,15 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   }
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "runtime initialized");
 
-  if (enabled_io_thread()) {
-    io_thread_running_.store(true);
+  if (options_.io_thread) {
+    io_thread_enabled_.store(true);
     io_thread_ = std::thread([this] {
-      while (io_thread_running_.load() && app_) {
+      io_thread_running_.store(true);
+      while (io_thread_enabled_.load() && app_) {
         io_tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
       }
+      io_thread_running_.store(false);
     });
     io_thread_.detach();
   }
@@ -662,11 +665,10 @@ void OrbitClientRuntime::advance_seed_fork() {
       return;
 
     case OrbitClientSeedForkState::kBeforeFork: {
-      int32_t before_result = callbacks_.on_before_fork ? callbacks_.on_before_fork()
-                                                        : ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+      int32_t before_result =
+          callbacks_.on_before_fork ? callbacks_.on_before_fork() : ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
       if (before_result < 0) {
-        ORBIT_LOG(OrbitClientLogLevel::kError,
-                  LOG_WRAPPER_FWAPI_FORMAT("before_fork failed, code={}", before_result));
+        ORBIT_LOG(OrbitClientLogLevel::kError, LOG_WRAPPER_FWAPI_FORMAT("before_fork failed, code={}", before_result));
         seed_fork_state_ = OrbitClientSeedForkState::kDone;
         request_end(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, before_result, "Before Fork Failed");
         return;
@@ -674,7 +676,15 @@ void OrbitClientRuntime::advance_seed_fork() {
       if (before_result > 0) {
         return;
       }
-
+      // 关闭IO线程
+      io_thread_enabled_.store(false);
+      if (io_thread_running_.load()) {
+        ORBIT_LOG(OrbitClientLogLevel::kWarning, LOG_WRAPPER_FWAPI_FORMAT("begin stop io thread"));
+        while (io_thread_running_.load()) {
+          // 等待
+        }
+        ORBIT_LOG(OrbitClientLogLevel::kWarning, LOG_WRAPPER_FWAPI_FORMAT("end stop io thread"));
+      }
       // 预热完成：上报种子就绪，然后进入阻塞等待 fork
       seed_fork_state_ = OrbitClientSeedForkState::kWaitingFork;
       int32_t ready_result = notify_seed_process_ready_inner();
@@ -687,7 +697,7 @@ void OrbitClientRuntime::advance_seed_fork() {
       }
 
       ORBIT_LOG(OrbitClientLogLevel::kInfo, "seed ready, blocking until fork");
-      int32_t wait_result = blocking_seed_process();
+      int32_t wait_result = blocking_seed_process(child_data_);
       if (wait_result < 0) {
         ORBIT_LOG(OrbitClientLogLevel::kError,
                   LOG_WRAPPER_FWAPI_FORMAT("blocking_seed_process failed, code={}", wait_result));
@@ -704,14 +714,12 @@ void OrbitClientRuntime::advance_seed_fork() {
       }
       return;
     }
-
     case OrbitClientSeedForkState::kAfterFork: {
       // 子进程侧
-      int32_t after_result = callbacks_.on_after_fork ? callbacks_.on_after_fork()
+      int32_t after_result = callbacks_.on_after_fork ? callbacks_.on_after_fork(child_data_)
                                                       : ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
       if (after_result < 0) {
-        ORBIT_LOG(OrbitClientLogLevel::kError,
-                  LOG_WRAPPER_FWAPI_FORMAT("after_fork failed, code={}", after_result));
+        ORBIT_LOG(OrbitClientLogLevel::kError, LOG_WRAPPER_FWAPI_FORMAT("after_fork failed, code={}", after_result));
         seed_fork_state_ = OrbitClientSeedForkState::kDone;
         return;
       }
@@ -724,7 +732,7 @@ void OrbitClientRuntime::advance_seed_fork() {
   }
 }
 
-int32_t OrbitClientRuntime::blocking_seed_process() {
+int32_t OrbitClientRuntime::blocking_seed_process(google::protobuf::Map<std::string, std::string> &child_data) {
   while (true) {
     OrbitClientRuntimeState state = state_.load();
     if (state == OrbitClientRuntimeState::kStopping || state == OrbitClientRuntimeState::kStopped) {
@@ -735,7 +743,7 @@ int32_t OrbitClientRuntime::blocking_seed_process() {
     if (callbacks_.on_seed_waiting_tick) {
       callbacks_.on_seed_waiting_tick();
     }
-    int32_t res = process_fork_request();
+    int32_t res = process_fork_request(child_data);
     if (res < 0) {
       ORBIT_LOG(OrbitClientLogLevel::kError, LOG_WRAPPER_FWAPI_FORMAT("process_fork_request failed, code={}", res));
       return res;
@@ -761,7 +769,7 @@ void OrbitClientRuntime::on_received_stop_request(const ::atframework::orbit::AT
   request_end(request.reason(), 0);
 }
 
-int32_t OrbitClientRuntime::process_fork_request() {
+int32_t OrbitClientRuntime::process_fork_request(google::protobuf::Map<std::string, std::string> &child_data) {
   if (!is_seed_process()) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "process_fork_request rejected: not a seed process");
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -802,8 +810,10 @@ int32_t OrbitClientRuntime::process_fork_request() {
   }
   options_.custom_launch_arguments =
       std::vector<std::string>(request.start_args().custom_args().begin(), request.start_args().custom_args().end());
+  child_data = request.start_args().child_data();
   return init(request.app_id(), options_,
-              callbacks_);  // TODO(yousongyang) Init内部应该还有问题 但是传入参数是正确的
+              callbacks_);  // TODO(yousongyang) Init内部应该还有问题
+                            // 但是传入参数是正确的
 }
 
 ORBIT_CLIENT_SDK_API const std::vector<std::string> &OrbitClientRuntime::get_custom_launch_arguments() const {
@@ -954,7 +964,8 @@ void OrbitClientRuntime::io_tick() {
 
   if (state_.load() == OrbitClientRuntimeState::kStopping) {
     // 兜底：在途请求可能已在重试/超时流程里全部结束；
-    // app_->stop() 之后需要继续跑 run_once（由外层 tick/io 线程驱动）才能等到 kStopped
+    // app_->stop() 之后需要继续跑 run_once（由外层 tick/io 线程驱动）才能等到
+    // kStopped
     finish_stopping_if_ready();
   }
 }
@@ -985,7 +996,8 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
   last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   if (send_result < 0) {
     ORBIT_LOG(OrbitClientLogLevel::kError,
-              LOG_WRAPPER_FWAPI_FORMAT("failed to send client_heartbeat request, code={}, next attempt after {} second",
+              LOG_WRAPPER_FWAPI_FORMAT("failed to send client_heartbeat request, code={}, next "
+                                       "attempt after {} second",
                                        send_result, options_.heartbeat_interval_second));
     return send_result;
   }
@@ -1135,8 +1147,9 @@ void OrbitClientRuntime::finalize_shutdown() {
   }
 
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "finalize shutdown");
-  // 只请求停止：app::stop() 仅置 kStoping 并 uv_stop，kStopped 要等下一次 run_once 里 uv_run 返回后才置位。
-  // 这里不能停 io 线程，否则没人再跑 run_once，收尾会永远卡在 kStopping。
+  // 只请求停止：app::stop() 仅置 kStoping 并 uv_stop，kStopped 要等下一次
+  // run_once 里 uv_run 返回后才置位。 这里不能停 io 线程，否则没人再跑
+  // run_once，收尾会永远卡在 kStopping。
   if (app_) {
     app_->stop();
   }
@@ -1169,14 +1182,15 @@ void OrbitClientRuntime::finish_stopping_if_ready() {
 
   try_finalize_shutdown();
 
-  // app 未初始化或已关闭时，收尾已完成；否则还要再跑一轮 run_once 才能观察到 kStopped
+  // app 未初始化或已关闭时，收尾已完成；否则还要再跑一轮 run_once 才能观察到
+  // kStopped
   if (nullptr != app_ && app_->is_inited() && !app_->is_closed()) {
     return;
   }
 
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "stopping finalized");
   set_state(OrbitClientRuntimeState::kStopped);
-  io_thread_running_.store(false);
+  io_thread_enabled_.store(false);
   reset();
   if (callbacks_.on_request_stop) {
     if (enabled_io_thread()) {
@@ -1192,8 +1206,9 @@ ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::is_shutdown_finalized() const noex
 }
 
 // ---- stop_module_t ----
-// 该 module 只在 atapp 的停止流程里被调用，此时已经在 app::run_ev_loop 的调用栈内，
-// 因此这里不能触发 finish_stopping_if_ready（它会 reset() 释放 app_），只做两件事：
+// 该 module 只在 atapp 的停止流程里被调用，此时已经在 app::run_ev_loop
+// 的调用栈内， 因此这里不能触发 finish_stopping_if_ready（它会 reset() 释放
+// app_），只做两件事：
 // 1. 把停止串到 Orbit 的 request_end，让在途/可靠请求继续收尾
 // 2. 未收尾完成时返回 > 0，让 atapp 保留 kStopped=false 并继续驱动 uv_run
 int OrbitClientRuntime::stop_module_t::init() { return 0; }
@@ -1210,7 +1225,8 @@ int OrbitClientRuntime::stop_module_t::stop() {
 
 int OrbitClientRuntime::stop_module_t::timeout() {
   OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
-                                "orbit client stop timeout, in-flight requests are still pending, stop will be forced");
+                                "orbit client stop timeout, in-flight requests "
+                                "are still pending, stop will be forced");
   return 0;
 }
 

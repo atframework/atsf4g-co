@@ -83,14 +83,6 @@ const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClie
   return "UNKNOWN";
 }
 
-static void waiting_and_tick(std::chrono::seconds duration) {
-  auto start_time = std::chrono::steady_clock::now();
-  while (std::chrono::steady_clock::now() - start_time < duration) {
-    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::tick();
-    std::this_thread::sleep_for(kTickInterval);
-  }
-}
-
 }  // namespace
 
 ORBIT_RPC_HANDLE(echo, "atframework.shared.OrbitServerRpcService/echo", PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
@@ -121,9 +113,7 @@ int main(int argc, char* argv[]) {
               << '\n';
   };
 
-  {
-    ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService);
-  }
+  { ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService); }
 
   if (log_file.is_open()) {
     write_log_line(atfw::util::string::format("log file: {}", log_file_path));
@@ -155,29 +145,6 @@ int main(int argc, char* argv[]) {
 
   bool ready_sent = false;
   bool ping_sent = false;
-
-  if (ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::is_seed_process()) {
-    write_log_line(atfw::util::string::format("seed process, waiting for {} seconds", kSeedReadyDelay.count()));
-    waiting_and_tick(kSeedReadyDelay);
-    // Seed进程准备成功
-    int32_t seed_ready_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::notify_seed_process_ready();
-    if (seed_ready_result != 0) {
-      write_log_line(
-          atfw::util::string::format("seed process notify_seed_process_ready failed, code={}", seed_ready_result));
-      return seed_ready_result;
-    }
-
-    int32_t blocking_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::blocking_seed_process();
-    if (blocking_result != 0) {
-      write_log_line(atfw::util::string::format("seed process blocking_seed_process failed, code={}", blocking_result));
-      return blocking_result;
-    }
-
-    if (ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::is_seed_process()) {
-      // Seed结束 退出
-      return 0;
-    }
-  }
 
   auto begin_timepoint = std::chrono::steady_clock::now();
   auto ready_timepoint = begin_timepoint;

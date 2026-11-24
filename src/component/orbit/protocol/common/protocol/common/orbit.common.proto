@@ -79,6 +79,7 @@ message DClientStartArgs {
   DClientId client_id = 1;
   repeated string custom_args = 2;
   uint64 client_instance_id = 3;
+  map<string, string> child_data = 4;
 }
 
 // 启动请求参数。接入端只传 client_id 与 client_template_id，其余参数由各进程读 Excel 配置

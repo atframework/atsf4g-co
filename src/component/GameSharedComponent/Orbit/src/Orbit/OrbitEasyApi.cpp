@@ -28,12 +28,6 @@ ORBIT_CLIENT_SDK_API const std::string& find_custom_launch_argument(const std::s
   return orbit_client_sdk::OrbitClientRuntime::me()->find_custom_launch_argument(key);
 }
 
-ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready() {
-  return orbit_client_sdk::OrbitClientRuntime::me()->notify_seed_process_ready();
-}
-ORBIT_CLIENT_SDK_API int32_t blocking_seed_process() {
-  return orbit_client_sdk::OrbitClientRuntime::me()->blocking_seed_process();
-}
 ORBIT_CLIENT_SDK_API int32_t notify_process_ready(int32_t port, const std::string& custom_data) {
   return orbit_client_sdk::OrbitClientRuntime::me()->notify_process_ready(port, custom_data);
 }

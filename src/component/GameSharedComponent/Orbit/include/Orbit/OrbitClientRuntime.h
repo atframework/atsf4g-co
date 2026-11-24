@@ -59,10 +59,10 @@ class OrbitClientRuntime {
  public:
   ORBIT_CLIENT_SDK_API virtual ~OrbitClientRuntime();
 
-  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const std::string& config_path, bool io_thread,
-                                const OrbitClientCallbacks& callbacks);
-  ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
-                                const OrbitClientCallbacks& callbacks);
+  ORBIT_CLIENT_SDK_API int init(int argc, char *argv[], const std::string &config_path, bool io_thread,
+                                const OrbitClientCallbacks &callbacks);
+  ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions &options,
+                                const OrbitClientCallbacks &callbacks);
   ORBIT_CLIENT_SDK_API void tick();
   ORBIT_CLIENT_SDK_API void reset();
 
@@ -76,39 +76,39 @@ class OrbitClientRuntime {
   // 种子进程准备成功
   ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready();
   // 种子进程等待Fork通知
-  ORBIT_CLIENT_SDK_API int32_t blocking_seed_process();
+  ORBIT_CLIENT_SDK_API int32_t blocking_seed_process(google::protobuf::Map<std::string, std::string> &child_data);
 
   // 进程已准备成功 可以通知Agent了
-  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(int32_t port, const std::string& custom_data = std::string{});
+  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(int32_t port, const std::string &custom_data = std::string{});
   // 这个接口会返回额外启动参数
-  ORBIT_CLIENT_SDK_API const std::vector<std::string>& get_custom_launch_arguments() const;
+  ORBIT_CLIENT_SDK_API const std::vector<std::string> &get_custom_launch_arguments() const;
   // 通过Key查找额外启动参数
-  ORBIT_CLIENT_SDK_API const std::string& find_custom_launch_argument(const std::string& key) const;
+  ORBIT_CLIENT_SDK_API const std::string &find_custom_launch_argument(const std::string &key) const;
   // 发送消息给Server
   ORBIT_CLIENT_SDK_API int32_t send_to_server(
-      const std::string& payload, OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback = nullptr,
-      const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
+      const std::string &payload, OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback = nullptr,
+      const OrbitClientRequestOptions &request_options = OrbitClientRequestOptions{});
   // 请求停止服务
   ORBIT_CLIENT_SDK_API int32_t request_end(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
-                                           const std::string& custom_data = std::string{});
+                                           const std::string &custom_data = std::string{});
 
-  ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const char* file_name, int line_number,
+  ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const char *file_name, int line_number,
                                 ::atframework::util::nostd::string_view message) const;
-  ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
+  ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg);
 
   // 在途/可靠请求是否已收尾完成（finalize_shutdown 已置位）；
   // atapp 的 stop module 靠它决定能否继续停止
   ORBIT_CLIENT_SDK_API bool is_shutdown_finalized() const noexcept;
 
-  using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
+  using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg &)>;
 
  private:
   void io_tick();
 
   int32_t notify_seed_process_ready_inner();
-  int32_t notify_process_ready_inner(int32_t port, const std::string& custom_data);
+  int32_t notify_process_ready_inner(int32_t port, const std::string &custom_data);
   int32_t request_end_inner(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
-                            const std::string& custom_data);
+                            const std::string &custom_data);
 
   // 种子流程状态
   enum class OrbitClientSeedForkState : uint8_t {
@@ -123,41 +123,41 @@ class OrbitClientRuntime {
 
   OrbitClientSeedForkState seed_fork_state_ = OrbitClientSeedForkState::kNone;
 
-  int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options);
-  void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output,
-                                     const std::string& config_path) const;
+  int extract_launch_options(int argc, char *argv[], uint64_t &app_id, OrbitClientOptions &options);
+  void build_client_launch_arguments(uint64_t app_id, std::vector<std::string> &output,
+                                     const std::string &config_path) const;
   void install_app_callbacks();
   void restore_app_callbacks();
-  int on_atapp_forward_request(::atframework::atapp::app& app,
-                               const ::atframework::atapp::app::message_sender_t& source,
-                               const ::atframework::atapp::app::message_t& msg);
-  int on_atapp_forward_response(::atframework::atapp::app& app,
-                                const ::atframework::atapp::app::message_sender_t& source,
-                                const ::atframework::atapp::app::message_t& msg, int32_t error_code);
-  int on_atapp_connected(::atframework::atapp::app& app, ::atbus::endpoint& ep, int status);
-  int on_atapp_disconnected(::atframework::atapp::app& app, ::atbus::endpoint& ep, int status);
-  bool should_handle_atapp_message(const ::atframework::atapp::app& app,
-                                   const ::atframework::atapp::app::message_sender_t& source,
-                                   const ::atframework::atapp::app::message_t& msg) const;
+  int on_atapp_forward_request(::atframework::atapp::app &app,
+                               const ::atframework::atapp::app::message_sender_t &source,
+                               const ::atframework::atapp::app::message_t &msg);
+  int on_atapp_forward_response(::atframework::atapp::app &app,
+                                const ::atframework::atapp::app::message_sender_t &source,
+                                const ::atframework::atapp::app::message_t &msg, int32_t error_code);
+  int on_atapp_connected(::atframework::atapp::app &app, ::atbus::endpoint &ep, int status);
+  int on_atapp_disconnected(::atframework::atapp::app &app, ::atbus::endpoint &ep, int status);
+  bool should_handle_atapp_message(const ::atframework::atapp::app &app,
+                                   const ::atframework::atapp::app::message_sender_t &source,
+                                   const ::atframework::atapp::app::message_t &msg) const;
 
   void set_state(OrbitClientRuntimeState next_state);
 
   bool wait_connect();
-  int32_t send_heartbeat(const OrbitClientLoadSnapshot& snapshot);
-  void on_heartbeat_response(int32_t result, const ::atframework::orbit::ATDClientHeartbeatRsp& response);
+  int32_t send_heartbeat(const OrbitClientLoadSnapshot &snapshot);
+  void on_heartbeat_response(int32_t result, const ::atframework::orbit::ATDClientHeartbeatRsp &response);
   // 未被 start_client 认领时，根据心跳响应做兜底自检
   void check_agent_alive(time_t now);
   time_t get_agent_alive_timeout_second() const;
-  void on_received_message(const std::string& message);
+  void on_received_message(const std::string &message);
 
-  int32_t on_received_fork_request(const ::atframework::orbit::ATDForkSeedClientReq& request);
-  void on_received_stop_request(const ::atframework::orbit::ATDStopClientReq& request);
-  int32_t process_fork_request();
+  int32_t on_received_fork_request(const ::atframework::orbit::ATDForkSeedClientReq &request);
+  void on_received_stop_request(const ::atframework::orbit::ATDStopClientReq &request);
+  int32_t process_fork_request(google::protobuf::Map<std::string, std::string> &child_data);
 
  private:
   struct pending_client_request_t {
     std::string packed_message;
-    const ::google::protobuf::MethodDescriptor* method = nullptr;
+    const ::google::protobuf::MethodDescriptor *method = nullptr;
     client_request_raw_callback_t callback;
     time_t timeout_second = 4;
     time_t deadline = 0;
@@ -167,32 +167,32 @@ class OrbitClientRuntime {
     bool not_count_in_shutdown_wait = false;
   };
 
-  int32_t send_request_message(const ::google::protobuf::MessageLite& body,
-                               const ::google::protobuf::MethodDescriptor& method,
+  int32_t send_request_message(const ::google::protobuf::MessageLite &body,
+                               const ::google::protobuf::MethodDescriptor &method,
                                client_request_raw_callback_t callback,
-                               const OrbitClientRequestOptions& request_options);
-  int32_t send_response_message(const ::atframework::SSMsgHead& req_head, const ::google::protobuf::MessageLite& body,
-                                const ::google::protobuf::MethodDescriptor& method);
-  int32_t send_stream_message(const ::google::protobuf::MessageLite& body,
-                              const ::google::protobuf::MethodDescriptor& method);
-  int32_t pack_request_message(std::string& output, uint64_t& task_id,
-                               const ::google::protobuf::MethodDescriptor& method,
-                               const ::google::protobuf::MessageLite& body);
-  int32_t pack_response_message(const ::atframework::SSMsgHead& req_head, std::string& output,
-                                const ::google::protobuf::MethodDescriptor& method,
-                                const ::google::protobuf::MessageLite& body);
-  int32_t pack_stream_message(std::string& output, const ::google::protobuf::MethodDescriptor& method,
-                              const ::google::protobuf::MessageLite& body);
-  int32_t send_message(const std::string& packed_message, const google::protobuf::MethodDescriptor& method,
+                               const OrbitClientRequestOptions &request_options);
+  int32_t send_response_message(const ::atframework::SSMsgHead &req_head, const ::google::protobuf::MessageLite &body,
+                                const ::google::protobuf::MethodDescriptor &method);
+  int32_t send_stream_message(const ::google::protobuf::MessageLite &body,
+                              const ::google::protobuf::MethodDescriptor &method);
+  int32_t pack_request_message(std::string &output, uint64_t &task_id,
+                               const ::google::protobuf::MethodDescriptor &method,
+                               const ::google::protobuf::MessageLite &body);
+  int32_t pack_response_message(const ::atframework::SSMsgHead &req_head, std::string &output,
+                                const ::google::protobuf::MethodDescriptor &method,
+                                const ::google::protobuf::MessageLite &body);
+  int32_t pack_stream_message(std::string &output, const ::google::protobuf::MethodDescriptor &method,
+                              const ::google::protobuf::MessageLite &body);
+  int32_t send_message(const std::string &packed_message, const google::protobuf::MethodDescriptor &method,
                        bool reliable = false, uint64_t task_id = 0);
 
-  int32_t unpack_message(atframework::SSMsg& output, const std::string& message) const;
-  int32_t dispatch_request_response(const atframework::SSMsg& message);
-  int32_t dispatch_received_message(const atframework::SSMsg& message);
-  bool retry_pending_request(uint64_t task_id, pending_client_request_t& pending, int32_t error_code,
-                             const char* reason);
-  void complete_pending_request(uint64_t task_id, int32_t error_code, const atframework::SSMsg* message);
-  void reschedule_pending_request_timeout(uint64_t task_id, pending_client_request_t& pending);
+  int32_t unpack_message(atframework::SSMsg &output, const std::string &message) const;
+  int32_t dispatch_request_response(const atframework::SSMsg &message);
+  int32_t dispatch_received_message(const atframework::SSMsg &message);
+  bool retry_pending_request(uint64_t task_id, pending_client_request_t &pending, int32_t error_code,
+                             const char *reason);
+  void complete_pending_request(uint64_t task_id, int32_t error_code, const atframework::SSMsg *message);
+  void reschedule_pending_request_timeout(uint64_t task_id, pending_client_request_t &pending);
   void execute_pending_request_timeouts();
   uint64_t allocate_sequence();
   void finalize_shutdown();
@@ -202,37 +202,38 @@ class OrbitClientRuntime {
   void finish_stopping_if_ready();
   OrbitClientLoadSnapshot make_default_load_snapshot();
 
-  int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatReq& request,
+  int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatReq &request,
                                     OrbitClientRpcCallback<::atframework::orbit::ATDClientHeartbeatRsp> callback,
-                                    const OrbitClientRequestOptions& request_options);
-  int32_t rpc_send_send_to_server(const ::atframework::orbit::DTASendToServerReq& request,
+                                    const OrbitClientRequestOptions &request_options);
+  int32_t rpc_send_send_to_server(const ::atframework::orbit::DTASendToServerReq &request,
                                   OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback,
-                                  const OrbitClientRequestOptions& request_options);
-  int32_t rpc_send_client_start(const ::atframework::orbit::DTAClientStartReq& request,
+                                  const OrbitClientRequestOptions &request_options);
+  int32_t rpc_send_client_start(const ::atframework::orbit::DTAClientStartReq &request,
                                 OrbitClientRpcCallback<::atframework::orbit::ATDClientStartRsp> callback,
-                                const OrbitClientRequestOptions& request_options);
-  int32_t rpc_send_client_exit(const ::atframework::orbit::DTAClientExitReq& request,
+                                const OrbitClientRequestOptions &request_options);
+  int32_t rpc_send_client_exit(const ::atframework::orbit::DTAClientExitReq &request,
                                OrbitClientRpcCallback<::atframework::orbit::ATDClientExitRsp> callback,
-                               const OrbitClientRequestOptions& request_options);
-  int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
-                                        ::atframework::orbit::ATDForwardToClientReq& request);
-  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
-                                       ::atframework::orbit::ATDForkSeedClientReq& request);
-  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head,
-                                  ::atframework::orbit::ATDStopClientReq& request);
-  int32_t rpc_receive_start_client(const ::atframework::SSMsgHead& req_head,
-                                   ::atframework::orbit::ATDStartClientReq& request);
+                               const OrbitClientRequestOptions &request_options);
+  int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead &req_head,
+                                        ::atframework::orbit::ATDForwardToClientReq &request);
+  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead &req_head,
+                                       ::atframework::orbit::ATDForkSeedClientReq &request);
+  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead &req_head,
+                                  ::atframework::orbit::ATDStopClientReq &request);
+  int32_t rpc_receive_start_client(const ::atframework::SSMsgHead &req_head,
+                                   ::atframework::orbit::ATDStartClientReq &request);
 
  private:
   // 把 atapp 的停止流程接到 Orbit 的退出流程：
   // atapp 收到 stop 后（含被 kill）会调用各 module 的 stop()，
-  // 返回 > 0 时 atapp 会保留 kStopped=false，并在后续 run_ev_loop 中再次调用，直到返回 <= 0 或 stop_timeout 超时
+  // 返回 > 0 时 atapp 会保留 kStopped=false，并在后续 run_ev_loop
+  // 中再次调用，直到返回 <= 0 或 stop_timeout 超时
   class stop_module_t : public ::atframework::atapp::module_impl {
    public:
     int init() override;
     int stop() override;
     int timeout() override;
-    const char* name() const override;
+    const char *name() const override;
   };
 
   std::unique_ptr<::atframework::atapp::app> app_;
@@ -253,13 +254,17 @@ class OrbitClientRuntime {
   // 心跳响应里的 Agent 实例标识与拉起时不一致
   bool agent_instance_id_mismatch_;
   // finalize_shutdown 是否已执行，避免收尾期间被重复调用。
-  // 写入在 io 线程（finalize_shutdown），读取在 atapp 的 stop 流程（run_once 调用栈内），因此用原子量
+  // 写入在 io 线程（finalize_shutdown），读取在 atapp 的 stop 流程（run_once
+  // 调用栈内），因此用原子量
   std::atomic<bool> shutdown_finalized_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
 
+  std::atomic<bool> io_thread_enabled_;
   std::atomic<bool> io_thread_running_;
   std::thread io_thread_;
+
+  google::protobuf::Map<std::string, std::string> child_data_;
 
   tbb::concurrent_queue<::atframework::orbit::ATDForkSeedClientReq> pending_fork_requests_;
   tbb::concurrent_queue<std::function<void()>> io_task_;
@@ -274,7 +279,7 @@ class OrbitClientRuntime {
 
  public:
   using orbit_client_send_hook_t = std::function<int32_t(
-      const std::string& rpc_full_name, const std::string& packed_message, uint64_t task_id, bool reliable)>;
+      const std::string &rpc_full_name, const std::string &packed_message, uint64_t task_id, bool reliable)>;
   ORBIT_CLIENT_SDK_API void set_unit_test_send_hook(orbit_client_send_hook_t hook);
 #endif
 

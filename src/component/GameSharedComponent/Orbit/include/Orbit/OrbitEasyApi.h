@@ -23,8 +23,6 @@ ORBIT_CLIENT_SDK_API bool is_seed_process();
 ORBIT_CLIENT_SDK_API const std::vector<std::string>& get_custom_launch_arguments();
 ORBIT_CLIENT_SDK_API const std::string& find_custom_launch_argument(const std::string& key);
 
-ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready();
-ORBIT_CLIENT_SDK_API int32_t blocking_seed_process();
 ORBIT_CLIENT_SDK_API int32_t notify_process_ready(int32_t port, const std::string& custom_data = std::string{});
 ORBIT_CLIENT_SDK_API int32_t request_end(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
                                          const std::string& custom_data = std::string{});

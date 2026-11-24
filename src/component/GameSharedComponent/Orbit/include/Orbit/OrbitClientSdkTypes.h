@@ -45,12 +45,14 @@ struct OrbitClientLoadSnapshot {
 
 struct OrbitClientOptions {
   std::string client_id;
-  // Agent 拉起进程时分配的通信标识，进程存活期内不变；Client 与 Agent 之间的报文都用它
+  // Agent 拉起进程时分配的通信标识，进程存活期内不变；Client 与 Agent
+  // 之间的报文都用它
   uint64_t client_instance_id = 0;
   std::string agent_endpoint;
   // Agent 实例唯一标识，随启动参数下发；心跳响应里的值不一致说明 Agent 已重启
   std::string agent_instance_id;
-  // 未被 start_client 认领时，多久收不到心跳响应就自行退出；<=0 时取 3 个心跳周期
+  // 未被 start_client 认领时，多久收不到心跳响应就自行退出；<=0 时取 3
+  // 个心跳周期
   time_t agent_alive_timeout_second = 0;
   time_t heartbeat_interval_second = 5;
   std::vector<std::string> config_env;
@@ -71,25 +73,28 @@ struct OrbitClientRequestOptions {
 
 struct OrbitClientLogRecord {
   OrbitClientLogLevel level = OrbitClientLogLevel::kInfo;
-  const char* file_name = nullptr;
+  const char *file_name = nullptr;
   int line_number = 0;
   ::atframework::util::nostd::string_view category;
   ::atframework::util::nostd::string_view message;
 };
 
-using OrbitClientLogCallback = std::function<void(const OrbitClientLogRecord& record)>;
-using OrbitClientMessageCallback = std::function<void(const std::string& payload)>;
+using OrbitClientLogCallback = std::function<void(const OrbitClientLogRecord &record)>;
+using OrbitClientMessageCallback = std::function<void(const std::string &payload)>;
 using OrbitClientStopCallback = std::function<void()>;
 using OrbitClientSeedWaitingTickCallback = std::function<void()>;
 // Fork 阶段回调：>0 表示还没完成（SDK 继续轮询），==0 成功，<0 失败
-using OrbitClientForkPhaseCallback = std::function<int32_t()>;
-// 收到 Agent 的 start_client：调用方上报 Ready 且被接受后，Agent 一定会下发该通知，
-// 此时进程真正可用，可以开始对外服务；client_id 为空表示沿用拉起时下发的值
+using OrbitClientBeforeForkPhaseCallback = std::function<int32_t()>;
+using OrbitClientAfterForkPhaseCallback =
+    std::function<int32_t(const google::protobuf::Map<std::string, std::string> &custom_data)>;
+// 收到 Agent 的 start_client：调用方上报 Ready 且被接受后，Agent
+// 一定会下发该通知， 此时进程真正可用，可以开始对外服务；client_id
+// 为空表示沿用拉起时下发的值
 using OrbitClientStartCallback = std::function<void(
-    const std::string& client_id, const google::protobuf::Map<std::string, std::string>& custom_data)>;
+    const std::string &client_id, const google::protobuf::Map<std::string, std::string> &custom_data)>;
 
 template <class TResponse>
-using OrbitClientRpcCallback = std::function<void(int32_t, const TResponse& response)>;
+using OrbitClientRpcCallback = std::function<void(int32_t, const TResponse &response)>;
 
 struct OrbitClientCallbacks {
   // 日志接口 io_thread True 时 on_log !!需要线程安全!!
@@ -105,10 +110,8 @@ struct OrbitClientCallbacks {
   // 等待Fork时需要注册的Tick回调
   OrbitClientSeedWaitingTickCallback on_seed_waiting_tick = nullptr;
 
-  // Seed：进入阻塞等待之前调用，返回 0 之后 SDK 才上报种子就绪
-  OrbitClientForkPhaseCallback on_before_fork = nullptr;
-  // Child：SDK 完成自身重建之后调用，返回 0 表示子进程已可对外服务
-  OrbitClientForkPhaseCallback on_after_fork = nullptr;
+  OrbitClientBeforeForkPhaseCallback on_before_fork = nullptr;
+  OrbitClientAfterForkPhaseCallback on_after_fork = nullptr;
 };
 
 }  // namespace orbit_client_sdk
