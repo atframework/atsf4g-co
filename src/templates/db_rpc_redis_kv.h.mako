@@ -86,3 +86,25 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type partly_get_${partly_fi
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context &ctx, gsl::span<table_key_t> keys,
                                            std::vector<batch_get_result_t> &rsp);
 % endfor
+
+% for partly_save in index.partly_save:
+<%
+    partly_save_field_name = ""
+    if partly_save.name != "":
+        partly_save_field_name += partly_save.name
+    else:
+        # Field validation for the generated body lives in db_rpc_redis_kv.cpp.mako, which has all_fields.
+        for field in partly_save.fields:
+            partly_save_field_name += field
+%>
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type partly_save_${partly_save_field_name}(rpc::context &ctx
+%     for key_field in key_fields:
+                                                         , ${key_field["cpp_type"]} ${key_field["raw_name"]}
+%     endfor
+                                                         , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store
+%     if index.enable_cas:
+                                                         , uint64_t &version);
+%     else:
+                                                         );
+%     endif
+% endfor

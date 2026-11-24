@@ -487,6 +487,9 @@ bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t 
     case op_type::kv_set:
       res = on_kv_set(req);
       break;
+    case op_type::kv_partly_set:
+      res = on_kv_partly_set(req);
+      break;
     case op_type::kv_insert:
       res = on_kv_insert(req);
       break;
@@ -557,6 +560,10 @@ bool mock_db::apply_table_handlers(const rpc::db::hash_table::unit_test_request 
     if (nullptr != req.partly_get_fields && req.partly_get_field_count > 0) {
       context.partly_get_fields =
           gsl::span<const gsl::string_view>{req.partly_get_fields, static_cast<size_t>(req.partly_get_field_count)};
+    }
+    if (nullptr != req.partly_set_fields && req.partly_set_field_count > 0) {
+      context.partly_set_fields =
+          gsl::span<const google::protobuf::FieldDescriptor *const>{req.partly_set_fields, req.partly_set_field_count};
     }
     context.inc_field = req.inc_field;
     context.list_index = req.list_index;
@@ -686,15 +693,66 @@ int32_t mock_db::on_kv_set(const rpc::db::hash_table::unit_test_request &req) {
   if (nullptr == req.store) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
+  return write_kv(req, *req.store);
+}
 
-  const absl::string_view store_full_name = req.store->GetDescriptor()->full_name();
+int32_t mock_db::on_kv_partly_set(const rpc::db::hash_table::unit_test_request &req) {
+  if (nullptr == req.store || nullptr == req.partly_set_fields || req.partly_set_field_count == 0) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  // Only the listed fields reach the stored record; every other stored field survives, which is the
+  // reason this write path exists. Fields the caller left unset are absent from the merge (the mock is
+  // presence-based), unlike the real HSET that stores their default value.
+  std::unique_ptr<google::protobuf::Message> partial{req.store->New()};
+  const google::protobuf::Reflection *reflect = req.store->GetReflection();
+  for (size_t i = 0; i < req.partly_set_field_count; ++i) {
+    const google::protobuf::FieldDescriptor *fd = req.partly_set_fields[i];
+    if (nullptr == fd || fd->is_repeated()) {
+      continue;
+    }
+    switch (fd->cpp_type()) {
+      case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
+        reflect->SetInt32(partial.get(), fd, reflect->GetInt32(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
+        reflect->SetInt64(partial.get(), fd, reflect->GetInt64(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
+        reflect->SetUInt32(partial.get(), fd, reflect->GetUInt32(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
+        reflect->SetUInt64(partial.get(), fd, reflect->GetUInt64(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
+        reflect->SetEnumValue(partial.get(), fd, reflect->GetEnumValue(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
+        reflect->SetBool(partial.get(), fd, reflect->GetBool(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
+        reflect->SetString(partial.get(), fd, reflect->GetString(*req.store, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE:
+        reflect->MutableMessage(partial.get(), fd)->CopyFrom(reflect->GetMessage(*req.store, fd));
+        break;
+      default:
+        break;
+    }
+  }
+
+  return write_kv(req, *partial);
+}
+
+int32_t mock_db::write_kv(const rpc::db::hash_table::unit_test_request &req, const google::protobuf::Message &store) {
+  const absl::string_view store_full_name = store.GetDescriptor()->full_name();
   const std::string type_name{store_full_name.data(), store_full_name.size()};
   kv_record *record = find_live_kv(req.key);
 
   if (nullptr == req.version) {
     // Plain HSET: merge the present fields and keep the CAS version untouched.
     std::string data;
-    if (!merge_stored_data(record, *req.store, data)) {
+    if (!merge_stored_data(record, store, data)) {
       return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
     }
     uint64_t old_version = nullptr == record ? 0 : record->version;
@@ -716,7 +774,7 @@ int32_t mock_db::on_kv_set(const rpc::db::hash_table::unit_test_request &req) {
   }
 
   std::string data;
-  if (!merge_stored_data(record, *req.store, data)) {
+  if (!merge_stored_data(record, store, data)) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
   bool has_expire = nullptr == record ? false : record->has_expire;

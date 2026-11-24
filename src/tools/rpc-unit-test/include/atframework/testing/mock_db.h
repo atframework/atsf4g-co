@@ -61,12 +61,14 @@ struct ATFW_UTIL_SYMBOL_VISIBLE db_table_context {
   rpc::context *rpc_context = nullptr;
 
   // Inputs (empty/nullptr when unused by the op).
-  const google::protobuf::Message *input_table = nullptr;  // kv_set: the record being stored
+  const google::protobuf::Message *input_table = nullptr;  // kv_set/kv_partly_set: the record being stored
   gsl::span<const gsl::string_view> partly_get_fields{};   // kv_partly_get: requested fields
-  gsl::string_view inc_field;                              // kv_inc_field: target field name
-  gsl::span<const uint64_t> list_index{};                  // kl_get_by_indexs/kl_update_by_index/kl_remove_by_index
-  uint32_t max_list_length = 0;                            // kl ops
-  uint64_t ttl_second = 0;                                 // set_ttl
+  // kv_partly_set: the fields written by this call, in call order.
+  gsl::span<const google::protobuf::FieldDescriptor *const> partly_set_fields{};
+  gsl::string_view inc_field;              // kv_inc_field: target field name
+  gsl::span<const uint64_t> list_index{};  // kl_get_by_indexs/kl_update_by_index/kl_remove_by_index
+  uint32_t max_list_length = 0;            // kl ops
+  uint64_t ttl_second = 0;                 // set_ttl
 
   // Outputs.
   int32_t return_code = 0;  // function-level result code reported to the caller
@@ -270,6 +272,9 @@ class RPC_UNIT_TEST_API mock_db {
   // the CAS/insert scripts) HSETs only the fields present in the store message (see
   // rpc::db::pack_message), so fields absent from a partial store survive in the stored record.
   bool merge_stored_data(const kv_record *record, const google::protobuf::Message &store, std::string &output) const;
+  // Shared write path of on_kv_set/on_kv_partly_set: plain HSET when req.version is null, otherwise
+  // the CAS script. `store` provides the fields to write.
+  int32_t write_kv(const rpc::db::hash_table::unit_test_request &req, const google::protobuf::Message &store);
   // Production unpackers never set db_key_list_message_result_t::version (it stays 0), so the mock
   // reports no KL version either.
   int32_t make_kl_output(const kl_entry &entry, rpc::context &ctx, db_key_list_message_result_t &output) const;
@@ -284,6 +289,7 @@ class RPC_UNIT_TEST_API mock_db {
   int32_t on_kv_get_all(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_partly_get(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_set(const rpc::db::hash_table::unit_test_request &req);
+  int32_t on_kv_partly_set(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_insert(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_inc_field(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kl_get_all(const rpc::db::hash_table::unit_test_request &req);

@@ -92,10 +92,14 @@ reply mappings such as insert's `CAS_FAILED` → `EN_DB_KEY_EXISTS` conversion a
   carries unversioned HSET data (no `CAS_VERSION` field in the hash). An already-versioned record returns
   `EN_DB_KEY_EXISTS` (caller-mapped `CAS_FAILED`) with the stored version written back; on success the version starts
   at 1.
-- KV writes (`set` with or without CAS, `insert`) merge only the caller message's **present fields** — `HSET`
-  semantics (`rpc::db::pack_message` HSETs `ListFields` output), never replacing the whole hash; the mock implements
-  this with `mock_db::merge_stored_data`. A versionless `set` never touches the stored CAS version. `partly_get`/
-  `HMGET` depend on field presence; the backend must be presence-aware.
+- KV writes (`set` with or without CAS, `insert`, `partly_set`) merge only the caller message's **present fields** —
+  `HSET` semantics (`rpc::db::pack_message` HSETs `ListFields` output), never replacing the whole hash; the mock
+  implements this with `mock_db::merge_stored_data`. A versionless `set` never touches the stored CAS version.
+  `partly_get`/`HMGET` depend on field presence; the backend must be presence-aware.
+- `kv_partly_set` (generated `partly_save_<name>`) carries its field list as `partly_set_fields`; the mock copies those
+  fields out of the caller message into a partial store (`on_kv_partly_set`) and runs the same CAS/HSET write path as
+  `kv_set` (`write_kv`), so unlisted stored fields survive. Because the mock is presence-based, a listed field the
+  caller left unset is absent from the merge, while the real `HSET` still writes its default value.
 - `inc_field` follows `HINCRBY`: missing key/field starts from 0; field descriptor/numeric validation happens before the
   hook; the CAS version is never touched and the caller message is swapped to hold only the incremented field.
 - KL index comes from `HINCRBY` on the counter field: 1-based, monotonically increasing and **never reused**. The

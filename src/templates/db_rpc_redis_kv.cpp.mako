@@ -536,6 +536,84 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
 }
 % endfor
 
+% for partly_save in index.partly_save:
+<%
+    partly_save_field_name = ""
+    if partly_save.name != "":
+        partly_save_field_name += partly_save.name
+    else:
+        for field in partly_save.fields:
+            partly_save_field_name += field
+    partly_save_field_count = len(partly_save.fields) + len(key_fields)
+%>
+SERVER_FRAME_API result_type partly_save_${partly_save_field_name}(rpc::context &ctx
+%     for key_field in key_fields:
+                                                        , ${key_field["cpp_type"]} ${key_field["raw_name"]}
+%     endfor
+                                                        , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store
+%     if index.enable_cas:
+                                                        , uint64_t &version) {
+%     else:
+                                                         ) {
+%     endif
+  rpc::internal::db_rpc_trace __trace(ctx, "rpc.db.${index.name}/partly_save_${partly_save_field_name}");
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // Reuses the replace handler slot: the handler signature matches this write interface.
+  if (auto __handler = mock_detail::replace_handler()) {
+    rpc::unit_test::db_mock_meta __meta;
+%     if index.enable_cas:
+    __meta.version = version;
+%     endif
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(__trace.child_context, *store, __meta));
+%     if index.enable_cas:
+    version = __meta.version;
+%     endif
+    RPC_DB_RETURN_CODE(__trace.finish(__res));
+  }
+#endif
+  char db_key[256];
+  size_t keylen = sizeof(db_key);
+  auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = static_cast<size_t>(result.size);
+  }
+  // Written fields are fixed at generation time, so the descriptor list stays on the stack.
+  const ::google::protobuf::FieldDescriptor *partly_save_field[${partly_save_field_count}];
+<%
+  field_index = 0
+%>
+%     for key_field in key_fields:
+  partly_save_field[${field_index}] = PROJECT_NAMESPACE_ID::${message_name}::descriptor()->FindFieldByName("${key_field["raw_name"]}");
+<%
+  field_index = field_index + 1
+%>
+%     endfor
+%     for field in partly_save.fields:
+%       if field not in all_fields:
+        #error "partly save field ${field} must be in fields"
+%       else:
+  partly_save_field[${field_index}] = PROJECT_NAMESPACE_ID::${message_name}::descriptor()->FindFieldByName("${field}");
+%       endif
+<%
+  field_index = field_index + 1
+%>
+%     endfor
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_set(
+      __trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(), gsl::string_view{db_key, keylen},
+      gsl::span<const ::google::protobuf::FieldDescriptor *>{partly_save_field, ${partly_save_field_count}},
+      shared_abstract_message<google::protobuf::Message>{store},
+%     if index.enable_cas:
+      &version));
+%     else:
+      nullptr));
+%     endif
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__trace.finish(res));
+  }
+  RPC_DB_RETURN_CODE(__trace.finish(PROJECT_NAMESPACE_ID::err::EN_SUCCESS));
+}
+% endfor
+
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 namespace mock {
 ${emit_mock_register("get_all", "get_all", "static_cast<int32_t>(rpc::db::hash_table::unit_test_request::op_type::kv_get_all)", index.name)}

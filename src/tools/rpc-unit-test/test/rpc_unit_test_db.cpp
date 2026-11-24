@@ -317,6 +317,144 @@ CASE_TEST(rpc_unit_test, db_kv_get_missing_and_partly_get_presence) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
+// Partly write (rpc::db::hash_table::key_value::partly_set, the primitive behind the generated
+// <table>::partly_save_<name> interfaces): only the listed fields reach the stored record, and the
+// write keeps both the plain HSET and the CAS contract of the full set path.
+CASE_TEST(rpc_unit_test, db_kv_partly_set_writes_listed_fields) {
+  atfw::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+
+  auto task =
+      test.run_task("db_kv_partly_save", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        const google::protobuf::Descriptor *descriptor = rpc_unit_test::RpcUnitTestTable::descriptor();
+        const google::protobuf::FieldDescriptor *counter_field = descriptor->FindFieldByName("counter");
+        const google::protobuf::FieldDescriptor *note_field = descriptor->FindFieldByName("note");
+        CASE_EXPECT_TRUE(nullptr != counter_field);
+        CASE_EXPECT_TRUE(nullptr != note_field);
+        if (nullptr == counter_field || nullptr == note_field) {
+          RPC_RETURN_CODE(0);
+        }
+
+        // Seed a complete, versionless record.
+        rpc::shared_message<rpc_unit_test::RpcUnitTestTable> table{ctx};
+        table->set_name("alice");
+        table->set_counter(7);
+        table->set_note("keep");
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
+            ctx, kTestDbChannel, "ut:kv:partly_save", rpc::shared_abstract_message<google::protobuf::Message>{table},
+            nullptr));
+        CASE_EXPECT_EQ(0, res);
+
+        // The patch carries name and note as well, but only counter is listed: everything else stored
+        // by the seed must survive.
+        rpc::shared_message<rpc_unit_test::RpcUnitTestTable> patch{ctx};
+        patch->set_name("mallory");
+        patch->set_counter(42);
+        patch->set_note("dropped");
+        const google::protobuf::FieldDescriptor *counter_only[] = {counter_field};
+        uint64_t version = 0;
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_set(
+            ctx, kTestDbChannel, "ut:kv:partly_save",
+            gsl::span<const google::protobuf::FieldDescriptor *>{counter_only, 1},
+            rpc::shared_abstract_message<google::protobuf::Message>{patch}, &version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(version));
+
+        auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:partly_save", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output->version));
+        if (output->message) {
+          const auto &restored = static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get());
+          CASE_EXPECT_EQ(42, static_cast<int>(restored.counter()));
+          CASE_EXPECT_TRUE(restored.has_name());
+          CASE_EXPECT_EQ("alice", restored.name());
+          CASE_EXPECT_EQ("keep", restored.note());
+        } else {
+          CASE_EXPECT_TRUE(false);
+        }
+
+        // Two listed fields are both written.
+        const google::protobuf::FieldDescriptor *two_fields[] = {counter_field, note_field};
+        patch->set_counter(43);
+        patch->set_note("updated");
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_set(
+            ctx, kTestDbChannel, "ut:kv:partly_save",
+            gsl::span<const google::protobuf::FieldDescriptor *>{two_fields, 2},
+            rpc::shared_abstract_message<google::protobuf::Message>{patch}, &version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(version));
+
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:partly_save", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(output->version));
+        if (output->message) {
+          const auto &restored = static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get());
+          CASE_EXPECT_EQ(43, static_cast<int>(restored.counter()));
+          CASE_EXPECT_EQ("updated", restored.note());
+          CASE_EXPECT_EQ("alice", restored.name());
+        } else {
+          CASE_EXPECT_TRUE(false);
+        }
+
+        // A versionless partly write keeps the stored CAS version untouched.
+        patch->set_counter(44);
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_set(
+            ctx, kTestDbChannel, "ut:kv:partly_save",
+            gsl::span<const google::protobuf::FieldDescriptor *>{counter_only, 1},
+            rpc::shared_abstract_message<google::protobuf::Message>{patch}, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:partly_save", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(output->version));
+
+        // A stale CAS version is rejected and reported back without touching the stored record.
+        uint64_t stale_version = 1;
+        patch->set_counter(45);
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_set(
+            ctx, kTestDbChannel, "ut:kv:partly_save",
+            gsl::span<const google::protobuf::FieldDescriptor *>{counter_only, 1},
+            rpc::shared_abstract_message<google::protobuf::Message>{patch}, &stale_version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(stale_version));
+
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:partly_save", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(output->version));
+        if (output->message) {
+          const auto &restored = static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get());
+          CASE_EXPECT_EQ(44, static_cast<int>(restored.counter()));
+        } else {
+          CASE_EXPECT_TRUE(false);
+        }
+
+        // An empty field list is a caller bug and is rejected before any DB round trip.
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_set(
+            ctx, kTestDbChannel, "ut:kv:partly_save", gsl::span<const google::protobuf::FieldDescriptor *>{},
+            rpc::shared_abstract_message<google::protobuf::Message>{patch}, nullptr));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, res);
+        RPC_RETURN_CODE(0);
+      });
+  if (task.empty()) {
+    test.stop();
+    return;
+  }
+
+  auto result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_FALSE(result.hard_timed_out);
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(4, static_cast<int>(test.db().calls(op_type::kv_partly_set)));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 CASE_TEST(rpc_unit_test, db_kv_inc_field_and_uuid_allocator) {
   atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
@@ -911,8 +1049,8 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
   seed.set_account_type(kLoginAuthAccountType);
   seed.set_open_id("openid-callback");
   seed.set_user_id(7);
-  const std::string seed_key = std::string(db_msg_dispatcher::me()->get_record_prefix()) + "-login_auth:" +
-                               std::to_string(kLoginAuthAccountType) + ":openid-callback";
+  const std::string seed_key = std::string(db_msg_dispatcher::me()->get_record_prefix()) +
+                               "-login_auth:" + std::to_string(kLoginAuthAccountType) + ":openid-callback";
   const std::string seed_type_name(PROJECT_NAMESPACE_ID::table_login_auth::descriptor()->full_name());
   test.db().set_raw_kv(seed_key, seed_type_name, seed.SerializeAsString(), 1);
 

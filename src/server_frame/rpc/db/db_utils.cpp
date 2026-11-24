@@ -742,7 +742,7 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
 }
 
 int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
-                 std::vector<const ::google::protobuf::FieldDescriptor *> fds, uint64_t *version,
+                 gsl::span<const ::google::protobuf::FieldDescriptor *> fds, uint64_t *version,
                  std::ostream *debug_message) {
   // 反射获取所有的字段
   const google::protobuf::Reflection *reflect = msg.GetReflection();

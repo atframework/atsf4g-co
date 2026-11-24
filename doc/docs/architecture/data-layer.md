@@ -26,12 +26,30 @@ title: 数据层
 
 | 原语 | 语义 |
 | --- | --- |
-| KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`；`set` / `insert`；`inc_field` 原子自增 |
+| KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`；`set` / `insert` / `partly_set`；`inc_field` 原子自增 |
 | KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`；索引单调递增，按数量裁剪（内嵌 Lua） |
 | TTL | 键过期管理 |
 
-当前 KV `set` / `insert` 写路径序列化并覆盖全部字段；未设置字段写成空值或默认值，不是 presence merge。
-需要部分更新时使用对应的显式字段操作，并确认生成接口是否提供该语义。
+KV `set` / `insert` 写路径序列化并覆盖全部字段；未设置字段写成空值或默认值，不是 presence merge。
+`partly_set` 只写调用方给出的字段（`gsl::span<const google::protobuf::FieldDescriptor*>`），其余字段保持库中原值，
+同样支持非 CAS 的 `HSET` 与 CAS 的 `EVALSHA` 两种写路径；字段值为空时按默认值写入，不做 presence merge。
+
+业务侧不直接拼字段列表，而是通过索引上的 `partly_save` 声明生成固定接口：
+
+```protobuf
+index: {
+  name: "user"
+  type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+  enable_cas: true
+  key_fields: "zone_id"
+  key_fields: "user_id"
+  partly_save: { name: "async_jobs" fields: "async_job_blob_data" }
+}
+```
+
+生成 `rpc::db::user::partly_save_async_jobs(ctx, zone_id, user_id, store, version)`：写回 key 字段与声明的字段，
+字段描述符数组在生成代码里固定为栈数组，不动态分配。`partly_save` 只支持 KV 索引，声明在 KL 索引上会生成
+`#error`。
 
 ### 生成的 DB 接口
 

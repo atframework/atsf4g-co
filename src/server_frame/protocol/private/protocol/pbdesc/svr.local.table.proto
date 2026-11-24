@@ -116,6 +116,10 @@ message table_user {
         fields: "user_data"
         fields: "option_data_public"
       }
+      partly_save: {
+        name: "async_jobs"
+        fields: "async_job_blob_data"
+      }
     }
   };
   // clang-format on

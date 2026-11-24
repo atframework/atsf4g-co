@@ -30,6 +30,7 @@ message database_table_index {
 
   repeated string key_fields = 11;
   repeated database_partly_field partly_get = 12;
+  repeated database_partly_field partly_save = 14;
   repeated string atomic_inc_fields = 13;
 }
 

@@ -109,6 +109,9 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
             "cpp_type": cpp_type,
         })
 %>
+%     if not index_type_kv and len(index.partly_save) > 0:
+#error "index ${index.name}: partly_save only supports EN_ATFRAMEWORK_DB_INDEX_TYPE_KV"
+%     endif
 namespace ${index.name} {
 %     if index_type_kv:
 <%include file="db_rpc_redis_kv.cpp.mako" args="message_name=message_name,index=index,key_fields=key_fields,all_fields=all_fields,atomic_inc_fields=atomic_inc_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />

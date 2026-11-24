@@ -21,9 +21,9 @@
 #include <string>
 #include <vector>
 
-#include <dispatcher/db_msg_dispatcher.h>
-#include <rpc/rpc_shared_message.h>
+#include "dispatcher/db_msg_dispatcher.h"
 #include "rpc/db/db_utils.h"
+#include "rpc/rpc_shared_message.h"
 
 struct db_message_t;
 
@@ -46,6 +46,8 @@ struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_request {
     // Insert-only write (kInsertHashTable); reported separately from kv_set because the two scripts
     // disagree on an existing record: kv_set with version 0 forces the overwrite, kv_insert fails.
     kv_insert,
+    // Partial write (HSET/EVALSHA of a caller-supplied field subset) instead of every descriptor field.
+    kv_partly_set,
     kv_inc_field,
     kl_get_all,
     kl_get_by_indexs,
@@ -65,6 +67,9 @@ struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_request {
   // Optional inputs (empty/nullptr when unused by the op).
   const gsl::string_view *partly_get_fields = nullptr;
   int32_t partly_get_field_count = 0;
+  // kv_partly_set: the fields to write, in call order.
+  const ::google::protobuf::FieldDescriptor *const *partly_set_fields = nullptr;
+  size_t partly_set_field_count = 0;
   const google::protobuf::Message *store = nullptr;
   gsl::string_view inc_field;
   gsl::span<const uint64_t> list_index;
@@ -110,6 +115,11 @@ batch_partly_get(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
 set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
     shared_abstract_message<google::protobuf::Message> &&store, uint64_t *version);
+
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
+partly_set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+           gsl::span<const ::google::protobuf::FieldDescriptor *> partly_set_fields,
+           shared_abstract_message<google::protobuf::Message> &&store, uint64_t *version);
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
 insert(rpc::context &ctx, uint32_t channel, gsl::string_view key,

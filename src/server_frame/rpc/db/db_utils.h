@@ -16,6 +16,7 @@
 
 #include <libcopp/future/poller.h>
 
+#include <gsl/select-gsl.h>
 #include <nostd/function_ref.h>
 #include <std/explicit_declare.h>
 
@@ -184,7 +185,7 @@ int unpack_list_message_with_index(
  * @return 0 or error code
  */
 int pack_message(const ::google::protobuf::Message& msg, redis_args& args,
-                 std::vector<const ::google::protobuf::FieldDescriptor*> fds, uint64_t* version,
+                 gsl::span<const ::google::protobuf::FieldDescriptor*> fds, uint64_t* version,
                  std::ostream* debug_message);
 }  // namespace db
 }  // namespace rpc

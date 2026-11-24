@@ -26,13 +26,33 @@ The data layer currently supports only **Redis** (`src/server_frame/dispatcher/d
 
 | Primitive | Semantics |
 | --- | --- |
-| KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`; `set` / `insert`; atomic `inc_field` |
+| KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`; `set` / `insert` / `partly_set`; atomic `inc_field` |
 | KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`; monotonically increasing indexes with count-based trimming (embedded Lua) |
 | TTL | Key expiration management |
 
-Current KV `set` / `insert` write paths serialize and overwrite every field; unset fields become empty/default values
-rather than being presence-merged. Use an explicit field operation for a partial update and verify that the generated
-API provides that semantic.
+KV `set` / `insert` write paths serialize and overwrite every field; unset fields become empty/default values rather
+than being presence-merged. `partly_set` writes only the fields the caller passes
+(`gsl::span<const google::protobuf::FieldDescriptor*>`) and leaves every other stored field untouched; it supports both
+the plain `HSET` and the CAS `EVALSHA` path. Field values are still written as defaults when unset, so it is not a
+presence merge either.
+
+Business code does not build the field list by hand; it uses the fixed interface generated from the index
+`partly_save` option:
+
+```protobuf
+index: {
+  name: "user"
+  type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+  enable_cas: true
+  key_fields: "zone_id"
+  key_fields: "user_id"
+  partly_save: { name: "async_jobs" fields: "async_job_blob_data" }
+}
+```
+
+This generates `rpc::db::user::partly_save_async_jobs(ctx, zone_id, user_id, store, version)`, which writes the key
+fields plus the declared fields; the descriptor array is a fixed stack array in the generated code. `partly_save` is
+only supported on KV indexes — declaring it on a KL index emits `#error`.
 
 ### Generated DB Interfaces
 
