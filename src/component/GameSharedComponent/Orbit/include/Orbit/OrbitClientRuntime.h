@@ -69,6 +69,7 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API bool enabled() const;
   ORBIT_CLIENT_SDK_API bool enabled_io_thread() const;
   ORBIT_CLIENT_SDK_API void post_to_io_thread(std::function<void()> task);
+  ORBIT_CLIENT_SDK_API int32_t post_to_io_thread_until_done(std::function<int32_t()> task);
   ORBIT_CLIENT_SDK_API void post_to_caller_thread(std::function<void()> task);
 
   // 是否种子进程
@@ -104,6 +105,7 @@ class OrbitClientRuntime {
 
  private:
   void io_tick();
+  void tick_inner();
 
   int32_t notify_seed_process_ready_inner();
   int32_t notify_process_ready_inner(int32_t port, const std::string &custom_data);
@@ -236,6 +238,7 @@ class OrbitClientRuntime {
     const char *name() const override;
   };
 
+  bool app_init_;
   std::unique_ptr<::atframework::atapp::app> app_;
   bool enabled_;
   OrbitClientCallbacks callbacks_;
@@ -269,6 +272,7 @@ class OrbitClientRuntime {
   tbb::concurrent_queue<::atframework::orbit::ATDForkSeedClientReq> pending_fork_requests_;
   tbb::concurrent_queue<std::function<void()>> io_task_;
   tbb::concurrent_queue<std::function<void()>> caller_task_;
+  std::set<pid_t> forked_client_ids_;
 
   uv_rusage_t last_self_rusage_;
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;

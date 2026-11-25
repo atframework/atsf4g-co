@@ -111,7 +111,10 @@ struct OrbitClientCallbacks {
   OrbitClientSeedWaitingTickCallback on_seed_waiting_tick = nullptr;
 
   OrbitClientBeforeForkPhaseCallback on_before_fork = nullptr;
-  OrbitClientAfterForkPhaseCallback on_after_fork = nullptr;
+  // fork后立刻调用一次
+  OrbitClientAfterForkPhaseCallback on_after_fork_once = nullptr;
+  // fork后底层连接建立后持续调用
+  OrbitClientAfterForkPhaseCallback on_after_fork_tick = nullptr;
 };
 
 }  // namespace orbit_client_sdk
