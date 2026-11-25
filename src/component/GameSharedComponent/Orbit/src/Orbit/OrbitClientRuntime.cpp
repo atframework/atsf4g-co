@@ -29,8 +29,8 @@
 #include <vector>
 
 #if defined(__linux__) || defined(__unix__)
-#  include <unistd.h>
 #  include <sys/wait.h>
+#  include <unistd.h>
 #endif
 #include <string_view>
 
@@ -786,7 +786,8 @@ void OrbitClientRuntime::on_received_stop_request(const ::atframework::orbit::AT
   request_end(request.reason(), 0);
 }
 
-int32_t OrbitClientRuntime::process_fork_request(google::protobuf::Map<std::string, std::string> &child_data) {
+int32_t OrbitClientRuntime::process_fork_request(
+    ATFW_EXPLICIT_UNUSED_ATTR google::protobuf::Map<std::string, std::string> &child_data) {
   if (!is_seed_process()) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "process_fork_request rejected: not a seed process");
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -1006,6 +1007,7 @@ void OrbitClientRuntime::tick_inner() {
       task();
     }
   }
+#if defined(__linux__) || defined(__unix__)
   // 处理child
   for (const auto &pid : forked_client_ids_) {
     int status;
@@ -1015,6 +1017,7 @@ void OrbitClientRuntime::tick_inner() {
       break;
     }
   }
+#endif
 }
 
 void OrbitClientRuntime::io_tick() {

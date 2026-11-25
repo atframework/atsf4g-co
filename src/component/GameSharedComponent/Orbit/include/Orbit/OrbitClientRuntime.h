@@ -18,6 +18,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -272,7 +273,9 @@ class OrbitClientRuntime {
   tbb::concurrent_queue<::atframework::orbit::ATDForkSeedClientReq> pending_fork_requests_;
   tbb::concurrent_queue<std::function<void()>> io_task_;
   tbb::concurrent_queue<std::function<void()>> caller_task_;
+#if defined(__linux__) || defined(__unix__)
   std::set<pid_t> forked_client_ids_;
+#endif
 
   uv_rusage_t last_self_rusage_;
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;
