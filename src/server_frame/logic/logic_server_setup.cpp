@@ -740,7 +740,7 @@ logic_server_common_module::get_service_discovery_module() {
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
     int32_t type_id) const {
   if (discovery_index_) {
-    return discovery_index_->get_discovery_index_by_type(type_id);
+    return discovery_index_->get_discovery_index_by_type(static_cast<uint64_t>(type_id));
   }
 
   return nullptr;
@@ -758,7 +758,7 @@ SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_modu
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
     int32_t type_id, uint64_t zone_id) const {
   if (discovery_index_) {
-    return discovery_index_->get_discovery_index_by_realm_type(zone_id, type_id);
+    return discovery_index_->get_discovery_index_by_realm_type(zone_id, static_cast<uint64_t>(type_id));
   }
 
   return nullptr;
@@ -816,7 +816,7 @@ logic_server_common_module::get_discovery_service_version(int32_t service_type) 
     return 0;
   }
 
-  return discovery_index_->get_service_discovery_version(service_type);
+  return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type));
 }
 
 int logic_server_common_module::tick_update_remote_configures() {
@@ -1034,7 +1034,7 @@ void logic_server_common_module::setup_metrics() {
 SERVER_FRAME_API int64_t
 logic_server_common_module::get_service_discovery_version(int32_t service_type_id) const noexcept {
   if (discovery_index_) {
-    return discovery_index_->get_service_discovery_version(service_type_id);
+    return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type_id));
   }
 
   return 0;
