@@ -1,24 +1,34 @@
 // Copyright 2026 atframework
 
-#include "sharding.h"
+#include "rpc/rank_board/sharding.h"
 
 #include <config/extern_service_types.h>
 #include <logic/logic_server_setup.h>
 #include <utility/random_engine.h>
 #include <xxhash.h>
-#include "common.h"
-#include "config/server_frame_build_feature.h"
-#include "log/log_wrapper.h"
-#include "rpc/rank_board/rankboardservice.atfw.gen.h"
-#include "rpc/rpc_async_invoke.h"
-#include "rpc/rpc_common_types.h"
-#include "rpc/rpc_context.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
+#include <protocol/config/svr.hpa.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <config/server_frame_build_feature.h>
+#include <log/log_wrapper.h>
+#include <rpc/rank_board/rankboardservice.atfw.gen.h>
+#include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_common_types.h>
+#include <rpc/rpc_context.h>
+
+#include <unordered_map>
+#include <vector>
+
+#include "rpc/rank_board/common.h"
 
 PROJECT_NAMESPACE_BEGIN
 
@@ -91,9 +101,9 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
   static uint64_t get_ranksvr_server_id_by_consistent_hash(uint32_t rank_id) {
     if (auto* common_mod = logic_server_last_common_module()) {
       auto type_index = common_mod->get_discovery_index_by_type(
-          static_cast<uint64_t>(atframework::component::logic_service_type::kRankBoardSvr));
+          PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRankBoardFieldNumber);
       const atfw::atapp::protocol::atapp_metadata* selector =
-          logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRanksvrFieldNumber,
+          logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRankBoardFieldNumber,
                                      logic_hpa_discovery_select_mode::kReady);
       if (type_index) {
         auto node = type_index->get_node_by_consistent_hash(static_cast<int64_t>(rank_id), selector);

@@ -162,8 +162,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
    * @param service_type_id 服务类型ID
    * @return （本地）服务发现版本号
    */
-  SERVER_FRAME_API int64_t
-  get_service_discovery_version(atframework::component::logic_service_type service_type_id) const noexcept;
+  SERVER_FRAME_API int64_t get_service_discovery_version(int32_t service_type_id) const noexcept;
 
   SERVER_FRAME_API void update_remote_server_configure(const std::string& global_conf, int32_t global_version,
                                                        const std::string& zone_conf, int32_t zone_version);
@@ -176,10 +175,10 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   SERVER_FRAME_API void insert_timer(uint64_t task_id, std::chrono::system_clock::duration timeout,
                                      logic_server_timer& output);
 
-  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(uint64_t type_id) const;
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(int32_t type_id) const;
   SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type(
       const std::string& type_name) const;
-  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(uint64_t type_id,
+  SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(int32_t type_id,
                                                                                            uint64_t zone_id) const;
   SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t get_discovery_index_by_type_zone(const std::string& type_name,
                                                                                            uint64_t zone_id) const;
@@ -199,8 +198,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
    * @param service_type 服务类型
    * @return （本地）服务发现版本号
    */
-  SERVER_FRAME_API int64_t
-  get_discovery_service_version(atfw::component::logic_service_type service_type) const noexcept;
+  SERVER_FRAME_API int64_t get_discovery_service_version(int32_t service_type) const noexcept;
 
   /**
    * @brief 获取HPA控制器

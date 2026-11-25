@@ -40,16 +40,15 @@
 #include <rpc/lobby/lobbysvrservice.atfw.gen.h>
 
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <memory>
 
 #include "config/server_frame_build_feature.h"
 
-cache_group_manager::cache_group_manager()
-    : user_cache_group_(*this) {}
+cache_group_manager::cache_group_manager() : user_cache_group_(*this) {}
 
 cache_group_manager::~cache_group_manager() {}
 
@@ -101,7 +100,7 @@ int cache_group_manager::tick_watcher(time_t now) {
         break;
       }
 
-      // TODO 缓存数量超出预期,高负载保护
+      // TODO(any): 缓存数量超出预期,高负载保护
       // if (max_watcher_number > 0 && timers_size > max_watcher_number) {
       //     need_remove = true;
       //
@@ -147,7 +146,8 @@ int cache_group_manager::tick_cache_groups(time_t now) {
   int64_t cachesvr_version = 1;
   logic_server_common_module *logic_module = logic_server_last_common_module();
   if (nullptr != logic_module) {
-    cachesvr_version = logic_module->get_discovery_service_version(atfw::component::logic_service_type::kCacheSvr);
+    cachesvr_version = logic_module->get_discovery_service_version(
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber);
   }
 
   int ret = 0;

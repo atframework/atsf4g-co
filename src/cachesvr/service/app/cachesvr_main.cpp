@@ -17,9 +17,7 @@
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <string>
 
 #include "app/handle_ss_rpc_cachesvrservice.atfw.gen.h"
 
@@ -37,7 +35,8 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
     INIT_CALL_FN(handle::cache::register_handles_for_cachesvrservice);
 
     if (get_app()->get_type_id() !=
-        static_cast<atfw::atapp::app_id_t>(atfw::component::logic_service_type::kCacheSvr)) {
+        static_cast<atfw::atapp::app_id_t>(
+            PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber)) {
       FWLOGERROR("main_service_module only works for cache server, but current app type is {:#x}",
                  get_app()->get_type_id());
       return -1;

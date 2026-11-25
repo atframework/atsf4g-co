@@ -772,14 +772,16 @@ class waiting_test_fixture {
     atfw::testing::mock_node orbit_node;
     orbit_node.set_id(kOrbitServerId)
         .set_name("waiting-room-orbit")
-        .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kOrbitSvr))
+        .set_type_id(
+            static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitServerFieldNumber))
         .set_type_name("orbitsvr")
         .set_zone_id(1);
     CASE_EXPECT_TRUE(!!runtime.discovery().add_node(orbit_node));
     atfw::testing::mock_node lobby_node;
     lobby_node.set_id(0x160001)
         .set_name("waiting-room-lobby")
-        .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kLobbySvr))
+        .set_type_id(
+            static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber))
         .set_type_name("lobbysvr")
         .set_zone_id(1);
     CASE_EXPECT_TRUE(!!runtime.discovery().add_node(lobby_node));
@@ -4709,7 +4711,8 @@ CASE_TEST(matchsvr_matching_manager, finished_room_releases_users_before_recycle
   atfw::testing::mock_node orbit_node;
   orbit_node.set_id(kOrbitServerId)
       .set_name("terminal-cleanup-orbit")
-      .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kOrbitSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitServerFieldNumber))
       .set_type_name("orbitsvr")
       .set_zone_id(1);
   auto orbit = runtime.discovery().add_node(orbit_node);
@@ -4718,7 +4721,7 @@ CASE_TEST(matchsvr_matching_manager, finished_room_releases_users_before_recycle
   atfw::testing::mock_node lobby_node;
   lobby_node.set_id(kLobbyServerId)
       .set_name("terminal-cleanup-lobby")
-      .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kLobbySvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber))
       .set_type_name("lobbysvr")
       .set_zone_id(1);
   auto lobby = runtime.discovery().add_node(lobby_node);

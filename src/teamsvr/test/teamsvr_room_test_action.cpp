@@ -152,12 +152,12 @@ CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
   // 相同 team_id、不同 zone_id 是不同队伍，room 与 DTMQ channel 都不能复用。
   auto other_zone_key = make_team_key(team_id, kTestZoneId + 1);
   team_room::ptr_t other_zone_room;
-  CASE_EXPECT_EQ(0, env.run("same_id_other_zone",
-                            [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
-    other_zone_room = team_room_manager::me()->mutable_room(ctx, other_zone_key);
-    CASE_EXPECT_TRUE(!!other_zone_room);
-    RPC_RETURN_CODE(0);
-  }));
+  CASE_EXPECT_EQ(
+      0, env.run("same_id_other_zone", [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
+        other_zone_room = team_room_manager::me()->mutable_room(ctx, other_zone_key);
+        CASE_EXPECT_TRUE(!!other_zone_room);
+        RPC_RETURN_CODE(0);
+      }));
   CASE_EXPECT_TRUE(other_zone_room.get() != room1.get());
   if (room1 && other_zone_room) {
     CASE_EXPECT_NE(room1->get_channel_key().channel_id(), other_zone_room->get_channel_key().channel_id());
@@ -285,8 +285,8 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
   constexpr uint64_t kOwnerRouterServerId = 0x1234ABCD;
 
   team_room::ptr_t room;
-  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner_key, owner_channel, &room, nullptr,
-                                           &owner_client_version, kOwnerRouterServerId));
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner_key, owner_channel, &room, nullptr, &owner_client_version,
+                                           kOwnerRouterServerId));
   CASE_EXPECT_TRUE(!!room);
   if (!room) {
     CASE_EXPECT_EQ(0, env.stop());
@@ -608,7 +608,8 @@ CASE_TEST(teamsvr_room_routing, forward_to_remote) {
     atframework::testing::mock_node node;
     node.set_id(kRemoteRoomNodeId)
         .set_name("unit-test-teamsvr-room-remote")
-        .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kTeamRoomSvr))
+        .set_type_id(
+            static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber))
         .set_type_name("teamsvr-room")
         .set_zone_id(1)
         .add_label("hpa_scaling_ready", "1")

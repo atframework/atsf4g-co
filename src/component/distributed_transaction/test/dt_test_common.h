@@ -61,7 +61,8 @@ inline atfw::testing::mock_node make_coordinator_node(uint64_t node_id, uint32_t
   atfw::testing::mock_node node;
   node.set_id(node_id)
       .set_name("unit-test-dtcoordsvr-" + std::to_string(node_id))
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kDtCoordSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber))
       .set_type_name("dtcoordsvr")
       .set_zone_id(zone_id)
       .add_label("hpa_scaling_ready", "1");

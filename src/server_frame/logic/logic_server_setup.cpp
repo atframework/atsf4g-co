@@ -738,7 +738,7 @@ logic_server_common_module::get_service_discovery_module() {
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type(
-    uint64_t type_id) const {
+    int32_t type_id) const {
   if (discovery_index_) {
     return discovery_index_->get_discovery_index_by_type(type_id);
   }
@@ -756,7 +756,7 @@ SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_modu
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_discovery_set::ptr_t logic_server_common_module::get_discovery_index_by_type_zone(
-    uint64_t type_id, uint64_t zone_id) const {
+    int32_t type_id, uint64_t zone_id) const {
   if (discovery_index_) {
     return discovery_index_->get_discovery_index_by_realm_type(zone_id, type_id);
   }
@@ -810,13 +810,13 @@ logic_server_common_module::get_discovery_by_name(const std::string &name) const
   return get_app()->get_global_discovery().get_node_by_name(name);
 }
 
-SERVER_FRAME_API int64_t logic_server_common_module::get_discovery_service_version(
-    atfw::component::logic_service_type service_type) const noexcept {
-  if (!discovery_index_ || 0 == static_cast<uint32_t>(service_type)) {
+SERVER_FRAME_API int64_t
+logic_server_common_module::get_discovery_service_version(int32_t service_type) const noexcept {
+  if (!discovery_index_ || service_type <= 0) {
     return 0;
   }
 
-  return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type));
+  return discovery_index_->get_service_discovery_version(service_type);
 }
 
 int logic_server_common_module::tick_update_remote_configures() {
@@ -1031,10 +1031,10 @@ void logic_server_common_module::setup_metrics() {
       });
 }
 
-SERVER_FRAME_API int64_t logic_server_common_module::get_service_discovery_version(
-    atframework::component::logic_service_type service_type_id) const noexcept {
+SERVER_FRAME_API int64_t
+logic_server_common_module::get_service_discovery_version(int32_t service_type_id) const noexcept {
   if (discovery_index_) {
-    return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type_id));
+    return discovery_index_->get_service_discovery_version(service_type_id);
   }
 
   return 0;

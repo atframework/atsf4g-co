@@ -163,7 +163,8 @@ inline bool setup_team_room_node(atfw::testing::runtime& test, uint64_t node_id 
   atfw::testing::mock_node node;
   node.set_id(node_id)
       .set_name("unit-test-teamsvr-room")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kTeamRoomSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber))
       .set_type_name("teamsvr-room")
       .set_zone_id(kZoneId)
       .add_label("hpa_scaling_ready", "1");

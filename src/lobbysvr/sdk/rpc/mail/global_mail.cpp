@@ -165,14 +165,14 @@ static result_void_type notify_lobbysvr(rpc::context &ctx, uint32_t zone_id) {
       break;
     }
 
-    auto discovery_index =
-        mod->get_discovery_index_by_type(static_cast<uint64_t>(::atfw::component::logic_service_type::kLobbySvr));
+    auto discovery_index = mod->get_discovery_index_by_type(
+        static_cast<uint64_t>(::PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber));
     if (!discovery_index) {
       break;
     }
 
-    const auto &all_nodes = discovery_index->get_sorted_nodes(
-        logic_hpa_discovery_select(static_cast<uint64_t>(::atfw::component::logic_service_type::kLobbySvr)));
+    const auto &all_nodes = discovery_index->get_sorted_nodes(logic_hpa_discovery_select(
+        static_cast<uint64_t>(::PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber)));
 
     // 没有监听gamesvr的话就不用通知了
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMailUpdateGlobalMailsSync> req_body{ctx};

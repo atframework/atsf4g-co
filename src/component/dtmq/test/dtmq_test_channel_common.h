@@ -133,7 +133,8 @@ inline bool add_dtmq_proxy_node(atframework::testing::runtime& test, uint64_t no
   atframework::testing::mock_node node;
   node.set_id(node_id)
       .set_name(name + std::to_string(node_id))
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kDtMqProxySvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber))
       .set_type_name("dtmq-proxysvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1")

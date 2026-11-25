@@ -49,12 +49,12 @@ TEAM_SDK_COMMON_API uint64_t get_teamsvr_room_server_id_of_zone(const atfw::team
   atfw::atapp::etcd_discovery_set::ptr_t discovery_set;
   if (0 == team_key.zone_id()) {
     // zone_id 为 0 表示不分区的全局队伍,使用全局发现集
-    discovery_set =
-        mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kTeamRoomSvr));
+    discovery_set = mod->get_discovery_index_by_type(
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber);
   } else {
-    discovery_set =
-        mod->get_discovery_index_by_type_zone(static_cast<uint64_t>(atfw::component::logic_service_type::kTeamRoomSvr),
-                                              static_cast<uint64_t>(team_key.zone_id()));
+    discovery_set = mod->get_discovery_index_by_type_zone(
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber,
+        static_cast<uint64_t>(team_key.zone_id()));
   }
 
   if (!discovery_set) {
@@ -63,7 +63,7 @@ TEAM_SDK_COMMON_API uint64_t get_teamsvr_room_server_id_of_zone(const atfw::team
 
   auto node = discovery_set->get_node_hash_by_consistent_hash(
       team_key.team_id(),
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamsvrFieldNumber,
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber,
                                  logic_hpa_discovery_select_mode::kReady));
   if (!node.node) {
     return 0;
@@ -78,15 +78,15 @@ TEAM_SDK_COMMON_API bool has_teamsvr_room() {
     return false;
   }
 
-  auto discovery_set =
-      mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kTeamRoomSvr));
+  auto discovery_set = mod->get_discovery_index_by_type(
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber);
   if (!discovery_set) {
     return false;
   }
 
   return !discovery_set
               ->get_sorted_nodes(logic_hpa_discovery_select(
-                  PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamsvrFieldNumber,
+                  PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber,
                   logic_hpa_discovery_select_mode::kReady))
               .empty();
 }

@@ -17,6 +17,7 @@
 
 #include <rpc/lobby/lobbysvrservice.atfw.gen.h>
 
+#include <unordered_map>
 #include <utility>
 
 #include "logic/cache_group_manager.h"
@@ -121,9 +122,9 @@ bool cache_object_base::is_cache_valid() const {
 
   logic_server_common_module *logic_module = logic_server_last_common_module();
   int64_t current_cachesvr_version =
-      logic_module != nullptr
-          ? logic_module->get_discovery_service_version(atfw::component::logic_service_type::kCacheSvr)
-          : 0;
+      logic_module != nullptr ? logic_module->get_discovery_service_version(
+                                    PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber)
+                              : 0;
   if (nullptr != logic_module && cachesvr_version_ != current_cachesvr_version) {
     // 缓存分布未变化，则直接刷新版本即可
     if (logic_config::me()->get_local_server_id() == rpc::cache_api::get_cachesvr_server_id(get_key())) {
@@ -237,7 +238,8 @@ int32_t cache_object_base::set_cache_expired(rpc::context &ctx) {
                    keys_on_server.second.size(), keys_on_server.first);
       continue;
     }
-    if (node->get_discovery_info().type_id() != static_cast<uint64_t>(atfw::component::logic_service_type::kLobbySvr)) {
+    if (node->get_discovery_info().type_id() !=
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber) {
       FWLOGERROR("send cache {}:{}:{} expired to {} watchers on server {:#x} failed. invalid watcher server type {}",
                  static_cast<uint32_t>(get_key().cache_type()), get_key().zone_id(), get_key().instance_id(),
                  keys_on_server.second.size(), keys_on_server.first, node->get_discovery_info().type_id());
@@ -326,7 +328,8 @@ int32_t cache_object_base::notify_update_meta(rpc::context &ctx, const PROJECT_N
                    keys_on_server.second.size(), keys_on_server.first);
       continue;
     }
-    if (node->get_discovery_info().type_id() != static_cast<uint64_t>(atfw::component::logic_service_type::kLobbySvr)) {
+    if (node->get_discovery_info().type_id() !=
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber) {
       FWLOGERROR(
           "send cache {}:{}:{} update meta to {} watchers on server {:#x} failed. invalid watcher server type {}",
           static_cast<uint32_t>(get_key().cache_type()), get_key().zone_id(), get_key().instance_id(),
@@ -400,7 +403,8 @@ cache_group_base::~cache_group_base() {}
 int64_t cache_group_base::get_local_cachesvr_version() const {
   logic_server_common_module *logic_module = logic_server_last_common_module();
   if (nullptr != logic_module) {
-    return logic_module->get_discovery_service_version(atfw::component::logic_service_type::kCacheSvr);
+    return logic_module->get_discovery_service_version(
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber);
   }
 
   return 1;

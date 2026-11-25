@@ -89,7 +89,8 @@ static void add_remote_room_node(room_test_env& env, uint64_t node_id, uint32_t 
   atfw::testing::mock_node node;
   node.set_id(node_id)
       .set_name("room-contract-remote")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kTeamRoomSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kTeamRoomFieldNumber))
       .set_type_name("teamsvr-room")
       .set_zone_id(zone_id)
       .add_label("hpa_scaling_ready", "1")

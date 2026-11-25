@@ -480,7 +480,7 @@ uint64_t orbit_agent_manager::select_controller_server_id(const std::string& cli
   }
 
   auto discovery = common_mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kOrbitControllerSvr));
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitControllerFieldNumber);
   if (!discovery) {
     return 0;
   }
@@ -536,14 +536,14 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
       FWLOGWARNING(
           "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().cpu_used(), expected_cpu, cpu_capacity_);
-      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
     if (memory_capacity_mb_ > 0.0 && load_record_.agent().memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (mem overload): mem_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
-      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
   }

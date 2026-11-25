@@ -50,23 +50,25 @@ router_friend_manager::get_default_router_server_id(EXPLICIT_UNUSED_ATTR const k
   atapp::etcd_discovery_node::ptr_t discovery;
 
   auto discovery_set = mod->get_discovery_index_by_type_zone(
-      static_cast<uint64_t>(atfw::component::logic_service_type::kFriendManagementSvr), key.zone_id);
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kFriendManagerFieldNumber, key.zone_id);
   if (discovery_set) {
     discovery = discovery_set->get_node_by_consistent_hash(
-        buffer,
-        logic_hpa_discovery_select(static_cast<uint64_t>(atfw::component::logic_service_type::kFriendManagementSvr),
-                                   logic_hpa_discovery_select_mode::kReady));
+        buffer, logic_hpa_discovery_select(
+                    static_cast<uint64_t>(
+                        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kFriendManagerFieldNumber),
+                    logic_hpa_discovery_select_mode::kReady));
   }
 
   // 全局全服和跨区合服支持
   if (!discovery) {
     discovery_set = mod->get_discovery_index_by_type(
-        static_cast<uint64_t>(atfw::component::logic_service_type::kFriendManagementSvr));
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kFriendManagerFieldNumber);
     if (discovery_set) {
       discovery = discovery_set->get_node_by_consistent_hash(
-          buffer,
-          logic_hpa_discovery_select(static_cast<uint64_t>(atfw::component::logic_service_type::kFriendManagementSvr),
-                                     logic_hpa_discovery_select_mode::kReady));
+          buffer, logic_hpa_discovery_select(
+                      static_cast<uint64_t>(
+                          PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kFriendManagerFieldNumber),
+                      logic_hpa_discovery_select_mode::kReady));
     }
   }
 

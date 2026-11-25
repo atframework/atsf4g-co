@@ -39,7 +39,10 @@
 #include <logic/logic_server_setup.h>
 
 #include <list>
+#include <string>
+#include <unordered_map>
 #include <utility>
+
 #include "rpc/rpc_shared_message.h"
 
 #ifdef max
@@ -136,8 +139,8 @@ void user_cache_manager::refresh_feature_limit_minute(rpc::context& ctx) {
       break;
     }
 
-    int64_t current_cachesvr_discovery_version =
-        mod->get_discovery_service_version(atfw::component::logic_service_type::kCacheSvr);
+    int64_t current_cachesvr_discovery_version = mod->get_discovery_service_version(
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber);
 
     if (cachesvr_discovery_version_ != current_cachesvr_discovery_version) {
       cachesvr_discovery_version_ = current_cachesvr_discovery_version;

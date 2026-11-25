@@ -44,7 +44,8 @@ CASE_TEST(component_rank, rank_sdk_update_score_contract) {
   atfw::testing::mock_node node;
   node.set_id(0x1A0001)
       .set_name("unit-test-rank-board")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kRankBoardSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRankBoardFieldNumber))
       .set_type_name("rank-board-svr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");

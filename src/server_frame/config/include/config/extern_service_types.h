@@ -14,31 +14,5 @@ enum class message_type : uint32_t {
   kInServerMessage = 11,  // solution services
 };
 
-enum class logic_service_type : uint32_t {
-  kAuthSvr = 11,
-  kLobbySvr = 12,
-  kDtCoordSvr = 13,         // 用于分布式事务的协调者服务
-  kMatchSvr = 14,           // 匹配服务器
-  kCacheSvr = 15,           // 缓存服务器
-  kRankSettlementSvr = 16,  // 排行榜结算服务器
-  kRankBoardSvr = 17,       // 排行榜展示服务器
-  kTeamRoomSvr = 18,        // 组队房间服务器
-  kTeamMatchSvr = 19,       // 组队匹配服务器
-  // kTeamCacheSvr = 20,       // 组队缓存服务器(预留)
-
-  // === 保留一部分21-25，以后消息队列服务精细化服务角色 ===
-  kDtMqProxySvr = 21,  // 分布式消息队列(接入)服务
-
-  // Orbit 相关服务 === 保留一部分25-30
-  kOrbitSvr = 25,            // Orbit 服务
-  kOrbitAgentSvr = 26,       // Orbit Agent 服务
-  kOrbitControllerSvr = 27,  // Orbit Controller 服务
-
-  // 好友 相关服务 === 保留一部分31-32
-  kFriendManagementSvr = 31,  // 好友管理服务
-  kFriendRecommendSvr = 32,   // 好友推荐服务
-
-  kComplianceSvr = 33,  // 合规服务（当前实现文本过滤）
-};
 }  // namespace component
 }  // namespace atframework

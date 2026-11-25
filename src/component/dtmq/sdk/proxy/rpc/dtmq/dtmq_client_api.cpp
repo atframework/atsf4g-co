@@ -15,6 +15,7 @@
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/com.struct.dtmq.config.pb.h>
+#include <protocol/config/svr.hpa.config.pb.h>
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
@@ -102,8 +103,8 @@ DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey
     return 0;
   }
 
-  auto discovery_set =
-      mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr));
+  auto discovery_set = mod->get_discovery_index_by_type(
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber);
   if (!discovery_set) {
     return 0;
   }
@@ -111,7 +112,7 @@ DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey
   atapp::etcd_discovery_set::node_hash_type node_hash;
   node_hash = discovery_set->get_node_hash_by_consistent_hash(
       channel_key.channel_id(),
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber,
                                  mode));
   if (!node_hash.node) {
     return 0;
@@ -157,8 +158,8 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
     return;
   }
 
-  auto discovery_set =
-      mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr));
+  auto discovery_set = mod->get_discovery_index_by_type(
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber);
   if (!discovery_set) {
     return;
   }
@@ -168,7 +169,7 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
   atapp::etcd_discovery_set::node_hash_type node_hash;
   node_hash = discovery_set->get_node_hash_by_consistent_hash(
       channel_key.channel_id(),
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber,
                                  mode));
   if (node_hash.node) {
     server_ids.emplace_back(node_hash.node->get_discovery_info().id());
@@ -202,15 +203,15 @@ DTMQ_PROXY_SDK_API bool has_dtmq_proxysvr() {
     return false;
   }
 
-  auto discovery_set =
-      mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr));
+  auto discovery_set = mod->get_discovery_index_by_type(
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber);
   if (!discovery_set) {
     return false;
   }
 
   return !discovery_set
               ->get_sorted_nodes(logic_hpa_discovery_select(
-                  PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
+                  PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber,
                   logic_hpa_discovery_select_mode::kReady))
               .empty();
 }

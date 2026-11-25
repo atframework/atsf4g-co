@@ -31,7 +31,7 @@ static atfw::testing::mock_node make_compliance_node(uint64_t node_id, const cha
   atfw::testing::mock_node node;
   node.set_id(node_id)
       .set_name(name)
-      .set_type_id(static_cast<uint64_t>(atfw::component::logic_service_type::kComplianceSvr))
+      .set_type_id(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kComplianceFieldNumber)
       .set_type_name("compliance-svr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", ready ? "1" : "0");
@@ -65,7 +65,7 @@ CASE_TEST(component_compliance_sdk, filter_text_selects_ready_node_and_preserves
   atfw::testing::mock_node other_type;
   other_type.set_id(0x120001)
       .set_name("lobby-ready")
-      .set_type_id(static_cast<uint64_t>(atfw::component::logic_service_type::kLobbySvr))
+      .set_type_id(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber)
       .set_type_name("lobbysvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");

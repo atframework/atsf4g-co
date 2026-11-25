@@ -115,7 +115,8 @@ void cache_watcher_t::notify_cache_expired(::rpc::context &ctx,
     return;
   }
 
-  if (node->get_discovery_info().type_id() != static_cast<uint64_t>(atfw::component::logic_service_type::kLobbySvr)) {
+  if (node->get_discovery_info().type_id() !=
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber) {
     FWLOGERROR("send cache {}:{}:{} expired to watcher {}:{}:{} on server {:#x} failed. invalid watcher server type {}",
                static_cast<int>(cache_key.cache_type()), cache_key.zone_id(), cache_key.instance_id(),
                static_cast<int>(get_key().cache_type()), get_key().zone_id(), get_key().instance_id(), server_inst_id_,

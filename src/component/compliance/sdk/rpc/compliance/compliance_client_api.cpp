@@ -28,15 +28,15 @@ COMPLIANCE_SDK_API atfw::atapp::etcd_discovery_node::ptr_t get_target_server_id(
     return nullptr;
   }
 
-  auto discovery =
-      module->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kComplianceSvr));
+  auto discovery = module->get_discovery_index_by_type(
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kComplianceFieldNumber);
   if (!discovery) {
     return nullptr;
   }
 
   auto selected = discovery->get_node_hash_by_consistent_hash(
       routing_key, logic_hpa_discovery_select(
-                       PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kComplianceSvrFieldNumber, mode));
+                       PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kComplianceFieldNumber, mode));
   return selected.node;
 }
 

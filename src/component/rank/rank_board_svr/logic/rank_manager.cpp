@@ -42,9 +42,12 @@
 
 #include <utility/random_engine.h>
 #include <utility/rank_util.h>
+
 #include <cstdint>
+#include <map>
 #include <ranges>
 #include <utility>
+#include <vector>
 
 #include "logic/rank.h"
 #include "logic/rank_mirror_global.h"
@@ -233,7 +236,8 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
         FWLOGDEBUG("rank({}:{}:{}:{}) highest slave:{} upgrade main version:{}", rank_key.rank_type(),
                    rank_key.rank_instance_id(), rank_key.sub_rank_type(), rank_key.sub_rank_instance_id(),
                    highest_data_version_slave_node.first, highest_data_version_slave_node.second);
-        auto replace_db_router = rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_router>(ctx, *rank_router_rsp);
+        auto replace_db_router =
+            rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_router>(ctx, *rank_router_rsp);
         auto& db_slave_nodes = *replace_db_router->mutable_blob_data()->mutable_slave_nodes();
         auto it = std::find(db_slave_nodes.begin(), db_slave_nodes.end(), highest_data_version_slave_node.first);
         if (it != db_slave_nodes.end()) {
@@ -287,9 +291,8 @@ rank::compare_fn_t rank_manager::get_compare_fn(PROJECT_NAMESPACE_ID::EnRankSort
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
-    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-    const PROJECT_NAMESPACE_ID::DRankUserKey& user_key, int64_t score,
-    const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
+    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, const PROJECT_NAMESPACE_ID::DRankUserKey& user_key,
+    int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
   auto rank_iter = rank_map_.find(rank_key);
   if (rank_iter == rank_map_.end() || !rank_iter->second) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_NOT_EXIST);
@@ -311,8 +314,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
 
 // 查询排行榜接口
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_one_user(
-    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
-    const PROJECT_NAMESPACE_ID::DRankUserKey& sort_key, PROJECT_NAMESPACE_ID::DRankUserBoardData& output) {
+    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, const PROJECT_NAMESPACE_ID::DRankUserKey& sort_key,
+    PROJECT_NAMESPACE_ID::DRankUserBoardData& output) {
   auto rank_iter = rank_map_.find(rank_key);
   if (rank_iter == rank_map_.end()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_NOT_EXIST);
@@ -343,14 +346,14 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context&, const PROJECT
   }
 
   atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_set> index_by_type = mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kRankBoardSvr));
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRankBoardFieldNumber);
   if (!index_by_type) {
     FWLOGERROR("select_teamsvr_match get_all_nodes_of_type nullptr");
     return slave_nodes;
   }
 
   auto sorted_nodes = index_by_type->get_sorted_nodes(
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRanksvrFieldNumber,
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRankBoardFieldNumber,
                                  logic_hpa_discovery_select_mode::kReady));
   if (sorted_nodes.empty()) {
     FWLOGERROR("select_teamsvr_match sorted_nodes.empty()");

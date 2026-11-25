@@ -144,8 +144,8 @@ uint64_t matching_logic::get_orbitsvr_server_id(const std::string& match_id) {
   if (module == nullptr) {
     return 0;
   }
-  auto discovery =
-      module->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kOrbitSvr));
+  auto discovery = module->get_discovery_index_by_type(
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitServerFieldNumber);
   if (!discovery) {
     return 0;
   }

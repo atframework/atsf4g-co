@@ -40,7 +40,8 @@ CASE_TEST(component_orbit, orbit_sdk_launch_client_contract) {
   atfw::testing::mock_node node;
   node.set_id(0x1D0001)
       .set_name("unit-test-orbit-controller")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kOrbitControllerSvr))
+      .set_type_id(static_cast<uint32_t>(
+          PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitControllerFieldNumber))
       .set_type_name("orbit-controller")
       .set_zone_id(1);
   auto remote = test.discovery().add_node(node);

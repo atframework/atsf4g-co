@@ -365,7 +365,7 @@ uint64_t orbit_server_manager::select_controller_server_id(const std::string& cl
     return 0;
   }
   auto discovery = common_mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kOrbitControllerSvr));
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitControllerFieldNumber);
   if (!discovery) {
     return 0;
   }
@@ -387,7 +387,7 @@ uint64_t orbit_server_manager::select_controller_server_id(const std::string& re
     return 0;
   }
   auto discovery = common_mod->get_discovery_index_by_type(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kOrbitControllerSvr));
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kOrbitControllerFieldNumber);
   if (!discovery) {
     return 0;
   }

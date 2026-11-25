@@ -65,7 +65,7 @@ CACHE_RPC_API uint64_t get_cachesvr_server_id(PROJECT_NAMESPACE_ID::EnCacheApiCa
   }
 
   auto discovery_set =
-      mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kCacheSvr));
+      mod->get_discovery_index_by_type(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber);
   if (!discovery_set) {
     return 0;
   }
@@ -77,9 +77,8 @@ CACHE_RPC_API uint64_t get_cachesvr_server_id(PROJECT_NAMESPACE_ID::EnCacheApiCa
   memcpy(buffer + sizeof(cache_type_id), &instance_id, sizeof(instance_id));
 
   auto node = discovery_set->get_node_hash_by_consistent_hash(
-      buffer,
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCachesvrFieldNumber,
-                                 logic_hpa_discovery_select_mode::kReady));
+      buffer, logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber,
+                                         logic_hpa_discovery_select_mode::kReady));
   if (!node.node) {
     return 0;
   }
@@ -103,14 +102,14 @@ CACHE_RPC_API bool has_cachesvr() {
   }
 
   atfw::util::memory::strong_rc_ptr<atapp::etcd_discovery_set> discovery_set =
-      mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kCacheSvr));
+      mod->get_discovery_index_by_type(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber);
   if (!discovery_set) {
     return false;
   }
 
   return !discovery_set
               ->get_sorted_nodes(logic_hpa_discovery_select(
-                  PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCachesvrFieldNumber,
+                  PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kCacheFieldNumber,
                   logic_hpa_discovery_select_mode::kReady))
               .empty();
 }

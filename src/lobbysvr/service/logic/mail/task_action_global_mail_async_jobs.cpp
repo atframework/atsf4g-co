@@ -63,12 +63,12 @@ task_action_global_mail_async_jobs::result_type task_action_global_mail_async_jo
   if (mod != nullptr) {
     is_zone_master = true;
     is_global_master = true;
-    auto lobbsvr_index =
-        mod->get_discovery_index_by_type(static_cast<uint64_t>(::atfw::component::logic_service_type::kLobbySvr));
+    auto lobbsvr_index = mod->get_discovery_index_by_type(
+        static_cast<uint64_t>(::PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber));
     if (lobbsvr_index && !lobbsvr_index->empty()) {
-      for (const auto& gamesvr : lobbsvr_index->get_sorted_nodes(
-               logic_hpa_discovery_select(static_cast<uint64_t>(::atfw::component::logic_service_type::kLobbySvr),
-                                          logic_hpa_discovery_select_mode::kReady))) {
+      for (const auto& gamesvr : lobbsvr_index->get_sorted_nodes(logic_hpa_discovery_select(
+               static_cast<uint64_t>(::PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kLobbyFieldNumber),
+               logic_hpa_discovery_select_mode::kReady))) {
         if (!is_global_master && !is_zone_master) {
           break;
         }

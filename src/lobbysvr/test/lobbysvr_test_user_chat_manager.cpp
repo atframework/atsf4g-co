@@ -135,7 +135,8 @@ bool setup_dtmq_proxy_node(atfw::testing::runtime &test) {
   atfw::testing::mock_node node;
   node.set_id(kDtmqProxyNodeId)
       .set_name("unit-test-dtmq-proxy")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kDtMqProxySvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber))
       .set_type_name("dtmq-proxysvr")
       .set_zone_id(kZoneId)
       .add_label("hpa_scaling_ready", "1");
@@ -148,7 +149,7 @@ bool setup_dtmq_proxy_node(atfw::testing::runtime &test) {
   atfw::testing::mock_node compliance_node;
   compliance_node.set_id(0x210001)
       .set_name("unit-test-compliance")
-      .set_type_id(static_cast<uint64_t>(atframework::component::logic_service_type::kComplianceSvr))
+      .set_type_id(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kComplianceFieldNumber)
       .set_type_name("compliance-svr")
       .set_zone_id(kZoneId)
       .add_label("hpa_scaling_ready", "1");

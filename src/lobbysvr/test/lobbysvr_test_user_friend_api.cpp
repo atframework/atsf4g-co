@@ -263,7 +263,8 @@ static std::vector<atfw::testing::ss_rule_handle> mock_coordinator(atfw::testing
   atfw::testing::mock_node node;
   node.set_id(0x1B0001)
       .set_name("friend-test-coordinator")
-      .set_type_id(static_cast<uint32_t>(atfw::component::logic_service_type::kDtCoordSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber))
       .set_type_name("dtcoordsvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");

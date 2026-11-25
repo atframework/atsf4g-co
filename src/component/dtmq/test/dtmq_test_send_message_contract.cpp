@@ -45,7 +45,8 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
   atfw::testing::mock_node node;
   node.set_id(0x1C0001)
       .set_name("unit-test-dtmq-proxy")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kDtMqProxySvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber))
       .set_type_name("dtmq-proxysvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");

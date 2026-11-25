@@ -578,7 +578,8 @@ CASE_TEST(lobbysvr_user_team, matching_sync_06_team_view_subscription_member_gat
     atfw::testing::mock_node node;
     node.set_id(kMatchsvrId)
         .set_name("unit-test-matchsvr-team-sync")
-        .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+        .set_type_id(
+            static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
         .set_type_name("matchsvr")
         .set_zone_id(team_test::kZoneId)
         .add_label("hpa_scaling_ready", "1");
@@ -1135,7 +1136,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_10_cancel_uses_current_captain) {
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("unit-test-matchsvr-captain-cancel")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .set_zone_id(team_test::kZoneId)
       .add_label("hpa_scaling_ready", "1");

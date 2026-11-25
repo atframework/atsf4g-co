@@ -104,7 +104,7 @@ int mq_channel_manager::init() {
         }
 
         if (discovery->get_discovery_info().type_id() !=
-            static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr)) {
+            PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxyFieldNumber) {
           return;
         }
 

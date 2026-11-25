@@ -68,11 +68,11 @@ static uint64_t calculate_server_id(const atfw::distributed_system::transaction_
   }
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr),
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber,
       logic_config::me()->get_local_zone_id());
   if (!discovery || discovery->empty()) {
     discovery = common_mod->get_discovery_index_by_type(
-        static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr));
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber);
   }
 
   if (!discovery || discovery->empty()) {
@@ -97,11 +97,11 @@ static void initialize_replication_server_ids(atfw::distributed_system::transact
   }
 
   auto discovery = common_mod->get_discovery_index_by_type_zone(
-      static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr),
+      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber,
       logic_config::me()->get_local_zone_id());
   if (!discovery || discovery->empty()) {
     discovery = common_mod->get_discovery_index_by_type(
-        static_cast<uint64_t>(atframework::component::logic_service_type::kDtCoordSvr));
+        PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber);
   }
 
   if (!discovery || discovery->empty()) {

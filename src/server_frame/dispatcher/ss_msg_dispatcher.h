@@ -50,12 +50,12 @@ class SSMsg;
 }
 
 struct ATFW_UTIL_SYMBOL_VISIBLE ss_msg_logic_index {
-  uint64_t type_id;
+  int32_t type_id;
   gsl::string_view type_name;
   uint64_t zone_id;
 
   inline ss_msg_logic_index() noexcept : type_id(0), zone_id(0) {}
-  inline ss_msg_logic_index(uint64_t input_type_id, uint64_t input_zone_id)
+  inline ss_msg_logic_index(int32_t input_type_id, uint64_t input_zone_id)
       : type_id(input_type_id), zone_id(input_zone_id) {}
   inline ss_msg_logic_index(gsl::string_view input_type_name, uint64_t input_zone_id) noexcept
       : type_id(0), type_name(input_type_name), zone_id(input_zone_id) {}

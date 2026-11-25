@@ -142,7 +142,7 @@ CASE_TEST(lobbysvr_user_matching, hands_off_missing_creating_battle_to_orbit_dur
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("unit-test-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");
@@ -237,7 +237,7 @@ CASE_TEST(lobbysvr_user_matching, sends_acknowledgement_in_periodic_matching_hea
   atfw::testing::mock_node node_a;
   node_a.set_id(kMatchsvrIdA)
       .set_name("unit-test-matchsvr-a")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");
@@ -245,7 +245,7 @@ CASE_TEST(lobbysvr_user_matching, sends_acknowledgement_in_periodic_matching_hea
   atfw::testing::mock_node node_b;
   node_b.set_id(kMatchsvrIdB)
       .set_name("unit-test-matchsvr-b")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");
@@ -648,7 +648,8 @@ CASE_TEST(lobbysvr_user_matching, retains_terminal_view_and_stops_heartbeat_when
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("terminal-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr));
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber));
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
   rpc::unit_test::ss_mock_rule_options rule_options;
   rule_options.match_node_id = kMatchsvrId;
@@ -730,7 +731,7 @@ CASE_TEST(lobbysvr_user_matching, registers_new_unit_before_create_and_accepts_e
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("new-round-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .add_label("hpa_scaling_ready", "1");
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
@@ -814,7 +815,8 @@ CASE_TEST(lobbysvr_user_matching, old_heartbeat_cannot_clear_new_subscribed_unit
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("late-heartbeat-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr));
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber));
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
   auto user_inst = user::create(10014, 1, "late-heartbeat-user");
   CASE_EXPECT_TRUE(!!user_inst);
@@ -891,7 +893,8 @@ CASE_TEST(lobbysvr_user_matching, repeated_subscription_preserves_ack_and_comple
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("repeated-subscription-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr));
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber));
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
   auto requests = std::make_shared<std::vector<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>>();
   rpc::unit_test::ss_mock_rule_options rule_options;
@@ -1126,7 +1129,7 @@ CASE_TEST(lobbysvr_user_matching, confirm_rpc_preserves_ack_when_completed_snaps
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("matching-confirm-event-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .add_label("hpa_scaling_ready", "1");
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
@@ -1255,7 +1258,7 @@ CASE_TEST(lobbysvr_user_matching, old_confirm_rpc_cannot_ack_new_confirmation_af
   atfw::testing::mock_node node;
   node.set_id(kMatchsvrId)
       .set_name("matching-confirm-replacement-matchsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_id(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kMatchFieldNumber))
       .set_type_name("matchsvr")
       .add_label("hpa_scaling_ready", "1");
   CASE_EXPECT_TRUE(!!test.discovery().add_node(node));

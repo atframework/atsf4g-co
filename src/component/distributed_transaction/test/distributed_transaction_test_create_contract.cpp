@@ -43,7 +43,8 @@ CASE_TEST(component_distributed_transaction, transaction_sdk_create_contract) {
   atfw::testing::mock_node node;
   node.set_id(0x1B0001)
       .set_name("unit-test-dtcoordsvr")
-      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kDtCoordSvr))
+      .set_type_id(
+          static_cast<uint32_t>(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtcoordFieldNumber))
       .set_type_name("dtcoordsvr")
       .set_zone_id(1)
       .add_label("hpa_scaling_ready", "1");
