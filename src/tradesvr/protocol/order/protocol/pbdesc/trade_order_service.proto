@@ -1,0 +1,509 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+
+import "protocol/extension/atframework.proto";
+
+import "protocol/pbdesc/distributed_transaction.proto";
+import "protocol/pbdesc/com.struct.trade.proto";
+import "protocol/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.trade.proto";
+import "protocol/common/svr.trade.common.proto";
+
+package atframework.trade;
+
+// ====== 事件准备阶段 ======
+message SSTradeOrderTransactionPrepareReq {
+  trade_order_ticket_key ticket_key = 1;
+  atframework.distributed_system.SSParticipatorTransactionPrepareReq transaction_request = 2;
+}
+
+// ====== 事件准备阶段 ======
+message SSTradeOrderTransactionPrepareRsp {
+  int32 client_result = 1;
+  atframework.distributed_system.SSParticipatorTransactionPrepareRsp transaction_response = 2;
+}
+
+// ====== 事件提交（成功完成）请求 ======
+message SSTradeOrderTransactionCommitReq {
+  trade_order_ticket_key ticket_key = 1;
+  atframework.distributed_system.SSParticipatorTransactionCommitReq transaction_request = 2;
+}
+
+// ====== 事件提交（成功完成）回包 ======
+message SSTradeOrderTransactionCommitRsp {
+  atframework.distributed_system.SSParticipatorTransactionCommitRsp transaction_response = 2;
+}
+
+// ====== 事件拒绝（失败）请求 ======
+message SSTradeOrderTransactionRejectReq {
+  trade_order_ticket_key ticket_key = 1;
+  atframework.distributed_system.SSParticipatorTransactionRejectReq transaction_request = 2;
+}
+
+// ====== 事件拒绝（失败）回包 ======
+message SSTradeOrderTransactionRejectRsp {
+  atframework.distributed_system.SSParticipatorTransactionRejectRsp transaction_response = 2;
+}
+
+message SSTradeOrderPublishSalesOrderReq {
+  DTradeOrderTicketMeta order = 1;
+}
+
+message SSTradeOrderPublishSalesOrderRsp {
+  int32 result_code = 1;
+}
+
+message SSTradeOrderPublishPurchaseOrderReq {
+  DTradeOrderTicketMeta order = 1;
+}
+
+message SSTradeOrderPublishPurchaseOrderRsp {
+  int32 result_code = 1;
+}
+
+message SSTradeOrderPublishAuctionOrderReq {
+  DTradeOrderTicketMeta order = 1;
+}
+
+message SSTradeOrderPublishAuctionOrderRsp {
+  int32 result_code = 1;
+}
+
+message SSTradeOrderPublishBidOrderReq {
+  trade_order_ticket_key ticket_key = 1;
+  DTradeBidOrderMeta bid_data = 2;
+
+  DTradeClientProfile client_profile = 3;
+}
+
+message SSTradeOrderPublishBidOrderRsp {
+  int32 result_code = 1;
+  DTradeOrderTicketMeta meta = 2;
+}
+
+message SSTradeOrderCancelOrderReq {
+  trade_order_ticket_key ticket_key = 1;
+
+  int64 acknowledge_event_id = 2;
+
+  message CancelOptions {
+    bool auction_no_bidder = 1;
+  }
+
+  SSTradeOrderCancelOrderReq.CancelOptions options = 3;
+}
+
+message SSTradeOrderCancelOrderRsp {
+  int32 result_code = 1;
+}
+
+message SSTradeOrderGetOrderReq {
+  repeated trade_order_ticket_key ticket_key = 1;
+}
+
+message SSTradeOrderGetOrderRsp {
+  int32 result_code = 1;
+  repeated DTradeOrderTicketDetail order_detail = 2;
+  repeated trade_order_ticket_key not_found_ticket_key = 3;
+}
+
+message SSTradePriceIdBound {
+  int64 price = 1;
+  int64 trade_order_ticket_id = 2;
+}
+
+message SSTradeOrderPriceIdBoundUnit {
+  SSTradePriceIdBound bound_min = 1;
+  SSTradePriceIdBound bound_max = 2;
+  int64 count = 3;
+}
+
+message SSTradeOrderFetchSalesOrderReq {
+  DTradeMarketProductKey product_key = 1;
+
+  // Order服 Slot ID列表
+  repeated int32 slot_ids = 2;
+
+  SSTradeOrderPriceIdBoundUnit price_id_bound_info = 3;
+
+  // 检查Fetch锁,不用填充lock_timeout
+  trade_order_fetch_lock_data check_fetch_lock = 4;
+}
+
+message SSTradeOrderFetchSalesOrderRsp {
+  int32 result_code = 1;
+  repeated DTradeOrderTicketMeta orders = 2;
+  bool has_more_data = 3;
+}
+
+message SSTradeOrderFetchPurchaseOrderReq {
+  DTradeMarketProductKey product_key = 1;
+
+  // Order服 Slot ID列表
+  repeated int32 slot_ids = 2;
+
+  repeated SSTradeOrderPriceIdBoundUnit price_id_bound_infos = 3;
+
+  // 检查Fetch锁,不用填充lock_timeout
+  trade_order_fetch_lock_data check_fetch_lock = 4;
+}
+
+message SSTradeOrderFetchPurchaseOrderRsp {
+  int32 result_code = 1;
+  repeated DTradeOrderTicketMeta orders = 2;
+  bool has_more_data = 3;
+}
+
+message SSTradeOrderFetchLockOrderReq {
+  message fetch_lock_product {
+    DTradeMarketProductKey product_key = 1;
+    // 商品类型 @see DTradeOrderTicketMeta.type
+    int32 order_type = 2;
+
+    // 加锁价格单元和数量
+    repeated SSTradeOrderPriceIdBoundUnit lock_unit = 3;
+
+    // 默认价格从低到高，当 reverse_order=true 是2从高到低排序
+    bool reverse_order = 4;
+  }
+
+  trade_order_fetch_lock_data fetch_lock_data = 1;
+
+  repeated fetch_lock_product try_lock = 2;
+}
+
+message SSTradeOrderFetchLockOrderRsp {
+  message fetch_lock_unit {
+    SSTradeOrderPriceIdBoundUnit price_id_bound_info = 1;
+    repeated DTradeOrderTicketMeta order_tickets = 2;
+    bool has_more_data = 3;
+  }
+
+  message fetch_lock_product {
+    DTradeMarketProductKey product_key = 1;
+    // 商品类型 @see DTradeOrderTicketMeta.type
+    int32 order_type = 2;
+    repeated fetch_lock_unit lock_unit = 3;
+  }
+
+  repeated fetch_lock_product locked = 1;
+
+  repeated int32 invalid_area_codes = 2;
+}
+
+message SSTradeOrderFetchUnlockOrderReq {
+  message fetch_unlock_product {
+    DTradeMarketProductKey product_key = 1;
+
+    repeated int64 trade_order_ticket_id = 2;
+  }
+
+  trade_order_fetch_lock_data check_lock_data = 1;
+
+  repeated fetch_unlock_product unlock = 2;
+}
+
+message SSTradeOrderFetchUnlockOrderRsp {
+  message fetch_unlock_product {
+    DTradeMarketProductKey product_key = 1;
+
+    repeated int64 trade_order_ticket_id = 2;
+  }
+
+  repeated fetch_unlock_product unlocked = 1;
+
+  repeated int32 invalid_area_codes = 2;
+}
+
+message DTradeOrderHeartbeatData {
+  trade_order_ticket_key ticket_key = 1;
+  int64 event_id = 2;
+}
+
+message SSTradeUpdateOrderHeartbeatReq {
+  repeated DTradeOrderHeartbeatData heartbeat_data = 1;
+}
+
+message SSTradeUpdateOrderHeartbeatRsp {
+  int32 result_code = 1;
+  repeated trade_order_ticket_key not_found_ticket_key = 2;
+  repeated trade_order_ticket_key event_id_error_ticket_key = 3;
+}
+
+message SSTradeOrderUnsubscribeReq {
+  repeated trade_order_ticket_key ticket_key = 1;
+}
+
+message SSTradeOrderSearchReq {
+  int32 area_code = 1;
+  int32 order_type = 2;  // 订单类型, 指向 DTradeOrderTicketMeta.type
+  DTradeOrderTicketSearchRule query = 3;
+  int64 count = 4;
+}
+
+message SSTradeOrderSearchRsp {
+  int32 result_code = 1;
+  repeated DTradeOrderTicketMeta orders = 2;
+  bool query_has_more_data = 3;
+}
+
+message DTradeOrderSlotTransferSync {
+  int32 area_code = 1;
+  int32 slot_id = 2;
+  int32 order_type = 3;
+  int64 etcd_revision = 4;
+}
+
+message SSTradeOrderSlotTransferSync {
+  repeated DTradeOrderSlotTransferSync transfer_data = 1;
+}
+
+message SSTradeGetProductStatisticsReq {
+  DTradeMarketProductKey product_key = 1;
+  bool need_clear_cache = 2;
+  int32 slot_id = 3;
+  int32 calculate_cycle_idx = 4;
+  int32 order_type = 5;
+}
+
+message SSTradeGetProductStatisticsRsp {
+  SSTradeGetProductStatisticsReq ss_req = 1;
+  int32 error_code = 2;
+  trade_product_statistics_detail_by_cycle statistics_info = 3;
+}
+
+message SSTradeOrderGetRecommendOrderTicketReq {
+  DTradeRecommendOrderTicketRule query = 1;
+}
+
+message SSTradeOrderGetRecommendOrderTicketRsp {
+  DTradeRecommendOrderTicketResult result = 2;
+}
+
+message SSTradeOrderFetchProductHotSaleReq {
+  int32 area_code = 1;
+  int32 market_id = 2;
+
+  int32 top_n = 3;
+}
+
+message SSTradeOrderFetchProductHotSaleRsp {
+  repeated DTradeMarketProductKey product_key = 1;
+  bool has_ready = 2;
+}
+
+message DTradeOrderGmSetProductStandardPirce {
+  message OneProductStandardPirce {
+    DTradeStandardPriceKey key = 1;
+    int64 price = 2;
+  }
+
+  repeated OneProductStandardPirce product_key_list = 1;
+}
+
+message DTradeOrderGmGetProductStandardPrice {
+  DTradeStandardPriceKey price_key = 1;
+}
+
+message SSTradeOrderGmReq {
+  oneof cmd {
+    DTradeOrderGmSetProductStandardPirce set_standard_price = 1;  // 设置商品sp价格
+    DTradeOrderGmGetProductStandardPrice get_standard_price = 2;  // 查询商品sp价格
+  }
+}
+
+message SSTradeOrderGmRsp {
+  int32 error_code = 1;
+  oneof cmd {
+    trade_product_standard_price_by_price_key standard_price = 2;  // 查询商品sp价格
+  }
+}
+
+// Index -> Order : 拉取商品分布、价格池
+message SSTradeOrderProductLoadReq {
+  repeated trade_product_distribution_order_key product_order_key = 1;
+}
+
+message SSTradeOrderProductLoadRsp {
+  int32 result_code = 1;
+
+  repeated trade_product_distribution_order_detail product_detail = 2;
+}
+
+// Index -> Order 心跳
+message SSTradeOrderProductHeartbeatSync {
+  repeated trade_product_distribution_order_heartbeat product_hearteat = 1;
+}
+
+service TradeOrderService {
+  option (atframework.service_options) = {
+    module_name: "trade"
+  };
+
+  rpc transaction_prepare(SSTradeOrderTransactionPrepareReq) returns (SSTradeOrderTransactionPrepareRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "事务准备阶段(Try)"
+      allow_no_wait: true
+    };
+  };
+
+  rpc transaction_commit(SSTradeOrderTransactionCommitReq) returns (SSTradeOrderTransactionCommitRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "事务提交(Commit)"
+      allow_no_wait: true
+    };
+  };
+
+  rpc transaction_reject(SSTradeOrderTransactionRejectReq) returns (SSTradeOrderTransactionRejectRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "事务拒绝(Commit)"
+      allow_no_wait: true
+    };
+  };
+
+  rpc publish_sales_order(SSTradeOrderPublishSalesOrderReq) returns (SSTradeOrderPublishSalesOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "同质化 发布供货单"
+      user_rpc: true
+    };
+  };
+
+  rpc publish_purchase_order(SSTradeOrderPublishPurchaseOrderReq) returns (SSTradeOrderPublishPurchaseOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "同质化 发布订购单"
+      user_rpc: true
+    };
+  };
+
+  rpc publish_auction_order(SSTradeOrderPublishAuctionOrderReq) returns (SSTradeOrderPublishAuctionOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拍卖 发布卖单"
+      user_rpc: true
+    };
+  };
+
+  rpc publish_bid_order(SSTradeOrderPublishBidOrderReq) returns (SSTradeOrderPublishBidOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拍卖 发布买单"
+      user_rpc: true
+    };
+  };
+
+  rpc cancel_order(SSTradeOrderCancelOrderReq) returns (SSTradeOrderCancelOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "取消订单"
+      user_rpc: true
+    };
+  };
+
+  rpc get_order(SSTradeOrderGetOrderReq) returns (SSTradeOrderGetOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取指定订单"
+      allow_no_wait: true
+    };
+  };
+
+  rpc fetch_sales_order(SSTradeOrderFetchSalesOrderReq) returns (SSTradeOrderFetchSalesOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取供货单"
+      allow_no_wait: true
+    };
+  };
+
+  rpc fetch_purchase_order(SSTradeOrderFetchPurchaseOrderReq) returns (SSTradeOrderFetchPurchaseOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取订购单"
+      allow_no_wait: true
+    };
+  };
+
+  rpc update_order_heartbeat(SSTradeUpdateOrderHeartbeatReq) returns (SSTradeUpdateOrderHeartbeatRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "订单心跳"
+      user_rpc: true
+    };
+  };
+
+  rpc order_unsubscribe(stream SSTradeOrderUnsubscribeReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "订单反订阅"
+      user_rpc: true
+      allow_no_wait: true
+    };
+  };
+
+  rpc get_product_stat_info(SSTradeGetProductStatisticsReq) returns (SSTradeGetProductStatisticsRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "查询商品交易统计数据"
+      allow_no_wait: true
+    };
+  };
+
+  rpc search(SSTradeOrderSearchReq) returns (SSTradeOrderSearchRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "搜索订单"
+      allow_no_wait: true
+    };
+  };
+
+  rpc trade_slot_transfer_sync(stream SSTradeOrderSlotTransferSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Slot转移通知"
+    };
+  };
+
+  rpc get_recommend_order_ticket(SSTradeOrderGetRecommendOrderTicketReq)
+      returns (SSTradeOrderGetRecommendOrderTicketRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取推荐"
+      allow_no_wait: true
+    };
+  };
+
+  rpc fetch_hot_sale_product(SSTradeOrderFetchProductHotSaleReq) returns (SSTradeOrderFetchProductHotSaleRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "交易行热销数据拉取"
+    };
+  };
+
+  rpc trade_gm_set(SSTradeOrderGmReq) returns (SSTradeOrderGmRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "gm 设置"
+    };
+  };
+
+  rpc heartbeat_product_to_order(stream SSTradeOrderProductHeartbeatSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Index -> Order 心跳"
+    };
+  };
+
+  rpc load_product_from_order(SSTradeOrderProductLoadReq) returns (SSTradeOrderProductLoadRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Index -> Order : 拉取商品分布、价格池"
+      allow_no_wait: true
+    };
+  };
+
+  rpc fetch_try_lock(SSTradeOrderFetchLockOrderReq) returns (SSTradeOrderFetchLockOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Fetch锁-TryLock"
+      allow_no_wait: true
+    };
+  };
+
+  rpc fetch_unlock(SSTradeOrderFetchUnlockOrderReq) returns (SSTradeOrderFetchUnlockOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Fetch锁-UnLock"
+      allow_no_wait: true
+    };
+  };
+}

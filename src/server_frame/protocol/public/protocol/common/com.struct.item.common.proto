@@ -95,6 +95,13 @@ message DItemOffset {
   int64 count = 2 [(org.xresloader.validator) = ">0"];
 }
 
+// 附带位置信息的道具Offset，可能用于自动摆放和堆叠。
+message DItemBasicOffset {
+  int32 type_id = 1;
+  int64 count = 2;
+  DItemPosition position = 4;
+}
+
 message DItemUseAction {
   oneof action_type {
     int64 add_character_exp = 1 [(org.xresloader.field_unique_tag) = "item"];

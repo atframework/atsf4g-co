@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/timestamp.proto";
+
+import "protocol/pbdesc/com.struct.trade.proto";
+import "protocol/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.trade.proto";
+
+package atframework.trade;
+
+enum EnTradeConstSetting {
+  EN_TRADE_CONST_SETTING_NONE = 0;
+  // Sharding的最大Slot数
+  EN_TRADE_CONST_SETTING_SHARDING_SIZE = 2048;
+  // group最大数
+  EN_TRADE_CONST_SETTING_GROUP_SIZE = 10;
+}
+
+message trade_product_deal_info {
+  // 成交价格
+  int64 price = 1;
+  // 成交单数
+  int64 deal_count = 2;
+  // 时间
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message trade_product_index_key {
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 1;
+
+  // 商品Key
+  DTradeMarketProductKey product_key = 2;
+
+  // 指定周期ID，不指定则是拉取最新周期。
+  // 如果最新周期未ready，也返回倒数第二个周期
+  int64 cycle_id = 3;
+
+  // 是否需要拉取统计数据
+  bool need_summary = 4;
+
+  // 是否需要拉取对应的价格池数据
+  bool need_price_pool = 5;
+}
+
+message trade_product_percentage_info {
+  // 价格占比
+  int64 percentage = 1;
+  // 档位价格
+  int64 min_price = 2;
+  // 档位累计商品数
+  int64 accmulate_count = 3;
+}
+
+message trade_product_distribution_summary {
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 1;
+
+  // 商品Key
+  DTradeMarketProductKey product_key = 2;
+
+  // 指定周期ID，不指定则是拉取最新周期
+  int64 cycle_id = 3;
+
+  // 汇总版本号
+  int64 summary_version = 4;
+
+  // 周期开始时间（包含）
+  google.protobuf.Timestamp cycle_begin_time = 5;
+
+  // 周期结束时间（不包含）
+  google.protobuf.Timestamp cycle_end_time = 6;
+
+  // 汇总数据是否完整
+  bool summary_ready = 7;
+
+  // 成交数据统计汇总
+  trade_product_deal_statistics_data summary_deal_stat = 8;
+
+  // 档位数据统计汇总
+  repeated trade_product_onsale_price_statistics summary_order_price_statistics = 9;
+
+  // 优先百分比统计汇总
+  repeated trade_product_percentage_info summary_price_percentage = 10;
+
+  // 价格池数据(可选)
+  trade_product_standard_price_info price_pool = 11;
+}
+
+message trade_product_distribution_order_key {
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 1;
+
+  // 商品Key
+  DTradeMarketProductKey product_key = 2;
+
+  // 指定周期ID，不指定则是拉取最新周期
+  int64 cycle_id = 3;
+
+  // order服务的Slot ID
+  int32 order_slot_id = 4;
+
+  // 是否需要拉取对应的价格池数据
+  bool need_price_pool = 5;
+}
+
+message trade_product_distribution_order_heartbeat {
+  trade_product_distribution_order_key product_order_key = 1;
+  int64 order_slot_data_version = 2;
+  int64 price_pool_cycle_id = 3;
+}
+
+message trade_product_distribution_order_detail {
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 1;
+
+  // 商品Key
+  DTradeMarketProductKey product_key = 2;
+
+  // 指定周期ID，不指定则是拉取最新周期
+  int64 cycle_id = 3;
+
+  // 周期开始时间（包含）
+  google.protobuf.Timestamp cycle_begin_time = 4;
+
+  // 周期结束时间（不包含）
+  google.protobuf.Timestamp cycle_end_time = 5;
+
+  // order服务的Slot ID
+  int32 order_slot_id = 6;
+
+  // order服务对应Slot ID的数据版本号
+  int64 order_slot_data_version = 7;
+
+  // 成交数据统计
+  trade_product_deal_statistics_data order_deal_statistics = 8;
+
+  // 档位数据统计
+  repeated trade_product_onsale_price_statistics order_price_statistics = 9;
+
+  // 价格池数据(可选)
+  trade_product_standard_price_summary price_pool = 11;
+}

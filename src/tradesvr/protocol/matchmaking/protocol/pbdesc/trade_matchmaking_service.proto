@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "protocol/extension/atframework.proto";
+
+import "protocol/pbdesc/com.struct.trade.proto";
+
+package atframework.trade;
+
+message SSMatchMakingPublishFixedPurchaseOrderReq {
+  DTradeOrderTicketMeta order = 1;
+  bool is_fixed = 2;
+  int32 sharding_count = 3;
+}
+
+message SSMatchMakingPublishFixedPurchaseOrderRsp {
+  int32 result_code = 1;
+  DTradeOrderMatchMakingBasicInfo matchmaking_info = 2;
+}
+
+message SSMatchMakingDoOnOffRecycleProductReq {
+  DTradeMarketProductKey trade_product_key = 1;
+  int64 min_price = 2;
+  int64 max_price = 3;
+  int64 count = 4;
+  int32 on_off_switch = 5;
+  int64 recycle_date = 6;
+}
+
+message SSMatchMakingDoOnOffRecycleProductRsp {
+  int32 result_code = 1;
+}
+
+message SSPriceIdBound {
+  int64 price = 1;
+  int64 trade_order_ticket_id = 2;
+}
+
+message SSMatchMakingNotifyProductReplicatedProcessReq {
+  DTradeMarketProductKey trade_product_key = 1;
+  SSPriceIdBound sales_order_bound = 2;
+  SSPriceIdBound purchase_order_bound = 3;
+  uint64 main_node_id = 4;
+
+  uint32 ttl = 11;
+}
+
+message SSMatchMakingNotifyProductReplicatedProcessRsp {
+  int32 result_code = 1;
+}
+
+service TradeMatchMakingService {
+  option (atframework.service_options) = {
+    module_name: "trade"
+  };
+
+  rpc publish_fixed_purchase_order(SSMatchMakingPublishFixedPurchaseOrderReq)
+      returns (SSMatchMakingPublishFixedPurchaseOrderRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "同质化 发布一口价到撮合服务"
+      user_rpc: true
+    };
+  };
+
+  rpc gm_do_on_off_recycle_product(SSMatchMakingDoOnOffRecycleProductReq)
+      returns (SSMatchMakingDoOnOffRecycleProductRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "GM 回收对应商品订单开关"
+    };
+  };
+
+  rpc matchmaking_main_notify_replicated(SSMatchMakingNotifyProductReplicatedProcessReq)
+      returns (SSMatchMakingNotifyProductReplicatedProcessRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "通知从节点开始撮合"
+      allow_no_wait: true
+    };
+  };
+}

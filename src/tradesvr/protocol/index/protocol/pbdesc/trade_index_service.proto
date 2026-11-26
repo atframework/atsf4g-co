@@ -1,0 +1,223 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+import "protocol/extension/atframework.proto";
+
+import "protocol/common/svr.trade.common.proto";
+import "protocol/pbdesc/com.struct.trade.proto";
+import "protocol/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.trade.proto";
+
+package atframework.trade;
+
+message SSTradeConditionIndexReq {
+  DTradeRecommendProductRule query = 1;
+
+  int32 slot_id = 10;  // index service slot id
+  int32 ttl = 11;
+}
+
+message SSTradeConditionIndexRsp {
+  int32 result_code = 1;
+  DTradeRecommendProductResult search_result = 2;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+message SSTradeProductHistogramPullReq {
+  DTradeMarketProductKey trade_product_key = 1;
+  int32 ttl = 11;
+}
+
+message SSTradeProductHistogramPullRsp {
+  int32 result_code = 1;
+  repeated trade_product_standard_price_summary product_standard_price_infos = 2;
+  int32 ttl = 11;
+}
+
+message SSTradeIndexGetReq {
+  DTradeMarketProductKey trade_product_key = 1;
+  google.protobuf.Timestamp timestamp = 2;  // request the index data that nearby timestamp
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  int32 slot_id = 10;  // index service slot id
+  int32 ttl = 11;
+}
+
+message SSTradeIndexGetRsp {
+  int32 result_code = 1;
+  DTradeMarketProductIndexInfo info = 2;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+message SSTradeIndexQueryStandardPriceReq {
+  DTradeBatchQueryStandardPriceRule query = 1;
+
+  int32 slot_id = 10;  // index service slot id
+  int32 ttl = 11;
+}
+
+message SSTradeIndexQueryStandardPriceRsp {
+  int32 result_code = 1;
+  DTradeBatchQueryStandardPriceResult result = 2;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+message SSTradeBatchGetBasicIndexReq {
+  repeated DTradeMarketProductKey trade_product_key = 1;
+  google.protobuf.Timestamp timestamp = 2;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+message SSTradeBatchGetBasicIndexRsp {
+  int32 result_code = 1;
+  repeated DTradeMarketProductBasicIndexInfo info = 2;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+message SSTradeGetProductPercentageReq {
+  DTradeMarketProductKey trade_product_key = 1;
+  google.protobuf.Timestamp timestamp = 2;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+message SSTradeGetProductPercentageRsp {
+  int32 result_code = 1;
+  DTradeMarketProductPercentageInfo info = 2;
+
+  int32 slot_id = 10;
+  int32 ttl = 11;
+}
+
+// Replicate -> Main : 拉取商品分布、价格池
+message SSTradeProductDistributionLoadReq {
+  repeated trade_product_index_key product_index_key = 1;
+}
+
+message SSTradeProductDistributionLoadRsp {
+  int32 result_code = 1;
+
+  repeated trade_product_distribution_summary product_summary = 2;
+}
+
+// Main -> Replicate : 商品分布、价格池变更通知
+message SSTradeProductDistributionReplicateChangeSync {
+  repeated trade_product_distribution_summary product_summary = 1;
+}
+
+// Replicate -> Main : 商品分布、价格池变更通知
+message SSTradeProductDistributionHeartbeatSync {
+  message DHeartbeatData {
+    trade_product_index_key product_index_key = 1;
+    int64 summary_version = 2;
+    int64 price_pool_cycle_id = 3;
+  }
+  repeated SSTradeProductDistributionHeartbeatSync.DHeartbeatData product_hearteat = 1;
+}
+
+// Order -> Main : 商品分布、价格池变更通知
+message SSTradeProductDistributionOrderSlotChangeSync {
+  repeated trade_product_distribution_order_detail product_order_slot = 1;
+}
+
+service TradeIndexService {
+  option (atframework.service_options) = {
+    module_name: "trade"
+  };
+
+  rpc condition_index(SSTradeConditionIndexReq) returns (SSTradeConditionIndexRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "条件索引"
+      allow_no_wait: true
+    };
+  };
+
+  rpc query_standard_price(SSTradeIndexQueryStandardPriceReq) returns (SSTradeIndexQueryStandardPriceRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "基准价格搜索请求"
+      allow_no_wait: true
+    };
+  };
+
+  rpc product_histogram_replicated_pull_main(SSTradeProductHistogramPullReq) returns (SSTradeProductHistogramPullRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "从节点向主节点获取product_histogram数据"
+    };
+  };
+
+  rpc fetch_product_histogram_distribution(SSTradeIndexGetReq) returns (SSTradeIndexGetRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Index拉取product相关索引信息"
+    };
+  };
+
+  rpc batch_fetch_product_distribution(SSTradeBatchGetBasicIndexReq) returns (SSTradeBatchGetBasicIndexRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "批量基础数据"
+      allow_no_wait: true
+    };
+  };
+
+  rpc fetch_product_price_percentage(SSTradeGetProductPercentageReq) returns (SSTradeGetProductPercentageRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取商品售价百分比分布"
+    };
+  };
+
+  rpc load_product_distribution(SSTradeProductDistributionLoadReq) returns (SSTradeProductDistributionLoadRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "Replicate -> Main : 拉取商品分布、价格池"
+    };
+  };
+
+  rpc sync_product_distribution_replicate(stream SSTradeProductDistributionReplicateChangeSync)
+      returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Main -> Replicate : 商品分布、价格池变更通知"
+    };
+  };
+
+  rpc heartbeat_product_distribution(stream SSTradeProductDistributionHeartbeatSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Replicate -> Main : 商品分布、价格池变更通知"
+    };
+  };
+
+  rpc sync_product_distribution_order_slot(stream SSTradeProductDistributionOrderSlotChangeSync)
+      returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "Order -> Main : 商品分布、价格池变更通知"
+    };
+  };
+}

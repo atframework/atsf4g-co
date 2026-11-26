@@ -1,0 +1,788 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "protocol/common/com.struct.item.common.proto";
+import "protocol/pbdesc/com.struct.proto";
+
+package atframework.trade;
+
+enum EnTradeConfirmationType {
+  EN_TRADE_CONFIRMATION_TYPE_UNKNOWN = 0;
+  EN_TRADE_CONFIRMATION_TYPE_MATCHMAKING = 1;       // 撮合成交
+  EN_TRADE_CONFIRMATION_TYPE_USER_ELIMINATION = 2;  // 用户撤单
+  EN_TRADE_CONFIRMATION_TYPE_SYSTEM_CONFIRM = 3;    // 系统成交
+  EN_TRADE_CONFIRMATION_TYPE_FAILED_RETURN = 4;     // 未成交返回
+  EN_TRADE_CONFIRMATION_TYPE_ACE_CLONE = 5;         // 风控-买家克隆商品，卖家交易失败
+}
+
+enum EnTradeOrderTicketState {
+  EN_TRADE_ORDER_TICKET_STATE_UNKNOWN = 0;
+  EN_TRADE_ORDER_TICKET_STATE_UNPROCESSED = 1;  // 订单发布中
+
+  EN_TRADE_ORDER_TICKET_STATE_INEFFECTIVE = 11;  // 订单未生效
+  EN_TRADE_ORDER_TICKET_STATE_TRADING = 12;      // 订单交易中
+
+  EN_TRADE_ORDER_TICKET_STATE_CONFIRMING = 20;          // 订单完成但是有待确认的成交单
+  EN_TRADE_ORDER_TICKET_STATE_CONFIRMATION = 21;        // 订单完全成交
+  EN_TRADE_ORDER_TICKET_STATE_EXPIRATION = 22;          // 订单到期
+  EN_TRADE_ORDER_TICKET_STATE_CANCEL = 23;              // 订单取消
+  EN_TRADE_ORDER_TICKET_STATE_NOT_FOUND = 24;           // 订单服无记录
+  EN_TRADE_ORDER_TICKET_STATE_CONFIRMATION_ERROR = 25;  // 订单成交异常
+}
+
+enum EnTradeOrderTicketLabelAttributeType {
+  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_UNKNOWN = 0;
+
+  // 通用标签 0 - 1000
+  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_RARITY = 1;            // 稀有度 EnItemRarity
+  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_LEVEL = 2;             // 等级限制
+  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_EQUIPMENT_RATING = 3;  // 装备分
+}
+
+enum EnTradePriceMode {
+  // 当前价格
+  EN_TRADE_PRICE_MODE_CURRENT = 0;
+  // 一口价
+  EN_TRADE_PRICE_MODE_FIXED = 1;
+  // 混合，优先一口价
+  EN_TRADE_PRICE_MODE_MIXED = 2;
+}
+
+enum EnTradeSearchSortBy {
+  // 按推荐分排序
+  EN_TRADE_SEARCH_SORT_BY_RECOMMEND_SP = 0;
+
+  // 按价格排序
+  EN_TRADE_SEARCH_SORT_BY_PRICE = 1;
+}
+
+enum EnTradeStandardPriceSortBy {
+  // 基准价升序
+  EN_TRADE_STANDARD_PRICE_SORT_ASCENDING = 0;
+
+  // 基准价降序
+  EN_TRADE_STANDARD_PRICE_SORT_DESCENDING = 1;
+}
+
+enum EnTradeConfirmationSaleType {
+  EN_TRADE_CONFIRMATION_SALE_TYPE_NONE = 0;
+  EN_TRADE_CONFIRMATION_SALE_TYPE_SELF = 1;
+  EN_TRADE_CONFIRMATION_SALE_TYPE_OTHER = 2;
+}
+
+message DTradeOrderTicketLabelTag {
+  int32 label_type = 1;
+  repeated int32 label_value = 2;
+}
+
+message DTradeOrderTicketLabelAttribute {
+  int32 attribute_type = 1;
+  int32 attribute_value = 2;
+}
+
+message DTradeOrderItem {
+  int32 type_id = 1;
+  int32 count = 2;
+  int64 guid = 3;  // 唯一ID(如果有)
+}
+
+message DTradeOrderTicketLabel {
+  // 索引一级大类
+  int32 major_index_type = 1;
+
+  // 索引二级大类
+  int32 minor_index_type = 2;
+
+  // Tag型标签(Has检查)(匹配成功必须存在该Type,Value为空则全匹配,否则为Has)
+  repeated DTradeOrderTicketLabelTag item_tag = 6;
+
+  // Key-Value型标签, Key 为属性类型(值范围检查)
+  repeated DTradeOrderTicketLabelAttribute item_attribute = 7;
+}
+
+message DTradeClientProfile {
+  int32 account_type = 1;  // EnAccountITopLoginChannelType/EnAccountIntlLoginChannelType
+  int32 platform_id = 2;   // EnPlatformID
+  int64 role_guid = 3;
+  string ip = 4;
+  string device_id = 5;
+}
+
+message DTradeProductProfile {
+  int64 price_min = 1;
+  int64 price_max = 2;
+
+  bool is_treasure = 3;
+}
+
+message DTradeIndexCustomTypeKey {
+  // 业务定制化特殊索引类型
+  int32 type_id = 1;
+  int32 type_value = 2;
+}
+
+message DTradeOrderTicketDetail {
+  DTradeOrderTicketMeta meta = 1;
+
+  // 这里存放锁住的原始资源
+  //   对于订购单,冻结的消费物品（交易行货币）
+  //   对于供货单,冻结的售卖物品
+  atframework.shared.DItemInstance item_data = 2;
+
+  // 商品标签，用于搜索
+  DTradeOrderTicketLabel label = 3;
+
+  // 商品自定义分类索引（用于优化搜索性能，注意发布要和搜索匹配）
+  repeated DTradeIndexCustomTypeKey custom_index_type = 4;
+
+  int64 auction_confirmation_key = 5;
+
+  // 发布者信息，用于完成时同步snapshot
+  // 不填写则为系统单 本单不生成 confirmation
+  atframework.shared.DUserIDKey publisher = 6;
+
+  // 数据版本号，用于处理多个缓存不一致时的新老数据判定
+  int64 data_version = 7;
+
+  map<int64, DTradeConfirmation> confirmation = 9;
+
+  // 统计类数据
+  DTradeProductProfile product_profile = 21;
+  // 发布者客户端信息
+  DTradeClientProfile publisher_client_profile = 22;
+  // 记录对方客户端信息（竞标时缓存竞拍者）
+  DTradeClientProfile other_client_profile = 23;
+}
+
+// DTradeOrderTicketDetail拆成可变和不变两部分
+message DTradeOrderTicketDetailImmutable {
+  // 这里存放锁住的原始资源
+  //   对于订购单,冻结的消费物品（交易行货币）
+  //   对于供货单,冻结的售卖物品
+  atframework.shared.DItemInstance item_data = 2;
+
+  // 商品标签，用于搜索
+  DTradeOrderTicketLabel label = 3;
+
+  // 商品自定义分类索引（用于优化搜索性能，注意发布要和搜索匹配）
+  repeated DTradeIndexCustomTypeKey custom_index_type = 4;
+
+  // 发布者信息，用于完成时同步snapshot
+  atframework.shared.DUserIDKey publisher = 6;
+}
+
+message DTradeOrderTicketDetailMutable {
+  DTradeOrderTicketMeta meta = 1;
+
+  int64 auction_confirmation_key = 4;
+
+  // 数据版本号，用于处理多个缓存不一致时的新老数据判定
+  int64 data_version = 6;
+
+  map<int64, DTradeConfirmation> confirmation = 9;
+
+  // 统计类数据
+  DTradeProductProfile product_profile = 21;
+  // 发布者客户端信息
+  DTradeClientProfile publisher_client_profile = 22;
+  // 记录对方客户端信息（竞标时缓存竞拍者）
+  DTradeClientProfile other_client_profile = 23;
+}
+
+// 成交单
+message DTradeConfirmation {
+  int64 confirmation_key = 1;
+  EnTradeConfirmationType confirmation_type = 2;
+
+  google.protobuf.Timestamp confirm_timepoint = 4;
+
+  // 这里存放获得的东西
+  //   对于订购单,这里是买到获得的道具
+  //   对于供货单,这里是卖出获得的道具
+  atframework.shared.DItemInstance item_data = 6;
+
+  // 总单版本
+  int64 unit_price = 7;    // 单位价格
+  int64 total_price = 8;   // 总价
+  int64 final_price = 9;   // 税后价格
+  int32 trade_count = 10;  // 成交个数
+
+  // 单独单版本
+  int64 virtual_refer_confirmation_key = 16;
+  int64 virtual_unit_price = 17;   // 单位价格
+  int64 virtual_total_price = 18;  // 总价
+  int64 virtual_final_price = 19;  // 税后价格
+  int32 virtual_trade_count = 20;  // 成交个数
+
+  EnTradeConfirmationSaleType sale_type = 30;
+}
+
+message DTradeEventAuctionModify {
+  int32 current_price = 1;
+  DTradeBidOrderMeta bid_meta = 2;
+}
+
+message DTradeEventTicketState {
+  EnTradeOrderTicketState state = 1;
+  int64 bid_order_ticket_id = 2;
+}
+
+message DTradeEventConfirmation {
+  DTradeConfirmation confirmation = 1;
+  int64 bid_order_ticket_id = 2;
+}
+
+// 同质化 供货单
+message DTradeSalesOrderMeta {
+  sint32 origin_item_count = 1;  // 原始出售数量
+  sint32 left_item_count = 2;    // 剩余未成交数量
+  int32 unit_price = 3;          // 当前单位价格
+  int32 unit_count = 4;          // 当前每个单位价格对应的DItem数量，默认为 1
+
+  atframework.shared.DUserIDKey user_key = 6;  // 供货者
+}
+
+// 同质化 订购单
+message DTradePurchaseOrderMeta {
+  sint32 origin_item_count = 1;  // 原始下单数量
+  sint32 left_item_count = 2;    // 剩余未成交数量
+  int32 current_unit_price = 3;  // 当前单位价格(缓存)
+  int32 left_price = 4;          // 剩余代币
+  bool is_fixed = 5;             // 是否一口价
+  int32 origin_price = 7;        // 原始代币
+
+  atframework.shared.DUserIDKey user_key = 6;  // 订购者
+}
+
+// 拍卖行 出售单
+message DTradeAuctionOrderMeta {
+  int64 auction_trade_order_ticket_id = 1;     // 出售订单ID
+  atframework.shared.DUserIDKey user_key = 2;  // 出售者
+  int32 origin_price = 3;                      // 原始挂单价
+  int32 current_price = 4;                     // 显示价格
+  int32 fixed_price = 5;                       // 一口价
+}
+
+// 拍卖行 竞拍单
+message DTradeBidOrderMeta {
+  int64 bid_trade_order_ticket_id = 1;         // 竞拍订单ID
+  atframework.shared.DUserIDKey user_key = 2;  // 竞拍者
+  int32 price = 3;                             // 竞价
+}
+
+message DTradeAuctionMeta {
+  DTradeAuctionOrderMeta auction_order_meta = 1;
+  DTradeBidOrderMeta bid_order_meta = 2;
+}
+
+// 委托单
+message DTradeOrderTicketMeta {
+  // 委托单ID
+  int64 trade_order_ticket_id = 1;
+  // 商品信息
+  DTradeMarketProductKey trade_product_key = 2;
+  // 交易行分布Slot（服务器用）
+  int32 slot_id = 3;
+
+  google.protobuf.Timestamp ticket_publish_timestamp = 4;
+
+  EnTradeOrderTicketState ticket_state = 5;
+
+  google.protobuf.Timestamp valid_begin_timestamp = 6;
+  google.protobuf.Timestamp valid_end_timestamp = 7;
+
+  int64 event_id = 8;
+
+  // 推荐分（业务层可以自定义推荐分的含义，比如装备强度）
+  sint64 recommend_score = 9;
+  int32 recommend_standard_price_mode = 10;
+
+  oneof type {
+    DTradeSalesOrderMeta sales_order = 11;
+    DTradePurchaseOrderMeta purchase_order = 12;
+    DTradeAuctionMeta auction_order = 13;
+  }
+
+  // 下一次成交单检查时间（服务器用）
+  google.protobuf.Timestamp next_confirmation_checkpoint = 101;
+  // 服务器缓存的稀有度
+  int32 label_cache_rarity = 102;
+}
+
+message DTradeOrderMatchMakingBasicInfo {
+  int32 origin_price = 1;        // 买单总价
+  int32 origin_count = 2;        // 买单总数
+  int32 confirmation_price = 3;  // 成交总价
+  int32 confirmation_count = 4;  // 成交总数
+}
+
+message DTradeOrderTicketSearchTag {
+  int32 label_type = 1;
+  repeated int32 label_value = 2;  // 任意Tag命中则选中
+}
+
+message DTradeOrderTicketSearchAttribute {
+  int32 attribute_type = 1;
+  sint32 min_value = 2;
+  sint32 max_value = 3;
+}
+
+message DTradeOrderTicketSearchBound {
+  // 委托单ID
+  int64 trade_order_ticket_id = 1;
+
+  // 价格
+  int32 price = 2;
+
+  // 推荐分（业务层可以自定义推荐分的含义，比如装备强度）
+  sint64 recommend_score = 3;
+
+  // 稀有度
+  int32 rarity = 4;
+
+  // 价格模式
+  EnTradePriceMode price_mode = 5;
+}
+
+message DTradeOrderTicketSearchRule {
+  int32 trade_market_id = 2;
+  // 索引一级大类
+  int32 major_index_type = 6;
+  // 索引二级大类
+  int32 minor_index_type = 7;
+
+  // Tag型标签(Has检查)(不限制则不需要填入该Type)(多个Type && 关系 一个Type多个值 || 关系)
+  repeated DTradeOrderTicketSearchTag item_tag = 8;
+
+  // Key-Value型标签, Key 为属性类型(值范围检查)
+  repeated DTradeOrderTicketSearchAttribute item_attribute = 9;
+
+  // Tag型标签(Exclude检查)(任意Type，任意Value匹配则排除：|| 关系)
+  repeated DTradeOrderTicketSearchTag exclude_item_tag = 10;
+
+  sint32 min_price = 11;
+  sint32 max_price = 12;
+
+  DTradeOrderTicketSearchBound bound_exclude = 13;
+
+  // 价格模式
+  EnTradePriceMode price_mode = 14;
+}
+
+message DTradeOrderTicketEventLog {
+  int64 event_id = 1;                              // 事件ID
+  google.protobuf.Timestamp create_timepoint = 2;  // 创建时间
+
+  oneof event {
+    DTradeEventTicketState state = 21;          // 状态机状态变化
+    DTradeEventConfirmation confirmation = 22;  // 成交（入WAL数据时可以把Item详情移动到详情）
+    DTradeEventAuctionModify auction = 23;      // 竞拍状态变更
+  }
+}
+
+message DTradeMarketProductMetricPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  int64 lowest_price = 2;  // 成交最低价
+  int64 standard_price = 3;
+  int64 highest_price = 4;  // 成交最高价
+}
+
+message DTradeMarketProductOnSaleDistribution {
+  int64 lowest_price = 1;
+  int64 highest_price = 2;
+
+  // 委托单数
+  int32 order_ticket_count = 4;
+  // 委托单内道具总数
+  int32 item_count = 5;
+
+  // 是否隐藏了更多数据
+  bool hide_more = 6;
+}
+
+message DTradeAuctionTicketKey {
+  int64 trade_order_ticket_id = 1;
+  DTradeMarketProductKey trade_product_key = 2;
+  int32 slot_id = 3;
+}
+
+// 商品
+message DTradeMarketProductKey {
+  int32 area_code = 1;
+  int32 trade_market_id = 2;
+  int32 trade_product_id = 3;
+}
+
+message DTradeStandardPriceKey {
+  int32 area_code = 1;
+  int32 price_pool_id = 2;
+  int32 trade_product_id = 3;
+}
+
+message DTradeMarketProductBasicIndexInfo {
+  DTradeMarketProductKey trade_product_key = 1;
+  int64 lowest_price = 2;
+  int64 standard_price = 3;
+  google.protobuf.Timestamp next_update_standard_price_time = 4;
+
+  // 汇总数据版本号
+  int64 summary_version = 5;
+
+  google.protobuf.Timestamp timestamp = 10;
+}
+
+message DTradeMarketProductIndexInfo {
+  DTradeMarketProductKey trade_product_key = 1;  // 可以移除?
+  repeated DTradeMarketProductMetricPoint metric_point = 2;
+  repeated DTradeMarketProductOnSaleDistribution on_sale = 3;
+  repeated DTradeProductPricePercentage percentage = 4;
+  DTradeMarketProductBasicIndexInfo basic_info = 5;
+}
+
+message DTradeMarketProductPercentageInfo {
+  DTradeMarketProductKey trade_product_key = 1;
+  repeated DTradeProductPricePercentage percentage = 2;
+}
+
+message DTradeIndexSearchBound {
+  // 翻页Bound: 推荐分（仅对推荐分参与排序的有效）
+  int64 recommend_score = 1;
+  // 翻页Bound: 商品ID
+  int32 trade_product_id = 2;
+  // 翻页Bound: 销量（仅对热销有效）
+  int64 sale_num = 3;
+  // 翻页Bound: 销量（仅对稀有度参与排序的规则有效）
+  int32 rarity = 4;
+  // 翻页Bound: 搜索商品顺序（仅对类型参与排序的规则有效）
+  int64 search_order = 5;
+  // 翻页Bound: 最低挂单价（仅对最低挂单价参与排序的规则有效）
+  int64 lowest_price = 6;
+  // 翻页Bound: 是否有订单
+  bool has_order = 7;
+}
+
+message DTradeProductSearchRule {
+  // 索引一级大类
+  int32 major_index_type = 6;
+  // 索引二级大类
+  int32 minor_index_type = 7;
+
+  // Tag型标签(Has检查)(不限制则不需要填入该Type)(多个Type && 关系 一个Type多个值 || 关系)
+  repeated DTradeOrderTicketSearchTag item_tag = 8;
+
+  // Key-Value型标签, Key 为属性类型(值范围检查)
+  repeated DTradeOrderTicketSearchAttribute item_attribute = 9;
+
+  // Tag型标签(Exclude检查)(任意Type，任意Value匹配则排除：|| 关系)
+  repeated DTradeOrderTicketSearchTag exclude_item_tag = 10;
+
+  sint32 min_price = 11;
+  sint32 max_price = 12;
+}
+
+message DTradeIndexSearchBasicRule {
+  DTradeProductSearchRule product_rule = 2;
+
+  DTradeIndexSearchBound bound = 11;
+}
+
+message DTradeIndexHotSaleSearchRule {
+  DTradeIndexSearchBasicRule filter_rule = 1;
+  int32 count = 2;
+}
+
+message DTradeIndexRarityCustomIndexTypeSearchRule {
+  DTradeIndexSearchBasicRule filter_rule = 1;
+  int32 count = 2;
+
+  int32 min_rarity = 3;
+  int32 max_rarity = 4;
+
+  // 穿戴类型的特殊索引
+  repeated DTradeIndexCustomTypeKey custom_index_type = 5;
+}
+
+message DTradeIndexCustomSearchRule {
+  DTradeIndexSearchBasicRule filter_rule = 1;
+  int32 count = 2;
+}
+
+message DTradeRecommendProductRule {
+  int32 area_code = 1;
+  int32 trade_market_id = 2;
+
+  // 单类型, @Refer DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  // 基于热销的搜索
+  DTradeIndexHotSaleSearchRule hot_sale_rule = 5;
+
+  // 玩家手动搜索行为
+  DTradeIndexCustomSearchRule custom_search_rule = 6;
+
+  // (批量)基于稀有度及自定义索引的搜索
+  repeated DTradeIndexRarityCustomIndexTypeSearchRule batch_rarity_custom_type_rule = 7;
+}
+
+message DTradeIndexSearchStandardPriceRule {
+  // 单类型, @Refer DTradeOrderTicketMeta.type
+  int32 order_type = 1;
+  EnTradeStandardPriceSortBy sort_by = 2;
+  DTradeProductSearchRule product_rule = 3;
+  int32 count = 4;
+
+  int64 callback_sequence = 11;
+}
+
+message DTradeBatchQueryStandardPriceRule {
+  int32 area_code = 1;
+  int32 trade_market_id = 2;
+
+  // (批量)基准价格（SP）搜索
+  repeated DTradeIndexSearchStandardPriceRule batch_query_standard_price_rule = 3;
+}
+
+message DTradeIndexRecommendIndexInfo {
+  DTradeMarketProductBasicIndexInfo basic_info = 1;
+  DTradeIndexSearchBound extra_info = 2;
+}
+
+message DTradeIndexRecommendHotSaleResult {
+  DTradeIndexRecommendIndexInfo info = 1;
+}
+
+message DTradeIndexCustomSearchResult {
+  DTradeIndexRecommendIndexInfo info = 1;
+}
+
+message DTradeIndexRecommendRarityCustomIndexTypeResult {
+  repeated DTradeIndexRecommendIndexInfo info = 1;
+
+  int32 min_rarity = 2;
+  int32 max_rarity = 3;
+
+  DTradeIndexCustomTypeKey custom_index_type = 4;
+
+  bool more_info = 5;
+}
+
+message DTradeRecommendProductResult {
+  int32 area_code = 1;
+  int32 trade_market_id = 2;
+
+  // 基于热销的搜索结果
+  repeated DTradeIndexRecommendHotSaleResult hot_sale_result = 5;
+  bool hot_sale_more_info = 6;
+
+  // 基于装备稀有度及穿戴类型的搜索结果
+  repeated DTradeIndexRecommendRarityCustomIndexTypeResult rarity_custom_index_result = 7;
+
+  // 玩家手动搜索行为
+  repeated DTradeIndexCustomSearchResult custom_search_result = 8;
+  bool custom_search_more_info = 9;
+}
+
+message DTradeIndexStandardPriceResult {
+  EnTradeStandardPriceSortBy sort_by = 1;
+  // 单类型, @Refer DTradeOrderTicketMeta.type
+  int32 order_type = 2;
+
+  repeated DTradeMarketProductBasicIndexInfo basic_info = 3;
+
+  bool has_more = 7;
+
+  int64 callback_sequence = 11;
+}
+
+message DTradeBatchQueryStandardPriceResult {
+  int32 area_code = 1;
+  int32 trade_market_id = 2;
+
+  repeated DTradeIndexStandardPriceResult query_standard_price_result = 3;
+}
+
+message DTradeProductPricePercentage {
+  int64 percentage = 1;
+  int64 min_price = 2;
+}
+
+message DTradeTicketRefund {
+  int64 confirmation_key = 1;
+  repeated atframework.shared.DItemInstance refund_item = 2;
+}
+
+message DTradeTicketConfirmation {
+  DTradeConfirmation confirmation = 1;
+}
+
+message DTradePendingConfirmation {
+  int64 trade_order_ticket_id = 1;
+  oneof data {
+    DTradeTicketRefund refund_data = 2;
+    DTradeTicketConfirmation confirmation_data = 3;
+  }
+}
+
+// 用户未领取交易行数据
+message DUserTradeConfirmData {
+  int64 trade_order_ticket_id = 1;
+  map<int64, DTradePendingConfirmation> pending_receive = 2;
+  repeated int64 receive_all_confirmation_key = 3;
+  atframework.shared.DItemInstance cost_item = 4;
+  atframework.shared.DItemInstance publish_cost_item = 5;
+}
+
+message DTradeReceiveConfirmationProduct {
+  int64 confirmation_id = 1;
+  int32 type_id = 2;
+  int32 count = 3;
+
+  atframework.shared.DItemPosition target_position = 4;
+}
+
+message DTradeAuctionOrderInfo {
+  DTradeOrderTicketDetail order = 1;
+}
+
+message DTradeIndexProductOrderInfo {
+  // order info in trade index
+  oneof order {
+    DTradeSalesOrderMeta sale_order = 1;
+    DTradePurchaseOrderMeta purchase_order = 2;
+  }
+}
+
+message DTradeMetaConfirmation {
+  DTradeOrderTicketMeta meta = 1;
+  DUserTradeConfirmData confirmation = 2;
+}
+
+message DUserTradeMarketDirty {
+  repeated int64 delete_order = 1;
+  repeated int64 delete_confimation = 2;
+  repeated int64 delete_confimation_full = 3;
+  repeated DTradeOrderTicketMeta dirty_order = 11;
+  repeated DTradePendingConfirmation dirty_confimation = 12;
+  repeated DUserTradeConfirmData dirty_confimation_full = 13;
+}
+
+message DUserTradeMarketLogic {
+  int64 unlock_trade_auction_privilege_timestamp = 1;
+  bool is_trade_unlock = 2;
+}
+
+message DTradeRecommendOrderTicketBasicRule {
+  DTradeOrderTicketSearchRule filter_rule = 1;
+  int32 count = 2;
+}
+
+message DTradeRecommendOrderTicketBasicResult {
+  repeated DTradeOrderTicketMeta order_ticket = 6;
+  bool has_more = 7;
+}
+
+message DTradeRecommendOrderTicketRarityCustomIndexTypeRule {
+  DTradeOrderTicketSearchRule filter_rule = 1;
+  int32 count = 2;
+
+  int32 min_rarity = 3;
+  int32 max_rarity = 4;
+  repeated DTradeIndexCustomTypeKey custom_index_type = 5;
+}
+
+message DTradeRecommendOrderTicketRarityCustomIndexTypeResult {
+  int32 min_rarity = 3;
+  int32 max_rarity = 4;
+  DTradeIndexCustomTypeKey custom_index_type = 5;
+
+  repeated DTradeOrderTicketMeta order_ticket = 6;
+  bool has_more = 7;
+}
+
+message DTradeRecommendOrderTicketBatchRule {
+  DTradeRecommendOrderTicketBasicRule rule = 1;
+  uint64 sequence = 2;
+  google.protobuf.Any private_data = 3;
+}
+
+message DTradeRecommendOrderTicketRule {
+  int32 area_code = 1;
+  int32 order_ticket_type = 2;  // Refer to DTradeOrderTicketMeta.type
+  int32 trade_market_id = 3;
+
+  // 基于// 推荐分（业务层可以自定义推荐分的含义，比如装备强度）的拉取数量
+  DTradeRecommendOrderTicketBasicRule recommend_score_rule = 11;
+
+  // 基于新上架的拉取数量
+  DTradeRecommendOrderTicketBasicRule publish_new_rule = 12;
+
+  // 基于畅销（销量）的拉取数量
+  DTradeRecommendOrderTicketBasicRule best_selling_amount_rule = 13;
+
+  // 基于畅销（提价）的拉取数量
+  DTradeRecommendOrderTicketBasicRule best_selling_price_increase_rule = 14;
+
+  // 基于稀有度和装备位置的拉取规则
+  DTradeRecommendOrderTicketRarityCustomIndexTypeRule rarity_custom_index_rule = 15;
+
+  // 基于装备强度的拉取数量(Batch)
+  repeated DTradeRecommendOrderTicketBatchRule batch_rule = 16;
+
+  // 是否限制返回的数量（slot向main_slot请求时，不限制数量，全部返回）
+  bool no_limit_count = 21;
+}
+
+message DTradeRecommendOrderTicketBatchResult {
+  DTradeRecommendOrderTicketBasicResult result = 1;
+  uint64 sequence = 2;
+  google.protobuf.Any private_data = 3;
+}
+
+message DTradeRecommendOrderTicketResult {
+  int32 area_code = 1;
+  int32 order_ticket_type = 2;  // Refer to DTradeOrderTicketMeta.type
+  int32 trade_market_id = 3;
+
+  // 基于推荐分的拉取结果（业务层可以自定义推荐分的含义，比如装备强度）
+  DTradeRecommendOrderTicketBasicResult recommend_score_result = 11;
+
+  // 基于新上架的拉取结果
+  DTradeRecommendOrderTicketBasicResult publish_new_result = 12;
+
+  // 基于畅销（销量）的拉取结果
+  DTradeRecommendOrderTicketBasicResult best_selling_amount_result = 13;
+
+  // 基于畅销（提价）的拉取结果
+  DTradeRecommendOrderTicketBasicResult best_selling_price_increase_result = 14;
+
+  // 基于稀有度和装备位置的拉取结果
+  repeated DTradeRecommendOrderTicketRarityCustomIndexTypeResult rarity_custom_index_result = 15;
+
+  // 基于装备强度的拉取结果(Batch)
+  repeated DTradeRecommendOrderTicketBatchResult batch_result = 16;
+}
+
+enum EnTradeIndexUpdateReasonType {
+  EN_TRADE_INDEX_UPDATE_REASON_NONE = 0;
+  EN_TRADE_INDEX_UPDATE_REASON_LOAD_ORDERSVR = 1;
+  EN_TRADE_INDEX_UPDATE_REASON_LOAD_MAIN = 2;
+  EN_TRADE_INDEX_UPDATE_REASON_LOAD_DATABASE = 3;
+  EN_TRADE_INDEX_UPDATE_REASON_ORDER_SYNC = 4;
+  EN_TRADE_INDEX_UPDATE_REASON_INDEX_SYNC = 5;
+}
+
+message DTradePurchaseOrder {
+  DTradeMarketProductKey trade_product_key = 1;
+  int32 count = 2;
+  int32 price = 3;
+
+  // 购买成功后自动穿戴或放到指定位置
+  repeated atframework.shared.DItemBasicOffset auto_receive_position = 4;
+}

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/tradesvr/protocol/common/protocol/config";
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+package atframework.trade.config;
+
+message tradesvr_common_cfg {
+  google.protobuf.Duration order_slot_stabilization_window = 1
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15s" min_value: "1s" }];
+}

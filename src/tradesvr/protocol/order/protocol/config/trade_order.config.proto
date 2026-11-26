@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/tradesvr/protocol/common/protocol/config";
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+import "protocol/config/trade_common.config.proto";
+
+package atframework.trade.config;
+
+message tradesvr_order_cfg {
+  tradesvr_common_cfg shared_setting = 1;
+
+  uint32 io_events_per_tick_min = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "256" min_value: "1" }];
+  uint32 io_events_per_tick_max = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "256" min_value: "16" }];
+  google.protobuf.Duration io_events_protect_interval = 4
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1s" min_value: "4ms" }];
+  google.protobuf.Duration cpu_time_per_tick = 5
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64ms" min_value: "4ms" }];
+  google.protobuf.Duration slot_keepalive_timeout = 6
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2h" min_value: "60s" }];
+  google.protobuf.Duration slot_leak_check_interval = 7
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "60s" }];
+  google.protobuf.Duration global_index_leak_check_interval = 8
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "60s" }];
+  google.protobuf.Duration slot_io_task_timeout = 9
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "16s" min_value: "8s" }];
+
+  google.protobuf.Duration slot_save_db_interval = 10
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "60s" }];
+  google.protobuf.Duration slot_save_db_interval_random = 11
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  google.protobuf.Duration slot_save_db_quick_retry_save_interval = 12
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "480s" min_value: "60s" }];
+  google.protobuf.Duration slot_save_db_quick_retry_save_interval_random = 13
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+
+  google.protobuf.Duration slot_move_in_writable_protect = 14
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
+  google.protobuf.Duration slot_move_in_writable_protect_retry = 15
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "1s" }];
+  google.protobuf.Duration slot_move_in_writable_protect_quick_retry_base = 16
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "1s" }];
+  google.protobuf.Duration slot_move_in_writable_protect_quick_retry_random = 17
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20s" min_value: "1s" }];
+  google.protobuf.Duration slot_load_db_retry_interval_unit = 18
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3s" min_value: "1s" }];
+  google.protobuf.Duration slot_load_db_retry_interval_random = 19
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3s" min_value: "1s" }];
+  google.protobuf.Duration slot_load_db_retry_interval_max = 20
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "50s" min_value: "1s" }];
+  google.protobuf.Duration slot_save_db_retry_interval_unit = 21
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5s" }];
+  google.protobuf.Duration slot_save_db_retry_interval_random = 22
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20s" min_value: "1s" }];
+  google.protobuf.Duration slot_save_db_retry_interval_max = 23
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "60s" }];
+  google.protobuf.Duration slot_save_db_quick_retry_interval_base = 24
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
+  google.protobuf.Duration slot_save_db_quick_retry_interval_random = 25
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  google.protobuf.Duration slot_save_db_quick_move_out_interval_base = 26
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration slot_save_db_quick_move_out_interval_random = 27
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  google.protobuf.Duration slot_save_db_stop_retry_interval_base = 28
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
+  google.protobuf.Duration slot_save_db_stop_retry_interval_random = 29
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+
+  google.protobuf.Duration order_ticket_recycle_cleanup_timeout = 31
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "10s" }];
+  google.protobuf.Duration order_ticket_leak_recover_timer = 32
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "900s" min_value: "10s" }];
+  google.protobuf.Duration order_ticket_db_retry_interval_base = 33
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration order_ticket_db_retry_interval_random = 34
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration order_ticket_db_save_interval_base = 35
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration order_ticket_confirmation_retry_interval_base = 36
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration order_ticket_confirmation_retry_interval_random = 37
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration order_ticket_recycle_stop_timeout = 38
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "10s" }];
+  google.protobuf.Duration order_ticket_recycle_quick_timeout = 39
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "10s" }];
+  uint64 order_ticket_recycle_quick_count = 40
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "10s" }];
+  google.protobuf.Duration order_ticket_close_max_timer_interval = 41
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "1s" }];
+  google.protobuf.Duration order_ticket_recycle_close_interval = 42
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1s" min_value: "1s" }];
+  int32 order_ticket_db_overflow_retry_times = 43 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" }];
+  int32 order_ticket_max_count_per_slot = 44 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10000" }];
+  bool order_ticket_fetch_lock_save_db = 45;
+
+  // 视图索引缓存时间
+  google.protobuf.Duration index_view_cache_timeout = 51
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "1s" }];
+  // 视图索引最小数量
+  uint32 index_view_cache_min_count = 52
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  // 视图索引最大数量
+  uint32 index_view_cache_max_count = 53
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
+  // 视图索引内最大缓存的订单数
+  int32 index_view_cache_max_order_count = 54
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "250" min_value: "16" }];
+
+  // 全局商品sp缓存更新时间
+  google.protobuf.Duration global_sp_cache_refresh_interval = 70
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "600s" }];
+  // 全局商品sp结算周期起始时间点(utc 时间戳)
+  uint32 global_sp_calculate_cycle_start_time_point = 71
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1692979200" min_value: "1692979200" }];
+  bool open_pressure_test = 72;
+
+  uint32 metrics_order_ticket_time_histogram_bucket_count = 81
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "10" }];
+  // 缓存商品sp信息条数
+  uint32 max_slot_cache_product_sp_info_records = 82
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "2" }];
+
+  uint32 metrics_order_ticket_time_histogram_push_product_count = 83
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+
+  uint32 global_index_leak_checking_round_count = 84
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "10" }];
+  // 结算周期监测心跳间隔时间
+  google.protobuf.Duration global_calculate_pool_hearbeat_interval = 85
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "10s" }];
+  // order发送到index 同步包的打包单元上限
+  int32 max_product_distribution_order_unit_limit = 86
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+  // 每帧发起商品sp计算数量上限
+  uint32 calculate_product_limit_count_per_frame = 87
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" min_value: "50" }];
+  // 存储及缓存结算池的结算周期数量上限
+  uint32 calculate_pool_cycle_idx_cache_limit = 88
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "10" }];
+}

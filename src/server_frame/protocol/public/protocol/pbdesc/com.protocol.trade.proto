@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/common/com.struct.item.common.proto";
+import "protocol/pbdesc/com.struct.trade.proto";
+
+package atframework.trade;
+
+message CSTradeProductPriceBasicInfoReq {
+  repeated atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 2;
+}
+
+message SCTradeProductPriceBasicInfoRsp {
+  repeated atframework.trade.DTradeMarketProductBasicIndexInfo info = 1;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 2;
+}
+
+message CSTradeProductPriceInfoReq {
+  atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 2;
+}
+
+message SCTradeProductPriceInfoRsp {
+  atframework.trade.DTradeMarketProductIndexInfo info = 1;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 2;
+}
+
+message CSTradeProductPercentageInfoReq {
+  atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+}
+
+message SCTradeProductPercentageInfoRsp {
+  atframework.trade.DTradeMarketProductPercentageInfo info = 1;
+}
+
+message CSTradePurchaseOrderPublishReq {
+  atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+  int32 count = 2;
+  int32 price = 3;
+  string bill_no = 4;
+  bool is_fixed = 5;
+
+  repeated atframework.shared.DItemBasicOffset auto_receive_position = 21;
+}
+
+message SCTradePurchaseOrderPublishRsp {
+  int64 trade_order_ticket_id = 1;
+  int32 result_code = 2;
+  atframework.trade.DTradeOrderMatchMakingBasicInfo matchmaking_info = 3;
+  bool is_fixed = 4;
+}
+
+message CSTradeSalesOrderPublishReq {
+  atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+  repeated atframework.shared.DItemBasic item_basic = 2;
+  int32 price = 3;
+  string bill_no = 4;
+}
+
+message SCTradeSalesOrderPublishRsp {
+  int64 trade_order_ticket_id = 1;
+}
+
+message CSTradeOrderHistoryReq {
+  int32 market_id = 1;
+}
+
+message SCTradeOrderHistoryRsp {
+  int32 market_id = 1;
+  repeated atframework.trade.DTradeMetaConfirmation meta_confirmation = 2;
+}
+
+message CSTradeOrderCancelReq {
+  int64 trade_order_ticket_id = 1;
+}
+
+message SCTradeOrderCancelRsp {}
+
+message CSTradeOrderDeleteReq {
+  repeated int64 trade_order_ticket_id = 1;
+}
+
+message SCTradeOrderDeleteRsp {}
+
+message CSTradeReceiveConfirmationProductReq {
+  repeated atframework.trade.DTradeReceiveConfirmationProduct receive_confirmation_product = 1;
+}
+
+message SCTradeReceiveConfirmationProductRsp {}
+
+message CSTradeBidOrderPublishReq {
+  atframework.trade.DTradeAuctionTicketKey auction_ticket_key = 1;
+  int32 price = 2;
+  string bill_no = 3;
+}
+
+message SCTradeBidOrderPublishRsp {
+  int64 trade_order_ticket_id = 1;
+  atframework.trade.DTradeOrderTicketMeta auction_data = 2;
+}
+
+message CSTradeAuctionOrderPublishReq {
+  atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+  repeated atframework.shared.DItemBasic item_basic = 2;
+  int32 price = 3;
+  string bill_no = 4;
+  int32 fixed_price = 5;
+
+  repeated atframework.shared.DItemBasic publish_cost = 11;
+}
+
+message SCTradeAuctionOrderPublishRsp {
+  int64 trade_order_ticket_id = 1;
+}
+
+message CSTradeAuctionFetchOrderInfoReq {
+  repeated atframework.trade.DTradeAuctionTicketKey auction_ticket_key = 1;
+}
+
+message SCTradeAuctionFetchOrderInfoRsp {
+  repeated atframework.trade.DTradeAuctionOrderInfo auction_order_info = 1;
+}
+
+message CSTradeAuctionIndexReq {
+  atframework.trade.DTradeOrderTicketSearchRule search_rule = 1;
+  int32 search_rule_type_id = 2;
+  atframework.trade.EnTradeSearchSortBy sort_by = 3;
+}
+
+message SCTradeAuctionIndexRsp {
+  repeated atframework.trade.DTradeOrderTicketMeta order_ticket = 1;
+  bool next_page = 2;
+}
+
+message CSTradeAuctionRecommendOrderTicketReq {
+  int32 trade_market_id = 1;
+  // 基于性价比
+  atframework.trade.DTradeRecommendOrderTicketBasicRule recommend_score_rule = 11;
+  // 基于新上架
+  atframework.trade.DTradeRecommendOrderTicketBasicRule publish_new_rule = 12;
+  // 基于畅销（销量）
+  atframework.trade.DTradeRecommendOrderTicketBasicRule best_selling_amount_rule = 13;
+  // 基于畅销（提价）
+  atframework.trade.DTradeRecommendOrderTicketBasicRule best_selling_price_increase_rule = 14;
+  // 基于稀有度和二级分类的拉取规则
+  atframework.trade.DTradeRecommendOrderTicketRarityCustomIndexTypeRule rarity_custom_index_rule = 15;
+
+  // 基于装备强度的拉取数量(Batch)
+  repeated atframework.trade.DTradeRecommendOrderTicketBatchRule batch_rule = 16;
+}
+
+message SCTradeAuctionRecommendOrderTicketRsp {
+  atframework.trade.DTradeRecommendOrderTicketResult result = 1;
+}
+
+message CSTradeProductRecommendOrderTicketReq {
+  int32 trade_market_id = 1;
+
+  // 单类型, @Refer DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  // 基于热销的搜索
+  atframework.trade.DTradeIndexHotSaleSearchRule hot_sale_rule = 11;
+
+  // (批量)基于装备稀有度及穿戴类型的搜索
+  repeated atframework.trade.DTradeIndexRarityCustomIndexTypeSearchRule batch_rarity_custom_index_rule = 12;
+}
+
+message SCTradeProductRecommendOrderTicketRsp {
+  atframework.trade.DTradeRecommendProductResult result = 1;
+}
+
+message CSTradeProductSearchOrderTicketReq {
+  int32 trade_market_id = 1;
+
+  // 单类型, @Refer DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+
+  // 玩家手动搜索行为
+  atframework.trade.DTradeIndexCustomSearchRule custom_search_rule = 13;
+}
+
+message SCTradeProductSearchOrderTicketRsp {
+  atframework.trade.DTradeRecommendProductResult result = 1;
+}

@@ -27,6 +27,7 @@
     <tree id="team" name="组队"></tree>
 	  <tree id="mail" name="邮件"></tree>
     <tree id="orbit" name="DS"></tree>
+    <tree id="trade" name="交易行"></tree>
     <!-- 业务功能开始 -->
   </category>
 
@@ -67,6 +68,59 @@
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">OrbitClient.xlsx|template|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelOrbitClientTemplate</scheme>
       <scheme name="OutputFile" desc="输出文件名">Both/orbit_client_template.bytes</scheme>
+    </item>
+    <item name="MarketSettings" cat="trade" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|MarketSettings|4,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeMarket</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_market.bytes</scheme>
+      <scheme name="KeyRow" desc="scheme模式参数-Key行号">3</scheme>
+    </item>
+    <item name="ValidTime" cat="trade" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|ValidTime|4,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeValidTime</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_valid_time.bytes</scheme>
+      <scheme name="KeyRow" desc="scheme模式参数-Key行号">3</scheme>
+    </item>
+    <item name="Commodity" cat="trade" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|Commodity|4,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeCommodity</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_commodity.bytes</scheme>
+      <scheme name="KeyRow" desc="scheme模式参数-Key行号">3</scheme>
+    </item>
+    <item name="SellDelay" cat="trade" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|SellDelay|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeSellDelay</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_sell_delay.bytes</scheme>
+    </item>
+    <item name="StandardPrice" cat="trade" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|StandardPrice|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeStandardPrice</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_standard_price.bytes</scheme>
+    </item>
+    <item name="ValidPrice" cat="trade" class="client server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|ValidPrice|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeValidPrice</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_valid_price.bytes</scheme>
+    </item>
+    <item name="AmountCoefficient" cat="trade" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|TradeAmountCoefficient|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeAmountCoefficient</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_amount_coefficient.bytes</scheme>
+    </item>
+    <item name="TradeSearchOrder" cat="trade" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|TradeSearchOrder|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeSearchOrder</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_search_order.bytes</scheme>
+    </item>
+    <item name="TradeAuctionRecommend" cat="trade" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|TradeAuctionRecommend|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeAuctionRecommend</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_auction_recommend.bytes</scheme>
+    </item>
+    <item name="TradeHomogeneousRecommend" cat="trade" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">TradeMarket.xlsx|TradeHomogeneousRecommend|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTradeHomogeneousRecommend</scheme>
+      <scheme name="OutputFile" desc="输出文件名">trade_homogeneous_recommend.bytes</scheme>
     </item>
     <item name="关卡表" cat="level" class="all">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Level.xlsx|关卡定义表|3,1</scheme>

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/tradesvr/protocol/common/protocol/config";
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+import "protocol/config/trade_common.config.proto";
+
+package atframework.trade.config;
+
+message tradesvr_search_cfg {
+  tradesvr_common_cfg shared_setting = 1;
+
+  int32 search_max_ttl = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  int32 search_max_count = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
+  int32 search_prefetch_count = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "40" min_value: "1" }];
+
+  int32 order_max_ttl = 11 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  int32 order_max_count = 12 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1000000" min_value: "1" }];
+
+  int32 product_max_count = 21 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10000" min_value: "1" }];
+  int32 standard_price_max_count = 22
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10000" min_value: "1" }];
+
+  uint32 order_ticket_max_internal_groups = 80
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4" min_value: "1" }];
+  uint32 search_query_order_max_nodes = 81
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  uint32 recommend_order_max_nodes = 82
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  int32 recommend_product_max_prefetch_count_per_group = 83
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  int32 recommend_product_min_prefetch_count_per_group = 84
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2" min_value: "1" }];
+  int32 recommend_order_max_count = 85 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+
+  int32 recommend_count_max_multiplier_percentage = 91
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2.0" min_value: "1.0" }];
+  int32 recommend_product_max_count = 92
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "48" min_value: "1" }];
+  int32 search_product_max_count = 93 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
+  google.protobuf.Duration index_leak_check_interval = 7
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "60s" }];
+  google.protobuf.Duration market_product_view_leak_timeout = 8
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "30s" }];
+
+  int32 query_standard_price_max_prefetch_count_per_group = 101
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "256" min_value: "1" }];
+  int32 query_standard_price_min_prefetch_count_per_group = 102
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1" min_value: "1" }];
+}

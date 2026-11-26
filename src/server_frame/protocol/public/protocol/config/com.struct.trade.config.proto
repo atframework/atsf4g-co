@@ -1,0 +1,254 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/v3/xresloader.proto";
+import "protocol/extension/xrescode_extensions_v3.proto";
+
+import "google/protobuf/duration.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+
+package atframework.shared.config;
+
+enum EnTradePriceMethod {
+  EN_TRADE_PRICE_METHOD_AUTO = 0;
+  EN_TRADE_PRICE_METHOD_LOCK = 1;
+  EN_TRADE_PRICE_METHOD_LOCK_BY_CONFIG = 2;
+}
+
+enum EnTradeMatchMethod {
+  EN_TRADE_MATCH_METHOD_RANDOM = 0;
+  EN_TRADE_PRICE_METHOD_TIME = 1;
+  EN_TRADE_PRICE_METHOD_PRICE = 2;
+}
+
+enum EnTradeMarketType {
+  EN_TRADE_MARKET_TYPE_UNKNOW = 0;
+  EN_TRADE_MARKET_TYPE_AUCTION = 1 [(org.xresloader.enum_alias) = "拍卖"];
+  EN_TRADE_MARKET_TYPE_HOMOGENEOUS = 2 [(org.xresloader.enum_alias) = "同质化"];
+}
+
+enum EnTradeTicketType {
+  EN_TRADE_TICKET_TYPE_UNKNOW = 0;
+  EN_TRADE_TICKET_TYPE_PURCHASE = 1 [(org.xresloader.enum_alias) = "预购"];
+  EN_TRADE_TICKET_TYPE_FIXED = 2 [(org.xresloader.enum_alias) = "一口价"];
+  EN_TRADE_TICKET_TYPE_AUCTION = 3 [(org.xresloader.enum_alias) = "拍卖"];
+}
+
+message ExcelTradeMarket {
+  option (xrescode.loader) = {
+    file_path: "trade_market.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+    indexes: { fields: "market_type" index_type: EN_INDEX_KL }
+    indexes: { fields: "calculate_pool_id" index_type: EN_INDEX_KL }
+    indexes: { fields: "group_id" index_type: EN_INDEX_KL }
+
+    tags: "server"
+    tags: "client"
+  };
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  bool return_price_difference = 3 [(org.xresloader.field_required) = true];
+  int64 valid_lower_limit = 4 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">=1"];
+  int32 po_amount_limit = 5 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">=1"];
+  int32 so_amount_limit = 6 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">=1"];
+  int32 currency_type = 11
+      [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelItemType_type_id"];
+  int32 valid_price = 12
+      [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelTradeValidPrice_id"];
+  bool random_item = 13 [(org.xresloader.field_required) = true];
+  EnTradeMarketType market_type = 14 [(org.xresloader.field_required) = true];
+  repeated EnTradeTicketType ticket_type = 15 [(org.xresloader.field_required) = true];
+  int32 publish_cost_currency_type = 17
+      [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelItemType_type_id"];
+  int32 bid_price_percentage = 18 [(org.xresloader.validator) = ">=1"];
+  int32 calculate_pool_id = 19
+      [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelTradeStandardPrice_id"];
+  int32 recommend_id = 20 [(org.xresloader.validator) = "ExcelTradeRecommend_id"];
+  int32 group_id = 21;
+}
+
+message TradeSellDelayConfig {
+  google.protobuf.Duration min = 1 [(org.xresloader.field_required) = true];
+  google.protobuf.Duration max = 2 [(org.xresloader.field_required) = true];
+}
+
+message ExcelTradeSellDelay {
+  option (xrescode.loader) = {
+    file_path: "trade_sell_delay.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+  };
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  repeated TradeSellDelayConfig random_time = 2 [(org.xresloader.field_required) = true];
+}
+
+message ExcelTradeCommodity {
+  option (xrescode.loader) = {
+    file_path: "trade_commodity.bytes"
+    indexes: { fields: "id" fields: "market_id" index_type: EN_INDEX_KV allow_not_found: true }
+    indexes: { fields: "market_id" fields: "item_id" index_type: EN_INDEX_KL allow_not_found: true }
+    indexes: { fields: "market_id" sort_by: "id" index_type: EN_INDEX_KL }
+    tags: "server"
+    tags: "client"
+  };
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id_market_id"];
+  int32 item_id = 2 [
+    (org.xresloader.validator) = "ExcelItemType_type_id",
+    (org.xresloader.field_unique_tag) = "item_market_require_id"
+  ];
+  int32 market_id = 3 [
+    (org.xresloader.field_unique_tag) = "id_market_id",
+    (org.xresloader.field_unique_tag) = "item_market_require_id",
+    (org.xresloader.validator) = "ExcelTradeMarket_id"
+  ];
+  int32 price_def = 4 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">=1"];
+  EnTradePriceMethod price_method = 5 [(org.xresloader.field_required) = true];
+  EnTradeMatchMethod match_method = 6 [(org.xresloader.field_required) = true];
+  uint64 price_locked = 7;
+  bool is_on_shelf = 8 [(org.xresloader.field_required) = true];
+  bool system_buy_allowed = 9 [(org.xresloader.field_required) = true];
+  int32 system_buy_price_coefficient = 10;
+  google.protobuf.Duration system_buy_time = 11;
+  int32 tax_percentage = 12 [(org.xresloader.field_required) = true, (org.xresloader.validator) = "0-1000"];
+  int32 price_upper_limit = 13 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">0"];
+  int32 price_lower_limit = 14 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">0"];
+  int32 trade_amount_coefficient = 15
+      [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelTradeAmountCoefficient_id_group"];
+  int32 increse_percentage_limit = 16 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">=0"];
+  int32 decrease_percentage_limit = 17 [(org.xresloader.field_required) = true, (org.xresloader.validator) = "0-999"];
+  int32 sell_delay = 18 [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelTradeSellDelay_id"];
+  int32 order_valid_time = 19
+      [(org.xresloader.field_required) = true, (org.xresloader.validator) = "ExcelTradeValidTime_id"];
+  int32 sale_count_limit = 20 [(org.xresloader.validator) = ">=0"];
+  int32 purchase_count_limit = 21 [(org.xresloader.validator) = ">=0"];
+  int32 publish_cost = 22 [(org.xresloader.validator) = ">=0"];
+  bool is_calculate_sp = 23 [(org.xresloader.field_required) = true];
+  bool force_save_db = 25;
+}
+
+message ExcelTradeValidTime {
+  option (xrescode.loader) = {
+    file_path: "trade_valid_time.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+    tags: "client"
+  };
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  google.protobuf.Duration po_valid_time = 2 [(org.xresloader.field_required) = true];
+  google.protobuf.Duration so_valid_time = 3 [(org.xresloader.field_required) = true];
+}
+
+message ExcelTradeStandardPrice {
+  option (xrescode.loader) = {
+    file_path: "trade_standard_price.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+    tags: "client"
+  };
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  google.protobuf.Duration update_interval = 2 [(org.xresloader.field_required) = true];
+}
+
+message ExcelTradeValidPrice {
+  option (xrescode.loader) = {
+    file_path: "trade_valid_price.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KL }
+
+    tags: "server"
+    tags: "client"
+  };
+
+  int32 id = 1;
+  int32 sp_min = 2;
+  int32 sp_max = 3;
+  int32 range = 4;
+}
+
+message ExcelTradeAmountCoefficient {
+  option (xrescode.loader) = {
+    file_path: "trade_amount_coefficient.bytes"
+    indexes: { fields: "id_group" index_type: EN_INDEX_KL }
+
+    tags: "server"
+  };
+
+  int32 id_group = 1;
+  int32 trade_amount = 2 [(org.xresloader.field_required) = true, (org.xresloader.validator) = ">=-1"];
+  int32 trade_amount_cofficient = 3 [(org.xresloader.field_required) = true, (org.xresloader.validator) = "0-1000"];
+}
+
+message ExcelTradeSearchOrder {
+  option (xrescode.loader) = {
+    file_path: "trade_search_order.bytes"
+    indexes: { fields: "item_major_type" fields: "item_minor_type" name: "item_type" index_type: EN_INDEX_KV allow_not_found: true }
+
+    tags: "server"
+  };
+
+  int32 item_major_type = 1 [(org.xresloader.field_unique_tag) = "item_type"];
+  int32 item_minor_type = 2 [(org.xresloader.field_unique_tag) = "item_type"];
+  int64 search_order = 3;
+}
+
+message ExcelTradeAuctionRecommendRarity {
+  option (org.xresloader.msg_separator) = "#";
+  repeated int32 rarity = 1 [(org.xresloader.field_separator) = ","];
+}
+
+message ExcelTradeAuctionRecommendPosition {
+  option (org.xresloader.msg_separator) = "@";
+  oneof position_rule {
+    option (org.xresloader.oneof_separator) = "|";
+
+    ExcelTradeAuctionRecommendRarity item_rarity = 1;  // 道具品质
+    int32 sp_score = 2;                                // 道具推荐分
+  }
+}
+
+message ExcelTradeAuctionRecommend {
+  option (xrescode.loader) = {
+    file_path: "trade_auction_recommend.bytes"
+    indexes: { fields: "group_id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+    tags: "client"
+  };
+  int32 group_id = 1 [(org.xresloader.field_unique_tag) = "group_id"];
+  repeated ExcelTradeAuctionRecommendPosition position = 2 [(org.xresloader.field_separator) = ";"];
+}
+
+message ExcelTradeHomogeneousRecommendRule {
+  option (org.xresloader.msg_separator) = ",";
+  // 索引一级大类
+  int32 major_index_type = 1;
+
+  // 索引二级大类
+  int32 minor_index_type = 2;
+
+  int32 count = 3;
+  int32 weight = 4;
+}
+
+message ExcelTradeHomogeneousRecommend {
+  option (xrescode.loader) = {
+    file_path: "trade_homogeneous_recommend.bytes"
+    indexes: { fields: "group_id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+    tags: "client"
+  };
+  int32 group_id = 1 [(org.xresloader.field_unique_tag) = "group_id"];
+  repeated ExcelTradeHomogeneousRecommendRule recommend_rule = 2 [(org.xresloader.field_separator) = ";"];
+}

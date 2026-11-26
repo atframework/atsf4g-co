@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/tradesvr/protocol/common/protocol/config";
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+import "protocol/config/trade_common.config.proto";
+
+package atframework.trade.config;
+
+message tradesvr_index_cfg {
+  tradesvr_common_cfg shared_setting = 1;
+
+  google.protobuf.Duration slot_cycle_eliminate_interval = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "9d" min_value: "1m" }];
+
+  google.protobuf.Duration slot_leak_check_interval = 3
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "60s" }];
+  google.protobuf.Duration slot_leak_check_interval_floor = 4
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1m" min_value: "1s" }];
+
+  int32 init_hot_product_interval_factor_floor = 5
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "0" min_value: "0" }];
+  int32 init_hot_product_interval_factor_ceiling = 6
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+
+  int32 fetch_index_max_ttl = 7 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "6" min_value: "1" }];
+
+  google.protobuf.Duration slot_load_main_cooldown_base = 8
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  google.protobuf.Duration slot_load_main_cooldown_delta = 9
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  google.protobuf.Duration slot_load_main_cooldown_threshold = 10
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+
+  google.protobuf.Duration product_histogram_pull_interval = 11
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "2s" }];
+  int32 product_histogram_db_delete_batch_max_count = 12
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "36" min_value: "6" }];
+  google.protobuf.Duration product_histogram_process_remove_interval = 13
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "10s" }];
+  uint32 product_histogram_db_saved_histogram_max_count = 14
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "5" }];
+
+  int64 product_distribution_heartbeat_interval = 15
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120" min_value: "10" }];
+  int64 product_distribution_next_pull_interval = 16
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15" min_value: "5" }];
+  int64 product_distribution_next_io_retry_interval = 17
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15" min_value: "5" }];
+  int64 product_distribution_update_index_retry_interval = 18
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15" min_value: "5" }];
+  google.protobuf.Duration index_reload_delay_window = 19
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15s" min_value: "5s" }];
+  google.protobuf.Duration index_cleanup_delay_window = 20
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15s" min_value: "5s" }];
+  google.protobuf.Duration hpa_append_delay_window = 21
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+}

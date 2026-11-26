@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/timestamp.proto";
+
+import "protocol/extension/atframework.proto";
+
+import "protocol/pbdesc/com.struct.trade.proto";
+import "protocol/pbdesc/svr.struct.proto";
+
+package atframework.trade;
+
+message SSTradePriceUpdateStandardPriceReq {
+  DTradeMarketProductKey trade_product_key = 1;
+
+  int32 ttl = 9;
+}
+
+message SSTradePriceUpdateStandardPriceRsp {
+  int32 result_code = 1;
+
+  int32 ttl = 9;
+}
+
+service TradePriceService {
+  option (atframework.service_options) = {
+    module_name: "trade"
+  };
+
+  rpc update_standard_price(SSTradePriceUpdateStandardPriceReq) returns (SSTradePriceUpdateStandardPriceRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "主动触发基准价格更新"
+      allow_no_wait: true
+    };
+  };
+}

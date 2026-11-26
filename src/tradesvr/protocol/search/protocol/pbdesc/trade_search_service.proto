@@ -1,0 +1,220 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/timestamp.proto";
+
+import "protocol/gameplay/frame/legacy_frame.proto";
+import "protocol/pbdesc/com.struct.trade.proto";
+import "protocol/gameplay/pbdesc/svr.struct.proto";
+
+package atframework.trade;
+
+message SSTradeSearchQueryReq {
+  int32 area_code = 1;
+  int32 order_type = 2;  // 订单类型, 指向 DTradeOrderTicketMeta.type
+  atframework.trade.DTradeOrderTicketSearchRule query = 3;
+  int32 count = 4;
+  uint64 random_seed = 5;
+  bool no_next_seed = 6;
+  atframework.trade.EnTradeSearchSortBy sort_by = 7;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchQueryRsp {
+  int32 result_code = 1;
+  repeated atframework.trade.DTradeOrderTicketMeta orders = 2;
+  bool query_has_more_data = 3;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchGetOrderReq {
+  repeated atframework.gameplay.server.trade_order_ticket_key ticket_key = 1;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchGetOrderRsp {
+  int32 result_code = 1;
+  repeated atframework.trade.DTradeOrderTicketDetail order_detail = 2;
+  repeated atframework.gameplay.server.trade_order_ticket_key not_found_ticket_key = 3;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchBatchGetSalesBasicIndexReq {
+  repeated atframework.trade.DTradeMarketProductKey trade_product_key = 1;
+  google.protobuf.Timestamp timestamp = 2;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 3;
+}
+
+message SSTradeSearchBatchGetSalesBasicIndexRsp {
+  int32 result_code = 1;
+  repeated atframework.trade.DTradeMarketProductBasicIndexInfo sales_product_basic_info = 2;
+  repeated atframework.trade.DTradeMarketProductKey not_found_product_key = 3;
+
+  // 商品类型 @see DTradeOrderTicketMeta.type
+  int32 order_type = 4;
+}
+
+message SSTradeSearchGetRecommendOrderTicketReq {
+  atframework.trade.DTradeRecommendOrderTicketRule query = 1;
+  uint64 random_seed = 2;
+  bool no_next_seed = 3;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchGetRecommendOrderTicketRsp {
+  int32 result_code = 1;
+  atframework.trade.DTradeRecommendOrderTicketResult result = 2;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchGetRecommendProductReq {
+  atframework.trade.DTradeRecommendProductRule query = 1;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchGetRecommendProductRsp {
+  int32 result_code = 1;
+  atframework.trade.DTradeRecommendProductResult result = 2;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchQueryProductByGroupReq {
+  message GroupRule {
+    atframework.trade.DTradeRecommendProductRule query = 1;
+    int32 group_id = 2;
+  }
+  repeated atframework.trade.SSTradeSearchQueryProductByGroupReq.GroupRule group_query = 1;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeSearchQueryProductByGroupRsp {
+  int32 result_code = 1;
+
+  message GroupResult {
+    int32 group_id = 2;
+    atframework.trade.DTradeRecommendProductResult result = 1;
+  }
+
+  repeated atframework.trade.SSTradeSearchQueryProductByGroupRsp.GroupResult group_result = 2;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeQueryAggregationStandardPriceReq {
+  atframework.trade.DTradeBatchQueryStandardPriceRule query = 1;
+}
+
+message SSTradeQueryAggregationStandardPriceRsp {
+  int32 result_code = 1;
+  atframework.trade.DTradeBatchQueryStandardPriceResult result = 2;
+}
+
+message SSTradeQueryStandardPriceByGroupReq {
+  message GroupRule {
+    atframework.trade.DTradeBatchQueryStandardPriceRule query = 1;
+    int32 group_id = 2;
+  }
+  repeated atframework.trade.SSTradeQueryStandardPriceByGroupReq.GroupRule group_query = 1;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+message SSTradeQueryStandardPriceByGroupRsp {
+  int32 result_code = 1;
+
+  message GroupResult {
+    int32 group_id = 2;
+    atframework.trade.DTradeBatchQueryStandardPriceResult result = 1;
+  }
+
+  repeated atframework.trade.SSTradeQueryStandardPriceByGroupRsp.GroupResult group_result = 2;
+
+  int32 slot_id = 8;
+  int32 ttl = 9;
+}
+
+service TradeSearchService {
+  option (atframework.gameplay.frame.service_options) = {
+    module_name: "trade"
+  };
+
+  rpc query(atframework.trade.SSTradeSearchQueryReq) returns (atframework.trade.SSTradeSearchQueryRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "搜索订单"
+    };
+  };
+
+  rpc get_order(atframework.trade.SSTradeSearchGetOrderReq) returns (atframework.trade.SSTradeSearchGetOrderRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "拉取指定订单数据"
+    };
+  };
+
+  rpc batch_get_sales_basic(atframework.trade.SSTradeSearchBatchGetSalesBasicIndexReq) returns (atframework.trade.SSTradeSearchBatchGetSalesBasicIndexRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "拉取指定出售单基础数据（同质化交易行）"
+    };
+  };
+
+  rpc get_recommend_order_ticket(atframework.trade.SSTradeSearchGetRecommendOrderTicketReq)
+      returns (atframework.trade.SSTradeSearchGetRecommendOrderTicketRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "拉取推荐(拍卖)"
+    };
+  };
+
+  rpc get_recommend_product(atframework.trade.SSTradeSearchGetRecommendProductReq) returns (atframework.trade.SSTradeSearchGetRecommendProductRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "拉取推荐(同质化)"
+    };
+  };
+
+  rpc query_product(atframework.trade.SSTradeSearchQueryProductByGroupReq) returns (atframework.trade.SSTradeSearchQueryProductByGroupRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "按虚拟分组拉取推荐和搜索(同质化)"
+      allow_no_wait: true
+    };
+  };
+
+  rpc query_aggregation_standard_price(atframework.trade.SSTradeQueryAggregationStandardPriceReq)
+      returns (atframework.trade.SSTradeQueryAggregationStandardPriceRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "聚合拉取基准价格(As replication)"
+    };
+  };
+
+  rpc query_standard_price_by_group(atframework.trade.SSTradeQueryStandardPriceByGroupReq) returns (atframework.trade.SSTradeQueryStandardPriceByGroupRsp) {
+    option (atframework.gameplay.frame.rpc_options) = {
+      api_name: "按虚拟分组拉取基准价格(As main)"
+      allow_no_wait: true
+    };
+  };
+}

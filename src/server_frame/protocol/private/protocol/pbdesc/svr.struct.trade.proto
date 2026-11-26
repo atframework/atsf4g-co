@@ -1,0 +1,364 @@
+syntax = "proto3";
+// 后台数据结构定义
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.trade.proto";
+
+package atframework.trade;
+
+message user_trade_ticket_detail {
+  DTradeOrderTicketDetail detail = 1;
+  DUserTradeConfirmData confirmation_data = 2;  // 收取数据
+  bool auto_remove = 3;                         // 自动删除订单
+  bool refund = 4;                              // 已退款
+  bool ace_clone = 5;                           // ACE制裁
+  repeated atframework.shared.DItemBasicOffset auto_receive = 7;
+}
+
+message user_trade_ticket_blob_detail {
+  // 仅用于数据恢复
+  user_trade_ticket_detail ticket_detail = 1;
+  repeated atframework.shared.DItemBasic origin_cost_item = 2;
+  string bill_no = 3;
+}
+
+message table_user_trade_blob_data {
+  repeated user_trade_ticket_blob_detail orders = 1;
+  int32 data_version = 11;
+}
+
+message trade_order_ticket_key {
+  // 区域码
+  int32 area_code = 1;
+  // 委托单ID
+  int64 trade_order_ticket_id = 2;
+  // 交易行分布Slot（服务器用）
+  int32 slot_id = 3;
+
+  // 委托单类型，指向 DTradeOrderTicketMeta.type
+  int32 order_type = 4;
+}
+
+message user_trade_order_update {
+  int32 ticket_martet_id = 1;
+  trade_order_ticket_key ticket_key = 4;
+
+  DTradeOrderTicketDetail snapshot = 2;
+  repeated DTradeOrderTicketEventLog event_data = 3;
+
+  // 数据版本号，用于处理多个缓存不一致时的新老数据判定
+  int64 data_version = 6;
+}
+
+message user_trade_order_update_pending {
+  user_trade_order_update data = 1;
+  bool async_job = 2;
+}
+
+message table_user_trade_confirm_blob_data {
+  repeated user_trade_ticket_detail orders = 1;
+  repeated user_trade_order_update_pending pending_order_update = 2;
+  int64 last_time_clear_op_lock_count = 3;
+  int32 op_lock_count = 4;
+  int64 op_lock_endtime = 5;
+  google.protobuf.Timestamp unlock_trade_auction_privilege = 6;
+  int32 data_version = 11;
+}
+
+message trade_server_profile {
+  atframework.shared.DUserIDKey user_key = 1;
+}
+
+message trade_order_confirmation {
+  int64 confirmation_key = 1;
+  EnTradeConfirmationType confirmation_type = 2;
+
+  google.protobuf.Timestamp confirm_timepoint = 4;
+
+  // 卖方付出的道具
+  atframework.shared.DItemInstance sales_item_data = 6;
+
+  // 买方付出的道具
+  atframework.shared.DItemInstance purchase_item_data = 7;
+
+  trade_server_profile sales_server_profile = 8;
+  trade_server_profile purchase_server_profile = 9;
+
+  // 下一次检查时间
+  int32 checking_times = 19;
+  google.protobuf.Timestamp next_checkpoint = 20;
+
+  // 统计类数据
+  DTradeProductProfile product_profile = 21;
+  // 卖方客户端信息
+  DTradeClientProfile sales_client_profile = 22;
+  // 买方客户端信息
+  DTradeClientProfile purchase_client_profile = 23;
+
+  int64 trace_confirmation_key = 24;
+
+  EnTradeConfirmationSaleType sale_type = 25;
+}
+
+message trade_order_transaction_event_log {
+  google.protobuf.Timestamp create_timepoint = 2;  // 创建时间
+
+  oneof event {
+    trade_order_confirmation confirmation = 13;  // 成交（入WAL数据时可以把Item详情移动到详情）
+  }
+}
+
+message trade_order_transaction_data {
+  uint64 lock_by_server_id = 1;
+  string lock_by_server_name = 2;
+  google.protobuf.Timestamp lock_timeout = 3;
+
+  repeated trade_order_transaction_event_log event_data = 11;
+}
+
+message trade_order_fetch_lock_data {
+  uint64 lock_by_server_id = 1;
+  string lock_by_server_name = 2;
+  google.protobuf.Timestamp lock_timeout = 3;
+
+  // 锁类型，0表示无类型。非0值相同类型的锁可以重复加锁，不同类型的锁互斥。
+  uint32 lock_type = 4;
+}
+
+message trade_order_subscriber_data {
+  atframework.shared.DUserIDKey user_key = 1;
+  uint64 server_instance_id = 2;
+
+  google.protobuf.Timestamp last_heartbeat_time_point = 3;
+}
+
+// ======================== 统计信息，部分需要高频同步 ========================
+
+message trade_product_standard_price_info {
+  google.protobuf.Timestamp timestamp = 1;  // 结算起始时间
+  int64 standard_price = 2;                 // 基准价格
+  int64 total_price = 3;                    // 总价格
+  int64 total_count = 4;                    // 总单数
+  int64 next_calculate_ts = 5;              // 下次结算时间
+  int64 max_price = 6;                      // 单价最大值
+  int64 min_price = 7;                      // 单价最小值
+}
+
+message trade_product_standard_price_by_price_key {
+  DTradeStandardPriceKey price_key = 1;
+  trade_product_standard_price_info standard_price = 2;
+}
+
+// 委托单统计信息
+message trade_product_onsale_price_statistics {
+  // 挂单价格
+  int64 onsale_price = 1;
+  // 委托单数
+  int64 order_ticket_count = 2;
+  // 委托单内道具总数
+  int64 item_count = 3;
+}
+
+// 订单档位统计
+message trade_product_order_price_statistics_info {
+  int32 order_type = 1;
+
+  // 当前周期的委托单数据
+  repeated trade_product_onsale_price_statistics order_price_statistics = 2;
+}
+
+message trade_product_local_deal_statistics {
+  int64 total_price = 1;  // 总价格
+  int64 total_count = 2;  // 总单数
+  int64 max_price = 3;    // 单价最大值
+  int64 min_price = 4;    // 单价最小值
+}
+
+// 拍卖统计信息
+message trade_product_deal_statistics_data {
+  int32 max_premium_price_rate = 1;  // 最大溢价比例
+  int64 deal_count = 2;              // 成交单数
+}
+
+// 价格池sp汇总
+message trade_product_standard_price_summary {
+  // 商品sp
+  trade_product_standard_price_info total_standard_price = 1;
+
+  // 版本号
+  int64 version = 3;
+}
+
+message trade_product_deal_statistics_summary {
+  int32 order_type = 1;
+
+  // 统一统计数据,统计溢价 及成交单数
+  trade_product_deal_statistics_data deal_statistics = 2;
+
+  // 交易数据统计(限server内部使用)
+  trade_product_local_deal_statistics local_deal = 3;
+}
+
+// 单周期内详细统计信息(server内使用)
+message trade_product_statistics_detail_by_cycle {
+  // 结算起始时间
+  google.protobuf.Timestamp timestamp = 1;
+
+  // by order_type
+  repeated trade_product_order_price_statistics_info order_price = 3;
+
+  // 版本号
+  int64 version = 7;
+
+  // 汇总数据by order_type
+  repeated trade_product_deal_statistics_summary local_deal_summary = 10;
+}
+
+/// -----索引服index------
+message trade_product_index_info {
+  DTradeMarketProductKey product_key = 1;
+  google.protobuf.Timestamp timestamp = 2;
+
+  // 索引更新周期内的时序信息
+  // - 基准价格相关指标
+  trade_product_standard_price_info metric_point = 3;
+
+  // - 成交信息
+  repeated trade_product_onsale_price_statistics on_sale = 4;
+
+  // - 最低成交价
+  int64 lowest_price = 5;
+  // - 推荐分当前值
+  int64 current_recommend_score = 6;
+  // - 推荐分前值
+  int64 previous_recommend_score = 7;
+
+  // - 版本号
+  int64 version = 9;
+  // - 下一次计算时间
+  int32 next_calculate_timestamp = 10;
+}
+
+/// ----order 统计信息-----
+message trade_product_statistics_info {
+  DTradeMarketProductKey product_key = 1;
+
+  repeated trade_product_statistics_detail_by_cycle statistics_by_cycle = 2;
+}
+
+message table_trade_calculate_pool_detail_blob_data {
+  // 区域码
+  int32 area_code = 1;
+  // 商品结算池id
+  int32 trade_calculate_pool_id = 2;
+
+  // 最近一次结算的节点sid
+  uint64 last_calculate_sid = 4;
+}
+
+// ======================== 交易行指标 ========================
+
+// 单个商品落地周期内的相关指标变化历史
+message table_trade_product_metric_blob_data {
+  DTradeMarketProductKey product_key = 1;  // 商品key
+
+  trade_product_statistics_detail_by_cycle statistics_of_cycle = 2;  // 统计信息
+}
+
+// 单个商品所在结算池周期内的相关汇总数据
+message table_trade_product_calculate_pool_blob_data {
+  DTradeStandardPriceKey price_key = 1;
+  trade_product_standard_price_summary product_standard_price_summary = 3;
+}
+
+message table_trade_slot_metric_blob_data {
+  // 区域码
+  int32 area_code = 1;
+  // 交易行分布Slot（服务器用）
+  int32 slot_id = 2;
+  // 商品交易索引信息
+  repeated trade_product_index_info product_info_list = 3;
+}
+
+message table_trade_order_ticket_slot_blob_data {
+  repeated DTradeOrderTicketMeta meta = 1;
+  repeated table_trade_product_metric_blob_data product_statistics_process = 2;
+  bool more_meta_slice = 4;
+}
+
+message table_trade_order_ticket_detail_blob_data {
+  DTradeOrderTicketDetail order_ticket_data = 1;
+
+  int64 event_id_allocator = 2;
+  int64 last_removed_log_event_id = 3;
+  EnTradeOrderTicketState delay_ticket_state = 4;
+
+  repeated trade_order_subscriber_data subscriber = 6;
+
+  repeated DTradeOrderTicketEventLog event_logs = 11;
+
+  // Fetch乐观锁
+  trade_order_fetch_lock_data fetch_lock = 12;
+
+  // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
+  google.protobuf.Any transaction_storage = 21;
+  trade_order_transaction_data lock = 22;
+  map<int64, trade_order_confirmation> unchecked_confirmation = 23;
+}
+
+// table_trade_order_ticket_detail_blob_data拆成可变和不变两部分
+
+message table_trade_order_ticket_detail_immutable_blob_data {
+  DTradeOrderTicketDetailImmutable order_ticket_data_immutable = 1;
+}
+
+message table_trade_order_ticket_detail_mutable_blob_data {
+  DTradeOrderTicketDetailMutable order_ticket_data_mutable = 1;
+
+  int64 event_id_allocator = 2;
+  int64 last_removed_log_event_id = 3;
+  EnTradeOrderTicketState delay_ticket_state = 4;
+
+  repeated trade_order_subscriber_data subscriber = 6;
+
+  repeated DTradeOrderTicketEventLog event_logs = 11;
+
+  // Fetch乐观锁
+  trade_order_fetch_lock_data fetch_lock = 12;
+
+  // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
+  google.protobuf.Any transaction_storage = 21;
+  trade_order_transaction_data lock = 22;
+  map<int64, trade_order_confirmation> unchecked_confirmation = 23;
+
+  uint64 last_process_order_server_id = 24;
+}
+
+// ======================== 交易行撮合协调数据 ========================
+
+message table_trade_matchmaking_product_recycle_time_info {
+  bool valid = 1;
+  int32 min_price = 2;
+  int32 max_price = 3;
+  int32 left_count = 4;
+  uint32 recycle_date = 5;
+  bool src_zero = 6;
+  int32 type = 7;
+}
+
+message table_trade_matchmaking_product_recycle_blob_data {
+  // 时间递增排序
+  map<uint32, table_trade_matchmaking_product_recycle_time_info> recycle_time_info = 1;
+}

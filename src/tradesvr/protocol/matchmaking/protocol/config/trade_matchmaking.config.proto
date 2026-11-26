@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/tradesvr/protocol/common/protocol/config";
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+import "protocol/config/trade_common.config.proto";
+
+package atframework.trade.config;
+
+message tradesvr_matchmaking_cfg {
+  tradesvr_common_cfg shared_setting = 1;
+
+  // 单个一口价买单最多拉取的卖单数
+  int32 quick_purchase_fetch_sales_order_count = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+  // 正常卖单，每次批量拉取的买单数量
+  int32 preorder_sales_order_fetch_count = 3
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" min_value: "10" }];
+  // 批量处理每次撮合不同商品的数量
+  uint32 preorder_batch_product_count = 4
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5" min_value: "1" }];
+  // 事务超时时间秒
+  google.protobuf.Duration transaction_expired_time = 5
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "5s" }];
+  // 单个商品连续撮合的时间间隔秒
+  google.protobuf.Duration preorder_defalut_timer_delta_tick = 6
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "1s" }];
+  // 单个商品撮合失败下次撮合的时间间隔秒
+  google.protobuf.Duration preorder_wait_timer_delta_tick = 7
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "60s" }];
+  // 单个商品撮合失败下次撮合的时间间隔秒-随机增量
+  google.protobuf.Duration preorder_wait_timer_delta_random_cfg = 8
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "20s" min_value: "1s" }];
+  // 单个商品撮合状态OSS上报
+  google.protobuf.Duration preorder_oss_state_tick = 9
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "60s" }];
+  // 最大ttl
+  uint32 preorder_max_ttl = 10 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4" min_value: "1" }];
+
+  // 撮合单个商品时，同时进行的异步task数
+  uint32 preorder_product_batch_task_count = 21
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "10" }];
+  // 立即撮合单个商品时，同时进行的异步task数
+  // uint32 quick_product_batch_task_count = 22 [(atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "10" }];
+  // 匹配的订单提交事务时，同时进行的异步task数
+  uint32 transaction_batch_task_count = 23
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "10" }];
+
+  // 全局最多的task数量限制
+  uint32 global_task_count = 24 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5000" min_value: "10" }];
+  // 单个订单最多匹配的撮合订单数
+  uint32 max_matched_order_count = 25 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
+
+  // 回收系统
+  // 数据库加载保护时间
+  google.protobuf.Duration recycle_system_wait_protect_time = 26
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "20s" }];
+
+  // 定时存储间隔时间
+  google.protobuf.Duration recycle_system_db_save_interval = 27
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5s" }];
+
+  // 无任何撮合任务则进行重置时间间隔
+  google.protobuf.Duration preorder_no_task_recovery_time = 28
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "180s" }];
+
+  // 单个商品一段时间未进行撮合则认为timer丢失
+  google.protobuf.Duration preorder_check_timer_lost_time = 29
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "240s" min_value: "180s" }];
+
+  // 卖单可以提前认为过期时间
+  google.protobuf.Duration sales_order_timeout_pre = 30
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "0s" }];
+
+  // 缓存的meta经过几秒过期
+  google.protobuf.Duration meta_cache_timeout = 32
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+
+  // 启动后的写保护
+  google.protobuf.Duration write_time_protect = 33
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "2s" }];
+
+  // 主节点等待从节点超时时间秒
+  google.protobuf.Duration main_wait_replicated_timeout = 34
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15s" min_value: "8s" }];
+
+  // 一口价买单没有卖单等待时间
+  google.protobuf.Duration quick_purchase_no_sales_wait = 35
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "0s" }];
+
+  // 快速购买卖单缓存时间
+  google.protobuf.Duration quick_purchase_sales_meta_cache_expired = 36
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8s" min_value: "4s" }];
+
+  // 预购买单缓存时间
+  google.protobuf.Duration preorder_purchase_meta_cache_expired = 37
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8s" min_value: "4s" }];
+
+  // 预购卖单缓存时间
+  google.protobuf.Duration preorder_sales_orders_meta_cache_expired = 38
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8s" min_value: "4s" }];
+
+  bool open_pressure_test = 39;
+  bool enable_logger = 40;
+  bool enable_quick_purchase_final_not_matched_log = 41;
+}

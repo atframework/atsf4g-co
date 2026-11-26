@@ -23,6 +23,7 @@ import "protocol/pbdesc/com.struct.rank.proto";
 import "protocol/pbdesc/com.struct.match.proto";
 import "protocol/pbdesc/svr.struct.friend_api.proto";
 import "protocol/pbdesc/svr.struct.mail.proto";
+import "protocol/pbdesc/svr.struct.trade.proto";
 
 package atframework.shared;
 
@@ -443,4 +444,123 @@ message table_mail_global_index {
   int32 major_type = 2;
 
   atframework.mail.table_global_mail_blob_data blob_data = 6;
+}
+
+// ======================== 交易行表 ========================
+
+// Original table 1031.
+message TABLE_TRADE_PRODUCT_HISTOGRAM {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "table_trade_product_histogram"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
+      enable_cas: true
+      key_fields: "deployment_environment"
+      key_fields: "area_code"
+      key_fields: "trade_market_id"
+      key_fields: "order_type"
+      key_fields: "trade_product_id"
+    }
+  };
+  // clang-format on
+  string deployment_environment = 101;
+  int32 area_code = 102;
+  int32 trade_market_id = 103;
+  int32 order_type = 104;
+  int32 trade_product_id = 105;
+  int64 timestamp = 106;
+
+  atframework.trade.table_trade_product_metric_blob_data product_metric = 108;
+}
+
+// Original table 1032.
+message table_trade_slot_histogram {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "table_trade_slot_histogram"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
+      enable_cas: true
+      key_fields: "deployment_environment"
+      key_fields: "area_code"
+      key_fields: "slot_id"
+    }
+  };
+  // clang-format on
+  string deployment_environment = 101;
+  int32 area_code = 102;
+  int32 slot_id = 103;
+  int64 timestamp = 104;
+
+  atframework.trade.table_trade_slot_metric_blob_data slot_metric = 106;
+}
+
+message table_trade_order_ticket_detail {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "table_trade_order_ticket_detail"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "deployment_environment"
+      key_fields: "area_code"
+      key_fields: "trade_order_tick_id"
+    }
+  };
+  // clang-format on
+  string deployment_environment = 101;
+  int32 area_code = 102;
+  int64 trade_order_tick_id = 103;
+
+  atframework.trade.table_trade_order_ticket_detail_blob_data order_detail = 105;
+  atframework.trade.table_trade_order_ticket_detail_immutable_blob_data order_detail_stable = 107;
+  atframework.trade.table_trade_order_ticket_detail_mutable_blob_data order_detail_unstable = 109;
+}
+
+message table_trade_order_ticket_slot {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "table_trade_order_ticket_slot"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "deployment_environment"
+      key_fields: "area_code"
+      key_fields: "order_type"
+      key_fields: "slot_id"
+      key_fields: "slice_index"
+    }
+  };
+  // clang-format on
+  string deployment_environment = 101;
+  int32 area_code = 102;
+  int32 order_type = 103;
+  int32 slot_id = 104;
+  int32 slice_index = 105;
+
+  atframework.trade.table_trade_order_ticket_slot_blob_data order_meta = 107;
+}
+
+// Original table 1044.
+message table_trade_matchmaking_recycle {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "table_trade_matchmaking_recycle"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "deployment_environment"
+      key_fields: "area_code"
+      key_fields: "market_id"
+      key_fields: "product_id"
+    }
+  };
+  // clang-format on
+  string deployment_environment = 101;
+  int32 area_code = 102;
+  int32 market_id = 103;
+  int32 product_id = 104;
+
+  atframework.trade.table_trade_matchmaking_product_recycle_blob_data product_recycle = 106;
 }
