@@ -25,11 +25,12 @@ message table_uuid_allocator {
   option (atframework.database_table) = {
     index: {
       name: "uuid_allocator"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "major_type"
       key_fields: "minor_type"
       key_fields: "path_type"
-      atomic_inc_fields: "auto_inc_id"
+      kv: {
+        atomic_inc_fields: "auto_inc_id"
+      }
     }
   };
   // clang-format on

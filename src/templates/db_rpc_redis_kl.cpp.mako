@@ -1,5 +1,5 @@
 ## -*- coding: utf-8 -*-
-<%page args="message_name,index,key_fields,all_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_pb" />
+<%page args="message_name,index,index_kl,key_fields,all_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_pb" />
 <%def name="emit_mock_slot(slot, handler_type)">
 namespace mock_detail {
 using ${slot}_handler_t = ${handler_type};
@@ -216,7 +216,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type add(rpc::context &ctx
   }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(__trace.child_context, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
-                                                                ${index.max_list_length},
+                                                                ${index_kl.max_list_length},
                                                                 std::move(store)));
   if (res < 0) {
     RPC_DB_RETURN_CODE(__trace.finish(res));

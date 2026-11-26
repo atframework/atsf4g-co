@@ -2,7 +2,7 @@
 <%!
 import time
 import sys
-%><%page args="message_name,extension,message,index_type_enum,message_full_name" />
+%><%page args="message_name,extension,message,message_full_name" />
 % for field in message.fields:
 %     if not field.is_db_vaild_type():
 // ${message_name} filed: {${field.get_name()}} not db vaild type
@@ -12,9 +12,10 @@ import sys
 % for index in extension.index:
 <%
     key_fields = []
-    index_type_kv = True
-    if index.type == index_type_enum.values_by_name["EN_ATFRAMEWORK_DB_INDEX_TYPE_KL"].descriptor.number:
-        index_type_kv = False
+    # database_table_index carries one of kv/kl/km; the selected message holds the per-kind options.
+    index_kind = index.WhichOneof("index")
+    index_config = getattr(index, index_kind) if index_kind is not None else index.kv
+    index_type_kv = index_kind != "kl"
     for key in index.key_fields:
         field = message.fields_by_name[key]
         key_fields.append({
@@ -23,7 +24,7 @@ import sys
         })
 
     atomic_inc_fields = []
-    for inc_field in index.atomic_inc_fields:
+    for inc_field in getattr(index_config, "atomic_inc_fields", []):
         if inc_field not in message.fields_by_name:
             continue
         field = message.fields_by_name[inc_field]
@@ -35,12 +36,14 @@ import sys
             "cpp_type": cpp_type,
         })
 %>
-%     if not index_type_kv and len(index.partly_save) > 0:
-#error "index ${index.name}: partly_save only supports EN_ATFRAMEWORK_DB_INDEX_TYPE_KV"
+%     if index_kind is None:
+#error "index ${index.name}: database_table_index.index is not set (kv/kl/km)"
+%     elif index_kind == "km":
+#error "index ${index.name}: database_table_index_km is not supported yet"
 %     endif
 namespace ${index.name} {
 %     if index_type_kv:
-<%include file="db_rpc_redis_kv.h.mako" args="message_name=message_name,index=index,key_fields=key_fields,atomic_inc_fields=atomic_inc_fields" />
+<%include file="db_rpc_redis_kv.h.mako" args="message_name=message_name,index=index,index_kv=index_config,key_fields=key_fields,atomic_inc_fields=atomic_inc_fields" />
 %     else:
 <%include file="db_rpc_redis_kl.h.mako" args="message_name=message_name,index=index,key_fields=key_fields" />
 %     endif
@@ -102,7 +105,7 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle inc_field_${inc_field["raw_nam
                       ${inc_field["cpp_type"]} &, rpc::unit_test::db_mock_meta &)>
         __handler);
 %         endfor
-%         for partly_get in index.partly_get:
+%         for partly_get in index_config.partly_get:
 <%
     partly_mock_name = ""
     if partly_get.name != "":

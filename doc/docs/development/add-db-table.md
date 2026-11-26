@@ -16,15 +16,21 @@ message table_example {
   option (atframework.database_table) = {
     index: {
       name: "example"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "user_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   uint64 user_id = 1;
   string value = 2;
 }
 ```
+
+`index` 用 `kv` / `kl` / `km` 其中一个子消息选择索引类型，也只有该类型定义了对应选项：`kv` 有 `enable_cas`、
+`partly_get`、`partly_save`、`atomic_inc_fields`，`kl` 有 `max_list_length`，`km` 有 `enable_cas`、`map_keys`
+（生成模板暂未支持 `km`，声明后会得到 `#error`）。必须显式选一种；不需要任何选项时也要写 `kv: {}` 占位。
+把选项写在不属于它的类型下会被 proto 编译拒绝。
 
 2. 按[统一构建步骤](overview)重新配置/构建；已有流程更新
    `rpc/db/local_db_interface.atfw.gen.h/.cpp` 或 `global_db_interface.atfw.gen.h/.cpp`。

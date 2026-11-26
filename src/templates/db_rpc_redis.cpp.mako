@@ -2,7 +2,7 @@
 <%!
 import time
 import sys
-%><%page args="message_name,extension,message,index_type_enum,message_full_name" />
+%><%page args="message_name,extension,message,message_full_name" />
 <%def name="emit_mock_slot(slot, handler_type)">
 namespace mock_detail {
 using ${slot}_handler_t = ${handler_type};
@@ -57,9 +57,10 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
 <%
     key_fields = []
     all_fields = []
-    index_type_kv = True
-    if index.type == index_type_enum.values_by_name["EN_ATFRAMEWORK_DB_INDEX_TYPE_KL"].descriptor.number:
-        index_type_kv = False
+    # database_table_index carries one of kv/kl/km; the selected message holds the per-kind options.
+    index_kind = index.WhichOneof("index")
+    index_config = getattr(index, index_kind) if index_kind is not None else index.kv
+    index_type_kv = index_kind != "kl"
     for key in index.key_fields:
         field = message.fields_by_name[key]
         if field.get_cpp_type() == "string_view":
@@ -97,7 +98,7 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
         prefix_fmt_value_from_key += key_map["raw_name"]
 
     atomic_inc_fields = []
-    for inc_field in index.atomic_inc_fields:
+    for inc_field in getattr(index_config, "atomic_inc_fields", []):
         if inc_field not in message.fields_by_name:
             continue
         field = message.fields_by_name[inc_field]
@@ -109,14 +110,16 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
             "cpp_type": cpp_type,
         })
 %>
-%     if not index_type_kv and len(index.partly_save) > 0:
-#error "index ${index.name}: partly_save only supports EN_ATFRAMEWORK_DB_INDEX_TYPE_KV"
+%     if index_kind is None:
+#error "index ${index.name}: database_table_index.index is not set (kv/kl/km)"
+%     elif index_kind == "km":
+#error "index ${index.name}: database_table_index_km is not supported yet"
 %     endif
 namespace ${index.name} {
 %     if index_type_kv:
-<%include file="db_rpc_redis_kv.cpp.mako" args="message_name=message_name,index=index,key_fields=key_fields,all_fields=all_fields,atomic_inc_fields=atomic_inc_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
+<%include file="db_rpc_redis_kv.cpp.mako" args="message_name=message_name,index=index,index_kv=index_config,key_fields=key_fields,all_fields=all_fields,atomic_inc_fields=atomic_inc_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
 %     else:
-<%include file="db_rpc_redis_kl.cpp.mako" args="message_name=message_name,index=index,key_fields=key_fields,all_fields=all_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
+<%include file="db_rpc_redis_kl.cpp.mako" args="message_name=message_name,index=index,index_kl=index_config,key_fields=key_fields,all_fields=all_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
 %     endif
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS

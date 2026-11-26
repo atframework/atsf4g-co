@@ -32,10 +32,11 @@ message table_login_auth {
   option (atframework.database_table) = {
     index: {
       name: "login_auth"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "account_type"
       key_fields: "open_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -58,9 +59,10 @@ message table_login_lock {
   option (atframework.database_table) = {
     index: {
       name: "login_lock"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "user_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -86,11 +88,12 @@ message table_user_async_jobs {
   option (atframework.database_table) = {
     index: {
       name: "async_jobs"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
-      max_list_length: 50
       key_fields: "job_type"
       key_fields: "user_id"
       key_fields: "zone_id"
+      kl: {
+        max_list_length: 50
+      }
     }
   };
   // clang-format on
@@ -105,21 +108,22 @@ message table_user {
   option (atframework.database_table) = {
     index: {
       name: "user"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "zone_id"
       key_fields: "user_id"
-      partly_get: {
-        name: "basic_info"
-        fields: "open_id"
-        fields: "login_data"
-        fields: "account_data"
-        fields: "user_data"
-        fields: "option_data_public"
-      }
-      partly_save: {
-        name: "async_jobs"
-        fields: "async_job_blob_data"
+      kv: {
+        enable_cas: true
+        partly_get: {
+          name: "basic_info"
+          fields: "open_id"
+          fields: "login_data"
+          fields: "account_data"
+          fields: "user_data"
+          fields: "option_data_public"
+        }
+        partly_save: {
+          name: "async_jobs"
+          fields: "async_job_blob_data"
+        }
       }
     }
   };
@@ -160,11 +164,12 @@ message table_string_mapping {
   option (atframework.database_table) = {
     index: {
       name: "string_mapping"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "type_id"
       key_fields: "string_value"
       key_fields: "zone_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -180,10 +185,11 @@ message table_distribute_transaction {
   option (atframework.database_table) = {
     index: {
       name: "distribute_transaction"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "zone_id"
       key_fields: "transaction_uuid"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -198,7 +204,6 @@ message table_rank {
   option (atframework.database_table) = {
     index: {
       name: "rank"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "rank_type"
       key_fields: "rank_instance_id"
       key_fields: "sub_rank_type"
@@ -206,7 +211,7 @@ message table_rank {
       key_fields: "zone_id"
       key_fields: "slice_index"
       key_fields: "storge_version"
-
+      kv: {}
     }
   };
   // clang-format on
@@ -228,7 +233,6 @@ message table_rank_mirror {
   option (atframework.database_table) = {
     index: {
       name: "rank_mirror"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "rank_type"
       key_fields: "rank_instance_id"
       key_fields: "sub_rank_type"
@@ -236,6 +240,7 @@ message table_rank_mirror {
       key_fields: "zone_id"
       key_fields: "mirror_id"
       key_fields: "slice_index"
+      kv: {}
     }
   };
   // clang-format on
@@ -259,13 +264,14 @@ message table_rank_router {
   option (atframework.database_table) = {
     index: {
       name: "rank_router"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "rank_type"
       key_fields: "rank_instance_id"
       key_fields: "sub_rank_type"
       key_fields: "sub_rank_instance_id"
       key_fields: "zone_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -286,12 +292,12 @@ message table_rank_mirror_meta {
   option (atframework.database_table) = {
     index: {
       name: "rank_mirror_meta"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "rank_type"
       key_fields: "rank_instance_id"
       key_fields: "sub_rank_type"
       key_fields: "sub_rank_instance_id"
       key_fields: "zone_id"
+      kv: {}
     }
   };
   // clang-format on
@@ -310,14 +316,14 @@ message table_rank_settlement {
   option (atframework.database_table) = {
     index: {
       name: "rank_settlement"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "zone_id"
       key_fields: "rank_type"
       key_fields: "rank_instance_id"
       key_fields: "sub_rank_type"
       key_fields: "sub_rank_instance_id"
-
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -335,13 +341,13 @@ message table_rank_history {
   option (atframework.database_table) = {
     index: {
       name: "rank_history"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "zone_id"
       key_fields: "rank_type"
       key_fields: "rank_instance_id"
       key_fields: "sub_rank_type"
       key_fields: "sub_rank_instance_id"
       key_fields: "rank_no"
+      kv: {}
     }
   };
   // clang-format on
@@ -366,8 +372,8 @@ message table_dtmq_channel_record {
   option (atframework.database_table) = {
     index: {
       name: "dtmq_channel_record"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "channel_id"
+      kv: {}
     }
   };
   // clang-format on
@@ -394,13 +400,14 @@ message table_friend {
   option (atframework.database_table) = {
     index: {
       name: "user_friend"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "zone_id"
       key_fields: "user_id"
-      partly_get: {
-        name: "basic_info"
-        fields: "router_lock"
+      kv: {
+        enable_cas: true
+        partly_get: {
+          name: "basic_info"
+          fields: "router_lock"
+        }
       }
     }
   };
@@ -417,9 +424,10 @@ message table_mail_content {
   option (atframework.database_table) = {
     index: {
       name: "mail_content"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "mail_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -433,10 +441,11 @@ message table_mail_global_index {
   option (atframework.database_table) = {
     index: {
       name: "mail_global_index"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "zone_id"
       key_fields: "major_type"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -454,13 +463,12 @@ message TABLE_TRADE_PRODUCT_HISTOGRAM {
   option (atframework.database_table) = {
     index: {
       name: "table_trade_product_histogram"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
-      enable_cas: true
       key_fields: "deployment_environment"
       key_fields: "area_code"
       key_fields: "trade_market_id"
       key_fields: "order_type"
       key_fields: "trade_product_id"
+      kl: {}
     }
   };
   // clang-format on
@@ -480,11 +488,10 @@ message table_trade_slot_histogram {
   option (atframework.database_table) = {
     index: {
       name: "table_trade_slot_histogram"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
-      enable_cas: true
       key_fields: "deployment_environment"
       key_fields: "area_code"
       key_fields: "slot_id"
+      kl: {}
     }
   };
   // clang-format on
@@ -501,11 +508,12 @@ message table_trade_order_ticket_detail {
   option (atframework.database_table) = {
     index: {
       name: "table_trade_order_ticket_detail"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "deployment_environment"
       key_fields: "area_code"
       key_fields: "trade_order_tick_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on
@@ -523,12 +531,11 @@ message table_trade_order_ticket_slot {
   option (atframework.database_table) = {
     index: {
       name: "table_trade_order_ticket_slot"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
-      enable_cas: true
       key_fields: "deployment_environment"
       key_fields: "area_code"
       key_fields: "order_type"
       key_fields: "slot_id"
+      kl: {}
     }
   };
   // clang-format on
@@ -547,12 +554,13 @@ message table_trade_matchmaking_recycle {
   option (atframework.database_table) = {
     index: {
       name: "table_trade_matchmaking_recycle"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "deployment_environment"
       key_fields: "area_code"
       key_fields: "market_id"
       key_fields: "product_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   // clang-format on

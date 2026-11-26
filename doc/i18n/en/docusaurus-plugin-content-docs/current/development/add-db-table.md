@@ -17,15 +17,21 @@ message table_example {
   option (atframework.database_table) = {
     index: {
       name: "example"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-      enable_cas: true
       key_fields: "user_id"
+      kv: {
+        enable_cas: true
+      }
     }
   };
   uint64 user_id = 1;
   string value = 2;
 }
 ```
+
+`index` selects its kind through one of the `kv` / `kl` / `km` sub-messages, and only that kind defines the matching
+options: `kv` has `enable_cas`, `partly_get`, `partly_save`, `atomic_inc_fields`; `kl` has `max_list_length`; `km` has
+`enable_cas`, `map_keys` (the generator does not support `km` yet and emits `#error`). The kind is mandatory — write
+`kv: {}` even when no option is needed. Options set on the wrong kind are rejected by the proto compiler.
 
 2. [Reconfigure/build](overview); the existing workflow updates
    `rpc/db/local_db_interface.atfw.gen.h/.cpp` or `global_db_interface.atfw.gen.h/.cpp`.

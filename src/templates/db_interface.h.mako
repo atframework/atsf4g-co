@@ -9,8 +9,8 @@ import re
 <%
 file = database.get_file(generate_proto_file)
 pb_inclue_path = re.sub(r'\.proto$', '.pb.h', generate_proto_file)
-index_type_enum = database.get_enum("atframework.database_index_type")
-if index_type_enum is None:
+table_index_desc = database.get_message("atframework.database_table_index")
+if table_index_desc is None:
     return
 %>
 
@@ -64,7 +64,7 @@ using string_view = ATFRAMEWORK_UTILS_NAMESPACE_ID::nostd::string_view;
     if extension is None:
         continue
 %>
-<%include file="db_rpc_redis.h.mako" args="message_name=message_name,extension=extension,message=message,index_type_enum=index_type_enum,message_full_name=full_name" />
+<%include file="db_rpc_redis.h.mako" args="message_name=message_name,extension=extension,message=message,message_full_name=full_name" />
 %   endfor
 
 }  // namespace db

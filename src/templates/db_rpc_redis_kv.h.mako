@@ -1,11 +1,11 @@
 ## -*- coding: utf-8 -*-
-<%page args="message_name,index,key_fields,atomic_inc_fields" />
+<%page args="message_name,index,index_kv,key_fields,atomic_inc_fields" />
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx
 % for key_field in key_fields:
                                                              , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
                                                              , PROJECT_NAMESPACE_ID::${message_name} &rsp
-% if index.enable_cas:
+% if index_kv.enable_cas:
                                                              , uint64_t &version);
 % else:
                                                              );
@@ -28,7 +28,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE table_key_t {
 
 struct ATFW_UTIL_SYMBOL_VISIBLE batch_get_result_t {
   int32_t result;
-% if index.enable_cas:
+% if index_kv.enable_cas:
   uint64_t version;
 % endif
   atfw::util::memory::strong_rc_ptr<rpc::shared_message<PROJECT_NAMESPACE_ID::${message_name}>> message;
@@ -39,13 +39,13 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type batch_get_all(rpc::con
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type replace(rpc::context &ctx,
                                                          shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store
-% if index.enable_cas:
+% if index_kv.enable_cas:
                                                          ,uint64_t &version);
 % else:
                                                          );
 % endif
 
-% if index.enable_cas:
+% if index_kv.enable_cas:
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type insert(rpc::context &ctx,
                                                          shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store,
                                                          uint64_t* version = nullptr);
@@ -62,7 +62,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type inc_field_${inc_field[
 %     endfor
 % endif
 
-% for partly_get in index.partly_get:
+% for partly_get in index_kv.partly_get:
 <%
     partly_field_name = ""
     if partly_get.name != "":
@@ -77,7 +77,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type partly_get_${partly_fi
                                                          , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 %     endfor
                                                          , PROJECT_NAMESPACE_ID::${message_name} &rsp
-%     if index.enable_cas:
+%     if index_kv.enable_cas:
                                                          , uint64_t &version);
 %     else:
                                                          );
@@ -87,7 +87,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type batch_partly_get_${par
                                            std::vector<batch_get_result_t> &rsp);
 % endfor
 
-% for partly_save in index.partly_save:
+% for partly_save in index_kv.partly_save:
 <%
     partly_save_field_name = ""
     if partly_save.name != "":
@@ -102,7 +102,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type partly_save_${partly_s
                                                          , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 %     endfor
                                                          , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store
-%     if index.enable_cas:
+%     if index_kv.enable_cas:
                                                          , uint64_t &version);
 %     else:
                                                          );

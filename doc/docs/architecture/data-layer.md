@@ -39,17 +39,18 @@ KV `set` / `insert` 写路径序列化并覆盖全部字段；未设置字段写
 ```protobuf
 index: {
   name: "user"
-  type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-  enable_cas: true
   key_fields: "zone_id"
   key_fields: "user_id"
-  partly_save: { name: "async_jobs" fields: "async_job_blob_data" }
+  kv: {
+    enable_cas: true
+    partly_save: { name: "async_jobs" fields: "async_job_blob_data" }
+  }
 }
 ```
 
 生成 `rpc::db::user::partly_save_async_jobs(ctx, zone_id, user_id, store, version)`：写回 key 字段与声明的字段，
-字段描述符数组在生成代码里固定为栈数组，不动态分配。`partly_save` 只支持 KV 索引，声明在 KL 索引上会生成
-`#error`。
+字段描述符数组在生成代码里固定为栈数组，不动态分配。`partly_save` 只定义在 `kv` 索引选项里，声明在 `kl` / `km`
+下无法通过 proto 编译。
 
 ### 生成的 DB 接口
 

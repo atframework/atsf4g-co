@@ -42,17 +42,18 @@ Business code does not build the field list by hand; it uses the fixed interface
 ```protobuf
 index: {
   name: "user"
-  type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
-  enable_cas: true
   key_fields: "zone_id"
   key_fields: "user_id"
-  partly_save: { name: "async_jobs" fields: "async_job_blob_data" }
+  kv: {
+    enable_cas: true
+    partly_save: { name: "async_jobs" fields: "async_job_blob_data" }
+  }
 }
 ```
 
 This generates `rpc::db::user::partly_save_async_jobs(ctx, zone_id, user_id, store, version)`, which writes the key
-fields plus the declared fields; the descriptor array is a fixed stack array in the generated code. `partly_save` is
-only supported on KV indexes — declaring it on a KL index emits `#error`.
+fields plus the declared fields; the descriptor array is a fixed stack array in the generated code. `partly_save` only
+exists in the `kv` index options, so declaring it under `kl` / `km` does not compile.
 
 ### Generated DB Interfaces
 
