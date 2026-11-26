@@ -4,6 +4,7 @@
 #include <nostd/mutex.h>
 #include <string/string_format.h>
 
+#include <Orbit/OrbitClientRuntime.h>
 #include <Orbit/OrbitEasyApi.h>
 
 #include <chrono>
@@ -51,13 +52,9 @@ int get_process_id() {
 #endif
 }
 
-std::string get_log_file_dir(std::string bin_dir) {
-  return bin_dir + "/../log/";
-}
+std::string get_log_file_dir(std::string bin_dir) { return bin_dir + "/../log/"; }
 
-std::string get_log_file_name() {
-  return"log_" + std::to_string(get_process_id()) + ".log";
-}
+std::string get_log_file_name() { return "log_" + std::to_string(get_process_id()) + ".log"; }
 
 const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel level) {
   using log_level_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel;
@@ -114,7 +111,10 @@ int main(int argc, char* argv[]) {
               << std::to_string(get_process_id()) << "] " << message << '\n';
   };
 
-  { ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService); }
+  {
+    ORBIT_REGISTER_ACTION_CODE(
+        echo, ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::service::get_orbit_client_rpc_service_descriptor());
+  }
 
   if (log_file.is_open()) {
     write_log_line(atfw::util::string::format("log file: {}", log_file_dir + get_log_file_name()));

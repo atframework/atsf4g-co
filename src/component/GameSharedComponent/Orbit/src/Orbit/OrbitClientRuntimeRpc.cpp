@@ -3,13 +3,12 @@
 #include <Orbit/OrbitClientRuntime.h>
 #include <Orbit/OrbitRPCDispatcher.h>
 
-#include <google/protobuf/descriptor.h>
-#include <google/protobuf/message_lite.h>
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/message_lite.h>
 #include <protocol/extension/atframework.pb.h>
 
 // clang-format off
@@ -66,11 +65,11 @@ const std::string &get_empty_string() {
 }
 
 const google::protobuf::MethodDescriptor *get_agent_to_client_method(const char *method_name) {
-  return orbit::AgentToClientService::descriptor()->FindMethodByName(method_name);
+  return service::get_agent_to_client_service_descriptor()->FindMethodByName(method_name);
 }
 
 const google::protobuf::MethodDescriptor *get_client_to_agent_method(const char *method_name) {
-  return orbit::ClientToAgentService::descriptor()->FindMethodByName(method_name);
+  return service::get_client_to_agent_service_descriptor()->FindMethodByName(method_name);
 }
 
 std::string get_rpc_full_name(const google::protobuf::MethodDescriptor &method) {
@@ -125,9 +124,11 @@ void register_receive_rpc(std::unordered_map<std::string, orbit_receive_rpc_type
   registry.emplace(get_rpc_full_name(*method), rpc_type);
 }
 
-#define ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(REGISTRY, METHOD_NAME, RPC_TYPE)                \
-  register_receive_rpc((REGISTRY), orbit::AgentToClientService::descriptor(), (METHOD_NAME), \
-                       orbit_receive_rpc_type_t::RPC_TYPE)
+#define ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(REGISTRY, METHOD_NAME, RPC_TYPE)                               \
+  register_receive_rpc(                                                                                     \
+      (REGISTRY),                                                                                           \
+      ::ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::service::get_agent_to_client_service_descriptor(), \
+      (METHOD_NAME), orbit_receive_rpc_type_t::RPC_TYPE)
 
 const std::unordered_map<std::string, orbit_receive_rpc_type_t> &get_receive_rpc_registry() {
   static const std::unordered_map<std::string, orbit_receive_rpc_type_t> registry = [] {

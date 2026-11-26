@@ -172,7 +172,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
                                     logic_config::me()->get_local_server_name());
   res = rpc::setup_rpc_stream_header(
       *req_msg.mutable_head()->mutable_rpc_stream(),
-      atframework::orbit::ServerToControllerService::descriptor()->full_name(),
+      rpc::servertocontrollerservice::service::get_servertocontrollerservice_descriptor()->full_name(),
       rpc::servertocontrollerservice::packer::get_full_name_of_send_to_client(),
       {atfw::util::nostd::data(atfw::orbit::STCSendToClientReq::descriptor()->full_name()),
        atfw::util::nostd::size(atfw::orbit::STCSendToClientReq::descriptor()->full_name())});

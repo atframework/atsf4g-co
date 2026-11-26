@@ -4,7 +4,6 @@ import "protocol/extension/atframework.proto";
 
 option optimize_for = SPEED;
 option cc_enable_arenas = true;
-option cc_generic_services = true;
 option go_package = "github.com/atframework/atsf4g-co/component/compliance/protocol/protocol/pbdesc";
 
 package atframework.compliance;

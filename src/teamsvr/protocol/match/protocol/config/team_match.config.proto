@@ -5,11 +5,9 @@ option optimize_for = SPEED;
 // option optimize_for = CODE_SIZE;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
-option cc_generic_services = true;
 
 option go_package = "github.com/atframework/atsf4g-co/src/service-teamsvr/protocol/match/protocol/config";
 
 package atframework.team.config;
 
-message teamsvr_match_cfg {
-}
+message teamsvr_match_cfg {}

@@ -8,8 +8,6 @@ syntax = "proto3";
 
 package rpc_unit_test;
 
-option cc_generic_services = true;
-
 import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
 
@@ -43,14 +41,19 @@ message RpcUnitTestListEntry {
 }
 
 service RpcUnitTestService {
-  option (atframework.service_options) = {module_name: "unit_test"};
+  option (atframework.service_options) = {
+    module_name: "unit_test"
+  };
 
   // Plain unary baseline.
   rpc rpc_unit_test_unary(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {}
 
   // Non-stream allow_no_wait: covers the no-wait/wait-later overloads.
   rpc rpc_unit_test_no_wait(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
-    option (atframework.rpc_options) = {allow_no_wait: true timeout: {seconds: 3}};
+    option (atframework.rpc_options) = {
+      allow_no_wait: true
+      timeout: { seconds: 3 }
+    };
   }
 
   // Task-free stream sends also carry user identifiers and support discovery/broadcast options.
@@ -66,21 +69,29 @@ service RpcUnitTestService {
 
   // User RPC: attaches user identifiers into the SS head.
   rpc rpc_unit_test_user(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
-    option (atframework.rpc_options) = {user_rpc: true};
+    option (atframework.rpc_options) = {
+      user_rpc: true
+    };
   }
 
   // Router unary: covers the router_rpc branch resolved through router_manager_set.
   rpc rpc_unit_test_router_unary(RpcUnitTestRouterReq) returns (RpcUnitTestRouterRsp) {
-    option (atframework.rpc_options) = {router_rpc: true};
+    option (atframework.rpc_options) = {
+      router_rpc: true
+    };
   }
 
   // Broadcast: one message per selected node, each target gets an independent record/response policy.
   rpc rpc_unit_test_broadcast(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
-    option (atframework.rpc_options) = {enable_broadcast: true};
+    option (atframework.rpc_options) = {
+      enable_broadcast: true
+    };
   }
 
   // Router stream: router_rpc + stream mode (fire and forget through the router system).
   rpc rpc_unit_test_router_stream(stream RpcUnitTestRouterReq) returns (google.protobuf.Empty) {
-    option (atframework.rpc_options) = {router_rpc: true};
+    option (atframework.rpc_options) = {
+      router_rpc: true
+    };
   }
 }

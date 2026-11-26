@@ -33,6 +33,15 @@ namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
+
+namespace service {
+${rpc_dllexport_decl} const ::google::protobuf::ServiceDescriptor* get_${service.get_name_lower_rule()}_descriptor() {
+  static const ::google::protobuf::ServiceDescriptor* ret = ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName(
+      "${service.get_full_name()}");
+  return ret;
+}
+}
+
 % for rpc in rpcs.values():
 <%
     rpc_is_router_api = rpc.get_extension_field('atframework.rpc_options', lambda x: x.router_rpc, False)
@@ -98,7 +107,7 @@ static internal::ss_rpc_options options_for_${rpc.get_name()}(
   options.service_full_name = "${service.get_full_name()}";
   options.rpc_full_name = "${rpc.get_service().get_full_name()}/${rpc.get_name()}";
   options.response_type_full_name = internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
-  options.method = ${service.get_cpp_class_name()}::descriptor()->FindMethodByName("${rpc.get_name()}");
+  options.method = service::get_${service.get_name_lower_rule()}_descriptor()->FindMethodByName("${rpc.get_name()}");
 %   for level in ['warning', 'info']:
 <% codes = rpc.get_extension_field('atframework.rpc_options', lambda x: getattr(x, level + '_log_response_code'), []) %>
 %     if codes:

@@ -14,11 +14,20 @@
 
 #include <design_pattern/singleton.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <google/protobuf/descriptor.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <atomic>
 #include <chrono>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -39,6 +48,14 @@ class SSMsg;
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
+
+namespace service {
+ORBIT_CLIENT_SDK_API const ::google::protobuf::ServiceDescriptor *get_agent_to_client_service_descriptor();
+
+ORBIT_CLIENT_SDK_API const ::google::protobuf::ServiceDescriptor *get_client_to_agent_service_descriptor();
+
+ORBIT_CLIENT_SDK_API const ::google::protobuf::ServiceDescriptor *get_orbit_client_rpc_service_descriptor();
+}  // namespace service
 
 class OrbitClientRuntime {
  public:

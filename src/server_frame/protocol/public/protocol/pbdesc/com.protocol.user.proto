@@ -6,7 +6,6 @@ option optimize_for = SPEED;
 // option optimize_for = CODE_SIZE;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
-option cc_generic_services = true;
 
 import "google/protobuf/duration.proto";
 
@@ -100,7 +99,7 @@ message CSUserGetInfoReq {
   bool need_user_virtual_inventory = 5;  // 标记为true 回包才有会有用户虚拟仓库数据
 
   // 业务数据开始
-  bool need_user_level_select = 34;         // 标记为true 回包才有会有用户关卡选择数据
+  bool need_user_level_select = 34;  // 标记为true 回包才有会有用户关卡选择数据
 }
 
 // 用户数据返回
@@ -113,7 +112,7 @@ message SCUserGetInfoRsp {
   DUserVirtualInventoryData user_virtual_inventory = 6;  // 用户虚拟仓库数据
 
   // 业务数据开始
-  DLevelSelect user_level_select = 34;               // 用户关卡选择数据
+  DLevelSelect user_level_select = 34;  // 用户关卡选择数据
 }
 
 message CSUserGMCommandReq {

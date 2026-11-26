@@ -50,6 +50,11 @@ namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
+
+namespace service {
+${rpc_dllexport_decl} const ::google::protobuf::ServiceDescriptor* get_${service.get_name_lower_rule()}_descriptor();
+}
+
 % for rpc in rpcs.values():
 <%
     # Only generate not empty calls

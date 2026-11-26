@@ -47,6 +47,11 @@ class context;
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
+
+namespace service {
+${rpc_dllexport_decl} const ::google::protobuf::ServiceDescriptor* get_${service.get_name_lower_rule()}_descriptor();
+}
+
 % for rpc in rpcs.values():
 <%
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()

@@ -272,6 +272,27 @@ struct atapp_log_maker_for_orbit {
 
 }  // namespace
 
+namespace service {
+ORBIT_CLIENT_SDK_API const ::google::protobuf::ServiceDescriptor *get_agent_to_client_service_descriptor() {
+  static const ::google::protobuf::ServiceDescriptor *service_desc =
+      ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName("atframework.orbit.AgentToClientService");
+  return service_desc;
+}
+
+ORBIT_CLIENT_SDK_API const ::google::protobuf::ServiceDescriptor *get_client_to_agent_service_descriptor() {
+  static const ::google::protobuf::ServiceDescriptor *service_desc =
+      ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName("atframework.orbit.ClientToAgentService");
+  return service_desc;
+}
+
+ORBIT_CLIENT_SDK_API const ::google::protobuf::ServiceDescriptor *get_orbit_client_rpc_service_descriptor() {
+  static const ::google::protobuf::ServiceDescriptor *service_desc =
+      ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName(
+          "atframework.shared.OrbitClientRpcService");
+  return service_desc;
+}
+}  // namespace service
+
 #if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
 #  if defined(ORBIT_CLIENT_SDK_NATIVE) && ORBIT_CLIENT_SDK_NATIVE
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(OrbitClientRuntime);

@@ -41,6 +41,15 @@ namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
+
+namespace service {
+${rpc_dllexport_decl} const ::google::protobuf::ServiceDescriptor* get_${service.get_name_lower_rule()}_descriptor() {
+  static const ::google::protobuf::ServiceDescriptor* ret = ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName(
+      "${service.get_full_name()}");
+  return ret;
+}
+}
+
 % for rpc in rpcs.values():
 <%
     if rpc.get_request_descriptor().full_name == "google.protobuf.Empty":

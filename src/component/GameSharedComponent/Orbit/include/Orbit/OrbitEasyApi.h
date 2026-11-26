@@ -41,10 +41,10 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
                                                                              retry_time);                             \
   }
 
-#define ORBIT_REGISTER_ACTION_CODE(orbit_rpc_name, orbit_service_name)                                    \
+#define ORBIT_REGISTER_ACTION_CODE(orbit_rpc_name, orbit_service_descriptor)                              \
   int ret = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()                     \
                 ->register_action<ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)>(                     \
-                    orbit_service_name::descriptor(), ORBIT_STRINGIFY_HELPER(orbit_rpc_name), true);      \
+                    orbit_service_descriptor, ORBIT_STRINGIFY_HELPER(orbit_rpc_name), true);              \
   if (ret != 0) {                                                                                         \
     ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                       \
         ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError, __FILE__, __LINE__, \

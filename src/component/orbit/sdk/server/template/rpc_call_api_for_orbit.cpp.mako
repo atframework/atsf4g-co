@@ -197,6 +197,15 @@ inline static rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context 
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
+
+namespace service {
+${rpc_dllexport_decl} const ::google::protobuf::ServiceDescriptor* get_${service.get_name_lower_rule()}_descriptor() {
+  static const ::google::protobuf::ServiceDescriptor* ret = ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName(
+      "${service.get_full_name()}");
+  return ret;
+}
+}
+
 % for rpc in rpcs.values():
 <%
     rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
@@ -317,7 +326,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   do {
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
     await_options.sequence = req_msg.head().sequence();
-    const google::protobuf::MethodDescriptor *method = ${service.get_cpp_class_name()}::descriptor()->FindMethodByName("${rpc.get_name()}");
+    const google::protobuf::MethodDescriptor *method = service::get_${service.get_name_lower_rule()}_descriptor()->FindMethodByName("${rpc.get_name()}");
     if (nullptr != method && method->options().HasExtension(atframework::rpc_options)) {
       await_options.timeout = rpc::make_duration_or_default(
           method->options().GetExtension(atframework::rpc_options).timeout(), std::chrono::seconds{5});

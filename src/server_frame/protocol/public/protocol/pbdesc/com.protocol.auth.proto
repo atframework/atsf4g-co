@@ -6,7 +6,6 @@ option optimize_for = SPEED;
 // option optimize_for = CODE_SIZE;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
-option cc_generic_services = true;
 
 import "protocol/pbdesc/com.const.proto";
 import "protocol/pbdesc/com.struct.proto";

@@ -5,7 +5,6 @@ option optimize_for = SPEED;
 // option optimize_for = CODE_SIZE;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
-option cc_generic_services = true;
 
 import "protocol/extension/xrescode_extensions_v3.proto";
 import "protocol/extension/v3/xresloader.proto";
@@ -42,7 +41,7 @@ message ExcelRankRule {
   uint32 rank_type = 1 [(org.xresloader.field_unique_tag) = "rank_type_and_instance_id"];         // 排行榜类型
   uint32 rank_instance_id = 2 [(org.xresloader.field_unique_tag) = "rank_type_and_instance_id"];  //
   DRankRuleContent content = 3;                                                                   // 详情配置
-  bool is_instance_rank = 5;          // 指定上单实例类型
+  bool is_instance_rank = 5;                                                                      // 指定上单实例类型
   bool need_auto_update = 7;          // 是否走自动更新修复流程
   EnRankImplType rank_impl_type = 9;  // 实现类型
 }
@@ -56,7 +55,7 @@ message ExcelRankPeriodRewardPool {
   };
 
   int32 rank_reward_pool_id = 1
-      [(org.xresloader.field_unique_tag) = "rank_reward_pool_id_rank_or_score"];  // 排行榜奖励池ID
+      [(org.xresloader.field_unique_tag) = "rank_reward_pool_id_rank_or_score"];                      // 排行榜奖励池ID
   int64 rank_or_score = 2 [(org.xresloader.field_unique_tag) = "rank_reward_pool_id_rank_or_score"];  // 排行榜段位
   DRankPeriodRewardPoolContent content = 3;
   repeated DItemOffset show_items = 101 [(org.xresloader.field_separator) = ";"];

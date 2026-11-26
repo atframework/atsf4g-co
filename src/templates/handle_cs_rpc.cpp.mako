@@ -48,9 +48,15 @@ ${ns}
 % endfor
 ${service_dllexport_decl} int register_handles_for_${service.get_name_lower_rule()}() {
   int ret = 0;
+  const ::google::protobuf::ServiceDescriptor* service_desc = ::google::protobuf::DescriptorPool::generated_pool()->FindServiceByName(
+      "${service.get_full_name()}");
+  if (service_desc == nullptr) {
+    FWLOGERROR("{} descriptor not found", "${service.get_full_name()}");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
+  }
 % for rpc in rpcs.values():
 %   if not rpc.get_request_descriptor().full_name == "google.protobuf.Empty":
-  REG_TASK_RPC_HANDLE(cs_msg_dispatcher, ret, task_action_${rpc.get_name()}, ${service.get_cpp_class_name()}::descriptor(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}");
+  REG_TASK_RPC_HANDLE(cs_msg_dispatcher, ret, task_action_${rpc.get_name()}, service_desc, "${rpc.get_service().get_full_name()}/${rpc.get_name()}");
 %   endif
 % endfor
   return ret;
