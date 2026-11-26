@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "tradesvr-price.pvc") -}}
+{{- define "tradesvr-price.pvc" -}}
+{{- end -}}

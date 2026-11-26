@@ -153,7 +153,7 @@ message SSTradeProductDistributionOrderSlotChangeSync {
 
 service TradeIndexService {
   option (atframework.service_options) = {
-    module_name: "trade"
+    module_name: "trade_index"
   };
 
   rpc condition_index(SSTradeConditionIndexReq) returns (SSTradeConditionIndexRsp) {

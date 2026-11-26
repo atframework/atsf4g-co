@@ -1,0 +1,1 @@
+{{ include "atapp.kill.sh" . }}

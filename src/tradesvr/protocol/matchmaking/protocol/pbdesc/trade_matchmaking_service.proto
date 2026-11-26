@@ -57,7 +57,7 @@ message SSMatchMakingNotifyProductReplicatedProcessRsp {
 
 service TradeMatchMakingService {
   option (atframework.service_options) = {
-    module_name: "trade"
+    module_name: "trade_matchmaking"
   };
 
   rpc publish_fixed_purchase_order(SSMatchMakingPublishFixedPurchaseOrderReq)

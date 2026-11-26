@@ -30,7 +30,7 @@ message SSTradePriceUpdateStandardPriceRsp {
 
 service TradePriceService {
   option (atframework.service_options) = {
-    module_name: "trade"
+    module_name: "trade_price"
   };
 
   rpc update_standard_price(SSTradePriceUpdateStandardPriceReq) returns (SSTradePriceUpdateStandardPriceRsp) {

@@ -42,8 +42,8 @@ message tradesvr_search_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2" min_value: "1" }];
   int32 recommend_order_max_count = 85 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
 
-  int32 recommend_count_max_multiplier_percentage = 91
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2.0" min_value: "1.0" }];
+  int32 recommend_count_max_multiplier_permille = 91
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2000" min_value: "1000" }];
   int32 recommend_product_max_count = 92
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "48" min_value: "1" }];
   int32 search_product_max_count = 93 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];

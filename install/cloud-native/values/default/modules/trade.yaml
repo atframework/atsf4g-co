@@ -1,0 +1,120 @@
+# 交易行进程配置。各角色使用对应配置协议，common 渲染为各进程的 shared_setting。
+enabled: false
+service:
+  common:
+    order_slot_stabilization_window: 15s
+  index:
+    slot_cycle_eliminate_interval: 7d
+    slot_leak_check_interval: 1800s
+    slot_leak_check_interval_floor: 1m
+    fetch_index_max_ttl: 6
+    product_histogram_pull_interval: 5s
+    product_histogram_db_delete_batch_max_count: 360
+    product_histogram_process_remove_interval: 120s
+    product_histogram_db_saved_histogram_max_count: 10
+    product_distribution_heartbeat_interval: 300
+    product_distribution_next_pull_interval: 15
+    product_distribution_next_io_retry_interval: 5
+    product_distribution_update_index_retry_interval: 15
+    index_reload_delay_window: 15s
+    index_cleanup_delay_window: 15s
+    hpa_append_delay_window: 5s
+  matchmaking:
+    transaction_expired_time: 10s
+    transaction_batch_task_count: 1000
+    max_matched_order_count: 10
+    sales_order_timeout_pre: 2s
+    meta_cache_timeout: 20s
+    write_time_protect: 30s
+    main_wait_replicated_timeout: 15s
+    preorder_sales_order_fetch_count: 200
+    preorder_batch_product_count: 200
+    preorder_defalut_timer_delta_tick: 3s
+    preorder_wait_timer_delta_tick: 100s
+    preorder_oss_state_tick: 600s
+    preorder_wait_timer_delta_random_cfg: 20s
+    preorder_product_batch_task_count: 1000
+    preorder_no_task_recovery_time: 300s
+    preorder_check_timer_lost_time: 240s
+    preorder_max_ttl: 8
+    preorder_purchase_meta_cache_expired: 60s
+    preorder_sales_orders_meta_cache_expired: 4s
+    recycle_system_wait_protect_time: 30s
+    recycle_system_db_save_interval: 10s
+    quick_purchase_fetch_sales_order_count: 200
+    quick_purchase_no_sales_wait: 5s
+    quick_purchase_sales_meta_cache_expired: 4s
+    open_pressure_test: false
+    enable_logger: true
+    enable_quick_purchase_final_not_matched_log: true
+  order:
+    io_events_per_tick_max: 256
+    io_events_per_tick_min: 16
+    io_events_protect_interval: 1s
+    slot_io_task_timeout: 16s
+    slot_save_db_stop_retry_interval_base: 5s
+    slot_save_db_stop_retry_interval_random: 1s
+  price: {}
+  search:
+    search_max_ttl: 8
+    search_max_count: 256
+    search_prefetch_count: 64
+    order_max_ttl: 8
+    order_max_count: 1000000
+    product_max_count: 10000
+    standard_price_max_count: 10000
+    order_ticket_max_internal_groups: 4
+    search_query_order_max_nodes: 24
+    recommend_order_max_nodes: 24
+    recommend_product_max_prefetch_count_per_group: 16
+    recommend_product_min_prefetch_count_per_group: 8
+    recommend_order_max_count: 1000000
+    recommend_count_max_multiplier_permille: 2000
+    recommend_product_max_count: 64
+    search_product_max_count: 64
+    query_standard_price_max_prefetch_count_per_group: 256
+    query_standard_price_min_prefetch_count_per_group: 3
+    index_leak_check_interval: 1800s
+    market_product_view_leak_timeout: 600s
+hpa:
+  index:
+    controller:
+      min_replicas: 2
+      replicate_start_delay: 5s
+      replicate_period: 10s
+      scaling_delay: 15s
+  matchmaking:
+    controller:
+      replicate_start_delay: 15s
+      replicate_period: 10s
+      scaling_delay: 25s
+  order:
+    controller:
+      min_replicas: 2
+      replicate_start_delay: 60s
+      replicate_period: 60s
+      scaling_delay: 60s
+    rule:
+      custom:
+        - metrics_name: trade_hpa_rule_search_cpu_rate
+          scaling_up_value: 300
+          scaling_down_value: 250
+        - metrics_name: trade_product_sales_order
+          metrics_unit: count
+          metrics_description: "OrderSvr Product Sales Order Count"
+          metrics_type: gauge
+          aggregation: sum
+          aggregation_parameter:
+            by:
+              - area_code
+              - market_id
+              - product_id
+              - slot_id
+          simple_function:
+            - last_over_time: 1m
+  search:
+    controller:
+      min_replicas: 2
+      replicate_start_delay: 15s
+      replicate_period: 10s
+      scaling_delay: 15s

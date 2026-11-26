@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "tradesvr-matchmaking.statefulset") -}}
+{{- define "tradesvr-matchmaking.statefulset" -}}
+{{- end -}}

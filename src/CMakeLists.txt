@@ -53,6 +53,7 @@ add_subdirectory(authsvr)
 add_subdirectory(rank_settlement_svr)
 add_subdirectory(orbitsvr)
 add_subdirectory(matchsvr)
+add_subdirectory(tradesvr)
 add_subdirectory(lobbysvr)
 
 add_subdirectory(tools)

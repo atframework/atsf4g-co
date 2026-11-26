@@ -1,0 +1,32 @@
+# Default values for tradesvr-price.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: tradesvr-priced
+
+type_id: 55
+type_name: "tradesvr-price"
+replicaCount: 1
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/tradesvr-price
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/tradesvr-price/cfg
+  logMountPath: /data/atframework/publish/tradesvr-price/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/tradesvr-price/log
+
+redis:
+  enabled: true
+
+enable_excel_config: true
+
+trade:
+  enabled: true

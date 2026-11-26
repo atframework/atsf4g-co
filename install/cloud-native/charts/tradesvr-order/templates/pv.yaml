@@ -1,0 +1,3 @@
+{{- template "libapp.pv" (list . "tradesvr-order.pv") -}}
+{{- define "tradesvr-order.pv" -}}
+{{- end -}}

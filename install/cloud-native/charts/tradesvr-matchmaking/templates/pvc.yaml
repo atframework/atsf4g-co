@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "tradesvr-matchmaking.pvc") -}}
+{{- define "tradesvr-matchmaking.pvc" -}}
+{{- end -}}

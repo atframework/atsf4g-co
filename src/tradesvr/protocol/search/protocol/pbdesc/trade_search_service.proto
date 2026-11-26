@@ -9,9 +9,9 @@ option cc_generic_services = true;
 
 import "google/protobuf/timestamp.proto";
 
-import "protocol/gameplay/frame/legacy_frame.proto";
+import "protocol/extension/atframework.proto";
 import "protocol/pbdesc/com.struct.trade.proto";
-import "protocol/gameplay/pbdesc/svr.struct.proto";
+import "protocol/pbdesc/svr.struct.trade.proto";
 
 package atframework.trade;
 
@@ -38,7 +38,7 @@ message SSTradeSearchQueryRsp {
 }
 
 message SSTradeSearchGetOrderReq {
-  repeated atframework.gameplay.server.trade_order_ticket_key ticket_key = 1;
+  repeated trade_order_ticket_key ticket_key = 1;
 
   int32 slot_id = 8;
   int32 ttl = 9;
@@ -47,7 +47,7 @@ message SSTradeSearchGetOrderReq {
 message SSTradeSearchGetOrderRsp {
   int32 result_code = 1;
   repeated atframework.trade.DTradeOrderTicketDetail order_detail = 2;
-  repeated atframework.gameplay.server.trade_order_ticket_key not_found_ticket_key = 3;
+  repeated trade_order_ticket_key not_found_ticket_key = 3;
 
   int32 slot_id = 8;
   int32 ttl = 9;
@@ -162,43 +162,43 @@ message SSTradeQueryStandardPriceByGroupRsp {
 }
 
 service TradeSearchService {
-  option (atframework.gameplay.frame.service_options) = {
-    module_name: "trade"
+  option (atframework.service_options) = {
+    module_name: "trade_search"
   };
 
   rpc query(atframework.trade.SSTradeSearchQueryReq) returns (atframework.trade.SSTradeSearchQueryRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "搜索订单"
     };
   };
 
   rpc get_order(atframework.trade.SSTradeSearchGetOrderReq) returns (atframework.trade.SSTradeSearchGetOrderRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "拉取指定订单数据"
     };
   };
 
   rpc batch_get_sales_basic(atframework.trade.SSTradeSearchBatchGetSalesBasicIndexReq) returns (atframework.trade.SSTradeSearchBatchGetSalesBasicIndexRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "拉取指定出售单基础数据（同质化交易行）"
     };
   };
 
   rpc get_recommend_order_ticket(atframework.trade.SSTradeSearchGetRecommendOrderTicketReq)
       returns (atframework.trade.SSTradeSearchGetRecommendOrderTicketRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "拉取推荐(拍卖)"
     };
   };
 
   rpc get_recommend_product(atframework.trade.SSTradeSearchGetRecommendProductReq) returns (atframework.trade.SSTradeSearchGetRecommendProductRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "拉取推荐(同质化)"
     };
   };
 
   rpc query_product(atframework.trade.SSTradeSearchQueryProductByGroupReq) returns (atframework.trade.SSTradeSearchQueryProductByGroupRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "按虚拟分组拉取推荐和搜索(同质化)"
       allow_no_wait: true
     };
@@ -206,13 +206,13 @@ service TradeSearchService {
 
   rpc query_aggregation_standard_price(atframework.trade.SSTradeQueryAggregationStandardPriceReq)
       returns (atframework.trade.SSTradeQueryAggregationStandardPriceRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "聚合拉取基准价格(As replication)"
     };
   };
 
   rpc query_standard_price_by_group(atframework.trade.SSTradeQueryStandardPriceByGroupReq) returns (atframework.trade.SSTradeQueryStandardPriceByGroupRsp) {
-    option (atframework.gameplay.frame.rpc_options) = {
+    option (atframework.rpc_options) = {
       api_name: "按虚拟分组拉取基准价格(As main)"
       allow_no_wait: true
     };

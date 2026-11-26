@@ -22,13 +22,13 @@ title: 新增服务
 4. 在 `src/CMakeLists.txt` 加入 `add_subdirectory(examplesvr)`；重新配置/构建，
    填充生成的 action，再次构建。
 5. 复制 `install/cloud-native/charts/authsvr/` 为新服务 chart，替换名称和配置段。
-   在 `src/server_frame/config/include/config/extern_service_types.h` 的
-   `logic_service_type` 中分配新类型，在新 chart 的 `values.yaml` 填写一致的
-   `proc_name`、`type_id`、`type_name`；在所用 values 的
+   在新 chart 的 `values.yaml` 中分配唯一的 `type_id`，填写对应的 `proc_name` 和 `type_name`。
+   需要按类型发现服务时，在 `src/server_frame/protocol/private/protocol/config/svr.hpa.config.proto`
+   中添加与 `type_name` 一致的发现别名。在所用 values 的
    `non_cloud_native/deploy.yaml` 登记实例。
 6. 按[运行与部署](../getting-started/run-deploy)生成配置并启动新实例，检查发现注册和一次正常 RPC。
 
-服务或配置名称不能与原服务重复。类型枚举、values 映射和进程布局必须一致。
+为服务和配置分配唯一名称，并保持 values、发现别名和进程布局一致。
 
 ## 快速上手：新增 SS RPC 服务声明
 
@@ -52,6 +52,31 @@ generate_for_pb_add_ss_service(
 在 main 注册生成的 `register_handles_for_exampleservice()`。
 之后给此 service 增加方法只需修改 proto 和业务 action。
 独立 SDK 的头文件/源文件清单沿用已有 SDK 声明补充新接口文件。
+
+## 交易行服务组
+
+`src/tradesvr/` 下的 index、matchmaking、order、price、search 进程分别使用 `protocol/<role>/`
+中的 SS RPC 和配置协议。`sdk::trade-sdk-<role>` 提供 `rpc::trade_<role>` 下生成的客户端 API。
+各 SDK 在 `src/tradesvr/sdk/` 对应子目录的 `CMakeLists.txt` 中独立声明。
+角色 SDK 依赖 `sdk::trade-common-sdk`，公共算法位于 `src/tradesvr/sdk/common/trade/`。
+各进程直接链接的 SDK 见 `src/tradesvr/service/CMakeLists.txt`。
+各进程在自己的 `service/<role>/app/trade_<role>_main.cpp` 中定义 `main_module`。
+该模块负责注册服务端 handler，也是该进程的生命周期扩展点。
+当前请求/响应 RPC 返回 `EN_ERR_NOT_IMPLEMENTED`，单向 RPC 沿用无响应语义。
+业务 action 位于各自的 `service/<role>/logic/action/`。
+
+每个进程在 `install/cloud-native/charts/tradesvr-<role>/` 下有独立 chart。默认本地部署的第 9 组
+配置各角色的实例。类型 ID 跟随 `svr.hpa.config.proto` 中 `logic_discovery_selector_cfg`
+的字段编号。order、matchmaking、index、search、price 分别使用 51、52、53、54、55。
+
+在 `install/cloud-native/values/default/modules/trade.yaml` 维护 `trade.service.common` 和
+`trade.service.<role>`。渲染时各角色读取自己的配置，将公共配置写入 `shared_setting`。
+`trade.hpa.<role>` 提供各角色的 HPA 参数。进程读取渲染后的 `tradesvr_<role>` 配置段，
+环境变量前缀为 `ATAPP_TRADESVR_<ROLE>`。
+
+order 的自定义规则配置在 `trade.hpa.order.rule.custom`。
+`tgf_hpa_rule_search_cpu_rate` 保留扩容阈值 300 和缩容阈值 250，需要监控后端提供对应时间序列。
+`product_sales_order` 定义订单数的分组聚合，样本采集需接入订单业务实现。
 
 ## 定制与详细设计
 

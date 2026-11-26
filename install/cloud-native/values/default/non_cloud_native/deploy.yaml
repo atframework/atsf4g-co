@@ -112,3 +112,33 @@ proc_desc:
     instance_count: 0
     start_instance_id: 1
     group: 2
+
+  - chart_name: "tradesvr-index"
+    world_instance: true
+    instance_count: 2
+    start_instance_id: 1
+    group: 5
+
+  - chart_name: "tradesvr-matchmaking"
+    world_instance: true
+    instance_count: 2
+    start_instance_id: 1
+    group: 5
+
+  - chart_name: "tradesvr-order"
+    world_instance: true
+    instance_count: 2
+    start_instance_id: 1
+    group: 5
+
+  - chart_name: "tradesvr-price"
+    world_instance: true
+    instance_count: 1
+    start_instance_id: 1
+    group: 5
+
+  - chart_name: "tradesvr-search"
+    world_instance: true
+    instance_count: 2
+    start_instance_id: 1
+    group: 5

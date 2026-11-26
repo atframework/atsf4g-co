@@ -1,0 +1,5 @@
+{{- template "libapp.configmap" (list . "tradesvr-price.configmap") -}}
+{{- define "tradesvr-price.configmap" -}}
+data:
+  {{ include "tradesvr-price.name" . }}.yaml: {{ tpl (.Files.Get "cfg/tradesvr-price.yaml.tpl") . | quote }}
+{{- end -}}

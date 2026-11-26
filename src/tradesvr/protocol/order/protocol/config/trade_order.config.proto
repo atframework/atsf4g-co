@@ -95,7 +95,7 @@ message tradesvr_order_cfg {
   google.protobuf.Duration order_ticket_recycle_quick_timeout = 39
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "10s" }];
   uint64 order_ticket_recycle_quick_count = 40
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200s" min_value: "10s" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1200" min_value: "10" }];
   google.protobuf.Duration order_ticket_close_max_timer_interval = 41
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "1s" }];
   google.protobuf.Duration order_ticket_recycle_close_interval = 42

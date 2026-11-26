@@ -1,0 +1,3 @@
+{{- template "libapp.pv" (list . "tradesvr-search.pv") -}}
+{{- define "tradesvr-search.pv" -}}
+{{- end -}}

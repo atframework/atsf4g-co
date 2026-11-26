@@ -1,0 +1,32 @@
+# Default values for tradesvr-matchmaking.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: tradesvr-matchmakingd
+
+type_id: 52
+type_name: "tradesvr-matchmaking"
+replicaCount: 1
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/tradesvr-matchmaking
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/tradesvr-matchmaking/cfg
+  logMountPath: /data/atframework/publish/tradesvr-matchmaking/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/tradesvr-matchmaking/log
+
+redis:
+  enabled: true
+
+enable_excel_config: true
+
+trade:
+  enabled: true

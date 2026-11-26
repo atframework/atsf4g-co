@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "tradesvr-order.service") -}}
+{{- define "tradesvr-order.service" -}}
+{{- end -}}

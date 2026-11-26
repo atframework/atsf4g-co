@@ -345,7 +345,7 @@ message SSTradeOrderProductHeartbeatSync {
 
 service TradeOrderService {
   option (atframework.service_options) = {
-    module_name: "trade"
+    module_name: "trade_order"
   };
 
   rpc transaction_prepare(SSTradeOrderTransactionPrepareReq) returns (SSTradeOrderTransactionPrepareRsp) {

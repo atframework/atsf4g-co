@@ -1,0 +1,32 @@
+# Default values for tradesvr-index.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: tradesvr-indexd
+
+type_id: 53
+type_name: "tradesvr-index"
+replicaCount: 1
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/tradesvr-index
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/tradesvr-index/cfg
+  logMountPath: /data/atframework/publish/tradesvr-index/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/tradesvr-index/log
+
+redis:
+  enabled: true
+
+enable_excel_config: true
+
+trade:
+  enabled: true

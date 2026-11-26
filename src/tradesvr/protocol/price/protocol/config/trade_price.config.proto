@@ -8,10 +8,6 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/tradesvr/protocol/common/protocol/config";
 
-import "google/protobuf/duration.proto";
-
-import "atframe/atapp_conf.proto";
-
 import "protocol/config/trade_common.config.proto";
 
 package atframework.trade.config;

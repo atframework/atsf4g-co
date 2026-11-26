@@ -1,0 +1,32 @@
+# Default values for tradesvr-order.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: tradesvr-orderd
+
+type_id: 51
+type_name: "tradesvr-order"
+replicaCount: 1
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/tradesvr-order
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/tradesvr-order/cfg
+  logMountPath: /data/atframework/publish/tradesvr-order/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/tradesvr-order/log
+
+redis:
+  enabled: true
+
+enable_excel_config: true
+
+trade:
+  enabled: true

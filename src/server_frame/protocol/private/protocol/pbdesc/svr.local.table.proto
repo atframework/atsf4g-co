@@ -523,13 +523,12 @@ message table_trade_order_ticket_slot {
   option (atframework.database_table) = {
     index: {
       name: "table_trade_order_ticket_slot"
-      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KL
       enable_cas: true
       key_fields: "deployment_environment"
       key_fields: "area_code"
       key_fields: "order_type"
       key_fields: "slot_id"
-      key_fields: "slice_index"
     }
   };
   // clang-format on

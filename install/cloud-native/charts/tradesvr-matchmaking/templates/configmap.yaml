@@ -1,0 +1,5 @@
+{{- template "libapp.configmap" (list . "tradesvr-matchmaking.configmap") -}}
+{{- define "tradesvr-matchmaking.configmap" -}}
+data:
+  {{ include "tradesvr-matchmaking.name" . }}.yaml: {{ tpl (.Files.Get "cfg/tradesvr-matchmaking.yaml.tpl") . | quote }}
+{{- end -}}

@@ -17,6 +17,7 @@ high-performance game server architectures.
 - `src/server_frame/`: shared config, protocol, dispatcher, router, RPC, data, and utility code.
 - `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `friendsvr`, `matchsvr`, `teamsvr`,
   `rank_settlement_svr`, `orbitsvr`).
+- `src/tradesvr/`: protocols, SDKs, and processes for the trade index, matchmaking, order, price, and search services.
 - `src/component/`: DTMQ, distributed transaction, rank, Orbit (UE Dedicated Server management), the compliance
   service and SDK, and shared item/user algorithms.
 - `src/robot/` and `src/tools/`: Go stress client, generators, diagnostics, and the offline mock-RPC test fixture.
