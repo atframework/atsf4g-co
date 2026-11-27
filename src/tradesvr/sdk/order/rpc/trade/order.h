@@ -43,9 +43,8 @@ namespace trade {
  * @param request_bodys  请求包集合,Key为目标server id。
  *                       Value可以由 ctx.create<SSTradeOrderFetchLockOrderReq>() 或
  *                       rpc::context::message_holder<SSTradeOrderFetchLockOrderReq> 创建
- * @param response_bodys 回包集合，Key为目标server id。
- *                       Value由 ctx.create<SSTradeOrderFetchLockOrderRsp>() 创建，生命周期仅当前Task有效
- * @return 0或错误码
+ * @param response_bodys 按目标 server id 保存回包。复用已有对象，缺失或为空时由 ctx 创建，生命周期限于当前任务。
+ * @return 全部成功时返回 0。部分请求失败时返回错误码，已收到的有效回包仍可读取。
  */
 ATFW_EXPLICIT_NODISCARD_ATTR TRADE_SDK_ORDER_API rpc::result_code_type batch_try_fetch_lock(
     rpc::context& ctx,
@@ -53,16 +52,15 @@ ATFW_EXPLICIT_NODISCARD_ATTR TRADE_SDK_ORDER_API rpc::result_code_type batch_try
     std::unordered_map<uint64_t, ::atframework::trade::SSTradeOrderFetchLockOrderRsp*>& response_bodys);
 
 /**
-* @brief 解除Fetch锁（Batch）
-*
-* @param ctx RPC上下文
-* @param request_bodys  请求包集合,Key为目标server id。
-&                       Value可以由 ctx.create<SSTradeOrderFetchUnlockOrderReq>() 或
-*                       rpc::context::message_holder<SSTradeOrderFetchUnlockOrderReq> 创建
-* @param response_bodys 回包集合，Key为目标server id。
-*                       Value由 ctx.create<SSTradeOrderFetchUnlockOrderRsp>() 创建，生命周期仅当前Task有效
-* @return 0或错误码
-*/
+ * @brief 解除Fetch锁（Batch）
+ *
+ * @param ctx RPC上下文
+ * @param request_bodys 请求包集合，Key 为目标 server id。
+ *                      Value 可以由 ctx.create<SSTradeOrderFetchUnlockOrderReq>() 或
+ *                      rpc::context::message_holder<SSTradeOrderFetchUnlockOrderReq> 创建
+ * @param response_bodys 按目标 server id 保存回包。复用已有对象，缺失或为空时由 ctx 创建，生命周期限于当前任务。
+ * @return 全部成功时返回 0。部分请求失败时返回错误码，已收到的有效回包仍可读取。
+ */
 ATFW_EXPLICIT_NODISCARD_ATTR TRADE_SDK_ORDER_API rpc::result_code_type batch_fetch_unlock(
     rpc::context& ctx,
     std::unordered_map<uint64_t, ::atframework::trade::SSTradeOrderFetchUnlockOrderReq*>& request_bodys,

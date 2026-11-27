@@ -28,19 +28,7 @@ class DTradeRecommendProductRule;
 class DTradeRecommendProductResult;
 class DTradeBatchQueryStandardPriceRule;
 class DTradeBatchQueryStandardPriceResult;
-}  // namespace trade
-}  // namespace atframework
-
-namespace atframework {
-namespace gameplay {
-namespace server {
 class trade_order_ticket_key;
-}  // namespace server
-}  // namespace gameplay
-}  // namespace atframework
-
-namespace atframework {
-namespace trade {
 class SSTradeSearchQueryRsp;
 class SSTradeSearchGetOrderRsp;
 class SSTradeSearchBatchGetSalesBasicIndexRsp;
@@ -71,8 +59,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR TRADE_SDK_SEARCH_API rpc::result_code_type search(
  *
  * @param ctx RPC上下文
  * @param ticket_keys 委托单Key
- * @param response_body 输出回包
- * @return 0或错误码
+ * @param response_body 本次查询中成功区域的委托单详情和未找到的 Key
+ * @return 全部区域成功时返回 0，否则返回首个错误码
  */
 ATFW_EXPLICIT_NODISCARD_ATTR TRADE_SDK_SEARCH_API rpc::result_code_type get_orders(
     rpc::context& ctx, gsl::span<const atfw::trade::trade_order_ticket_key> ticket_keys,
@@ -128,4 +116,4 @@ ATFW_EXPLICIT_NODISCARD_ATTR TRADE_SDK_SEARCH_API rpc::result_code_type query_st
     atframework::trade::DTradeBatchQueryStandardPriceResult& result);
 
 }  // namespace trade
-}
+}  // namespace atframework

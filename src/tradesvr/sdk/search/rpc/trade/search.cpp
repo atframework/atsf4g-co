@@ -11,6 +11,7 @@
 
 #include <protocol/common/svr.trade.common.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/trade_search_service.pb.h>
 
 // clang-format off
@@ -20,6 +21,7 @@
 #include <trade/sharding.h>
 
 #include <rpc/rpc_common_types.h>
+#include <rpc/rpc_shared_message.h>
 #include <rpc/rpc_utils.h>
 #include <rpc/trade_search/tradesearchservice.atfw.gen.h>
 
@@ -27,6 +29,8 @@
 
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 namespace atframework {
 namespace trade {
@@ -106,8 +110,9 @@ TRADE_SDK_SEARCH_API rpc::result_code_type search(rpc::context& ctx, int32_t are
   rpc::result_code_type::value_type ret =
       RPC_AWAIT_CODE_RESULT(rpc::trade_search::unicast::query(ctx, *server_node, *req_body, response_body));
   if (ret < 0) {
-    FWLOGERROR("search order area_code: {}, order_type: {}, query: {} failed, result: {}({})", area_code, order_type,
-               protobuf_mini_dumper_get_readable(query), ret, protobuf_mini_dumper_get_error_msg(ret));
+    FCTXLOGERROR(ctx, "search order area_code: {}, order_type: {}, query: {} failed, result: {}({})", area_code,
+                 order_type, protobuf_mini_dumper_get_readable(req_body->query()), ret,
+                 protobuf_mini_dumper_get_error_msg(ret));
   }
   RPC_RETURN_CODE(ret);
 }
@@ -115,58 +120,58 @@ TRADE_SDK_SEARCH_API rpc::result_code_type search(rpc::context& ctx, int32_t are
 TRADE_SDK_SEARCH_API rpc::result_code_type get_orders(rpc::context& ctx,
                                                       gsl::span<const atfw::trade::trade_order_ticket_key> ticket_keys,
                                                       atfw::trade::SSTradeSearchGetOrderRsp& response_body) {
-  // 先按area code分组
-  std::unordered_map<int32_t, atfw::trade::SSTradeSearchGetOrderReq*> request_bodys;
-  for (const auto& ticket_key : ticket_keys) {
-    int32_t area_code = ticket_key.area_code();
-    auto iter = request_bodys.find(area_code);
-    if (iter != request_bodys.end() && nullptr != iter->second) {
-      protobuf_copy_message(*iter->second->add_ticket_key(), ticket_key);
-    } else {
-      atfw::trade::SSTradeSearchGetOrderReq* request_body = ctx.create<atfw::trade::SSTradeSearchGetOrderReq>();
-      if (nullptr != request_body) {
-        request_body->set_slot_id(
-            atfw::trade_api::get_search_random_slot(ticket_key, atfw::trade_api::EnSearchSlotType::kReplicate));
-        request_body->set_ttl(0);
+  std::unordered_map<int32_t, atfw::trade::SSTradeSearchGetOrderReq*> requests;
+  for (const auto& key : ticket_keys) {
+    bool new_request = requests.end() == requests.find(key.area_code());
+    auto*& request = requests[key.area_code()];
+    if (request == nullptr || new_request) {
+      request = ctx.create<atfw::trade::SSTradeSearchGetOrderReq>();
+      if (request == nullptr) {
+        response_body.Clear();
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+      }
+      request->set_slot_id(atfw::trade_api::get_search_random_slot(key, atfw::trade_api::EnSearchSlotType::kReplicate));
+    }
+    protobuf_copy_message(*request->add_ticket_key(), key);
+  }
 
-        if (request_body->slot_id() <= 0) {
-          FWLOGERROR("get order {} (area_code: {}) failed, can not find available slot",
-                     ticket_key.trade_order_ticket_id(), area_code);
-          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TRADE_SERVICE_UNAVAILABLE);
-        }
-
-        protobuf_copy_message(*request_body->add_ticket_key(), ticket_key);
-        request_bodys[area_code] = request_body;
+  response_body.Clear();
+  int32_t first_error = 0;
+  auto area_response = rpc::make_shared_message<atfw::trade::SSTradeSearchGetOrderRsp>(ctx);
+  // FIXME(owent): 以后看需要改成并行请求
+  for (const auto& group : requests) {
+    const auto area_code = group.first;
+    auto& request = *group.second;
+    auto server_node =
+        request.slot_id() > 0 ? atfw::trade_api::get_server_node_of_search_slot(area_code, request.slot_id()) : nullptr;
+    int32_t result = PROJECT_NAMESPACE_ID::EN_ERR_TRADE_SERVICE_UNAVAILABLE;
+    if (server_node) {
+      area_response->Clear();
+      result = RPC_AWAIT_CODE_RESULT(rpc::trade_search::unicast::get_order(ctx, *server_node, request, *area_response));
+      if (result == 0) {
+        result = area_response->result_code();
+      }
+      if (requests.size() == 1) {
+        protobuf_move_message(response_body, std::move(*area_response));
+      } else if (result == 0) {
+        response_body.mutable_order_detail()->MergeFrom(area_response->order_detail());
+        response_body.mutable_not_found_ticket_key()->MergeFrom(area_response->not_found_ticket_key());
+      } else if (response_body.result_code() == 0) {
+        response_body.set_result_code(area_response->result_code());
+      }
+      if (result == 0) {
+        continue;
       }
     }
-  }
-
-  rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::EN_SUCCESS;
-
-  // FIXME(owentou): 以后看需要改成并行请求
-  for (auto& request_body_pair : request_bodys) {
-    if (nullptr == request_body_pair.second) {
-      continue;
-    }
-
-    int32_t area_code = request_body_pair.first;
-    atfw::trade::SSTradeSearchGetOrderReq& request_body = *request_body_pair.second;
-    auto server_node = atfw::trade_api::get_server_node_of_search_slot(area_code, request_body.slot_id());
-    if (!server_node) {
-      FWLOGERROR("get order {} (area_code: {}) failed, can not find available server",
-                 collect_order_ticket_id(request_body.ticket_key()), area_code);
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TRADE_SERVICE_UNAVAILABLE);
-    }
-
-    ret = RPC_AWAIT_CODE_RESULT(rpc::trade_search::unicast::get_order(ctx, *server_node, request_body, response_body));
-    if (ret < 0) {
-      FWLOGERROR("get order {} (area_code: {}) failed, result: {}({})",
-                 collect_order_ticket_id(request_body.ticket_key()), area_code, ret,
-                 protobuf_mini_dumper_get_error_msg(ret));
+    FCTXLOGERROR(ctx, "get order {} (area_code: {}, slot: {}) failed, result: {}({})",
+                 collect_order_ticket_id(request.ticket_key()), area_code, request.slot_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
+    if (first_error == 0) {
+      first_error = result;
     }
   }
 
-  RPC_RETURN_CODE(ret);
+  RPC_RETURN_CODE(first_error);
 }
 
 EXPLICIT_NODISCARD_ATTR TRADE_SDK_SEARCH_API rpc::result_code_type batch_get_product_basic(
