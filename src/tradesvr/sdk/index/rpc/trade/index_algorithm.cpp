@@ -13,11 +13,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <xxhash.h>
-
 #include <cassert>
 #include <limits>
-#include <unordered_set>
 
 #ifdef min
 #  undef min
@@ -29,26 +26,6 @@
 
 namespace atframework {
 namespace trade_api {
-
-namespace {
-template <class T>
-inline static void copy_buffer_into(char* start, size_t offset, T value) {
-  memcpy(start + offset, &value, sizeof(value));
-}
-
-template <class T>
-bool check_set_equal(const std::unordered_set<T>& l, const std::unordered_set<T>& r) {
-  if (l.size() != r.size()) {
-    return false;
-  }
-  for (const auto& item : l) {
-    if (r.find(item) == r.end()) {
-      return false;
-    }
-  }
-  return true;
-}
-}  // namespace
 
 TRADE_SDK_INDEX_API product_index_hot_sale_key product_index_hot_sale_key::min() noexcept {
   product_index_hot_sale_key ret;
