@@ -32,6 +32,9 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#if defined(__linux__) || defined(__unix__)
+#  include <unordered_set>
+#endif
 
 namespace google {
 namespace protobuf {
@@ -291,7 +294,7 @@ class OrbitClientRuntime {
   tbb::concurrent_queue<std::function<void()>> io_task_;
   tbb::concurrent_queue<std::function<void()>> caller_task_;
 #if defined(__linux__) || defined(__unix__)
-  std::set<pid_t> forked_client_ids_;
+  std::unordered_set<pid_t> forked_client_ids_;
 #endif
 
   uv_rusage_t last_self_rusage_;
