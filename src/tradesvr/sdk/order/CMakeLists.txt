@@ -14,7 +14,9 @@ project_service_declare_sdk(
   "trade-common-sdk"
   HEADERS
   "rpc/trade_order/tradeorderservice.atfw.gen.h"
+  "rpc/trade/order.h"
   SOURCES
   "rpc/trade_order/tradeorderservice.atfw.gen.cpp"
+  "rpc/trade/order.cpp"
   GENERATED_FLOW_NAMES
   "atframework.trade.TradeOrderService")

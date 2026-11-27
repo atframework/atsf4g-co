@@ -103,7 +103,7 @@ message SSTradeBatchGetBasicIndexRsp {
   int32 ttl = 11;
 }
 
-message SSTradeGetProductPercentageReq {
+message SSTradeGetProductPermilleReq {
   DTradeMarketProductKey trade_product_key = 1;
   google.protobuf.Timestamp timestamp = 2;
 
@@ -111,9 +111,9 @@ message SSTradeGetProductPercentageReq {
   int32 ttl = 11;
 }
 
-message SSTradeGetProductPercentageRsp {
+message SSTradeGetProductPermilleRsp {
   int32 result_code = 1;
-  DTradeMarketProductPercentageInfo info = 2;
+  DTradeMarketProductPermilleInfo info = 2;
 
   int32 slot_id = 10;
   int32 ttl = 11;
@@ -188,9 +188,9 @@ service TradeIndexService {
     };
   };
 
-  rpc fetch_product_price_percentage(SSTradeGetProductPercentageReq) returns (SSTradeGetProductPercentageRsp) {
+  rpc fetch_product_price_permille(SSTradeGetProductPermilleReq) returns (SSTradeGetProductPermilleRsp) {
     option (atframework.rpc_options) = {
-      api_name: "拉取商品售价百分比分布"
+      api_name: "拉取商品售价千分比分布"
     };
   };
 

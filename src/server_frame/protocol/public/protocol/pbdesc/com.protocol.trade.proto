@@ -39,12 +39,12 @@ message SCTradeProductPriceInfoRsp {
   int32 order_type = 2;
 }
 
-message CSTradeProductPercentageInfoReq {
+message CSTradeProductPermilleInfoReq {
   atframework.trade.DTradeMarketProductKey trade_product_key = 1;
 }
 
-message SCTradeProductPercentageInfoRsp {
-  atframework.trade.DTradeMarketProductPercentageInfo info = 1;
+message SCTradeProductPermilleInfoRsp {
+  atframework.trade.DTradeMarketProductPermilleInfo info = 1;
 }
 
 message CSTradePurchaseOrderPublishReq {

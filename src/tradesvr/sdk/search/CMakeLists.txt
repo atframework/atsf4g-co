@@ -14,7 +14,11 @@ project_service_declare_sdk(
   "trade-common-sdk"
   HEADERS
   "rpc/trade_search/tradesearchservice.atfw.gen.h"
+  "rpc/trade/search.h"
+  "trade/search_algorithm.h"
   SOURCES
   "rpc/trade_search/tradesearchservice.atfw.gen.cpp"
+  "rpc/trade/search.cpp"
+  "trade/search_algorithm.cpp"
   GENERATED_FLOW_NAMES
   "atframework.trade.TradeSearchService")

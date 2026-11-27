@@ -37,15 +37,6 @@ enum EnTradeOrderTicketState {
   EN_TRADE_ORDER_TICKET_STATE_CONFIRMATION_ERROR = 25;  // 订单成交异常
 }
 
-enum EnTradeOrderTicketLabelAttributeType {
-  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_UNKNOWN = 0;
-
-  // 通用标签 0 - 1000
-  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_RARITY = 1;            // 稀有度 EnItemRarity
-  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_LEVEL = 2;             // 等级限制
-  EN_TRADE_ORDER_TICKET_LABEL_ATTRIBUTE_EQUIPMENT_RATING = 3;  // 装备分
-}
-
 enum EnTradePriceMode {
   // 当前价格
   EN_TRADE_PRICE_MODE_CURRENT = 0;
@@ -442,13 +433,13 @@ message DTradeMarketProductIndexInfo {
   DTradeMarketProductKey trade_product_key = 1;  // 可以移除?
   repeated DTradeMarketProductMetricPoint metric_point = 2;
   repeated DTradeMarketProductOnSaleDistribution on_sale = 3;
-  repeated DTradeProductPricePercentage percentage = 4;
+  repeated DTradeProductPricePermille permille = 4;
   DTradeMarketProductBasicIndexInfo basic_info = 5;
 }
 
-message DTradeMarketProductPercentageInfo {
+message DTradeMarketProductPermilleInfo {
   DTradeMarketProductKey trade_product_key = 1;
-  repeated DTradeProductPricePercentage percentage = 2;
+  repeated DTradeProductPricePermille permille = 2;
 }
 
 message DTradeIndexSearchBound {
@@ -581,7 +572,7 @@ message DTradeRecommendProductResult {
   repeated DTradeIndexRecommendHotSaleResult hot_sale_result = 5;
   bool hot_sale_more_info = 6;
 
-  // 基于装备稀有度及穿戴类型的搜索结果
+  // 基于装备稀有度及自定义索引的搜索结果
   repeated DTradeIndexRecommendRarityCustomIndexTypeResult rarity_custom_index_result = 7;
 
   // 玩家手动搜索行为
@@ -608,8 +599,8 @@ message DTradeBatchQueryStandardPriceResult {
   repeated DTradeIndexStandardPriceResult query_standard_price_result = 3;
 }
 
-message DTradeProductPricePercentage {
-  int64 percentage = 1;
+message DTradeProductPricePermille {
+  int64 permille = 1;
   int64 min_price = 2;
 }
 
@@ -729,10 +720,10 @@ message DTradeRecommendOrderTicketRule {
   // 基于畅销（提价）的拉取数量
   DTradeRecommendOrderTicketBasicRule best_selling_price_increase_rule = 14;
 
-  // 基于稀有度和装备位置的拉取规则
+  // 基于稀有度和自定义索引的拉取规则
   DTradeRecommendOrderTicketRarityCustomIndexTypeRule rarity_custom_index_rule = 15;
 
-  // 基于装备强度的拉取数量(Batch)
+  // 批量拉取(Batch)
   repeated DTradeRecommendOrderTicketBatchRule batch_rule = 16;
 
   // 是否限制返回的数量（slot向main_slot请求时，不限制数量，全部返回）
@@ -762,10 +753,10 @@ message DTradeRecommendOrderTicketResult {
   // 基于畅销（提价）的拉取结果
   DTradeRecommendOrderTicketBasicResult best_selling_price_increase_result = 14;
 
-  // 基于稀有度和装备位置的拉取结果
+  // 基于稀有度和自定义索引的拉取结果
   repeated DTradeRecommendOrderTicketRarityCustomIndexTypeResult rarity_custom_index_result = 15;
 
-  // 基于装备强度的拉取结果(Batch)
+  // 批量拉取的结果(Batch)
   repeated DTradeRecommendOrderTicketBatchResult batch_result = 16;
 }
 

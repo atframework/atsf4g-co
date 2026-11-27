@@ -18,7 +18,7 @@ message SSTradeSearchQueryReq {
   int32 area_code = 1;
   int32 order_type = 2;  // 订单类型, 指向 DTradeOrderTicketMeta.type
   atframework.trade.DTradeOrderTicketSearchRule query = 3;
-  int32 count = 4;
+  int64 count = 4;
   uint64 random_seed = 5;
   bool no_next_seed = 6;
   atframework.trade.EnTradeSearchSortBy sort_by = 7;

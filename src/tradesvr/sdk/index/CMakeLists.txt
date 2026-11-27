@@ -14,7 +14,11 @@ project_service_declare_sdk(
   "trade-common-sdk"
   HEADERS
   "rpc/trade_index/tradeindexservice.atfw.gen.h"
+  "rpc/trade/index_algorithm.h"
+  "rpc/trade/indexing.h"
   SOURCES
   "rpc/trade_index/tradeindexservice.atfw.gen.cpp"
+  "rpc/trade/index_algorithm.cpp"
+  "rpc/trade/indexing.cpp"
   GENERATED_FLOW_NAMES
   "atframework.trade.TradeIndexService")
