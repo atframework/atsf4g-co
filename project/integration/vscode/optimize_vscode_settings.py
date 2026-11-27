@@ -22,6 +22,12 @@ Applied rules (existing user values are preserved unless a repair is required):
   resolved only from the Python interpreter running this script, so CMake's selected
   ``Python3_EXECUTABLE`` determines the environment; unrelated ``PATH`` installations
   are not used as fallbacks.
+* ``protobuf.protoc.path`` (for ``drblury.protobuf-vsc`` / Protobuf VSC, and ``protoc.path``
+  for ``zxh404.vscode-proto3`` when used) is filled or repaired the same way using the
+  project's resolved third-party ``protoc`` executable (since VS Code extension hosts do not
+  inherit ``terminal.integrated.env.*`` or CMake runtime environments). An absolute path is
+  written because parts of ``drblury.protobuf-vsc`` spawn ``protobuf.protoc.path`` directly
+  without expanding ``${workspaceFolder}``.
 * ``C_Cpp.clang_format_path`` is filled or repaired the same way, but only when
   ``C_Cpp.intelliSenseEngine`` is not ``disabled``.
 * When clangd is in use, ``clangd.arguments`` is normalized:
@@ -42,6 +48,20 @@ Applied rules (existing user values are preserved unless a repair is required):
   These keys are arrays and are merged the same way (existing entries kept). Only the actual
   build dir name and the exact ``build`` are added, never a broad ``build_*`` wildcard, so a
   source directory such as ``.../build_setting`` stays analyzed and searchable.
+* When third-party runtime directories (``--extra-bin-dir`` / ``--extra-lib-dir``) are supplied,
+  they are merged idempotently into the runtime scopes for the active host platform without
+  touching ``cmake.environment`` (avoiding Windows MSVC ``vcvarsall`` PATH clobbering and
+  configure-time host tool library conflicts):
+    - ``terminal.integrated.env.windows`` / ``.linux`` / ``.osx`` (OS-scoped integrated terminal
+      and VS Code tasks).
+    - ``cmake.testEnvironment`` (CTest runs).
+    - ``cmake.debugConfig`` (CMake Tools debug/launch: ``environment`` array for ``cppvsdbg`` /
+      ``cppdbg``, or ``env`` dict when ``type`` is ``lldb``).
+    - Per-platform variable mapping:
+        * Windows: ``bin`` and ``lib``/``lib64`` directories are added to ``PATH`` (``Path`` when
+          creating a new entry in ``cmake.debugConfig.environment`` for ``cppvsdbg``).
+        * Linux: ``bin`` -> ``PATH``, ``lib``/``lib64`` -> ``LD_LIBRARY_PATH``.
+        * macOS: ``bin`` -> ``PATH``, ``lib``/``lib64`` -> ``DYLD_FALLBACK_LIBRARY_PATH``.
 
 JSONC comments are not preserved on rewrite; a ``.bak`` copy is written before any change.
 """
@@ -50,7 +70,9 @@ import argparse
 import copy
 import importlib.util
 import json
+import ntpath
 import os
+import posixpath
 import re
 import shutil
 import sys
@@ -91,12 +113,26 @@ STATIC_EXCLUDE_GLOBS = (
 
 CMAKE_FORMAT_EXTENSION_ID = "cheshirekow.cmake-format"
 CMAKE_FORMAT_PATH_SETTING = "cmakeFormat.exePath"
+PROTOBUF_VSC_EXTENSION_ID = "drblury.protobuf-vsc"
+PROTOBUF_VSC_PROTOC_PATH_SETTING = "protobuf.protoc.path"
+VSCODE_PROTO3_EXTENSION_ID = "zxh404.vscode-proto3"
+VSCODE_PROTO3_PROTOC_SECTION = "protoc"
 VSCODE_EXTENSION_ROOTS = (
     ".vscode/extensions",
     ".vscode-insiders/extensions",
     ".vscode-server/extensions",
     ".vscode-server-insiders/extensions",
 )
+
+PLATFORM_WINDOWS = "windows"
+PLATFORM_LINUX = "linux"
+PLATFORM_OSX = "osx"
+SUPPORTED_PLATFORMS = (PLATFORM_WINDOWS, PLATFORM_LINUX, PLATFORM_OSX)
+TERMINAL_ENV_SETTING_BY_PLATFORM = {
+    PLATFORM_WINDOWS: "terminal.integrated.env.windows",
+    PLATFORM_LINUX: "terminal.integrated.env.linux",
+    PLATFORM_OSX: "terminal.integrated.env.osx",
+}
 
 
 def strip_jsonc_comments(text):
@@ -193,10 +229,17 @@ def resolve_tool(hint, names):
     return None
 
 
-def is_cmake_format_extension_available():
-    """Whether an installed VS Code extension contributes ``cmakeFormat.exePath``."""
-    for relative_root in VSCODE_EXTENSION_ROOTS:
-        root = os.path.expanduser("~/" + relative_root)
+def is_vscode_extension_setting_available(
+    target_extension_id, setting_key, extension_roots=None
+):
+    """Whether an installed VS Code extension contributes ``setting_key``."""
+    target_id = target_extension_id.lower()
+    roots = (
+        extension_roots
+        if extension_roots is not None
+        else [os.path.expanduser("~/" + rel) for rel in VSCODE_EXTENSION_ROOTS]
+    )
+    for root in roots:
         try:
             extension_dirs = os.listdir(root)
         except OSError:
@@ -214,8 +257,8 @@ def is_cmake_format_extension_available():
         for extension_dir in extension_dirs:
             normalized_dir = extension_dir.lower()
             if not (
-                normalized_dir == CMAKE_FORMAT_EXTENSION_ID
-                or normalized_dir.startswith(CMAKE_FORMAT_EXTENSION_ID + "-")
+                normalized_dir == target_id
+                or normalized_dir.startswith(target_id + "-")
             ):
                 continue
             if obsolete.get(extension_dir) is True:
@@ -235,7 +278,7 @@ def is_cmake_format_extension_available():
                 manifest.get("publisher", ""),
                 manifest.get("name", ""),
             )
-            if extension_id.lower() != CMAKE_FORMAT_EXTENSION_ID:
+            if extension_id.lower() != target_id:
                 continue
 
             contributes = manifest.get("contributes")
@@ -250,12 +293,100 @@ def is_cmake_format_extension_available():
                 if not isinstance(configuration, dict):
                     continue
                 properties = configuration.get("properties")
-                if (
-                    isinstance(properties, dict)
-                    and CMAKE_FORMAT_PATH_SETTING in properties
-                ):
+                if isinstance(properties, dict) and setting_key in properties:
                     return True
     return False
+
+
+def is_cmake_format_extension_available():
+    """Whether an installed VS Code extension contributes ``cmakeFormat.exePath``."""
+    return is_vscode_extension_setting_available(
+        CMAKE_FORMAT_EXTENSION_ID, CMAKE_FORMAT_PATH_SETTING
+    )
+
+
+def is_protobuf_vsc_extension_available():
+    """Whether ``drblury.protobuf-vsc`` (Protobuf VSC) contributes ``protobuf.protoc.path``."""
+    return is_vscode_extension_setting_available(
+        PROTOBUF_VSC_EXTENSION_ID, PROTOBUF_VSC_PROTOC_PATH_SETTING
+    )
+
+
+def is_vscode_proto3_extension_available():
+    """Whether ``zxh404.vscode-proto3`` contributes ``protoc`` settings."""
+    return is_vscode_extension_setting_available(
+        VSCODE_PROTO3_EXTENSION_ID, VSCODE_PROTO3_PROTOC_SECTION
+    )
+
+
+def resolve_protoc(hint, extra_bin_dirs, platform):
+    """Find ``protoc``, preferring ``hint`` then ``extra_bin_dirs`` before system ``PATH``."""
+    if hint and is_usable_program(hint):
+        return normalize_path(hint)
+    executable_names = (
+        ("protoc.exe", "protoc") if platform == PLATFORM_WINDOWS else ("protoc",)
+    )
+    for bin_dir in extra_bin_dirs:
+        if not bin_dir or not str(bin_dir).strip():
+            continue
+        for name in executable_names:
+            candidate = os.path.join(str(bin_dir), name)
+            if os.path.isfile(candidate):
+                return normalize_path(candidate)
+    return resolve_tool(None, executable_names)
+
+
+def apply_protobuf_protoc_path(data, opts, changes):
+    """Fill or repair the protoc executable path for installed Protobuf VS Code extensions."""
+    has_protobuf_vsc = is_protobuf_vsc_extension_available()
+    has_vscode_proto3 = is_vscode_proto3_extension_available()
+    configure_protobuf_vsc = has_protobuf_vsc or (
+        PROTOBUF_VSC_PROTOC_PATH_SETTING in data
+    )
+    existing_proto3_section = data.get(VSCODE_PROTO3_PROTOC_SECTION)
+    configure_vscode_proto3 = has_vscode_proto3 and (
+        isinstance(existing_proto3_section, dict) or not configure_protobuf_vsc
+    )
+    if not configure_protobuf_vsc and not configure_vscode_proto3:
+        return
+
+    platform = detect_host_platform(opts.platform)
+    resolved = resolve_protoc(opts.protoc, opts.extra_bin_dirs, platform)
+
+    if configure_protobuf_vsc:
+        apply_tool_path(
+            data, PROTOBUF_VSC_PROTOC_PATH_SETTING, resolved, (), changes
+        )
+
+    if configure_vscode_proto3:
+        section = data.get(VSCODE_PROTO3_PROTOC_SECTION)
+        if section is not None and not isinstance(section, dict):
+            print(
+                "[optimize-vscode] skip %s: existing value is not an object"
+                % VSCODE_PROTO3_PROTOC_SECTION,
+                file=sys.stderr,
+            )
+            return
+        if section is None:
+            section = {}
+        current = section.get("path")
+        if is_usable_program(current):
+            return
+        if resolved is None:
+            print(
+                "[optimize-vscode] protoc not found; leaving %s.path unchanged"
+                % VSCODE_PROTO3_PROTOC_SECTION,
+                file=sys.stderr,
+            )
+            return
+        if current == resolved:
+            return
+        section["path"] = resolved
+        data[VSCODE_PROTO3_PROTOC_SECTION] = section
+        suffix = " (previous path was invalid)" if current else ""
+        changes.append(
+            "%s.path: set %s%s" % (VSCODE_PROTO3_PROTOC_SECTION, resolved, suffix)
+        )
 
 
 def resolve_python_cmake_format():
@@ -293,6 +424,8 @@ def compute_compile_commands_dir(build_dir, workspace_dir):
         rel = os.path.relpath(build_abs, workspace_abs)
     except ValueError:
         rel = None
+    if rel == ".":
+        return "${workspaceFolder}"
     if rel and not rel.startswith("..") and not os.path.isabs(rel):
         return "${workspaceFolder}/" + normalize_path(rel)
     return normalize_path(build_abs)
@@ -337,6 +470,9 @@ def compute_build_dir_glob(build_dir, workspace_dir):
         rel = os.path.relpath(build_abs, workspace_abs)
     except ValueError:
         rel = None
+    if rel == ".":
+        # Never exclude the workspace root itself on an in-source build.
+        return None
     if rel and not rel.startswith("..") and not os.path.isabs(rel):
         return "**/%s" % normalize_path(rel)
     return normalize_path(build_abs)
@@ -534,6 +670,454 @@ def apply_clangd_arguments(data, opts, changes):
     data["clangd.arguments"] = args
 
 
+def detect_host_platform(explicit=None):
+    """Return ``windows``, ``linux``, or ``osx`` for the active host platform."""
+    if explicit:
+        return explicit
+    if os.name == "nt" or sys.platform.startswith(("win", "msys", "cygwin")):
+        return PLATFORM_WINDOWS
+    if sys.platform == "darwin":
+        return PLATFORM_OSX
+    return PLATFORM_LINUX
+
+
+def get_path_module(platform):
+    return ntpath if platform == PLATFORM_WINDOWS else posixpath
+
+
+def normalize_platform_path(path, platform, base_dir=None):
+    """Normalize ``path`` using ``platform`` path semantics."""
+    pathmod = get_path_module(platform)
+    text = str(path).strip()
+    if platform == PLATFORM_WINDOWS:
+        text = text.replace("/", "\\")
+        if base_dir and not pathmod.isabs(text):
+            text = pathmod.join(str(base_dir).strip().replace("/", "\\"), text)
+    else:
+        text = text.replace("\\", "/")
+        if base_dir and not pathmod.isabs(text):
+            text = pathmod.join(str(base_dir).strip().replace("\\", "/"), text)
+    return pathmod.normpath(text)
+
+
+def format_env_dir(path, workspace_dir, platform):
+    """Format a runtime env directory, preferring ``${workspaceFolder}``-relative paths."""
+    pathmod = get_path_module(platform)
+    workspace_norm = normalize_platform_path(workspace_dir, platform)
+    expanded = expand_workspace_tokens(path, workspace_norm, platform)
+    dir_norm = normalize_platform_path(expanded, platform, base_dir=workspace_norm)
+    try:
+        rel = pathmod.relpath(dir_norm, workspace_norm)
+    except ValueError:
+        rel = None
+    if rel == ".":
+        return "${workspaceFolder}"
+    if (
+        rel
+        and rel != ".."
+        and not rel.startswith(".." + pathmod.sep)
+        and not pathmod.isabs(rel)
+    ):
+        if platform == PLATFORM_WINDOWS:
+            return "${workspaceFolder}\\" + rel.replace("/", "\\")
+        return "${workspaceFolder}/" + rel.replace("\\", "/")
+    return dir_norm
+
+
+def expand_workspace_tokens(entry, workspace_dir, platform):
+    """Expand ``${workspaceFolder}`` / ``${workspaceRoot}`` and separator tokens for comparison."""
+    pathmod = get_path_module(platform)
+    workspace_norm = normalize_platform_path(workspace_dir, platform)
+    token = str(entry).strip()
+    if len(token) >= 2 and token[0] == '"' and token[-1] == '"':
+        token = token[1:-1].strip()
+    token = token.replace("${pathSeparator}", pathmod.sep).replace("${/}", pathmod.sep)
+    for var_token in ("${workspaceFolder}", "${workspaceRoot}"):
+        if token == var_token:
+            return workspace_norm
+        for sep_char in ("/", "\\"):
+            prefix = var_token + sep_char
+            if token.startswith(prefix):
+                return pathmod.join(workspace_norm, token[len(prefix) :])
+    return token
+
+
+def canonical_env_entry_key(entry, workspace_dir, platform):
+    """Return a normalized comparison key so equivalent path spellings deduplicate cleanly."""
+    expanded = expand_workspace_tokens(entry, workspace_dir, platform)
+    if not expanded:
+        return ""
+    if "${" in expanded or "$" in expanded or "%" in expanded:
+        return expanded.lower() if platform == PLATFORM_WINDOWS else expanded
+    normalized = normalize_platform_path(expanded, platform)
+    if platform == detect_host_platform() and os.path.exists(normalized):
+        normalized = normalize_platform_path(os.path.realpath(normalized), platform)
+    if platform == PLATFORM_WINDOWS:
+        # Strip trailing backslash except on drive roots such as C:\.
+        if len(normalized) > 3 and normalized.endswith("\\"):
+            normalized = normalized.rstrip("\\")
+        return normalized.lower()
+    if len(normalized) > 1 and normalized.endswith("/"):
+        normalized = normalized.rstrip("/")
+    return normalized
+
+
+def deduplicate_env_dirs(dirs, workspace_dir, platform):
+    """Format and deduplicate directories while preserving first-seen order."""
+    result = []
+    seen = set()
+    for raw_dir in dirs:
+        if raw_dir is None or not str(raw_dir).strip():
+            continue
+        formatted = format_env_dir(raw_dir, workspace_dir, platform)
+        key = canonical_env_entry_key(formatted, workspace_dir, platform)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(formatted)
+    return result
+
+
+def split_env_path_entries(value, sep):
+    """Split a PATH-like string on ``sep`` without splitting inside ``${...}`` or quotes."""
+    entries = []
+    current = []
+    brace_depth = 0
+    in_quotes = False
+    i = 0
+    n = len(value)
+    while i < n:
+        ch = value[i]
+        if ch == '"':
+            in_quotes = not in_quotes
+            current.append(ch)
+            i += 1
+            continue
+        if not in_quotes:
+            if ch == "$" and i + 1 < n and value[i + 1] == "{":
+                brace_depth += 1
+                current.append("${")
+                i += 2
+                continue
+            if ch == "$" and value[i:].startswith("$env{"):
+                brace_depth += 1
+                current.append("$env{")
+                i += 5
+                continue
+            if ch == "$" and value[i:].startswith("$penv{"):
+                brace_depth += 1
+                current.append("$penv{")
+                i += 6
+                continue
+            if ch == "}" and brace_depth > 0:
+                brace_depth -= 1
+                current.append(ch)
+                i += 1
+                continue
+            if ch == sep and brace_depth == 0:
+                entries.append("".join(current))
+                current = []
+                i += 1
+                continue
+        current.append(ch)
+        i += 1
+    entries.append("".join(current))
+    return entries
+
+
+def is_env_var_reference(entry, var_name, platform):
+    """Whether ``entry`` references the inherited value of ``var_name``."""
+    token = str(entry).strip()
+    target = var_name.lower() if platform == PLATFORM_WINDOWS else var_name
+    for pattern in (
+        r"^\$\{env:([^}]+)\}$",
+        r"^\$\{env\.([^}]+)\}$",
+        r"^\$p?env\{([^}]+)\}$",
+        r"^%([^%]+)%$",
+        r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$",
+    ):
+        match = re.match(pattern, token)
+        if match:
+            ref_name = match.group(1)
+            if (ref_name.lower() if platform == PLATFORM_WINDOWS else ref_name) == target:
+                return True
+    return False
+
+
+def extract_third_party_install_prefix(entry, workspace_dir, platform):
+    """Return the ``third_party/install/<triplet>`` prefix for workspace-managed entries, else ``None``."""
+    expanded = expand_workspace_tokens(entry, workspace_dir, platform)
+    if not expanded or "${" in expanded or "$" in expanded or "%" in expanded:
+        return None
+    expanded_fwd = normalize_platform_path(expanded, platform).replace("\\", "/")
+    workspace_fwd = (
+        normalize_platform_path(workspace_dir, platform)
+        .replace("\\", "/")
+        .rstrip("/")
+    )
+    marker = workspace_fwd + "/third_party/install/"
+    cmp_expanded = expanded_fwd.lower() if platform == PLATFORM_WINDOWS else expanded_fwd
+    cmp_marker = marker.lower() if platform == PLATFORM_WINDOWS else marker
+    if not cmp_expanded.startswith(cmp_marker):
+        return None
+    remainder = cmp_expanded[len(cmp_marker) :]
+    triplet = remainder.split("/", 1)[0]
+    if not triplet:
+        return None
+    return cmp_marker + triplet
+
+
+def merge_env_path_value(existing_value, desired_dirs, var_name, workspace_dir, platform):
+    """Merge ``desired_dirs`` into a PATH-style value idempotently while preserving user order.
+
+    Missing directories are inserted before any earlier managed third-party directory from a
+    different toolchain triplet or before the first inherited ``${env:<var_name>}`` reference
+    (whichever comes first), keeping user-prepended custom directories at highest priority.
+    """
+    sep = ";" if platform == PLATFORM_WINDOWS else ":"
+    if not desired_dirs:
+        return existing_value
+    if existing_value is None:
+        return sep.join(list(desired_dirs) + ["${env:%s}" % var_name])
+    if existing_value.strip() == "":
+        return sep.join(desired_dirs)
+
+    entries = split_env_path_entries(existing_value, sep)
+    existing_keys = set()
+    for entry in entries:
+        key = canonical_env_entry_key(entry, workspace_dir, platform)
+        if key:
+            existing_keys.add(key)
+
+    missing = [
+        directory
+        for directory in desired_dirs
+        if canonical_env_entry_key(directory, workspace_dir, platform) not in existing_keys
+    ]
+    if not missing:
+        return existing_value
+
+    desired_prefixes = set()
+    for directory in desired_dirs:
+        prefix = extract_third_party_install_prefix(directory, workspace_dir, platform)
+        if prefix:
+            desired_prefixes.add(prefix)
+
+    insert_index = None
+    for index, entry in enumerate(entries):
+        if is_env_var_reference(entry, var_name, platform):
+            insert_index = index
+            break
+        entry_prefix = extract_third_party_install_prefix(entry, workspace_dir, platform)
+        if entry_prefix and entry_prefix not in desired_prefixes:
+            insert_index = index
+            break
+
+    if insert_index is not None:
+        entries[insert_index:insert_index] = missing
+    elif entries and entries[-1] == "":
+        entries[-1:-1] = missing
+    else:
+        entries.extend(missing)
+    return sep.join(entries)
+
+
+def find_env_dict_key(env_dict, var_name, platform):
+    """Find an existing env-dict key matching ``var_name`` (case-insensitive on Windows)."""
+    if var_name in env_dict:
+        return var_name
+    if platform == PLATFORM_WINDOWS:
+        lowered = var_name.lower()
+        for existing_key in env_dict:
+            if isinstance(existing_key, str) and existing_key.lower() == lowered:
+                return existing_key
+    return None
+
+
+def compute_runtime_env_specs(platform, bin_dirs, lib_dirs, workspace_dir):
+    """Build ``[(var_name, formatted_dirs, debug_default_name), ...]`` for ``platform``."""
+    if platform == PLATFORM_WINDOWS:
+        combined = deduplicate_env_dirs(
+            list(bin_dirs) + list(lib_dirs), workspace_dir, platform
+        )
+        if not combined:
+            return []
+        # Windows loads DLLs via PATH; cppvsdbg expects PascalCase "Path" when creating a new entry.
+        return [("PATH", combined, "Path")]
+
+    formatted_bin = deduplicate_env_dirs(bin_dirs, workspace_dir, platform)
+    formatted_lib = deduplicate_env_dirs(lib_dirs, workspace_dir, platform)
+    specs = []
+    if formatted_bin:
+        specs.append(("PATH", formatted_bin, "PATH"))
+    if formatted_lib:
+        lib_var = (
+            "DYLD_FALLBACK_LIBRARY_PATH"
+            if platform == PLATFORM_OSX
+            else "LD_LIBRARY_PATH"
+        )
+        specs.append((lib_var, formatted_lib, lib_var))
+    return specs
+
+
+def apply_path_environment_block(data, key, specs, workspace_dir, platform, changes):
+    """Merge PATH-like environment variables into a dict-shaped settings block ``key``."""
+    if not specs:
+        return
+    block = data.get(key)
+    if block is not None and not isinstance(block, dict):
+        print(
+            "[optimize-vscode] skip %s: existing value is not an object" % key,
+            file=sys.stderr,
+        )
+        return
+    if block is None:
+        block = {}
+
+    touched = False
+    for var_name, desired_dirs, _debug_name in specs:
+        existing_key = find_env_dict_key(block, var_name, platform)
+        if existing_key is not None:
+            current_value = block[existing_key]
+            if current_value is None:
+                # In VS Code settings, null explicitly unsets the variable; respect the user.
+                continue
+            if not isinstance(current_value, str):
+                print(
+                    "[optimize-vscode] skip %s.%s: existing value is not a string"
+                    % (key, existing_key),
+                    file=sys.stderr,
+                )
+                continue
+            target_key = existing_key
+        else:
+            current_value = None
+            target_key = var_name
+
+        updated_value = merge_env_path_value(
+            current_value, desired_dirs, var_name, workspace_dir, platform
+        )
+        if updated_value != current_value:
+            block[target_key] = updated_value
+            touched = True
+            action = "add" if current_value is None else "update"
+            changes.append("%s: %s %s" % (key, action, target_key))
+
+    if touched or key in data:
+        data[key] = block
+
+
+def apply_debug_config_environment(data, specs, workspace_dir, platform, changes):
+    """Merge runtime PATH/library search paths into ``cmake.debugConfig`` without overriding ``type``."""
+    if not specs:
+        return
+    key = "cmake.debugConfig"
+    debug_config = data.get(key)
+    if debug_config is not None and not isinstance(debug_config, dict):
+        print(
+            "[optimize-vscode] skip %s: existing value is not an object" % key,
+            file=sys.stderr,
+        )
+        return
+    if debug_config is None:
+        debug_config = {}
+
+    # CodeLLDB (type == "lldb") uses an "env" object rather than cpptools' "environment" array.
+    debug_type = str(debug_config.get("type", "")).strip().lower()
+    use_env_dict = debug_type == "lldb" or (
+        isinstance(debug_config.get("env"), dict) and "environment" not in debug_config
+    )
+
+    if use_env_dict:
+        nested_changes = []
+        apply_path_environment_block(
+            debug_config, "env", specs, workspace_dir, platform, nested_changes
+        )
+        if nested_changes:
+            data[key] = debug_config
+            for entry in nested_changes:
+                changes.append("%s.%s" % (key, entry))
+        return
+
+    env_list = debug_config.get("environment")
+    if env_list is not None and not isinstance(env_list, list):
+        print(
+            "[optimize-vscode] skip %s.environment: existing value is not an array"
+            % key,
+            file=sys.stderr,
+        )
+        return
+    if env_list is None:
+        env_list = []
+
+    touched = False
+    for var_name, desired_dirs, debug_default_name in specs:
+        matched_entry = None
+        for item in env_list:
+            if not isinstance(item, dict):
+                continue
+            item_name = item.get("name")
+            if not isinstance(item_name, str):
+                continue
+            if (
+                item_name.lower() == var_name.lower()
+                if platform == PLATFORM_WINDOWS
+                else item_name == var_name
+            ):
+                matched_entry = item
+                break
+
+        if matched_entry is not None:
+            current_value = matched_entry.get("value")
+            if current_value is None:
+                continue
+            if not isinstance(current_value, str):
+                print(
+                    "[optimize-vscode] skip %s.environment[%s]: existing value is not a string"
+                    % (key, matched_entry.get("name")),
+                    file=sys.stderr,
+                )
+                continue
+            updated_value = merge_env_path_value(
+                current_value, desired_dirs, var_name, workspace_dir, platform
+            )
+            if updated_value != current_value:
+                matched_entry["value"] = updated_value
+                touched = True
+                changes.append(
+                    "%s.environment: update %s" % (key, matched_entry["name"])
+                )
+        else:
+            updated_value = merge_env_path_value(
+                None, desired_dirs, var_name, workspace_dir, platform
+            )
+            env_list.append({"name": debug_default_name, "value": updated_value})
+            touched = True
+            changes.append("%s.environment: add %s" % (key, debug_default_name))
+
+    if touched:
+        debug_config["environment"] = env_list
+        data[key] = debug_config
+
+
+def apply_runtime_path_settings(data, opts, changes):
+    """Inject extra third-party bin/lib search paths into terminal, CTest, and debug settings."""
+    platform = detect_host_platform(opts.platform)
+    specs = compute_runtime_env_specs(
+        platform, opts.extra_bin_dirs, opts.extra_lib_dirs, opts.workspace_dir
+    )
+    if not specs:
+        return
+    terminal_key = TERMINAL_ENV_SETTING_BY_PLATFORM[platform]
+    apply_path_environment_block(
+        data, terminal_key, specs, opts.workspace_dir, platform, changes
+    )
+    apply_path_environment_block(
+        data, "cmake.testEnvironment", specs, opts.workspace_dir, platform, changes
+    )
+    apply_debug_config_environment(data, specs, opts.workspace_dir, platform, changes)
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="Optimize .vscode/settings.json for atsf4g-co."
@@ -562,6 +1146,29 @@ def parse_args(argv):
     )
     parser.add_argument(
         "--clang-format", default="", help="Discovered clang-format executable (hint)"
+    )
+    parser.add_argument(
+        "--protoc", default="", help="Discovered protoc executable (hint)"
+    )
+    parser.add_argument(
+        "--platform",
+        choices=SUPPORTED_PLATFORMS,
+        default=None,
+        help="Target host OS for runtime env settings (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--extra-bin-dir",
+        dest="extra_bin_dirs",
+        action="append",
+        default=[],
+        help="Extra third-party bin directory for runtime PATH (repeatable)",
+    )
+    parser.add_argument(
+        "--extra-lib-dir",
+        dest="extra_lib_dirs",
+        action="append",
+        default=[],
+        help="Extra third-party lib directory for runtime library search path (repeatable)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Report changes without writing"
@@ -597,6 +1204,7 @@ def main(argv):
         data, "cmake.configureEnvironment", DESIRED_CONFIGURE_ENVIRONMENT, changes
     )
     apply_environment_block(data, "cmake.environment", DESIRED_ENVIRONMENT, changes)
+    apply_runtime_path_settings(data, opts, changes)
 
     # Exclude the build output tree and other heavy/append-only directories from the file
     # watcher and the search scope. This is the primary fix for the editor/save/directory-create
@@ -641,6 +1249,8 @@ def main(argv):
             (),
             changes,
         )
+
+    apply_protobuf_protoc_path(data, opts, changes)
 
     intellisense_disabled = (
         str(data.get("C_Cpp.intelliSenseEngine", "default")).strip().lower()
