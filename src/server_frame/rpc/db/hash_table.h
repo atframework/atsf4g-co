@@ -32,6 +32,14 @@ class context;
 
 namespace db {
 namespace hash_table {
+namespace key_map {
+// One record to write: the hash field name (joined map key text) and the record itself, stored whole.
+struct ATFW_UTIL_SYMBOL_VISIBLE write_entry {
+  std::string map_key;
+  const google::protobuf::Message *store;
+};
+}  // namespace key_map
+
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 // Synchronous unit-test seam. When a hook is installed it is evaluated by every primitive operation
 // after all local validation and before any Redis request is constructed. When the hook reports the
@@ -57,6 +65,12 @@ struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_request {
     remove_all,
     set_ttl,
     remove_ttl,
+    // Map (KM) tables: one record per hash field, field name = concatenated map key text. Appended last so
+    // the codes of the existing operations stay stable.
+    km_get_all,
+    km_get_by_map_keys,
+    km_replace_by_map_keys,
+    km_remove_by_map_keys,
   };
 
   op_type op = op_type::kv_get_all;
@@ -75,12 +89,18 @@ struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_request {
   gsl::span<const uint64_t> list_index;
   uint32_t max_list_length = 0;
   uint64_t ttl_second = 0;
+  // km_get_by_map_keys/km_remove_by_map_keys: the field names requested or removed.
+  const std::string *map_keys = nullptr;
+  size_t map_key_count = 0;
+  // km_replace_by_map_keys: the entries to write, passed through as is (no copy of the field names).
+  gsl::span<const key_map::write_entry> map_entries;
 
   // Outputs (nullptr when unused by the op). The hook fills them exactly like the real wait/unpack
-  // path would: kv_output->message/version, kl_output entries, *version for CAS results, and the
-  // mutated inc_message field for kv_inc_field.
+  // path would: kv_output->message/version, kl_output entries, km_output records, *version for CAS
+  // results, and the mutated inc_message field for kv_inc_field.
   db_key_value_message_result_t *kv_output = nullptr;
   std::vector<db_key_list_message_result_t> *kl_output = nullptr;
+  std::vector<db_key_map_message_result_t> *km_output = nullptr;
   uint64_t *version = nullptr;
   google::protobuf::Message *inc_message = nullptr;
 };
@@ -154,6 +174,35 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_index(rpc::c
                                                                           gsl::string_view key,
                                                                           gsl::span<const uint64_t> list_index);
 }  // namespace key_list
+
+namespace key_map {
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel,
+                                                                  gsl::string_view key,
+                                                                  std::vector<db_key_map_message_result_t> &output,
+                                                                  db_msg_dispatcher::unpack_fn_t unpack_fn,
+                                                                  uint64_t *version);
+
+/**
+ * Read the given records. Absent map keys are simply missing from `output`; the call succeeds with an empty output
+ * when none of them exists. The CAS version is only requested (and reported) when `version` is not nullptr.
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_by_map_keys(
+    rpc::context &ctx, uint32_t channel, gsl::string_view key, gsl::span<const std::string> map_keys,
+    std::vector<db_key_map_message_result_t> &output, db_msg_dispatcher::unpack_fn_t unpack_fn, uint64_t *version);
+
+/**
+ * Upsert every entry in one call. The whole message is serialized, so a read returns it as is; `version` nullptr for a
+ * plain HSET, otherwise the CAS version (expect in, new version out).
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type replace(rpc::context &ctx, uint32_t channel,
+                                                                  gsl::string_view key,
+                                                                  gsl::span<const write_entry> entries,
+                                                                  uint64_t *version);
+
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_by_map_keys(
+    rpc::context &ctx, uint32_t channel, gsl::string_view key, gsl::span<const std::string> map_keys);
+}  // namespace key_map
+
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel,
                                                                      gsl::string_view key);
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel,

@@ -112,6 +112,17 @@ reply mappings such as insert's `CAS_FAILED` → `EN_DB_KEY_EXISTS` conversion a
   are not collapsed); `update_by_index` may upsert a field but must not touch the counter.
 - Writing (add_index/update_by_index) to a lazily-expired key starts a **fresh record without the stale TTL** — purge
   expired records via `find_live_*` before indexing the record map (matches the KV paths).
+- KM (`key_map`) records store one blob per hash field: the field name is the map key text and the payload is the whole
+  record serialized by `rpc::db::pack_map_message` (primary keys and map keys included), so the mock just serializes the
+  store as is. One CAS version serves the whole key — map keys have no version of their own:
+  `km_replace_by_map_keys` reuses the `kCompareAndSetHashTable` rule (missing record, matching version, or expected 0
+  accepted; `real + 1` stored), and `km_remove_by_map_keys` is a plain `HDEL` that neither checks nor advances the
+  version, so the key keeps its CAS field after the last record is deleted. `km_get_all` returns records in backend order
+  (the mock's `std::map` yields field-name order, production keeps the HGETALL reply order) and reports
+  `EN_DB_RECORD_NOT_FOUND` for an absent key; `km_get_by_map_keys` reports only the map keys that exist and still succeeds when none does — HMGET
+  returns one NIL slot per missing field and the unpacker drops those slots, so the output carries only existing records. For CAS
+  indexes the request appends the version field after the map keys, so the reply carries one extra element that the
+  unpacker consumes (and reports through `*version`) before reading the records.
 
 ## Hook seam & ABI rules
 

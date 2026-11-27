@@ -60,7 +60,8 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
     # database_table_index carries one of kv/kl/km; the selected message holds the per-kind options.
     index_kind = index.WhichOneof("index")
     index_config = getattr(index, index_kind) if index_kind is not None else index.kv
-    index_type_kv = index_kind != "kl"
+    index_type_kv = index_kind == "kv"
+    index_type_km = index_kind == "km"
     for key in index.key_fields:
         field = message.fields_by_name[key]
         if field.get_cpp_type() == "string_view":
@@ -74,6 +75,23 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
                 "raw_name": key,
                 "cpp_type": field.get_cpp_type(),
                 "set_args": [key],
+            })
+
+    # Map keys double as the hash field name, so they are restricted to types with an unambiguous text form.
+    map_key_fields = []
+    for map_key in getattr(index_config, "map_keys", []):
+        field = message.fields_by_name[map_key]
+        if field.get_cpp_type() == "string_view":
+            map_key_fields.append({
+                "raw_name": map_key,
+                "cpp_type": field.get_cpp_type(),
+                "set_args": [map_key + ".data(),", map_key + ".size()"],
+            })
+        else:
+            map_key_fields.append({
+                "raw_name": map_key,
+                "cpp_type": field.get_cpp_type(),
+                "set_args": [map_key],
             })
 
     for field in message.fields:
@@ -112,12 +130,21 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
 %>
 %     if index_kind is None:
 #error "index ${index.name}: database_table_index.index is not set (kv/kl/km)"
-%     elif index_kind == "km":
-#error "index ${index.name}: database_table_index_km is not supported yet"
+%     elif index_kind == "km" and len(map_key_fields) == 0:
+#error "index ${index.name}: database_table_index_km.map_keys must not be empty"
+%     endif
+%     if index_type_km:
+%         for map_key_field in map_key_fields:
+%             if map_key_field["cpp_type"] not in ("int32_t", "int64_t", "uint32_t", "uint64_t", "bool"):
+#error "index ${index.name}: map key field ${map_key_field["raw_name"]} must be an integer or bool field"
+%             endif
+%         endfor
 %     endif
 namespace ${index.name} {
 %     if index_type_kv:
 <%include file="db_rpc_redis_kv.cpp.mako" args="message_name=message_name,index=index,index_kv=index_config,key_fields=key_fields,all_fields=all_fields,atomic_inc_fields=atomic_inc_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
+%     elif index_type_km:
+<%include file="db_rpc_redis_km.cpp.mako" args="message_name=message_name,index=index,index_km=index_config,key_fields=key_fields,map_key_fields=map_key_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
 %     else:
 <%include file="db_rpc_redis_kl.cpp.mako" args="message_name=message_name,index=index,index_kl=index_config,key_fields=key_fields,all_fields=all_fields,prefix_fmt_key=prefix_fmt_key,prefix_fmt_value_from_args=prefix_fmt_value_from_args,prefix_fmt_value_from_key=prefix_fmt_value_from_key,prefix_fmt_value_from_pb=prefix_fmt_value_from_pb" />
 %     endif

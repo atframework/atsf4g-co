@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -69,17 +70,23 @@ struct ATFW_UTIL_SYMBOL_VISIBLE db_table_context {
   gsl::span<const uint64_t> list_index{};  // kl_get_by_indexs/kl_update_by_index/kl_remove_by_index
   uint32_t max_list_length = 0;            // kl ops
   uint64_t ttl_second = 0;                 // set_ttl
+  // km_get_by_map_keys/km_remove_by_map_keys: the requested/removed map keys.
+  gsl::span<const std::string> map_keys{};
+  // km_replace_by_map_keys: the entries written by this call (field name + record), as passed by the caller.
+  gsl::span<const rpc::db::hash_table::key_map::write_entry> map_entries{};
 
   // Outputs.
   int32_t return_code = 0;  // function-level result code reported to the caller
   // kv_get_all/kv_partly_get: the returned record; set it with mock_db::make_output (empty means the
   // handler decided to report no record, e.g. together with an error return_code).
   atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> output_table;
-  // kv read result CAS version; also written back to the caller's version pointer when requested.
+  // kv/km read result CAS version; also written back to the caller's version pointer when requested.
   uint64_t output_version = 0;
   // kl_get_all/kl_get_by_indexs: append entries here (same vector the caller receives); use
   // mock_db::make_kl_entry to build entries.
   std::vector<db_key_list_message_result_t> *kl_output = nullptr;
+  // km reads: append records here (same vector the caller receives); use mock_db::make_km_entry.
+  std::vector<db_key_map_message_result_t> *km_output = nullptr;
   // kv_inc_field: in/out message whose inc_field is mutated by the handler.
   google::protobuf::Message *inc_message = nullptr;
 };
@@ -143,6 +150,9 @@ class RPC_UNIT_TEST_API db_table_rule_handle {
 //   overwrite), insert-only writes reject an already-versioned record
 // - key_list records use a monotonic 1-based per-key index allocator and evict the smallest index
 //   when the entries reach max_list_length
+// - key_map records keep one serialized record per hash field (the concatenated map key) and one CAS
+//   version for the whole key; replace is the only write path (versioned writes bump the version, a
+//   versionless one keeps it) and removes are plain HDELs that never touch the version
 // - TTL is evaluated lazily against a controllable clock
 //
 // Get-like operations materialize outputs through message factories registered per protobuf
@@ -201,11 +211,20 @@ class RPC_UNIT_TEST_API mock_db {
     std::string type_name;
     std::string data;
   };
+  struct ATFW_UTIL_SYMBOL_VISIBLE km_raw_entry {
+    std::string map_key;
+    std::string type_name;
+    std::string data;
+  };
   bool get_raw_kv(gsl::string_view key, kv_raw_entry &output);
   void set_raw_kv(gsl::string_view key, gsl::string_view type_name, gsl::string_view data, uint64_t version = 0);
   bool get_raw_kl(gsl::string_view key, std::vector<kl_raw_entry> &output);
   // Append one entry with the per-key monotonic index allocator; returns the allocated index.
   uint64_t append_raw_kl(gsl::string_view key, gsl::string_view type_name, gsl::string_view data);
+  bool get_raw_km(gsl::string_view key, std::vector<km_raw_entry> &output);
+  // Upsert one map record; an empty map key clears every record of the key but keeps its version.
+  void set_raw_km(gsl::string_view key, gsl::string_view map_key, gsl::string_view type_name, gsl::string_view data,
+                  uint64_t version = 0);
   void set_raw_ttl(gsl::string_view key, clock::time_point expire_at);
 
   // History
@@ -232,6 +251,9 @@ class RPC_UNIT_TEST_API mock_db {
       atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> &out) const;
   int32_t make_kl_entry(rpc::context &ctx, const google::protobuf::Message &source, uint64_t list_index,
                         db_key_list_message_result_t &out) const;
+  // Build one map output entry from the already serialized bytes of one stored record.
+  int32_t make_km_entry(rpc::context &ctx, gsl::string_view type_name, gsl::string_view data,
+                        db_key_map_message_result_t &out) const;
 
   std::string get_diagnostic() const { return diagnostic_; }
 
@@ -263,8 +285,21 @@ class RPC_UNIT_TEST_API mock_db {
     clock::time_point expire_at{};
   };
 
+  // One record per map key; std::map keeps reads ordered by map key like the production unpack path.
+  struct km_entry {
+    std::string type_name;
+    std::string data;
+  };
+  struct km_record {
+    std::map<std::string, km_entry> entries;
+    uint64_t version = 0;
+    bool has_expire = false;
+    clock::time_point expire_at{};
+  };
+
   kv_record *find_live_kv(gsl::string_view key);
   kl_record *find_live_kl(gsl::string_view key);
+  km_record *find_live_km(gsl::string_view key);
   bool is_expired(bool has_expire, clock::time_point expire_at) const;
 
   int32_t make_kv_output(const kv_record &record, rpc::context &ctx, db_key_value_message_result_t *output) const;
@@ -297,6 +332,10 @@ class RPC_UNIT_TEST_API mock_db {
   int32_t on_kl_update_by_index(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kl_add_index(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kl_remove_by_index(const rpc::db::hash_table::unit_test_request &req);
+  int32_t on_km_get_all(const rpc::db::hash_table::unit_test_request &req);
+  int32_t on_km_get_by_map_keys(const rpc::db::hash_table::unit_test_request &req);
+  int32_t on_km_replace_by_map_keys(const rpc::db::hash_table::unit_test_request &req);
+  int32_t on_km_remove_by_map_keys(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_remove_all(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_set_ttl(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_remove_ttl(const rpc::db::hash_table::unit_test_request &req);
@@ -307,6 +346,7 @@ class RPC_UNIT_TEST_API mock_db {
   std::string diagnostic_;
   std::unordered_map<std::string, kv_record> kv_records_;
   std::unordered_map<std::string, kl_record> kl_records_;
+  std::unordered_map<std::string, km_record> km_records_;
   std::unordered_map<std::string, message_factory_t> factories_;
   std::vector<std::shared_ptr<detail::db_table_rule_state>> table_rules_;
   // Clear closures of typed per-interface handlers installed by generated code; invoked on unbind.

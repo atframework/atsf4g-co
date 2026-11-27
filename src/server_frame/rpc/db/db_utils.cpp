@@ -897,6 +897,158 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+int pack_map_message(const ::google::protobuf::Message &msg, redis_args &args) {
+  const google::protobuf::Descriptor *descriptor = msg.GetDescriptor();
+  if (nullptr == descriptor) {
+    FWLOGERROR("pack map message failed, get descriptor failed");
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
+  size_t dump_len = msg.ByteSizeLong();
+  char *data_allocated = args.alloc(dump_len + 1);
+  if (nullptr == data_allocated) {
+    FWLOGERROR("pack map message {} failed, alloc value failed", descriptor->full_name());
+    args.dealloc();
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+  }
+  *data_allocated = '&';
+  data_allocated += 1;
+  auto *next_buffer =
+      msg.SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+  if (next_buffer - reinterpret_cast<::google::protobuf::uint8 *>(data_allocated) != static_cast<ptrdiff_t>(dump_len)) {
+    FWLOGERROR("pack map message {} failed, serialize value failed", descriptor->full_name());
+    args.dealloc();
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t unpack_map_message(
+    rpc::context *ctx, const redisReply *reply, std::vector<db_key_map_message_result_t> &results,
+    atfw::util::nostd::function_ref<
+        atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context *)>
+        msg_factory,
+    uint64_t *version) {
+  if (nullptr == ctx || nullptr == reply) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  if (reply->type != REDIS_REPLY_ARRAY) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+  }
+
+  // The field name is only used to skip the CAS version field and to report errors; the order of the reply is
+  // kept as is, callers that need an order can sort by the fields carried in the record itself.
+  results.reserve(reply->elements / 2);
+  for (size_t i = 0; i + 1 < reply->elements; i += 2) {
+    const redisReply *key_reply = reply->element[i];
+    const redisReply *value_reply = reply->element[i + 1];
+
+    if (REDIS_REPLY_STRING != key_reply->type || nullptr == key_reply->str) {
+      FWLOGINFO("unpack map value failed, key(replay[{}]) type {} is not a string.", i, key_reply->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+
+    if (0 == UTIL_STRFUNC_STRNCMP(RPC_DB_VERSION_NAME, key_reply->str, RPC_DB_VERSION_LENGTH)) {
+      if (nullptr != version) {
+        if (REDIS_REPLY_INTEGER == value_reply->type) {
+          *version = static_cast<uint64_t>(value_reply->integer);
+        } else if (nullptr != value_reply->str) {
+          *version = atfw::util::string::to_int<uint64_t>(value_reply->str);
+        } else {
+          *version = 0;
+        }
+      }
+      continue;
+    }
+
+    if (REDIS_REPLY_STRING != value_reply->type || nullptr == value_reply->str) {
+      FWLOGERROR("unpack map value failed, value of {} is not a string(reply type={}).", key_reply->str,
+                 value_reply->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+
+    db_key_map_message_result_t result;
+    auto ptr = msg_factory(ctx);
+    if (value_reply->len > 1) {
+      if (value_reply->str[0] != '&') {
+        FWLOGERROR("unpack map value failed, value of {} is not start with '&'.", key_reply->str);
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+      }
+      if (false == (*ptr)->ParseFromArray(value_reply->str + 1, static_cast<int>(value_reply->len) - 1)) {
+        FWLOGERROR("map record {} unpack error failed", key_reply->str);
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+      }
+    }
+    result.message = ptr;
+    results.push_back(std::move(result));
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t unpack_map_message_with_keys(
+    rpc::context *ctx, const redisReply *reply, std::vector<db_key_map_message_result_t> &results,
+    atfw::util::nostd::function_ref<
+        atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context *)>
+        msg_factory,
+    uint64_t *version) {
+  if (nullptr == ctx || nullptr == reply) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  if (reply->type != REDIS_REPLY_ARRAY) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+  }
+
+  // The caller appended the CAS version field after the requested map keys, so it comes back as the last
+  // element and must be consumed before the records are read.
+  size_t value_count = reply->elements;
+  if (nullptr != version) {
+    *version = 0;
+    if (value_count > 0) {
+      const redisReply *version_reply = reply->element[value_count - 1];
+      if (REDIS_REPLY_INTEGER == version_reply->type) {
+        *version = static_cast<uint64_t>(version_reply->integer);
+      } else if (nullptr != version_reply->str) {
+        *version = atfw::util::string::to_int<uint64_t>(version_reply->str);
+      }
+      --value_count;
+    }
+  }
+
+  results.reserve(value_count);
+  for (size_t i = 0; i < value_count; ++i) {
+    const redisReply *value_reply = reply->element[i];
+    // An absent map key is NIL: it is simply not part of the record set.
+    if (REDIS_REPLY_NIL == value_reply->type) {
+      continue;
+    }
+
+    if (REDIS_REPLY_STRING != value_reply->type || nullptr == value_reply->str) {
+      FWLOGERROR("unpack map value failed, reply[{}] is not a string(reply type={}).", i, value_reply->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+
+    db_key_map_message_result_t result;
+    auto ptr = msg_factory(ctx);
+    if (value_reply->len > 1) {
+      if (value_reply->str[0] != '&') {
+        FWLOGERROR("unpack map value failed, reply[{}] is not start with '&'.", i);
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+      }
+      if (false == (*ptr)->ParseFromArray(value_reply->str + 1, static_cast<int>(value_reply->len) - 1)) {
+        FWLOGERROR("map record unpack error failed, reply[{}]", i);
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+      }
+    }
+    result.message = ptr;
+    results.push_back(std::move(result));
+  }
+
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
 constexpr const char *REDIS_LIST_INDEX_FIELD = "__index_number";
 
 std::string get_list_value_field(uint64_t index) { return std::to_string(index); }
@@ -948,6 +1100,7 @@ int32_t unpack_list_message(
     items[index] = value_reply;
   }
 
+  results.reserve(items.size());
   for (auto &item : items) {
     results.emplace_back();
     db_key_list_message_result_t &modify_result = results.back();
@@ -997,6 +1150,7 @@ int32_t unpack_list_message_with_index(
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
 
+  results.reserve(reply->elements);
   for (size_t i = 0; i < reply->elements; ++i) {
     results.emplace_back();
     db_key_list_message_result_t &modify_result = results.back();

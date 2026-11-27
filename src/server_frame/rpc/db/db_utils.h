@@ -175,6 +175,41 @@ int unpack_list_message_with_index(
     atfw::util::nostd::function_ref<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
         msg_factory);
+
+int unpack_map_message(
+    rpc::context* ctx, const redisReply* reply, std::vector<db_key_map_message_result_t>& results,
+    atfw::util::nostd::function_ref<
+        atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
+        msg_factory,
+    uint64_t* version);
+
+/**
+ * unpack a map (KM) table reply (HMGET) whose leading elements align with map_keys. NIL elements (absent fields) are
+ * skipped, so the output only carries the records that exist.
+ * @param ctx rpc context used to materialize messages
+ * @param reply HMGET reply
+ * @param results where to append the records
+ * @param msg_factory factory of the concrete table message
+ * @param version nullptr when the request did not ask for it, otherwise the last reply element is the CAS version
+ *                field and is consumed instead of being treated as a record
+ * @return 0 or error code
+ */
+int unpack_map_message_with_keys(
+    rpc::context* ctx, const redisReply* reply, std::vector<db_key_map_message_result_t>& results,
+    atfw::util::nostd::function_ref<
+        atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
+        msg_factory,
+    uint64_t* version);
+
+/**
+ * package one map record into redis args: '&' followed by the serialized message. The whole message is stored, so a
+ * read parses it back as is.
+ * @param msg record to serialize
+ * @param args where to store the argument
+ * @return 0 or error code
+ */
+int pack_map_message(const ::google::protobuf::Message& msg, redis_args& args);
+
 /**
  * package message into redis args, each message field will take two segment in args
  * @param msg message

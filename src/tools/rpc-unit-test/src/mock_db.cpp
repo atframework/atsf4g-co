@@ -177,10 +177,22 @@ mock_db::kl_record *mock_db::find_live_kl(gsl::string_view key) {
   return &iter->second;
 }
 
+mock_db::km_record *mock_db::find_live_km(gsl::string_view key) {
+  auto iter = km_records_.find(std::string{key});
+  if (iter == km_records_.end()) {
+    return nullptr;
+  }
+  if (is_expired(iter->second.has_expire, iter->second.expire_at)) {
+    km_records_.erase(iter);
+    return nullptr;
+  }
+  return &iter->second;
+}
+
 bool mock_db::has_key(gsl::string_view key) const {
   // const cast is safe: expiry evaluation is a read-only view of the logical state.
   mock_db &self = const_cast<mock_db &>(*this);
-  return nullptr != self.find_live_kv(key) || nullptr != self.find_live_kl(key);
+  return nullptr != self.find_live_kv(key) || nullptr != self.find_live_kl(key) || nullptr != self.find_live_km(key);
 }
 
 size_t mock_db::key_count() const {
@@ -195,20 +207,30 @@ size_t mock_db::key_count() const {
       ++ret;
     }
   }
+  for (const auto &record : km_records_) {
+    if (!is_expired(record.second.has_expire, record.second.expire_at)) {
+      ++ret;
+    }
+  }
   return ret;
 }
 
 uint64_t mock_db::get_version(gsl::string_view key) const {
   auto iter = kv_records_.find(std::string{key});
-  if (iter == kv_records_.end() || is_expired(iter->second.has_expire, iter->second.expire_at)) {
-    return 0;
+  if (iter != kv_records_.end() && !is_expired(iter->second.has_expire, iter->second.expire_at)) {
+    return iter->second.version;
   }
-  return iter->second.version;
+  auto km_iter = km_records_.find(std::string{key});
+  if (km_iter != km_records_.end() && !is_expired(km_iter->second.has_expire, km_iter->second.expire_at)) {
+    return km_iter->second.version;
+  }
+  return 0;
 }
 
 void mock_db::erase_key(gsl::string_view key) {
   kv_records_.erase(std::string{key});
   kl_records_.erase(std::string{key});
+  km_records_.erase(std::string{key});
 }
 
 bool mock_db::get_raw_kv(gsl::string_view key, kv_raw_entry &output) {
@@ -252,6 +274,32 @@ uint64_t mock_db::append_raw_kl(gsl::string_view key, gsl::string_view type_name
   return index;
 }
 
+bool mock_db::get_raw_km(gsl::string_view key, std::vector<km_raw_entry> &output) {
+  output.clear();
+  km_record *record = find_live_km(key);
+  if (nullptr == record) {
+    return false;
+  }
+  output.reserve(record->entries.size());
+  for (const auto &entry : record->entries) {
+    output.push_back(km_raw_entry{entry.first, entry.second.type_name, entry.second.data});
+  }
+  return true;
+}
+
+void mock_db::set_raw_km(gsl::string_view key, gsl::string_view map_key, gsl::string_view type_name,
+                         gsl::string_view data, uint64_t version) {
+  km_record &record = km_records_[std::string{key}];
+  if (map_key.empty()) {
+    record.entries.clear();
+    record.version = version;
+    return;
+  }
+  record.entries[std::string{map_key}] =
+      km_entry{std::string{type_name.data(), type_name.size()}, std::string{data.data(), data.size()}};
+  record.version = version;
+}
+
 void mock_db::set_raw_ttl(gsl::string_view key, clock::time_point expire_at) {
   // TTL applies to whichever record kind exists for the key (mirrors EXPIRE semantics).
   kv_record *kv = find_live_kv(key);
@@ -264,11 +312,17 @@ void mock_db::set_raw_ttl(gsl::string_view key, clock::time_point expire_at) {
     kl->has_expire = true;
     kl->expire_at = expire_at;
   }
+  km_record *km = find_live_km(key);
+  if (nullptr != km) {
+    km->has_expire = true;
+    km->expire_at = expire_at;
+  }
 }
 
 void mock_db::clear() {
   kv_records_.clear();
   kl_records_.clear();
+  km_records_.clear();
   calls_.clear();
   diagnostic_.clear();
 }
@@ -461,6 +515,7 @@ void mock_db::unbind() {
   // (same as mock_ss/mock_dns).
   kv_records_.clear();
   kl_records_.clear();
+  km_records_.clear();
   calls_.clear();
   diagnostic_.clear();
   clock_overridden_ = false;
@@ -510,6 +565,18 @@ bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t 
       break;
     case op_type::kl_remove_by_index:
       res = on_kl_remove_by_index(req);
+      break;
+    case op_type::km_get_all:
+      res = on_km_get_all(req);
+      break;
+    case op_type::km_get_by_map_keys:
+      res = on_km_get_by_map_keys(req);
+      break;
+    case op_type::km_replace_by_map_keys:
+      res = on_km_replace_by_map_keys(req);
+      break;
+    case op_type::km_remove_by_map_keys:
+      res = on_km_remove_by_map_keys(req);
       break;
     case op_type::remove_all:
       res = on_remove_all(req);
@@ -569,7 +636,12 @@ bool mock_db::apply_table_handlers(const rpc::db::hash_table::unit_test_request 
     context.list_index = req.list_index;
     context.max_list_length = req.max_list_length;
     context.ttl_second = req.ttl_second;
+    if (nullptr != req.map_keys && req.map_key_count > 0) {
+      context.map_keys = gsl::span<const std::string>{req.map_keys, req.map_key_count};
+    }
+    context.map_entries = req.map_entries;
     context.kl_output = req.kl_output;
+    context.km_output = req.km_output;
     context.inc_message = req.inc_message;
 
     if (!(*handler)(context)) {
@@ -997,6 +1069,143 @@ int32_t mock_db::on_kl_remove_by_index(const rpc::db::hash_table::unit_test_requ
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+int32_t mock_db::make_km_entry(rpc::context &ctx, gsl::string_view type_name, gsl::string_view data,
+                               db_key_map_message_result_t &out) const {
+  auto factory_iter = factories_.find(std::string{type_name});
+  if (factory_iter == factories_.end() || !factory_iter->second) {
+    FWLOGERROR("mock_db: no message factory registered for {}", std::string{type_name});
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+  }
+  auto message = factory_iter->second(ctx);
+  if (!message->ParseFromString(std::string{data})) {
+    FWLOGERROR("mock_db: parse stored data of {} failed", std::string{type_name});
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+  }
+  out.message = atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+      std::move(message));
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t mock_db::on_km_get_all(const rpc::db::hash_table::unit_test_request &req) {
+  if (nullptr == req.km_output || nullptr == req.ctx) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  km_record *record = find_live_km(req.key);
+  if (nullptr == record) {
+    // An absent key reports no version, same as HGETALL returning an empty array.
+    if (nullptr != req.version) {
+      *req.version = 0;
+    }
+    return PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
+  }
+
+  for (const auto &entry : record->entries) {
+    db_key_map_message_result_t output;
+    int32_t res = make_km_entry(*req.ctx, gsl::string_view{entry.second.type_name},
+                                gsl::string_view{entry.second.data}, output);
+    if (res < 0) {
+      return res;
+    }
+    req.km_output->push_back(std::move(output));
+  }
+  if (nullptr != req.version) {
+    *req.version = record->version;
+  }
+  // A key that only holds the CAS field yields an empty record set, which the production unpack path
+  // reports as "not found".
+  if (req.km_output->empty()) {
+    return PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t mock_db::on_km_get_by_map_keys(const rpc::db::hash_table::unit_test_request &req) {
+  if (nullptr == req.km_output || nullptr == req.ctx || nullptr == req.map_keys) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  km_record *record = find_live_km(req.key);
+  if (nullptr == record) {
+    // Absent keys are a normal read outcome, same as HMGET returning NIL elements.
+    if (nullptr != req.version) {
+      *req.version = 0;
+    }
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  if (nullptr != req.version) {
+    *req.version = record->version;
+  }
+
+  for (size_t i = 0; i < req.map_key_count; ++i) {
+    auto iter = record->entries.find(std::string{req.map_keys[i]});
+    if (iter == record->entries.end()) {
+      continue;
+    }
+    db_key_map_message_result_t output;
+    int32_t res = make_km_entry(*req.ctx, gsl::string_view{iter->second.type_name},
+                                gsl::string_view{iter->second.data}, output);
+    if (res < 0) {
+      return res;
+    }
+    req.km_output->push_back(std::move(output));
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t mock_db::on_km_replace_by_map_keys(const rpc::db::hash_table::unit_test_request &req) {
+  if (req.map_entries.empty()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  km_record *existing = find_live_km(req.key);
+  uint64_t current_version = nullptr == existing ? 0 : existing->version;
+  // kCompareAndSetHashTable accepts a missing record, a matching version, or an expected version of 0.
+  if (nullptr != req.version && current_version != 0 && *req.version != 0 && *req.version != current_version) {
+    *req.version = current_version;
+    return PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
+  }
+
+  km_record &record = km_records_[std::string{req.key}];
+  for (const auto &entry : req.map_entries) {
+    if (nullptr == entry.store) {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    }
+    std::string data;
+    if (!entry.store->SerializeToString(&data)) {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+    }
+    const absl::string_view store_full_name = entry.store->GetDescriptor()->full_name();
+    record.entries[entry.map_key] =
+        km_entry{std::string{store_full_name.data(), store_full_name.size()}, std::move(data)};
+  }
+
+  if (nullptr != req.version) {
+    record.version = current_version + 1;
+    *req.version = record.version;
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t mock_db::on_km_remove_by_map_keys(const rpc::db::hash_table::unit_test_request &req) {
+  if (nullptr == req.map_keys) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  // Plain HDEL: no CAS check and no version bump. The hash keeps its CAS version field, so the key
+  // survives until remove_all or TTL expiry even when the last data field is gone.
+  km_record *record = find_live_km(req.key);
+  if (nullptr == record) {
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
+
+  for (size_t i = 0; i < req.map_key_count; ++i) {
+    record->entries.erase(std::string{req.map_keys[i]});
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
 int32_t mock_db::on_remove_all(const rpc::db::hash_table::unit_test_request &req) {
   erase_key(req.key);
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -1006,6 +1215,7 @@ int32_t mock_db::on_set_ttl(const rpc::db::hash_table::unit_test_request &req) {
   clock::time_point expire_at = now() + std::chrono::seconds{req.ttl_second};
   kv_record *kv = find_live_kv(req.key);
   kl_record *kl = find_live_kl(req.key);
+  km_record *km = find_live_km(req.key);
   // Production maps EXPIRE's plain integer reply (0 for a missing key) through unpack_nothing, so a
   // missing key is a successful no-op here (same as on_remove_ttl mirroring PERSIST).
   if (nullptr != kv) {
@@ -1015,6 +1225,10 @@ int32_t mock_db::on_set_ttl(const rpc::db::hash_table::unit_test_request &req) {
   if (nullptr != kl) {
     kl->has_expire = true;
     kl->expire_at = expire_at;
+  }
+  if (nullptr != km) {
+    km->has_expire = true;
+    km->expire_at = expire_at;
   }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
@@ -1027,6 +1241,10 @@ int32_t mock_db::on_remove_ttl(const rpc::db::hash_table::unit_test_request &req
   kl_record *kl = find_live_kl(req.key);
   if (nullptr != kl) {
     kl->has_expire = false;
+  }
+  km_record *km = find_live_km(req.key);
+  if (nullptr != km) {
+    km->has_expire = false;
   }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }

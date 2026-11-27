@@ -30,8 +30,10 @@
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "logic/logic_server_setup.h"
@@ -377,6 +379,7 @@ SERVER_FRAME_API result_code_type wait(context &ctx, db_message_t &msg, const di
         stack_msg->head_message.Swap(&src_msg->head_message);
         stack_msg->body_message.swap(src_msg->body_message);
         stack_msg->body_message_list.swap(src_msg->body_message_list);
+        stack_msg->body_message_map.swap(src_msg->body_message_map);
       },
       reinterpret_cast<void *>(&msg)));
   if (0 != ret) {

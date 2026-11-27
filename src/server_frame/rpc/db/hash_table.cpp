@@ -995,8 +995,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   }
 
   RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_update_by_index, {
-    const uint64_t __ut_index[] = {list_index};
-    __ut_req.list_index = gsl::span<const uint64_t>{__ut_index, 1};
+    __ut_req.list_index = gsl::span<const uint64_t>{&list_index, 1};
     __ut_req.store = store.get();
   })
 
@@ -1264,6 +1263,368 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 }  // namespace key_list
+
+namespace key_map {
+namespace {
+// Append the field/value pairs of one write: hash field name, then '&' + the serialized record.
+int32_t append_write_entries(gsl::span<const write_entry> entries, redis_args &args) {
+  for (size_t i = 0; i < entries.size(); ++i) {
+    if (nullptr == entries[i].store) {
+      FWLOGERROR("pack map message failed, entry {} has no store", i);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    }
+    if (!args.push(entries[i].map_key)) {
+      FWLOGERROR("pack map message failed, alloc field name failed");
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+    }
+    int32_t res = rpc::db::pack_map_message(*entries[i].store, args);
+    if (res < 0) {
+      return res;
+    }
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+// Push the CAS prelude shared by the replace/insert paths: EVALSHA + sha1 + numkeys + key + version pair.
+void push_cas_prelude(redis_args &args, db_msg_dispatcher::script_type script, gsl::string_view key, uint64_t version) {
+  args.push("EVALSHA");
+  args.push(db_msg_dispatcher::me()->get_db_script_sha1(script));
+  args.push(1);
+  args.push(key.data(), key.size());
+  args.push(RPC_DB_VERSION_NAME);
+  args.push(version);
+}
+}  // namespace
+
+SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                     std::vector<db_key_map_message_result_t> &output,
+                                     db_msg_dispatcher::unpack_fn_t unpack_fn, uint64_t *version) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/key_map.get_all"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer =
+      __child_ctx.make_tracer("rpc.db.hash_table/key_map.get_all", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::km_get_all, {
+    __ut_req.km_output = &output;
+    __ut_req.version = version;
+  })
+
+  redis_args args(2);
+  args.push("HGETALL");
+  args.push(key.data(), key.size());
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map start to get all data", key);
+  uint64_t rpc_sequence = 0;
+  int res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), unpack_fn, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  output.swap(db_message.body_message_map);
+  if (nullptr != version) {
+    *version = db_message.head_message.response_int();
+  }
+  if (output.empty()) {
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, __trace_attributes}));
+  }
+
+  for (size_t i = 0; i < output.size(); ++i) {
+    if (output[i].message) {
+      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_map get_all result[{}]: \n{}", key, i,
+                  protobuf_mini_dumper_get_readable(*output[i].message->get()));
+    }
+  }
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map get_all, count: {}", key, output.size());
+
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
+SERVER_FRAME_API result_type get_by_map_keys(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                             gsl::span<const std::string> map_keys,
+                                             std::vector<db_key_map_message_result_t> &output,
+                                             db_msg_dispatcher::unpack_fn_t unpack_fn, uint64_t *version) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/key_map.get_by_map_keys"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer =
+      __child_ctx.make_tracer("rpc.db.hash_table/key_map.get_by_map_keys", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  if (map_keys.empty()) {
+    FWLOGERROR("get by map keys [key={}] failed, map key list is empty", key);
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, __trace_attributes}));
+  }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::km_get_by_map_keys, {
+    __ut_req.map_keys = map_keys.data();
+    __ut_req.map_key_count = map_keys.size();
+    __ut_req.km_output = &output;
+    __ut_req.version = version;
+  })
+
+  // HMGET echoes one value per requested field and no field names, so the CAS version is appended as the
+  // last requested field and consumed by the unpacker before the positional alignment.
+  redis_args args(2 + map_keys.size() + (nullptr == version ? 0 : 1));
+  args.push("HMGet");
+  args.push(key.data(), key.size());
+  for (size_t i = 0; i < map_keys.size(); ++i) {
+    args.push(map_keys[i].data(), map_keys[i].size());
+  }
+  if (nullptr != version) {
+    args.push(RPC_DB_VERSION_NAME);
+  }
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map start to get by map keys, count: {}", key, map_keys.size());
+  uint64_t rpc_sequence = 0;
+  int res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), unpack_fn, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  if (nullptr != version) {
+    *version = db_message.head_message.response_int();
+  }
+
+  // Absent map keys are NIL in the reply and already dropped by the unpacker: an empty output means none of the
+  // requested records exists, which is a normal read outcome.
+  output.clear();
+  output.swap(db_message.body_message_map);
+  if (nullptr != version) {
+    FWCLOGINFO(log_categorize_t::DB,
+               "table [key={}] key_map get_by_map_keys, requested: {}, returned: {}, cas_version: {}", key,
+               map_keys.size(), output.size(), *version);
+  } else {
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map get_by_map_keys, requested: {}, returned: {}", key,
+               map_keys.size(), output.size());
+  }
+
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
+SERVER_FRAME_API result_type replace(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                     gsl::span<const write_entry> entries, uint64_t *version) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/key_map.replace"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer =
+      __child_ctx.make_tracer("rpc.db.hash_table/key_map.replace", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  if (entries.empty()) {
+    FWLOGERROR("replace [key={}] failed, entry list is empty", key);
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, __trace_attributes}));
+  }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::km_replace_by_map_keys, {
+    __ut_req.map_entries = entries;
+    __ut_req.version = version;
+  })
+
+  size_t args_size = entries.size() * 2;
+  if (version != nullptr) {
+    // EVALSHA + sha1 + numkeys + key + version field + version value
+    args_size += 6;
+  } else {
+    // HSET + key
+    args_size += 2;
+  }
+  redis_args args(args_size);
+  if (version != nullptr) {
+    push_cas_prelude(args, db_msg_dispatcher::script_type::kCompareAndSetHashTable, key, *version);
+  } else {
+    args.push("HSET");
+    args.push(key.data(), key.size());
+  }
+
+  int res = append_write_entries(entries, args);
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  if (version != nullptr) {
+    FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_map start to replace data, expect version: {}", key,
+                *version);
+  } else {
+    FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_map start to replace data", key);
+  }
+
+  uint64_t rpc_sequence = 0;
+  res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && db_message.head_message.response_int() != 0 &&
+        version != nullptr) {
+      *version = db_message.head_message.response_int();
+    }
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  if (version != nullptr) {
+    *version = db_message.head_message.response_int();
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map data replaced, count: {}, new cas_version: {}", key,
+               entries.size(), *version);
+  } else {
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map data replaced, count: {}", key, entries.size());
+  }
+
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
+SERVER_FRAME_API result_type remove_by_map_keys(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                                gsl::span<const std::string> map_keys) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/key_map.remove_by_map_keys"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer =
+      __child_ctx.make_tracer("rpc.db.hash_table/key_map.remove_by_map_keys", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  if (map_keys.empty()) {
+    FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map remove_by_map_keys, map key list is empty", key);
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+  }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::km_remove_by_map_keys, {
+    __ut_req.map_keys = map_keys.data();
+    __ut_req.map_key_count = map_keys.size();
+  })
+
+  // Plain HDEL: the CAS version lives on the primary key and is not part of a map-field removal,
+  // so deleting entries never advances it and no Lua script is involved.
+  redis_args args(2 + map_keys.size());
+  args.push("HDEL");
+  args.push(key.data(), key.size());
+
+  for (size_t i = 0; i < map_keys.size(); ++i) {
+    args.push(map_keys[i].data(), map_keys[i].size());
+  }
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map start to remove by map keys, count: {}", key,
+             map_keys.size());
+  uint64_t rpc_sequence = 0;
+  int res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_map removed, count: {}", key, map_keys.size());
+
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+}  // namespace key_map
 
 SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl::string_view key) {
   rpc::context __child_ctx(ctx);

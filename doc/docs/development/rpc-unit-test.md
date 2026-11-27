@@ -187,11 +187,11 @@ RPC，但响应和返回码被丢弃。测试应等待可观察的 handler 结�
   unary SS 同链（`mock://` connector），不改 Mako。
 - **DNS**：`test.dns().mock_a(domain, ip)` / `mock(records)` / `mock_error(domain)`；hook 在 `uv_getaddrinfo`
   之前，测试不产生系统 DNS 请求。
-- **DB**：默认内存 backend 支持字段 presence 合并、CAS、KL 和 TTL，无需注册规则；但当前生产 KV
+- **DB**：默认内存 backend 支持字段 presence 合并、CAS、KL、KM 和 TTL，无需注册规则；但当前生产 KV
   `set/insert` 已改为全字段覆盖，mock 与契约测试尚未对齐。不要用该内存 backend 验证生产的全字段覆盖语义；
   可使用 typed handler 显式固定当前业务预期。生成层 per-table typed handler（`rpc::db::<ns>::mock::<interface>`）与引擎层 `test.db().mock_table(name)` 回调
   可覆盖单个接口，未覆盖的回落内存 backend。raw entry API（`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`）用于
-  CAS 版本种子/精确 bytes。
+  CAS 版本种子/精确 bytes；KM 记录用 `get_raw_km`/`set_raw_km` 读写。
 - **UUID**：`generate_global_increase_id`/`generate_global_unique_id` 经 DB `inc_field` 流入 DB mock
   （号段缓存跨 case 延续，不要断言绝对 id 值）；`generate_standard_uuid*`/`generate_short_uuid` 是纯本地函数、
   无需 mock。`feature::uuid` 当前不做额外 runtime 装配。
@@ -214,8 +214,10 @@ DB 覆盖顺序：生成层 typed handler → 引擎层 per-table 回调 → 内
 - 引擎投递按**到期顺序**而非 FIFO；投递会同步恢复协程，任务可重入引擎（两阶段 drain，见
   `src/tools/rpc-unit-test/src/detail/pending_drain.h`）。
 - DB 的 CAS set 接受无版本记录、相等期望版本或**期望版本 0（忽略版本比较强制覆盖，存储版本仍按真实版本
-  +1 递增）**，否则返回 `EN_DB_OLD_VERSION` 并回写存储版本；insert 拒绝已有版本记录；KL 索引单调不复用，
-  `inc_field` 从 0 创建且不动 CAS 版本。`server_frame_test_db_script_contract.cpp` 真实执行内嵌 Lua，但当前仍
+  +1 递增）**，否则返回 `EN_DB_OLD_VERSION` 并回写存储版本；insert 拒绝已有版本记录；KL 索引单调不复用；
+  KM 的 `get_all` 顺序由后端决定（内存 mock 按记录 key 排序，非接口保证）、写入只有 `replace` 一条路径、
+  删除是纯 `HDEL`（不校验也不推进 CAS 版本）；`inc_field` 从 0 创建且不动 CAS 版本。
+  `server_frame_test_db_script_contract.cpp` 真实执行内嵌 Lua，但当前仍
   断言所有写路径只合并 present 字段；生产 `set/insert` 已改为全字段覆盖，mock 与测试需另行修正。
 - 修改引擎/hook seam 的更深入不变量见 `.agents/skills/rpc-unit-test/references/engine-invariants.md`。
 

@@ -30,8 +30,10 @@ message table_example {
 
 `index` selects its kind through one of the `kv` / `kl` / `km` sub-messages, and only that kind defines the matching
 options: `kv` has `enable_cas`, `partly_get`, `partly_save`, `atomic_inc_fields`; `kl` has `max_list_length`; `km` has
-`enable_cas`, `map_keys` (the generator does not support `km` yet and emits `#error`). The kind is mandatory — write
-`kv: {}` even when no option is needed. Options set on the wrong kind are rejected by the proto compiler.
+`enable_cas`, `map_keys` (`map_keys` must not be empty and only accepts integer, enum, and `bool` fields; the
+generated `<table>_map_key` is the argument type of the read/remove interfaces — see
+[data layer](../architecture/data-layer)). The kind is mandatory — write `kv: {}` even when no option is needed.
+Options set on the wrong kind are rejected by the proto compiler.
 
 2. [Reconfigure/build](overview); the existing workflow updates
    `rpc/db/local_db_interface.atfw.gen.h/.cpp` or `global_db_interface.atfw.gen.h/.cpp`.
@@ -66,7 +68,7 @@ regenerating APIs.
 
 ## Customization and Design
 
-Use `rpc/db/hash_table.h` KV/KL/CAS/TTL primitives when generated APIs do not meet your needs.
+Use `rpc/db/hash_table.h` KV/KL/KM/CAS/TTL primitives when generated APIs do not meet your needs.
 Annotations are defined in `private/protocol/extension/svr.database.extension.proto`;
 see [RPC and code generation](../architecture/rpc-codegen) for generation rules.
 Distributed IDs use `rpc/db/uuid.h`; see [data layer](../architecture/data-layer) for runtime behavior.

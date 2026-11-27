@@ -200,12 +200,12 @@ return code are dropped. Wait for an observable handler result and inspect send 
   the unary SS chain (`mock://` connector) without touching Mako.
 - **DNS**: `test.dns().mock_a(domain, ip)` / `mock(records)` / `mock_error(domain)`; the hook sits before
   `uv_getaddrinfo`, so tests issue no system DNS requests.
-- **DB**: the default in-memory backend supports field-presence merging, CAS, KL, and TTL without rule registration,
+- **DB**: the default in-memory backend supports field-presence merging, CAS, KL, KM, and TTL without rule registration,
   but production KV `set/insert` now overwrites all fields and the mock and contract tests have not caught up. Do not
   use this backend to validate production full-overwrite semantics; use typed handlers to pin explicit business
   expectations. Generated per-table typed handlers (`rpc::db::<ns>::mock::<interface>`)
   and engine-level `test.db().mock_table(name)` callbacks can override individual interfaces, with everything else
-  falling back to the in-memory backend. Raw entry APIs (`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`) seed CAS versions
+  falling back to the in-memory backend. Raw entry APIs (`set_raw_kv`/`append_raw_kl`/`set_raw_ttl`, plus `get_raw_km`/`set_raw_km` for KM records) seed CAS versions
   or exact bytes.
 - **UUID**: `generate_global_increase_id`/`generate_global_unique_id` flow into the DB mock through `inc_field` (the
   pool cache persists across cases, so do not assert absolute id values); `generate_standard_uuid*`/
@@ -234,9 +234,11 @@ overridden per rule (e.g. explicitly mark a stream as `fail` for negative assert
 - DB CAS set accepts a record without a version, an equal expected version, or **expected version 0 (ignore the CAS
   check and force the overwrite while still incrementing the stored version)**; otherwise it returns
   `EN_DB_OLD_VERSION` with the stored version. Insert rejects an already-versioned record; KL indexes stay monotonic
-  and unreused, and `inc_field` starts at 0 without changing CAS. `server_frame_test_db_script_contract.cpp` executes
-  the embedded Lua but still asserts presence-only merging on every write, while production `set/insert` now overwrites
-  all fields. The mock and tests require a separate correction.
+  and unreused; KM `get_all` returns records in backend order (the in-memory mock happens to sort by record key,
+  which is not an API guarantee), `replace` is the only KM write path, and the KM remove is a plain
+  `HDEL` that neither checks nor advances the CAS version; `inc_field` starts at 0 without changing CAS.
+  `server_frame_test_db_script_contract.cpp` executes the embedded Lua but still asserts presence-only merging on
+  every write, while production `set/insert` now overwrites all fields. The mock and tests require a separate correction.
 - Deeper invariants for modifying the engines/hook seams live in
   `.agents/skills/rpc-unit-test/references/engine-invariants.md`.
 

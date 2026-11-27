@@ -1185,3 +1185,181 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// km (login_lock_zone): every login_zone_id is one hash field under the same primary key and the CAS
+// version is shared by the whole key. replace_by_map_key is the only write path; the remove is a plain
+// HDEL that neither checks nor advances the version.
+CASE_TEST(rpc_unit_test, db_km_login_lock_zone_replace_get_remove) {
+  atfw::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+  test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_lock>();
+
+  auto task =
+      test.run_task("db_km_login_lock_zone", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        using table_t = PROJECT_NAMESPACE_ID::table_login_lock;
+        using map_key_t = rpc::db::login_lock_zone::table_login_lock_map_key;
+        using message_ref_t = atfw::util::memory::strong_rc_ptr<rpc::shared_message<table_t>>;
+        constexpr uint64_t kUserId = 1001;
+
+        // Two records under the same primary key, written in reverse map-key order.
+        rpc::shared_message<table_t> stores[2] = {ctx, ctx};
+        stores[0]->set_user_id(kUserId);
+        stores[0]->set_login_zone_id(2);
+        stores[0]->set_router_server_id(200);
+        stores[0]->set_access_token_code("token-2");
+        stores[1]->set_user_id(kUserId);
+        stores[1]->set_login_zone_id(1);
+        stores[1]->set_router_server_id(100);
+        stores[1]->set_access_token_code("token-1");
+
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::replace_by_map_key(
+            ctx, gsl::span<const rpc::shared_message<table_t>>{stores, 2}, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(version));
+
+        // HGETALL: both records, in the mock's field-name order (the interface does not define an order). The
+        // whole record is stored, so the primary key and the map key come back with it.
+        std::vector<message_ref_t> output;
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_all(ctx, kUserId, output, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(output.size()));
+        CASE_EXPECT_EQ(1, static_cast<int>(version));
+        if (output.size() == 2) {
+          CASE_EXPECT_EQ(1, static_cast<int>((*output[0])->login_zone_id()));
+          CASE_EXPECT_EQ(kUserId, (*output[0])->user_id());
+          CASE_EXPECT_EQ(100, static_cast<int>((*output[0])->router_server_id()));
+          CASE_EXPECT_EQ("token-1", (*output[0])->access_token_code());
+          CASE_EXPECT_EQ(2, static_cast<int>((*output[1])->login_zone_id()));
+        }
+
+        // HMGET: absent map keys are dropped, the shared CAS version still comes back.
+        map_key_t probe[2];
+        probe[0].login_zone_id = 1;
+        probe[1].login_zone_id = 99;
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_by_map_key(
+            ctx, kUserId, gsl::span<const map_key_t>{probe, 2}, output, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        CASE_EXPECT_EQ(1, static_cast<int>(version));
+        if (!output.empty()) {
+          CASE_EXPECT_EQ("token-1", (*output[0])->access_token_code());
+        }
+
+        // A stale version is rejected and the stored version is reported back.
+        rpc::shared_message<table_t> stale{ctx};
+        stale->set_user_id(kUserId);
+        stale->set_login_zone_id(1);
+        stale->set_access_token_code("stale");
+        uint64_t stale_version = 9;
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::replace_by_map_key(
+            ctx, gsl::span<const rpc::shared_message<table_t>>{&stale, 1}, stale_version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(stale_version));
+
+        // The conflicting write did not land. The key comes straight from the zone-1 record (stores[1]): the
+        // constructor copies every declared map key field.
+        map_key_t first_key[1] = {map_key_t{*stores[1]}};
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_by_map_key(
+            ctx, kUserId, gsl::span<const map_key_t>{first_key, 1}, output, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        if (!output.empty()) {
+          CASE_EXPECT_EQ("token-1", (*output[0])->access_token_code());
+        }
+
+        // A matching version is applied and the version advances.
+        rpc::shared_message<table_t> updated{ctx};
+        updated->set_user_id(kUserId);
+        updated->set_login_zone_id(1);
+        updated->set_access_token_code("token-1-v2");
+        uint64_t matched_version = 1;
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::replace_by_map_key(
+            ctx, gsl::span<const rpc::shared_message<table_t>>{&updated, 1}, matched_version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(matched_version));
+
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_by_map_key(
+            ctx, kUserId, gsl::span<const map_key_t>{first_key, 1}, output, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        CASE_EXPECT_EQ(2, static_cast<int>(version));
+        if (!output.empty()) {
+          CASE_EXPECT_EQ("token-1-v2", (*output[0])->access_token_code());
+        }
+
+        // A batch spanning two primary keys is rejected before touching the backend.
+        rpc::shared_message<table_t> mixed[2] = {ctx, ctx};
+        mixed[0]->set_user_id(kUserId);
+        mixed[0]->set_login_zone_id(3);
+        mixed[1]->set_user_id(kUserId + 1);
+        mixed[1]->set_login_zone_id(4);
+        uint64_t mixed_version = 2;
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::replace_by_map_key(
+            ctx, gsl::span<const rpc::shared_message<table_t>>{mixed, 2}, mixed_version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, res);
+
+        // Removing a map key is a plain HDEL: the record goes away but the shared version does not move.
+        map_key_t remove_key[1];
+        remove_key[0].login_zone_id = 2;
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_lock_zone::remove_by_map_key(ctx, kUserId, gsl::span<const map_key_t>{remove_key, 1}));
+        CASE_EXPECT_EQ(0, res);
+
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_all(ctx, kUserId, output, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        CASE_EXPECT_EQ(2, static_cast<int>(version));
+        if (!output.empty()) {
+          CASE_EXPECT_EQ(1, static_cast<int>((*output[0])->login_zone_id()));
+        }
+
+        // Deleting the last record empties the record set while the key (and its CAS field) survives.
+        remove_key[0].login_zone_id = 1;
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_lock_zone::remove_by_map_key(ctx, kUserId, gsl::span<const map_key_t>{remove_key, 1}));
+        CASE_EXPECT_EQ(0, res);
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_all(ctx, kUserId, output, version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
+        CASE_EXPECT_TRUE(output.empty());
+        CASE_EXPECT_EQ(2, static_cast<int>(version));
+
+        // An empty map key list is rejected by the read and a no-op for the remove.
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_lock_zone::get_by_map_key(ctx, kUserId, gsl::span<const map_key_t>{}, output, version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, res);
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::login_lock_zone::remove_by_map_key(ctx, kUserId, gsl::span<const map_key_t>{}));
+        CASE_EXPECT_EQ(0, res);
+
+        // remove_all drops the key entirely, so the version is gone too.
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::remove_all(ctx, kUserId));
+        CASE_EXPECT_EQ(0, res);
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock_zone::get_all(ctx, kUserId, output, version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
+        CASE_EXPECT_EQ(0, static_cast<int>(version));
+
+        RPC_RETURN_CODE(0);
+      });
+  if (task.empty()) {
+    CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_FALSE(result.hard_timed_out);
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // The two batch-wide rejections (mixed keys, empty map keys) never reach the engine.
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls(op_type::km_replace_by_map_keys)));
+  CASE_EXPECT_EQ(4, static_cast<int>(test.db().calls(op_type::km_get_all)));
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls(op_type::km_get_by_map_keys)));
+  CASE_EXPECT_EQ(2, static_cast<int>(test.db().calls(op_type::km_remove_by_map_keys)));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls(op_type::remove_all)));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

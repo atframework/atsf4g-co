@@ -29,8 +29,9 @@ message table_example {
 
 `index` 用 `kv` / `kl` / `km` 其中一个子消息选择索引类型，也只有该类型定义了对应选项：`kv` 有 `enable_cas`、
 `partly_get`、`partly_save`、`atomic_inc_fields`，`kl` 有 `max_list_length`，`km` 有 `enable_cas`、`map_keys`
-（生成模板暂未支持 `km`，声明后会得到 `#error`）。必须显式选一种；不需要任何选项时也要写 `kv: {}` 占位。
-把选项写在不属于它的类型下会被 proto 编译拒绝。
+（`map_keys` 不能为空，只允许整数、枚举和 `bool` 字段；生成的 `<表>_map_key` 是读取/删除接口的入参，详见
+[数据层](../architecture/data-layer)）。必须显式选一种；
+不需要任何选项时也要写 `kv: {}` 占位。把选项写在不属于它的类型下会被 proto 编译拒绝。
 
 2. 按[统一构建步骤](overview)重新配置/构建；已有流程更新
    `rpc/db/local_db_interface.atfw.gen.h/.cpp` 或 `global_db_interface.atfw.gen.h/.cpp`。
@@ -61,7 +62,7 @@ TTL 与字段自增等。CAS 的 `version` 在读后保存并传给更新；具�
 
 ## 定制与详细设计
 
-生成接口不能满足需求时，再使用 `rpc/db/hash_table.h` 的 KV/KL/CAS/TTL 原语。
+生成接口不能满足需求时，再使用 `rpc/db/hash_table.h` 的 KV/KL/KM/CAS/TTL 原语。
 表注解定义在 `private/protocol/extension/svr.database.extension.proto`，
 生成规则见[RPC 与代码生成](../architecture/rpc-codegen)。
 分布式 ID 接口在 `rpc/db/uuid.h`，数据层运行方式见[数据层](../architecture/data-layer)。

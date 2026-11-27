@@ -64,6 +64,14 @@ message table_login_lock {
         enable_cas: true
       }
     }
+    index: { // 测试使用
+      name: "login_lock_zone"
+      key_fields: "user_id"
+      km: {
+        enable_cas: true
+        map_keys: "login_zone_id"
+      }
+    }
   };
   // clang-format on
   uint64 user_id = 1;

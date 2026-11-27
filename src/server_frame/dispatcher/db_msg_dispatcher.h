@@ -35,7 +35,12 @@
 #include <memory/rc_ptr.h>
 #include <rpc/rpc_shared_message.h>
 
-#include "dispatcher_implement.h"
+#include <list>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "dispatcher/dispatcher_implement.h"
 
 extern "C" struct redisAsyncContext;
 
@@ -64,10 +69,15 @@ struct db_key_list_message_result_t {
   atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> message;
 };
 
+struct db_key_map_message_result_t {
+  atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> message;
+};
+
 struct db_message_t {
   atframework::DBMsg head_message;
   atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> body_message;
   std::vector<db_key_list_message_result_t> body_message_list;
+  std::vector<db_key_map_message_result_t> body_message_map;
 };
 
 class db_msg_dispatcher : public dispatcher_implement {

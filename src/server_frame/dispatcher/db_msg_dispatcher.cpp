@@ -2,6 +2,8 @@
 // Created by owent on 2016/9/27.
 //
 
+#include "dispatcher/db_msg_dispatcher.h"
+
 #include "config/compile_optimize.h"
 #ifdef _MSC_VER
 #  pragma warning(push)
@@ -27,17 +29,12 @@
 #include <config/extern_log_categorize.h>
 #include <log/log_wrapper.h>
 #include <rpc/db/db_utils.h>
+#include <rpc/rpc_utils.h>
 #include <time/time_utility.h>
 
 #include <utility/random_engine.h>
 
 #include <config/logic_config.h>
-
-#include <cstdlib>
-#include <cstring>
-#include <type_traits>  // IWYU pragma: keep
-
-#include "db_msg_dispatcher.h"
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -46,7 +43,12 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <rpc/rpc_utils.h>
+#include <cstdlib>
+#include <cstring>
+#include <memory>
+#include <string>
+
+#include <type_traits>  // IWYU pragma: keep
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
@@ -69,7 +71,9 @@ struct ATFW_UTIL_SYMBOL_LOCAL db_async_data_t {
   db_msg_dispatcher::unpack_fn_t unpack_fn;
 };
 
-static void _uv_close_and_free_callback(uv_handle_t *handle) { delete (uv_timer_t *)handle; }
+static void _uv_close_and_free_callback(uv_handle_t *handle) {
+  delete (uv_timer_t *)handle;  // NOLINT: readability/casting
+}
 
 #if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
 static_assert(std::is_trivial<db_async_data_t>::value,
@@ -198,7 +202,7 @@ SERVER_FRAME_API db_msg_dispatcher::db_msg_dispatcher()
 SERVER_FRAME_API db_msg_dispatcher::~db_msg_dispatcher() {
   if (nullptr != tick_timer_) {
     uv_timer_stop(tick_timer_);
-    uv_close((uv_handle_t *)tick_timer_, _uv_close_and_free_callback);
+    uv_close((uv_handle_t *)tick_timer_, _uv_close_and_free_callback);  // NOLINT: readability/casting
     tick_timer_ = nullptr;
   }
 }

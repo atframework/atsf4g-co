@@ -28,6 +28,7 @@ title: 数据层
 | --- | --- |
 | KV | `get_all` / `partly_get` / `batch_get_all` / `batch_partly_get`；`set` / `insert` / `partly_set`；`inc_field` 原子自增 |
 | KL | `add_index` / `get_all` / `get_by_indexs` / `update_by_index` / `remove_by_index`；索引单调递增，按数量裁剪（内嵌 Lua） |
+| KM | `get_all` / `get_by_map_keys`；`replace` / `remove_by_map_keys`（`replace` 是唯一写路径）；一条 Redis 记录内按 map key 分多个字段 |
 | TTL | 键过期管理 |
 
 KV `set` / `insert` 写路径序列化并覆盖全部字段；未设置字段写成空值或默认值，不是 presence merge。
@@ -52,10 +53,60 @@ index: {
 字段描述符数组在生成代码里固定为栈数组，不动态分配。`partly_save` 只定义在 `kv` 索引选项里，声明在 `kl` / `km`
 下无法通过 proto 编译。
 
+### Map 索引（km）
+
+`km` 把同一条 Redis 记录的多个子记录放在一个 hash 里：key 和其他类型一样是 `"{前缀}-{索引名}:{key 字段}"`，
+hash 的 field 名是索引 `map_keys` 各字段值用 `:` 拼接的文本，field 值是该记录整条 protobuf 的序列化结果
+（`&` 前缀，与 KL 的记录值格式一致；主 key 与 map key 字段也一起存，读回即为完整记录）。
+
+```protobuf
+index: {
+  name: "user_item"
+  key_fields: "zone_id"
+  key_fields: "user_id"
+  km: {
+    enable_cas: true
+    map_keys: "bag_type"
+    map_keys: "slot"
+  }
+}
+```
+
+生成 `rpc::db::user_item::*`。`map_keys` 入参是索引专属的强类型 struct，字段名与类型就是声明的 `map_keys`
+字段（文本编码只在生成代码内部使用，不对外暴露）：
+
+```cpp
+struct table_user_item_map_key {
+  uint32_t bag_type{};
+  uint32_t slot{};
+
+  table_user_item_map_key() = default;
+  // 直接从记录取所有 map_keys 字段，调用方不必逐字段赋值
+  explicit table_user_item_map_key(const PROJECT_NAMESPACE_ID::table_user_item &store)
+      : bag_type(store.bag_type()), slot(store.slot()) {}
+};
+```
+
+默认构造保留（字段零初始化）；需要从一条记录构造 map key 时用 `table_user_item_map_key{*store}`。
+
+| 接口 | 语义 |
+| --- | --- |
+| `get_all(ctx, zone_id, user_id, output[, version])` | `HGETALL` 全量读取，记录顺序由后端决定（不保证按 map key 排序），`output` 是 `std::vector<atfw::util::memory::strong_rc_ptr<rpc::shared_message<表>>>`，每条记录即完整 protobuf |
+| `get_by_map_key(ctx, key..., gsl::span<const <表>_map_key>, output[, version])` | `HMGET`；不存在（NIL）的 map key 不出现在 `output`，全部不存在也算成功；CAS 索引把版本字段一并请求，返回整条记录的 CAS 版本 |
+| `replace_by_map_key(ctx, stores[, version])` | 批量 upsert（新增与更新都走它）；所有记录必须同属一个 key，否则返回 `EN_SYS_PARAM` |
+| `remove_by_map_key(ctx, key..., gsl::span<const <表>_map_key>)` | 删除指定 field；纯 `HDEL`，不校验也不推进 CAS 版本 |
+
+CAS 版本存同一个 hash 的 `CAS_VERSION` field，同一个主 key 下的所有 map 记录共用一个版本，map key 本身没有独立版本：
+`replace` 复用 `kCompareAndSetHashTable`，不新增 Lua 脚本。删除是纯 `HDEL`，既不校验也不推进版本，因此删掉最后一个
+数据 field 后 key 仍然存在（只剩版本字段），记录集为空。非 CAS 索引对应 `HSET` / `HDEL`，不写版本字段。
+
+`map_keys` 不能为空，且只允许整数（含枚举）与 `bool` 字段：field 名是这些值的文本拼接，浮点与字符串的文本形式
+不唯一，模板会生成 `#error`。
+
 ### 生成的 DB 接口
 
 由 `svr.local.table.proto` / `svr.global.table.proto` + `svr.database.extension.proto` 的表/索引扩展，经
-`db_interface.*.mako` 与 `db_rpc_redis(.kv/.kl).*.mako` 生成：
+`db_interface.*.mako` 与 `db_rpc_redis(.kv/.kl/.km).*.mako` 生成：
 
 - `rpc/db/local_db_interface.atfw.gen.{h,cpp}`：本 zone 库接口；
 - `rpc/db/global_db_interface.atfw.gen.{h,cpp}`：全局库接口；
