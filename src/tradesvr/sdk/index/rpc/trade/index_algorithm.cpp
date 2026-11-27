@@ -180,88 +180,6 @@ TRADE_SDK_INDEX_API bool operator==(const product_index_wear_part_store_key& l,
   return true;
 }
 
-TRADE_SDK_INDEX_API product_index_gear_sub_type_key product_index_gear_sub_type_key::min() noexcept {
-  product_index_gear_sub_type_key ret;
-  ret.has_order = true;
-  ret.rarity = std::numeric_limits<decltype(ret.rarity)>::max();
-  ret.search_order = std::numeric_limits<decltype(ret.search_order)>::min();
-  ret.recommend_score = std::numeric_limits<decltype(ret.recommend_score)>::min();
-  ret.lowest_price = std::numeric_limits<decltype(ret.lowest_price)>::min();
-  ret.product_id = std::numeric_limits<decltype(ret.product_id)>::min();
-
-  assert(ret < product_index_gear_sub_type_key{});
-
-  return ret;
-}
-
-TRADE_SDK_INDEX_API product_index_gear_sub_type_key product_index_gear_sub_type_key::max() noexcept {
-  product_index_gear_sub_type_key ret;
-  ret.has_order = false;
-  ret.rarity = std::numeric_limits<decltype(ret.rarity)>::min();
-  ret.search_order = std::numeric_limits<decltype(ret.search_order)>::max();
-  ret.recommend_score = std::numeric_limits<decltype(ret.recommend_score)>::max();
-  ret.lowest_price = std::numeric_limits<decltype(ret.lowest_price)>::max();
-  ret.product_id = std::numeric_limits<decltype(ret.product_id)>::max();
-
-  assert(product_index_gear_sub_type_key{} < ret);
-
-  return ret;
-}
-
-TRADE_SDK_INDEX_API bool operator==(const product_index_gear_sub_type_key& l,
-                                    const product_index_gear_sub_type_key& r) noexcept {
-  return l.has_order == r.has_order && l.rarity == r.rarity && l.search_order == r.search_order &&
-         l.recommend_score == r.recommend_score && l.lowest_price == r.lowest_price && l.product_id == r.product_id;
-}
-
-TRADE_SDK_INDEX_API bool operator<(const product_index_gear_sub_type_key& l,
-                                   const product_index_gear_sub_type_key& r) noexcept {
-  if (l.has_order != r.has_order) {
-    return l.has_order;
-  }
-
-  // 注意以下几个位置算法保持一致
-  //   global_search_cache_manager.cpp 中 sort_query_product_gear_sub_type
-  //   index_algorithm.cpp(sdk)中operator<(const product_index_gear_sub_type_key& l, const
-  //   product_index_gear_sub_type_key& r)
-  if (l.rarity != r.rarity) {
-    return l.rarity > r.rarity;
-  }
-
-  if (l.search_order != r.search_order) {
-    return l.search_order < r.search_order;
-  }
-
-  if (l.recommend_score != r.recommend_score) {
-    return l.recommend_score < r.recommend_score;
-  }
-
-  if (l.lowest_price != r.lowest_price) {
-    return l.lowest_price < r.lowest_price;
-  }
-
-  return l.product_id < r.product_id;
-}
-
-TRADE_SDK_INDEX_API bool operator==(const product_index_gear_sub_type_store_key& l,
-                                    const product_index_gear_sub_type_store_key& r) noexcept {
-  if (l.index != r.index || l.gear_sub_types.size() != r.gear_sub_types.size()) {
-    return false;
-  }
-
-  auto iter_l = l.gear_sub_types.begin();
-  auto iter_r = r.gear_sub_types.begin();
-  while (iter_l != l.gear_sub_types.end() && iter_r != r.gear_sub_types.end()) {
-    if (*iter_l != *iter_r) {
-      return false;
-    }
-
-    ++iter_l;
-    ++iter_r;
-  }
-  return true;
-}
-
 TRADE_SDK_INDEX_API product_index_search_key product_index_search_key::min() noexcept {
   product_index_search_key ret;
   ret.has_order = true;
@@ -324,45 +242,10 @@ TRADE_SDK_INDEX_API bool operator<(const product_index_search_key& l, const prod
 
 TRADE_SDK_INDEX_API bool operator==(const product_index_single_price_key& l,
                                     const product_index_single_price_key& r) noexcept {
-  if (!check_career_rarity_affix_gear_euqal(l, r)) {
-    return false;
-  }
   if (l.min_price != r.min_price) {
     return false;
   }
   return true;
-}
-
-TRADE_SDK_INDEX_API bool check_career_rarity_affix_gear_euqal(const product_index_single_price_key& l,
-                                                              const product_index_single_price_key& r) noexcept {
-  if (l.rarity != r.rarity) {
-    return false;
-  }
-  if (!check_set_equal(l.careers, r.careers)) {
-    return false;
-  }
-  if (!check_set_equal(l.affix_gear_sets, r.affix_gear_sets)) {
-    return false;
-  }
-  if (!check_set_equal(l.gear_sub_types, r.gear_sub_types)) {
-    return false;
-  }
-  return true;
-}
-
-TRADE_SDK_INDEX_API bool operator==(const product_affix_gearsubtype_key& l,
-                                    const product_affix_gearsubtype_key& r) noexcept {
-  return l.affix_gear == r.affix_gear && l.gear_subtype == r.gear_subtype;
-}
-
-TRADE_SDK_INDEX_API size_t
-product_affix_gearsubtype_key_hash_type::operator()(const product_affix_gearsubtype_key& key) const noexcept {
-  char hash_buffer[sizeof(int32_t) * 2];
-  copy_buffer_into(hash_buffer, 0, key.affix_gear);
-  copy_buffer_into(hash_buffer, sizeof(int32_t), key.gear_subtype);
-
-  // 随便搞个素数作magic number
-  return static_cast<size_t>(XXH64(hash_buffer, sizeof(hash_buffer), static_cast<XXH64_hash_t>(220291627)));
 }
 
 TRADE_SDK_INDEX_API standard_price_index_key::standard_price_index_key(
