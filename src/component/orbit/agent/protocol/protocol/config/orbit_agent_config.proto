@@ -30,4 +30,5 @@ message orbit_agent_cfg {
   string log_name = 33;
 
   bool enable_seed_mode = 40;
+  string seed_append_command_line = 41;
 }

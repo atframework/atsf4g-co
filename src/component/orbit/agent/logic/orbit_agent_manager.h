@@ -366,6 +366,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   std::string client_path_;                           // 第一个参数
   std::vector<std::string> pre_client_command_line_;  // client_path 后续参数
   std::vector<std::string> client_command_line_;      // Agent参数
+  std::vector<std::string> seed_append_command_line_; // 种子进程附加命令行参数
 
   atfw::orbit::DAgentIdentity agent_identity_;
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;

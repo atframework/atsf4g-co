@@ -217,6 +217,9 @@ int orbit_agent_manager::spawn_seed_client_process(const orbit_agent_client_reco
   build_client_launch_arguments(record, render_values, client_path_, pre_client_command_line_, client_command_line_,
                                 launch_arguments, false);
   launch_arguments.emplace_back(kOrbitSeedMode);
+  for (const auto& arg : seed_append_command_line_) {
+    launch_arguments.emplace_back(arg);
+  }
 
   // 种子进程不 detach：它需要承接 Agent 的 stdio 并长期存活
   int32_t spawn_result = spawn_client_async(record->client_instance_id, std::move(launch_arguments), false);

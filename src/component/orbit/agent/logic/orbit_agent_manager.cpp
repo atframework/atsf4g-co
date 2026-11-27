@@ -163,6 +163,12 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   max_batch_startup_count_ = config.max_batch_startup_count();
 #if defined(__linux__) || defined(__unix__)
   seed_mode_enabled_ = config.enable_seed_mode();
+  if (seed_mode_enabled_) {
+    if (!split_command_line(config.seed_append_command_line(), seed_append_command_line_)) {
+      FWLOGERROR("split_command_line failed for {}", config.seed_append_command_line());
+      return -4;
+    }
+  }
 #else
   seed_mode_enabled_ = false;
 #endif

@@ -16,6 +16,7 @@ orbit_agent:
   enable_pre_start: {{ .Values.orbit_agent.enable_pre_start }}
   pre_start_repeated_failures_limit: {{ .Values.orbit_agent.pre_start_repeated_failures_limit }}
   enable_seed_mode: {{ .Values.orbit_agent.enable_seed_mode }}
+  seed_append_command_line: {{ .Values.orbit_agent.seed_append_command_line }}
 
   client_path: {{ .Values.orbit_agent.client_path }}
   client_command_line: {{ .Values.orbit_agent.client_command_line }}
