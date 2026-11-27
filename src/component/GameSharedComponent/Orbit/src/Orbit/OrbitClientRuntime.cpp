@@ -883,7 +883,15 @@ int32_t OrbitClientRuntime::process_fork_request(
 
   // 阻断对于app的行为直到重新init
   app_init_ = false;
-
+  set_state(OrbitClientRuntimeState::kIdle);
+  options_.seed_mode = false;
+  pending_fork_requests_.clear();
+  options_.client_id = request.start_args().client_id().client_id();
+  if (request.start_args().client_instance_id() != 0) {
+  	options_.client_instance_id = request.start_args().client_instance_id();
+  }
+  options_.custom_launch_arguments =
+  	std::vector<std::string>(request.start_args().custom_args().begin(), request.start_args().custom_args().end());
   if (callbacks_.on_after_fork_once) {
     int32_t after_fork_once_result = callbacks_.on_after_fork_once(request.start_args().child_data());
     if (after_fork_once_result != 0) {
@@ -912,15 +920,6 @@ int32_t OrbitClientRuntime::process_fork_request(
     break;
   }
   // Child进程 需要重新初始化自己
-  set_state(OrbitClientRuntimeState::kIdle);
-  options_.seed_mode = false;
-  pending_fork_requests_.clear();
-  options_.client_id = request.start_args().client_id().client_id();
-  if (request.start_args().client_instance_id() != 0) {
-    options_.client_instance_id = request.start_args().client_instance_id();
-  }
-  options_.custom_launch_arguments =
-      std::vector<std::string>(request.start_args().custom_args().begin(), request.start_args().custom_args().end());
   child_data = request.start_args().child_data();
   return init(request.app_id(), options_, callbacks_);
 #else
