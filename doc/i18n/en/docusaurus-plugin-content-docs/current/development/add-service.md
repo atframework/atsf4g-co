@@ -58,7 +58,8 @@ Extend the existing SDK header/source lists for the new API files.
 The index, matchmaking, order, price, and search processes under `src/tradesvr/` each use the SS RPC and config
 schemas in `protocol/<role>/`. The `sdk::trade-sdk-<role>` target exposes the generated client API in `rpc::trade_<role>`.
 Each SDK is declared in the `CMakeLists.txt` of its own subdirectory under `src/tradesvr/sdk/`.
-Role SDKs depend on `sdk::trade-common-sdk`, with shared algorithms under `src/tradesvr/sdk/common/trade/`.
+Each role SDK links its RPC protocol and depends on `sdk::trade-common-sdk`. The common SDK links the shared trade
+protocol, and its algorithms live under `src/tradesvr/sdk/common/trade/`.
 The direct SDK dependencies for each process are declared in `src/tradesvr/service/CMakeLists.txt`.
 Each process defines its own `main_module` in `service/<role>/app/trade_<role>_main.cpp` for handler registration
 and process-specific lifecycle hooks. Request/response RPCs currently return `EN_ERR_NOT_IMPLEMENTED`.
@@ -68,9 +69,10 @@ Each process has a chart under `install/cloud-native/charts/tradesvr-<role>/`. G
 defines the instances for each role. The type IDs match the `logic_discovery_selector_cfg` field numbers in
 `svr.hpa.config.proto`. Order, matchmaking, index, search, and price use 51, 52, 53, 54, and 55, respectively.
 
-Maintain `trade.service.common` and `trade.service.<role>` in
-`install/cloud-native/values/default/modules/trade.yaml`. The renderer selects each role's settings and writes the
-common settings to `shared_setting`. `trade.hpa.<role>` holds per-role HPA settings. Each process reads the rendered
+Trade settings live in `install/cloud-native/values/default/modules/trade.yaml`. Charts that enable the trade module
+render `trade.logic` as `logic.trade`, which is read as `logic_trade_cfg`. `trade.service.<role>` supplies each
+role's settings, and `trade.service.common` is written to each role's `shared_setting`.
+`trade.hpa.<role>` holds per-role HPA settings. Each process reads the rendered
 `tradesvr_<role>` section and the `ATAPP_TRADESVR_<ROLE>` environment variable prefix.
 
 The order service's custom rules are configured under `trade.hpa.order.rule.custom`.

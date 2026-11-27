@@ -1,5 +1,37 @@
-# 交易行进程配置。各角色使用对应配置协议，common 渲染为各进程的 shared_setting。
+# 交易行配置。logic 渲染为 logic.trade，service.common 渲染为各进程的 shared_setting。
 enabled: false
+logic:
+  available_area_code:
+    - 0
+  ace:
+    auction_judge_deal_check_ignore_permille: 0
+  sales_order_slot_count: 8
+  sales_order_confirmation_limit: 100
+  purchase_order_slot_count: 8
+  purchase_order_confirmation_limit: 100
+  auction_order_slot_count: 8
+  order_ticket_log_expire_timeout: 1d
+  order_ticket_log_keep_count: 8
+  order_ticket_log_max_count: 16
+  order_ticket_subscribe_heartbeat_interval: 900s
+  order_ticket_subscribe_heartbeat_failed_retry_interval: 20s
+  order_ticket_confirmation_max_check_times: 3
+  matchmaking_batch_count: 2000
+  matchmaking_parallel: 1
+  index_group_count: 16
+  index_group_main_slot_count: 16
+  search_group_count: 32
+  search_group_main_slot_count: 4
+  search_cache_timeout: 2s
+  order_ticket_group_count: 32
+  order_ticket_group_main_slot_count: 4
+  order_ticket_cache_timeout: 1s
+  market_product_group_count: 32
+  market_product_cache_timeout: 1s
+  market_product_recommend_timeout: 2s
+  order_ticket_recommend_group_count: 32
+  order_ticket_recommend_group_main_slot_count: 4
+  order_ticket_recommend_timeout: 2s
 service:
   common:
     order_slot_stabilization_window: 15s

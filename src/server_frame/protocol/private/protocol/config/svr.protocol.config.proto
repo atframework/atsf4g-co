@@ -243,6 +243,95 @@ message logic_friend_api_cfg {
   uint32 wal_max_log_size = 6 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
 }
 
+message logic_trade_ace_cfg {
+  int32 auction_judge_deal_check_ignore_permille = 1;  // 多少（千分率）的订单直接放过
+}
+
+message logic_trade_cfg {
+  repeated int32 available_area_code = 1;
+
+  logic_trade_ace_cfg ace = 2;
+
+  // 默认供货单slot数
+  int32 sales_order_slot_count = 11 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+  // 默认供货单最大成交单数
+  int64 sales_order_confirmation_limit = 12
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" min_value: "1" }];
+
+  // 默认订购单slot数
+  int32 purchase_order_slot_count = 21 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+  // 默认订购单最大成交单数
+  int64 purchase_order_confirmation_limit = 22
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "100" min_value: "1" }];
+
+  // 委托单日志过期时间
+  google.protobuf.Duration order_ticket_log_expire_timeout = 31
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1d" min_value: "60s" }];
+  // 委托单日志开始GC的数量
+  uint32 order_ticket_log_keep_count = 32 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" }];
+  // 委托单日志最大数量
+  uint32 order_ticket_log_max_count = 33 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "16" }];
+  // 委托单订阅心跳间隔
+  google.protobuf.Duration order_ticket_subscribe_heartbeat_interval = 34
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1800s" min_value: "60s" }];
+  google.protobuf.Duration order_ticket_subscribe_heartbeat_failed_retry_interval = 35
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "5s" }];
+  int32 order_ticket_confirmation_max_check_times = 36
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+
+  // 交易撮合一批撮合几个订单
+  int64 matchmaking_batch_count = 51
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200" min_value: "10" }];
+  // 交易撮合一批同时执行几批撮合
+  int32 matchmaking_parallel = 52 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1" min_value: "1" }];
+
+  // 索引服务默认分组数
+  int32 index_group_count = 61 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "16" min_value: "1" }];
+  // 索引服务组内Main Slot节点数
+  int32 index_group_main_slot_count = 62
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "16" min_value: "1" }];
+
+  // 默认竞拍单slot数
+  int32 auction_order_slot_count = 71 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+
+  // 搜索服务默认分组数
+  int32 search_group_count = 81 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "32" min_value: "1" }];
+  // 搜索服务组内Main Slot节点数
+  int32 search_group_main_slot_count = 82
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4" min_value: "1" }];
+  // 搜索缓存时间
+  google.protobuf.Duration search_cache_timeout = 83
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  // 搜索服订单缓存默认分组数
+  int32 order_ticket_group_count = 84 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "32" min_value: "1" }];
+  // 搜索服订单缓存组内Main Slot节点数
+  int32 order_ticket_group_main_slot_count = 85
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4" min_value: "1" }];
+  // 搜索订单缓存时间
+  google.protobuf.Duration order_ticket_cache_timeout = 86
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+
+  // 搜索服商品缓存默认分组数
+  int32 market_product_group_count = 91
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "32" min_value: "1" }];
+  // 搜索商品缓存时间
+  google.protobuf.Duration market_product_cache_timeout = 93
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1s" min_value: "1s" }];
+  // 搜索商品缓存时间(同质化)
+  google.protobuf.Duration market_product_recommend_timeout = 94
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "1s" min_value: "1s" }];
+
+  // 推荐服务默认分组数
+  int32 order_ticket_recommend_group_count = 101
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "32" min_value: "1" }];
+  // 推荐服务组内Main Slot节点数
+  int32 order_ticket_recommend_group_main_slot_count = 102
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "4" min_value: "1" }];
+  // 推荐订单刷新时间(拍卖)
+  google.protobuf.Duration order_ticket_recommend_timeout = 103
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+}
+
 message logic_section_cfg {
   uint32 world_id = 1;
   uint32 zone_id = 2;
@@ -269,6 +358,7 @@ message logic_section_cfg {
   logic_gm_cfg gm = 114;
   logic_friend_api_cfg friend_api = 115;
   logic_mail_cfg mail = 116;
+  logic_trade_cfg trade = 117;
 }
 
 message db_group_gateway_cfg {

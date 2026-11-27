@@ -6,6 +6,7 @@
 #include <config/compiler_features.h>
 
 #include <gsl/select-gsl.h>
+#include <nostd/type_traits.h>
 
 #include <atframe/atapp_module_impl.h>
 #include <atframe/etcdcli/etcd_discovery.h>
@@ -38,6 +39,9 @@
 #include <memory>
 #include <queue>
 #include <string>
+#include <utility>
+
+#include "logic/hpa/logic_hpa_easy_api.h"
 
 namespace rpc {
 class context;
@@ -111,6 +115,36 @@ class logic_server_common_module : public atfw::atapp::module_impl {
     std::chrono::system_clock::time_point last_checkpoint;
     std::chrono::system_clock::time_point previous_tick_checkpoint;
   };
+
+  template <class HashDataType, bool NeedConvert>
+  struct ATFW_UTIL_SYMBOL_VISIBLE discovery_consistent_hash_helper;
+
+  template <class HashDataType>
+  struct ATFW_UTIL_SYMBOL_VISIBLE discovery_consistent_hash_helper<HashDataType, false> {
+    template <class InputType>
+    ATFW_UTIL_FORCEINLINE static InputType&& visit(InputType&& input) noexcept {
+      return std::forward<InputType>(input);
+    }
+  };
+
+  template <class HashDataType>
+  struct ATFW_UTIL_SYMBOL_VISIBLE discovery_consistent_hash_helper<HashDataType, true> {
+    template <class InputType>
+    ATFW_UTIL_FORCEINLINE static gsl::span<const unsigned char> visit(const InputType& input) noexcept {
+#if (defined(_MSVC_LANG) && _MSVC_LANG >= 201402L) || (defined(__cplusplus) && __cplusplus >= 201402L)
+      static_assert(std::is_trivially_copyable<HashDataType>::value,
+                    "Only trivially type can be used to calculate consistent hash key");
+#endif
+      return {reinterpret_cast<const unsigned char*>(&input), sizeof(input)};
+    }
+  };
+
+  template <class HashDataType>
+  struct ATFW_UTIL_SYMBOL_VISIBLE discovery_consistent_hash_convertor
+      : public discovery_consistent_hash_helper<
+            HashDataType, !std::is_integral<HashDataType>::value &&
+                              !std::is_convertible<HashDataType, gsl::string_view>::value &&
+                              !std::is_convertible<HashDataType, gsl::span<const unsigned char>>::value> {};
 
  public:
   SERVER_FRAME_API explicit logic_server_common_module(const logic_server_common_module_configure& static_conf);
@@ -190,6 +224,52 @@ class logic_server_common_module : public atfw::atapp::module_impl {
       uint64_t id) const;
   SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node> get_discovery_by_name(
       const std::string& name) const;
+
+  template <class HashDataType>
+  ATFW_UTIL_FORCEINLINE atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+  get_discovery_consistent_hash_node_by_type(logic_hpa_discovery_select_mode mode, int32_t type_id,
+                                             HashDataType&& hash_data) const {
+    auto index_set = get_discovery_index_by_type(type_id);
+    if (!index_set) {
+      return nullptr;
+    }
+
+    const auto* metadata = logic_hpa_discovery_select(type_id, mode);
+
+    return index_set->get_node_by_consistent_hash(
+        discovery_consistent_hash_convertor<atfw::util::nostd::remove_cvref_t<HashDataType>>::visit(
+            std::forward<HashDataType>(hash_data)),
+        metadata);
+  }
+
+  template <class HashDataType>
+  ATFW_UTIL_FORCEINLINE atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+  get_discovery_consistent_hash_node_by_type_zone(logic_hpa_discovery_select_mode mode, int32_t type_id,
+                                                  uint64_t zone_id, HashDataType&& hash_data) const {
+    auto index_set = get_discovery_index_by_type_zone(type_id, zone_id);
+    if (!index_set) {
+      return nullptr;
+    }
+
+    const auto* metadata = logic_hpa_discovery_select(type_id, mode);
+
+    return index_set->get_node_by_consistent_hash(
+        discovery_consistent_hash_convertor<atfw::util::nostd::remove_cvref_t<HashDataType>>::visit(
+            std::forward<HashDataType>(hash_data)),
+        metadata);
+  }
+
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+  get_discovery_random_node_by_type(logic_hpa_discovery_select_mode mode, int32_t type_id);
+
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+  get_discovery_random_node_by_type_zone(logic_hpa_discovery_select_mode mode, int32_t type_id, uint64_t zone_id);
+
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+  get_discovery_round_robin_node_by_type(logic_hpa_discovery_select_mode mode, int32_t type_id);
+
+  SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+  get_discovery_round_robin_node_by_type_zone(logic_hpa_discovery_select_mode mode, int32_t type_id, uint64_t zone_id);
 
   /**
    * @brief 获取指定服务类型的服务发现版本号（本地）

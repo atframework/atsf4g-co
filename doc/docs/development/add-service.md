@@ -58,7 +58,8 @@ generate_for_pb_add_ss_service(
 `src/tradesvr/` 下的 index、matchmaking、order、price、search 进程分别使用 `protocol/<role>/`
 中的 SS RPC 和配置协议。`sdk::trade-sdk-<role>` 提供 `rpc::trade_<role>` 下生成的客户端 API。
 各 SDK 在 `src/tradesvr/sdk/` 对应子目录的 `CMakeLists.txt` 中独立声明。
-角色 SDK 依赖 `sdk::trade-common-sdk`，公共算法位于 `src/tradesvr/sdk/common/trade/`。
+各角色 SDK 链接自己的 RPC 协议，并依赖 `sdk::trade-common-sdk`。公共 SDK 链接公共交易协议，
+算法位于 `src/tradesvr/sdk/common/trade/`。
 各进程直接链接的 SDK 见 `src/tradesvr/service/CMakeLists.txt`。
 各进程在自己的 `service/<role>/app/trade_<role>_main.cpp` 中定义 `main_module`。
 该模块负责注册服务端 handler，也是该进程的生命周期扩展点。
@@ -69,8 +70,9 @@ generate_for_pb_add_ss_service(
 配置各角色的实例。类型 ID 跟随 `svr.hpa.config.proto` 中 `logic_discovery_selector_cfg`
 的字段编号。order、matchmaking、index、search、price 分别使用 51、52、53、54、55。
 
-在 `install/cloud-native/values/default/modules/trade.yaml` 维护 `trade.service.common` 和
-`trade.service.<role>`。渲染时各角色读取自己的配置，将公共配置写入 `shared_setting`。
+交易配置位于 `install/cloud-native/values/default/modules/trade.yaml`。启用交易模块的 chart 将
+`trade.logic` 渲染为 `logic.trade`，由 `logic_trade_cfg` 读取。
+`trade.service.<role>` 提供角色配置，`trade.service.common` 写入各角色的 `shared_setting`。
 `trade.hpa.<role>` 提供各角色的 HPA 参数。进程读取渲染后的 `tradesvr_<role>` 配置段，
 环境变量前缀为 `ATAPP_TRADESVR_<ROLE>`。
 

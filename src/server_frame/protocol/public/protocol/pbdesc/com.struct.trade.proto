@@ -79,17 +79,17 @@ enum EnTradeConfirmationSaleType {
 
 message DTradeOrderTicketLabelTag {
   int32 label_type = 1;
-  repeated int32 label_value = 2;
+  repeated sint64 label_value = 2;
 }
 
 message DTradeOrderTicketLabelAttribute {
   int32 attribute_type = 1;
-  int32 attribute_value = 2;
+  sint64 attribute_value = 2;
 }
 
 message DTradeOrderItem {
   int32 type_id = 1;
-  int32 count = 2;
+  int64 count = 2;
   int64 guid = 3;  // 唯一ID(如果有)
 }
 
@@ -125,7 +125,7 @@ message DTradeProductProfile {
 message DTradeIndexCustomTypeKey {
   // 业务定制化特殊索引类型
   int32 type_id = 1;
-  int32 type_value = 2;
+  sint64 type_value = 2;
 }
 
 message DTradeOrderTicketDetail {
@@ -212,20 +212,20 @@ message DTradeConfirmation {
   int64 unit_price = 7;    // 单位价格
   int64 total_price = 8;   // 总价
   int64 final_price = 9;   // 税后价格
-  int32 trade_count = 10;  // 成交个数
+  int64 trade_count = 10;  // 成交个数
 
   // 单独单版本
   int64 virtual_refer_confirmation_key = 16;
   int64 virtual_unit_price = 17;   // 单位价格
   int64 virtual_total_price = 18;  // 总价
   int64 virtual_final_price = 19;  // 税后价格
-  int32 virtual_trade_count = 20;  // 成交个数
+  int64 virtual_trade_count = 20;  // 成交个数
 
   EnTradeConfirmationSaleType sale_type = 30;
 }
 
 message DTradeEventAuctionModify {
-  int32 current_price = 1;
+  int64 current_price = 1;
   DTradeBidOrderMeta bid_meta = 2;
 }
 
@@ -241,22 +241,22 @@ message DTradeEventConfirmation {
 
 // 同质化 供货单
 message DTradeSalesOrderMeta {
-  sint32 origin_item_count = 1;  // 原始出售数量
-  sint32 left_item_count = 2;    // 剩余未成交数量
-  int32 unit_price = 3;          // 当前单位价格
-  int32 unit_count = 4;          // 当前每个单位价格对应的DItem数量，默认为 1
+  sint64 origin_item_count = 1;  // 原始出售数量
+  sint64 left_item_count = 2;    // 剩余未成交数量
+  int64 unit_price = 3;          // 当前单位价格
+  int64 unit_count = 4;          // 当前每个单位价格对应的DItem数量，默认为 1
 
   atframework.shared.DUserIDKey user_key = 6;  // 供货者
 }
 
 // 同质化 订购单
 message DTradePurchaseOrderMeta {
-  sint32 origin_item_count = 1;  // 原始下单数量
-  sint32 left_item_count = 2;    // 剩余未成交数量
-  int32 current_unit_price = 3;  // 当前单位价格(缓存)
-  int32 left_price = 4;          // 剩余代币
+  sint64 origin_item_count = 1;  // 原始下单数量
+  sint64 left_item_count = 2;    // 剩余未成交数量
+  int64 current_unit_price = 3;  // 当前单位价格(缓存)
+  int64 left_price = 4;          // 剩余代币
   bool is_fixed = 5;             // 是否一口价
-  int32 origin_price = 7;        // 原始代币
+  int64 origin_price = 7;        // 原始代币
 
   atframework.shared.DUserIDKey user_key = 6;  // 订购者
 }
@@ -265,16 +265,16 @@ message DTradePurchaseOrderMeta {
 message DTradeAuctionOrderMeta {
   int64 auction_trade_order_ticket_id = 1;     // 出售订单ID
   atframework.shared.DUserIDKey user_key = 2;  // 出售者
-  int32 origin_price = 3;                      // 原始挂单价
-  int32 current_price = 4;                     // 显示价格
-  int32 fixed_price = 5;                       // 一口价
+  int64 origin_price = 3;                      // 原始挂单价
+  int64 current_price = 4;                     // 显示价格
+  int64 fixed_price = 5;                       // 一口价
 }
 
 // 拍卖行 竞拍单
 message DTradeBidOrderMeta {
   int64 bid_trade_order_ticket_id = 1;         // 竞拍订单ID
   atframework.shared.DUserIDKey user_key = 2;  // 竞拍者
-  int32 price = 3;                             // 竞价
+  int64 price = 3;                             // 竞价
 }
 
 message DTradeAuctionMeta {
@@ -302,7 +302,7 @@ message DTradeOrderTicketMeta {
 
   // 推荐分（业务层可以自定义推荐分的含义，比如装备强度）
   sint64 recommend_score = 9;
-  int32 recommend_standard_price_mode = 10;
+  EnTradePriceMode recommend_price_mode = 10;
 
   oneof type {
     DTradeSalesOrderMeta sales_order = 11;
@@ -317,21 +317,21 @@ message DTradeOrderTicketMeta {
 }
 
 message DTradeOrderMatchMakingBasicInfo {
-  int32 origin_price = 1;        // 买单总价
-  int32 origin_count = 2;        // 买单总数
-  int32 confirmation_price = 3;  // 成交总价
-  int32 confirmation_count = 4;  // 成交总数
+  int64 origin_price = 1;        // 买单总价
+  int64 origin_count = 2;        // 买单总数
+  int64 confirmation_price = 3;  // 成交总价
+  int64 confirmation_count = 4;  // 成交总数
 }
 
 message DTradeOrderTicketSearchTag {
   int32 label_type = 1;
-  repeated int32 label_value = 2;  // 任意Tag命中则选中
+  repeated sint64 label_value = 2;  // 任意Tag命中则选中
 }
 
 message DTradeOrderTicketSearchAttribute {
   int32 attribute_type = 1;
-  sint32 min_value = 2;
-  sint32 max_value = 3;
+  sint64 min_value = 2;
+  sint64 max_value = 3;
 }
 
 message DTradeOrderTicketSearchBound {
@@ -339,7 +339,7 @@ message DTradeOrderTicketSearchBound {
   int64 trade_order_ticket_id = 1;
 
   // 价格
-  int32 price = 2;
+  int64 price = 2;
 
   // 推荐分（业务层可以自定义推荐分的含义，比如装备强度）
   sint64 recommend_score = 3;
@@ -367,8 +367,8 @@ message DTradeOrderTicketSearchRule {
   // Tag型标签(Exclude检查)(任意Type，任意Value匹配则排除：|| 关系)
   repeated DTradeOrderTicketSearchTag exclude_item_tag = 10;
 
-  sint32 min_price = 11;
-  sint32 max_price = 12;
+  sint64 min_price = 11;
+  sint64 max_price = 12;
 
   DTradeOrderTicketSearchBound bound_exclude = 13;
 
@@ -399,9 +399,9 @@ message DTradeMarketProductOnSaleDistribution {
   int64 highest_price = 2;
 
   // 委托单数
-  int32 order_ticket_count = 4;
+  int64 order_ticket_count = 4;
   // 委托单内道具总数
-  int32 item_count = 5;
+  int64 item_count = 5;
 
   // 是否隐藏了更多数据
   bool hide_more = 6;
@@ -453,11 +453,11 @@ message DTradeMarketProductPercentageInfo {
 
 message DTradeIndexSearchBound {
   // 翻页Bound: 推荐分（仅对推荐分参与排序的有效）
-  int64 recommend_score = 1;
+  sint64 recommend_score = 1;
   // 翻页Bound: 商品ID
   int32 trade_product_id = 2;
   // 翻页Bound: 销量（仅对热销有效）
-  int64 sale_num = 3;
+  int64 sale_count = 3;
   // 翻页Bound: 销量（仅对稀有度参与排序的规则有效）
   int32 rarity = 4;
   // 翻页Bound: 搜索商品顺序（仅对类型参与排序的规则有效）
@@ -483,8 +483,8 @@ message DTradeProductSearchRule {
   // Tag型标签(Exclude检查)(任意Type，任意Value匹配则排除：|| 关系)
   repeated DTradeOrderTicketSearchTag exclude_item_tag = 10;
 
-  sint32 min_price = 11;
-  sint32 max_price = 12;
+  sint64 min_price = 11;
+  sint64 max_price = 12;
 }
 
 message DTradeIndexSearchBasicRule {
@@ -495,12 +495,12 @@ message DTradeIndexSearchBasicRule {
 
 message DTradeIndexHotSaleSearchRule {
   DTradeIndexSearchBasicRule filter_rule = 1;
-  int32 count = 2;
+  int64 count = 2;
 }
 
 message DTradeIndexRarityCustomIndexTypeSearchRule {
   DTradeIndexSearchBasicRule filter_rule = 1;
-  int32 count = 2;
+  int64 count = 2;
 
   int32 min_rarity = 3;
   int32 max_rarity = 4;
@@ -511,7 +511,7 @@ message DTradeIndexRarityCustomIndexTypeSearchRule {
 
 message DTradeIndexCustomSearchRule {
   DTradeIndexSearchBasicRule filter_rule = 1;
-  int32 count = 2;
+  int64 count = 2;
 }
 
 message DTradeRecommendProductRule {
@@ -536,7 +536,7 @@ message DTradeIndexSearchStandardPriceRule {
   int32 order_type = 1;
   EnTradeStandardPriceSortBy sort_by = 2;
   DTradeProductSearchRule product_rule = 3;
-  int32 count = 4;
+  int64 count = 4;
 
   int64 callback_sequence = 11;
 }
@@ -642,7 +642,7 @@ message DUserTradeConfirmData {
 message DTradeReceiveConfirmationProduct {
   int64 confirmation_id = 1;
   int32 type_id = 2;
-  int32 count = 3;
+  int64 count = 3;
 
   atframework.shared.DItemPosition target_position = 4;
 }
@@ -680,7 +680,7 @@ message DUserTradeMarketLogic {
 
 message DTradeRecommendOrderTicketBasicRule {
   DTradeOrderTicketSearchRule filter_rule = 1;
-  int32 count = 2;
+  int64 count = 2;
 }
 
 message DTradeRecommendOrderTicketBasicResult {
@@ -690,7 +690,7 @@ message DTradeRecommendOrderTicketBasicResult {
 
 message DTradeRecommendOrderTicketRarityCustomIndexTypeRule {
   DTradeOrderTicketSearchRule filter_rule = 1;
-  int32 count = 2;
+  int64 count = 2;
 
   int32 min_rarity = 3;
   int32 max_rarity = 4;
@@ -780,8 +780,8 @@ enum EnTradeIndexUpdateReasonType {
 
 message DTradePurchaseOrder {
   DTradeMarketProductKey trade_product_key = 1;
-  int32 count = 2;
-  int32 price = 3;
+  int64 count = 2;
+  int64 price = 3;
 
   // 购买成功后自动穿戴或放到指定位置
   repeated atframework.shared.DItemBasicOffset auto_receive_position = 4;

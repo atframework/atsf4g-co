@@ -819,6 +819,53 @@ logic_server_common_module::get_discovery_service_version(int32_t service_type) 
   return discovery_index_->get_service_discovery_version(static_cast<uint64_t>(service_type));
 }
 
+SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+logic_server_common_module::get_discovery_random_node_by_type(logic_hpa_discovery_select_mode mode, int32_t type_id) {
+  auto index_set = get_discovery_index_by_type(type_id);
+  if (!index_set) {
+    return nullptr;
+  }
+
+  const auto *metadata = logic_hpa_discovery_select(type_id, mode);
+  return index_set->get_node_by_random(metadata);
+}
+
+SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+logic_server_common_module::get_discovery_random_node_by_type_zone(logic_hpa_discovery_select_mode mode,
+                                                                   int32_t type_id, uint64_t zone_id) {
+  auto index_set = get_discovery_index_by_type_zone(type_id, zone_id);
+  if (!index_set) {
+    return nullptr;
+  }
+
+  const auto *metadata = logic_hpa_discovery_select(type_id, mode);
+  return index_set->get_node_by_random(metadata);
+}
+
+SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+logic_server_common_module::get_discovery_round_robin_node_by_type(logic_hpa_discovery_select_mode mode,
+                                                                   int32_t type_id) {
+  auto index_set = get_discovery_index_by_type(type_id);
+  if (!index_set) {
+    return nullptr;
+  }
+
+  const auto *metadata = logic_hpa_discovery_select(type_id, mode);
+  return index_set->get_node_by_round_robin(metadata);
+}
+
+SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<atfw::atapp::etcd_discovery_node>
+logic_server_common_module::get_discovery_round_robin_node_by_type_zone(logic_hpa_discovery_select_mode mode,
+                                                                        int32_t type_id, uint64_t zone_id) {
+  auto index_set = get_discovery_index_by_type_zone(type_id, zone_id);
+  if (!index_set) {
+    return nullptr;
+  }
+
+  const auto *metadata = logic_hpa_discovery_select(type_id, mode);
+  return index_set->get_node_by_round_robin(metadata);
+}
+
 int logic_server_common_module::tick_update_remote_configures() {
   if (nullptr == get_app()) {
     return 0;
