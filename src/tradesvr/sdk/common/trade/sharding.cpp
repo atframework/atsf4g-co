@@ -44,9 +44,19 @@ inline static void copy_buffer_into(char* start, size_t offset, T value) {
   memcpy(start + offset, &value, sizeof(value));
 }
 
-static uint64_t make_area_hash_key(int32_t area_code, int32_t local_id) noexcept {
+inline static uint64_t make_area_hash_key(int32_t area_code, int32_t local_id) noexcept {
   // 保留负数 ID 在原有哈希输入中的符号扩展。
   return (static_cast<uint64_t>(area_code) << 32U) | static_cast<uint64_t>(local_id);
+}
+
+inline static int32_t normalize_group_count(int32_t group_count, int32_t default_group_count) noexcept {
+  if (group_count <= 0) {
+    group_count = default_group_count;
+  }
+  if (group_count > atfw::trade::EN_TRADE_CONST_SETTING_SHARDING_SIZE) {
+    group_count = static_cast<int32_t>(atfw::trade::EN_TRADE_CONST_SETTING_SHARDING_SIZE);
+  }
+  return group_count;
 }
 }  // namespace
 
@@ -349,10 +359,8 @@ TRADE_SDK_COMMON_API int32_t make_sharding_slots(atfw::trade::DTradeOrderTicketM
 }
 
 TRADE_SDK_COMMON_API int32_t get_index_main_slot(const atfw::trade::DTradeMarketProductKey& product_key) {
-  int32_t index_group_count = logic_config::me()->get_logic_cfg().trade().index_group_count();
-  if (index_group_count <= 0) {
-    index_group_count = 16;
-  }
+  int32_t index_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().index_group_count(), 16);
 
   int32_t index_group_main_slot_count = logic_config::me()->get_logic_cfg().trade().index_group_main_slot_count();
   if (index_group_main_slot_count <= 0) {
@@ -374,8 +382,10 @@ TRADE_SDK_COMMON_API int32_t get_index_main_slot(const atfw::trade::DTradeMarket
   uint64_t value = static_cast<uint64_t>(XXH64(hash_buffer, sizeof(hash_buffer), 800000027));
 
   const uint32_t slots_per_group = static_cast<uint32_t>(group_slot_count);
-  uint32_t group_index = static_cast<uint32_t>(((value >> 32U) & 0x7fffffffU) % index_group_count);
-  uint32_t main_slot_index = static_cast<uint32_t>((value & 0x7fffffffU) % index_group_main_slot_count);
+  uint32_t group_index =
+      static_cast<uint32_t>(((value >> 32U) & 0x7fffffffU) % static_cast<uint32_t>(index_group_count));
+  uint32_t main_slot_index =
+      static_cast<uint32_t>((value & 0x7fffffffU) % static_cast<uint32_t>(index_group_main_slot_count));
   if (main_slot_index >= slots_per_group) {
     main_slot_index %= slots_per_group;
   }
@@ -418,10 +428,8 @@ TRADE_SDK_COMMON_API bool is_main_index_slot(int32_t index_slot_id) {
     return false;
   }
 
-  int32_t index_group_count = logic_config::me()->get_logic_cfg().trade().index_group_count();
-  if (index_group_count <= 0) {
-    index_group_count = 16;
-  }
+  int32_t index_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().index_group_count(), 16);
 
   int32_t index_group_main_slot_count = logic_config::me()->get_logic_cfg().trade().index_group_main_slot_count();
   if (index_group_main_slot_count <= 0) {
@@ -444,12 +452,13 @@ TRADE_SDK_COMMON_API int32_t get_index_slot_group_id(int32_t index_slot_id) {
     return 0;
   }
 
-  int32_t index_group_count = logic_config::me()->get_logic_cfg().trade().index_group_count();
-  if (index_group_count <= 0) {
-    index_group_count = 16;
-  }
+  int32_t index_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().index_group_count(), 16);
 
   int32_t group_slot_count = atfw::trade::EN_TRADE_CONST_SETTING_SHARDING_SIZE / index_group_count;
+  if (group_slot_count <= 0) {
+    group_slot_count = 1;
+  }
   return static_cast<int32_t>(((index_slot_id - 1) / group_slot_count) + 1);
 }
 
@@ -462,21 +471,23 @@ TRADE_SDK_COMMON_API std::pair<int32_t, int32_t> get_index_slot_id_range_in_grou
     return {0, 0};
   }
 
-  int32_t index_group_count = logic_config::me()->get_logic_cfg().trade().index_group_count();
-  if (index_group_count <= 0) {
-    index_group_count = 16;
+  int32_t index_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().index_group_count(), 16);
+  if (index_group_id > index_group_count) {
+    return {0, 0};
   }
 
   int32_t group_slot_count = atfw::trade::EN_TRADE_CONST_SETTING_SHARDING_SIZE / index_group_count;
+  if (group_slot_count <= 0) {
+    group_slot_count = 1;
+  }
   int32_t start_slot_id = 1 + (group_slot_count * (index_group_id - 1));
   return {start_slot_id, start_slot_id + group_slot_count - 1};
 }
 
 TRADE_SDK_COMMON_API std::pair<int32_t, int32_t> get_index_group_id_range() {
-  int32_t index_group_count = logic_config::me()->get_logic_cfg().trade().index_group_count();
-  if (index_group_count <= 0) {
-    index_group_count = 16;
-  }
+  int32_t index_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().index_group_count(), 16);
 
   return {1, index_group_count};
 }
@@ -504,10 +515,8 @@ TRADE_SDK_COMMON_API std::pair<int32_t, int32_t> get_index_slot_id_range_of_grou
     return interval;
   }
 
-  int32_t index_group_count = logic_config::me()->get_logic_cfg().trade().index_group_count();
-  if (index_group_count <= 0) {
-    index_group_count = 16;
-  }
+  int32_t index_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().index_group_count(), 16);
 
   int32_t index_group_main_slot_count = logic_config::me()->get_logic_cfg().trade().index_group_main_slot_count();
   if (index_group_main_slot_count <= 0) {
@@ -560,10 +569,8 @@ TRADE_SDK_COMMON_API bool is_main_search_view_index_slot(int32_t search_slot_id)
     return false;
   }
 
-  int32_t search_group_count = logic_config::me()->get_logic_cfg().trade().search_group_count();
-  if (search_group_count <= 0) {
-    search_group_count = 32;
-  }
+  int32_t search_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().search_group_count(), 32);
 
   int32_t search_group_main_slot_count = logic_config::me()->get_logic_cfg().trade().search_group_main_slot_count();
   if (search_group_main_slot_count <= 0) {
@@ -588,10 +595,8 @@ TRADE_SDK_COMMON_API int32_t get_search_random_slot(const atfw::trade::DTradeOrd
     return 0;
   }
 
-  int32_t search_group_count = logic_config::me()->get_logic_cfg().trade().search_group_count();
-  if (search_group_count <= 0) {
-    search_group_count = 32;
-  }
+  int32_t search_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().search_group_count(), 32);
 
   int32_t search_group_main_slot_count = logic_config::me()->get_logic_cfg().trade().search_group_main_slot_count();
   if (search_group_main_slot_count <= 0) {
@@ -652,10 +657,8 @@ TRADE_SDK_COMMON_API int32_t get_search_random_slot(int32_t index_group_id, int3
     return 0;
   }
 
-  int32_t search_group_count = logic_config::me()->get_logic_cfg().trade().search_group_count();
-  if (search_group_count <= 0) {
-    search_group_count = 32;
-  }
+  int32_t search_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().search_group_count(), 32);
 
   int32_t search_group_main_slot_count = logic_config::me()->get_logic_cfg().trade().search_group_main_slot_count();
   if (search_group_main_slot_count <= 0) {
@@ -715,10 +718,7 @@ TRADE_SDK_COMMON_API bool is_main_recommend_order_ticket_slot(int32_t search_slo
   }
 
   int32_t order_ticket_recommend_group_count =
-      logic_config::me()->get_logic_cfg().trade().order_ticket_recommend_group_count();
-  if (order_ticket_recommend_group_count <= 0) {
-    order_ticket_recommend_group_count = 32;
-  }
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().order_ticket_recommend_group_count(), 32);
 
   int32_t order_ticket_recommend_group_main_slot_count =
       logic_config::me()->get_logic_cfg().trade().order_ticket_recommend_group_main_slot_count();
@@ -745,10 +745,7 @@ TRADE_SDK_COMMON_API int32_t get_recommend_order_ticket_random_slot(int32_t trad
   }
 
   int32_t order_ticket_recommend_group_count =
-      logic_config::me()->get_logic_cfg().trade().order_ticket_recommend_group_count();
-  if (order_ticket_recommend_group_count <= 0) {
-    order_ticket_recommend_group_count = 32;
-  }
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().order_ticket_recommend_group_count(), 32);
 
   int32_t order_ticket_recommend_group_main_slot_count =
       logic_config::me()->get_logic_cfg().trade().order_ticket_recommend_group_main_slot_count();
@@ -808,10 +805,8 @@ TRADE_SDK_COMMON_API bool is_main_search_order_cache_slot(int32_t search_slot_id
     return false;
   }
 
-  int32_t order_ticket_group_count = logic_config::me()->get_logic_cfg().trade().order_ticket_group_count();
-  if (order_ticket_group_count <= 0) {
-    order_ticket_group_count = 32;
-  }
+  int32_t order_ticket_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().order_ticket_group_count(), 32);
 
   int32_t order_ticket_group_main_slot_count =
       logic_config::me()->get_logic_cfg().trade().order_ticket_group_main_slot_count();
@@ -837,10 +832,8 @@ TRADE_SDK_COMMON_API int32_t get_search_random_slot(const atfw::trade::trade_ord
     return 0;
   }
 
-  int32_t order_ticket_group_count = logic_config::me()->get_logic_cfg().trade().order_ticket_group_count();
-  if (order_ticket_group_count <= 0) {
-    order_ticket_group_count = 32;
-  }
+  int32_t order_ticket_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().order_ticket_group_count(), 32);
 
   int32_t order_ticket_group_main_slot_count =
       logic_config::me()->get_logic_cfg().trade().order_ticket_group_main_slot_count();
@@ -900,10 +893,8 @@ TRADE_SDK_COMMON_API int32_t get_search_random_slot(const atfw::trade::DTradeMar
     return 0;
   }
 
-  int32_t market_product_group_count = logic_config::me()->get_logic_cfg().trade().market_product_group_count();
-  if (market_product_group_count <= 0) {
-    market_product_group_count = 32;
-  }
+  int32_t market_product_group_count =
+      normalize_group_count(logic_config::me()->get_logic_cfg().trade().market_product_group_count(), 32);
 
   int32_t group_slot_count = atfw::trade::EN_TRADE_CONST_SETTING_SHARDING_SIZE / market_product_group_count;
   if (group_slot_count <= 0) {

@@ -249,8 +249,9 @@ template <class CharT>
 struct formatter<atfw::trade_api::trade_order_ticket_price_index_key, CharT> : formatter<const char*, CharT> {
   template <class FormatContext>
   auto format(const atfw::trade_api::trade_order_ticket_price_index_key& key, FormatContext& ctx) const {
-    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "order_ticket_price_key ({},{},{})",
-                                       static_cast<int32_t>(key.price_type), key.price, key.order_ticket_id);
+    return ATFRAMEWORK_UTILS_STRING_FWAPI_FORMAT_TO(ctx.out(), "order_ticket_price_key ({},{},{})",
+                                                    static_cast<int32_t>(key.price_type), key.price,
+                                                    key.order_ticket_id);
   }
 };
 
@@ -258,8 +259,8 @@ template <class CharT>
 struct formatter<atfw::trade_api::trade_order_ticket_recommend_score_index_key, CharT> : formatter<const char*, CharT> {
   template <class FormatContext>
   auto format(const atfw::trade_api::trade_order_ticket_recommend_score_index_key& key, FormatContext& ctx) const {
-    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "order_ticket_recommend_score_index_key ({},{},{})",
-                                       key.recommend_score, key.price, key.order_ticket_id);
+    return ATFRAMEWORK_UTILS_STRING_FWAPI_FORMAT_TO(ctx.out(), "order_ticket_recommend_score_index_key ({},{},{})",
+                                                    key.recommend_score, key.price, key.order_ticket_id);
   }
 };
 
