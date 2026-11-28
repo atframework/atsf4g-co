@@ -1,0 +1,2028 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>libatbus 性能对比表</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --surface: light-dark(#fff, #1a252b);
+      --background: light-dark(#f4f7f8, #111a1f);
+      --ink: light-dark(#182c35, #e6eff2);
+      --muted: light-dark(#48616b, #acc3cd);
+      --line: light-dark(#d7e1e5, #40525a);
+      --accent: light-dark(#116783, #9bdbec);
+      --bar: light-dark(#cdebef, #254c59);
+      --warn-bg: light-dark(#fff8e6, #2d2616);
+      --warn-border: light-dark(#d9a326, #a37b1d);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--ink);
+      font: 1rem/1.55 system-ui, sans-serif;
+    }
+    main { max-width: 76rem; margin: 0 auto; padding: clamp(1rem, 4vw, 3rem); }
+    .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+    h1 { margin: .4rem 0; line-height: 1.2; }
+    h2 { margin-top: 1.6rem; font-size: 1.15rem; }
+    p { margin: .5rem 0 1rem; }
+    a { color: var(--accent); }
+    .scope-note {
+      margin: 1rem 0;
+      padding: .75rem 1rem;
+      border: 1px solid var(--warn-border);
+      border-left-width: 4px;
+      border-radius: .4rem;
+      background: var(--warn-bg);
+      font-size: .92rem;
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.25rem 0 1rem; }
+    .tabs button {
+      padding: .45rem .95rem;
+      border: 1px solid var(--line);
+      border-radius: .4rem;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .tabs button[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--bar);
+      font-weight: 600;
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; margin: 1rem 0 .75rem; }
+    label { display: grid; gap: .25rem; color: var(--muted); min-width: 0; }
+    label[hidden] { display: none; }
+    select, button { font: inherit; color: var(--ink); }
+    select {
+      max-width: 100%;
+      min-height: 2.5rem;
+      padding: .35rem .5rem;
+      border: 1px solid var(--line);
+      border-radius: .35rem;
+      background: var(--surface);
+    }
+    .note { color: var(--muted); font-size: .9rem; }
+    .scroll { overflow: auto; border: 1px solid var(--line); border-radius: .45rem; }
+    table {
+      width: 100%;
+      border-spacing: 0;
+      background: var(--surface);
+      font-size: .9rem;
+      font-variant-numeric: tabular-nums;
+    }
+    th, td { border-bottom: 1px solid var(--line); }
+    thead th { padding: .55rem .7rem; background: var(--background); white-space: nowrap; }
+    tbody tr:last-child > * { border-bottom: 0; }
+    tr > :first-child {
+      position: sticky;
+      left: 0;
+      width: 15.5rem;
+      padding: .45rem .7rem;
+      text-align: left;
+      border-right: 1px solid var(--line);
+    }
+    tbody th { background: var(--surface); overflow-wrap: anywhere; }
+    .measure { min-width: 8.2rem; padding: 0; text-align: right; }
+    .measure button {
+      display: block;
+      width: 100%;
+      padding: .5rem .65rem;
+      border: 0;
+      text-align: right;
+      white-space: nowrap;
+      background: linear-gradient(to right, var(--bar) var(--fill, 0%), transparent var(--fill, 0%));
+      cursor: pointer;
+    }
+    .measure button:hover { color: var(--accent); text-decoration: underline; }
+    .measure span { display: block; }
+    .measure .sub { color: var(--muted); font-size: .82rem; }
+    .measure .additional { margin-top: .2rem; font-weight: 600; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    dialog {
+      width: min(35rem, calc(100% - 2rem));
+      max-height: calc(100% - 2rem);
+      padding: 1.2rem;
+      border: 1px solid var(--line);
+      border-radius: .55rem;
+      background: var(--surface);
+      color: var(--ink);
+    }
+    dialog::backdrop { background: #0007; }
+    dl { display: grid; grid-template-columns: minmax(7rem, auto) 1fr; gap: .3rem 1rem; }
+    dt { color: var(--muted); }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    dialog button { padding: .3rem 1rem; }
+    @media (max-width: 38rem) {
+      tr > :first-child { min-width: 8.8rem; width: 8.8rem; max-width: 8.8rem; }
+      .filters { display: grid; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <a id="back-link" href="/development/libatbus-benchmark">返回文档：libatbus 性能测试</a>
+    <a id="lang-link" href="?lang=en">English</a>
+  </div>
+  <h1 id="page-heading">libatbus 完整性能对比表</h1>
+  <p id="page-subtitle">libatbus <code>ffdd409</code> · 770 组单对基线（TCP / 共享内存 / 分配器对照）+ 480 组多节点汇聚（2 / 10 / 100 / 1000 节点）· 单位按 1024 进制换算（1 KB = 1024 B，1 MB = 1024 KB）</p>
+  <p class="scope-note" id="scope-note">适用范围：本表仅反映底层通信库（libatbus）的性能上限。atsf4g-co 实际业务 RPC 包含可观测性采集、更复杂的 RPC 协议头与协程分发、对象路由与代理转发，性能会低于基础通信库；实际业务承载能力需通过模拟回放真实业务 RPC 进行压测验证。</p>
+  <noscript><p>交互筛选需要 JavaScript。原始数据可从下方 CSV 链接下载查看。 / JavaScript is required for interactive filtering; raw CSV datasets are available below.</p></noscript>
+
+  <div class="tabs" role="tablist" id="dataset-tabs" aria-label="测试数据集">
+    <button type="button" role="tab" id="tab-single" aria-selected="true">单对连接（770 组）</button>
+    <button type="button" role="tab" id="tab-multi" aria-selected="false">多节点汇聚（480 组）</button>
+  </div>
+
+  <div id="panel-single">
+    <div class="filters">
+      <label><span id="lbl-view">对比方式</span>
+        <select id="view">
+          <option value="config" id="opt-view-config">固定环境，比较算法配置</option>
+          <option value="environment" id="opt-view-env">固定配置，比较环境与通道</option>
+        </select>
+      </label>
+      <label id="environment-filter"><span id="lbl-env">环境与通道</span><select id="environment"></select></label>
+      <label id="config-filter" hidden><span id="lbl-cfg">请求配置</span><select id="config"></select></label>
+      <label><span id="lbl-metric">附加指标</span>
+        <select id="metric">
+          <option value="" id="opt-m-none">QPS、吞吐量与压缩率</option>
+          <option value="plainRatio" id="opt-m-plain">相对无加密无压缩（%）</option>
+          <option value="cryptoRatio" id="opt-m-crypto">相对同压缩无加密（%）</option>
+          <option value="recv_cpu_percent" id="opt-m-rcpu">接收端 CPU（%）</option>
+          <option value="send_cpu_percent" id="opt-m-scpu">发送端 CPU（%）</option>
+          <option value="recvRss" id="opt-m-rrss">接收端峰值 RSS（MB）</option>
+          <option value="sendRss" id="opt-m-srss">发送端峰值 RSS（MB）</option>
+        </select>
+      </label>
+    </div>
+    <p id="metric-note" class="note" aria-live="polite"></p>
+    <div class="scroll" tabindex="0" role="region" id="single-region" aria-label="单对连接性能对比" aria-describedby="metric-note flags">
+      <table id="results">
+        <thead><tr id="head"></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note" id="flags"></p>
+  </div>
+
+  <div id="panel-multi" hidden>
+    <div class="filters">
+      <label><span id="lbl-mview">对比方式</span>
+        <select id="m-view">
+          <option value="by-nodes" id="opt-mv-nodes">固定节点数，比较算法配置</option>
+          <option value="by-config" id="opt-mv-cfg">固定配置，比较 2 / 10 / 100 / 1000 节点</option>
+        </select>
+      </label>
+      <label id="m-nodes-filter"><span id="lbl-mnodes">互联节点数</span>
+        <select id="m-nodes">
+          <option value="1000" id="opt-n1000">1000 节点（999 发 1 收）</option>
+          <option value="100" id="opt-n100">100 节点（99 发 1 收）</option>
+          <option value="10" id="opt-n10">10 节点（9 发 1 收）</option>
+          <option value="2" id="opt-n2">2 节点（1 发 1 收）</option>
+        </select>
+      </label>
+      <label id="m-config-filter" hidden><span id="lbl-mcfg">配置组合</span><select id="m-config"></select></label>
+      <label><span id="lbl-mmetric">附加指标</span>
+        <select id="m-metric">
+          <option value="" id="opt-mm-none">聚合 QPS 与吞吐量</option>
+          <option value="vs2" id="opt-mm-vs2">相对 2 节点倍率（%）</option>
+          <option value="recvRss" id="opt-mm-rrss">接收端峰值 RSS（MB）</option>
+          <option value="maxInterval" id="opt-mm-maxint">最长单次采样间隔（s）</option>
+        </select>
+      </label>
+    </div>
+    <p id="m-note" class="note" aria-live="polite"></p>
+    <div class="scroll" tabindex="0" role="region" id="multi-region" aria-label="多节点汇聚性能对比" aria-describedby="m-note">
+      <table id="m-results">
+        <thead><tr id="m-head"></tr></thead>
+        <tbody id="m-rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 id="csv-heading">原始 CSV 下载</h2>
+  <ul>
+    <li>Linux · <a href="linux-tcp.csv" download id="csv-ltcp">TCP（mimalloc）</a> · <a href="linux-shm.csv" download id="csv-lshm">共享内存</a> · <a href="multinode.csv" download id="csv-multi">多节点汇聚（480 组）</a></li>
+    <li>WSL2 · <a href="wsl-mimalloc-tcp.csv" download id="csv-wmtcp">TCP（mimalloc）</a> · <a href="wsl-tcp.csv" download id="csv-wtcp">TCP（glibc）</a> · <a href="wsl-shm.csv" download id="csv-wshm">共享内存</a></li>
+    <li>Windows · <a href="windows-tcp.csv" download id="csv-ntcp">TCP（MSVC）</a> · <a href="windows-shm.csv" download id="csv-nshm">共享内存</a></li>
+  </ul>
+</main>
+
+<dialog id="sample" aria-labelledby="sample-title">
+  <h2 id="sample-title"></h2>
+  <p id="sample-note" class="note" hidden></p>
+  <dl id="sample-metrics"></dl>
+  <form method="dialog"><button autofocus id="btn-close">关闭</button></form>
+</dialog>
+
+<script type="text/csv" id="single-data">
+environment,crypto,compression,level,payload_size,qps,throughput_Bps,recv_cpu_percent,send_cpu_percent,recv_peak_rss_kb,send_peak_rss_kb,compression_ratio,seq_gaps,errors,negotiated_crypto,negotiated_compression,steady_sec
+linux,aes-128-gcm,lz4,default,200,1640106,328021200,100.0,100.0,15372,32056,0.7656,20,19,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,lz4,fast,200,1617324,323464800,100.0,100.0,15368,31960,0.7656,20,19,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,none,default,200,1622400,324480000,100.0,100.0,15544,31736,,20,19,aes-128-gcm,none,14.0
+linux,aes-128-gcm,zstd,default,200,1616734,323346700,100.0,100.0,15424,31788,0.6615,20,19,aes-128-gcm,zstd,14.0
+linux,aes-128-gcm,zstd,high-ratio,200,1644995,328998900,100.0,100.0,15428,31916,0.6562,21,20,aes-128-gcm,zstd,14.0
+linux,aes-192-gcm,none,default,200,1636692,327338400,100.0,100.0,15444,31816,,20,19,aes-192-gcm,none,14.0
+linux,aes-256-gcm,lz4,default,200,1641408,328281600,100.0,100.0,15368,31612,0.7656,20,19,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,lz4,fast,200,1630848,326169600,100.0,100.0,15304,32052,0.7656,21,20,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,none,default,200,1630848,326169600,100.0,100.0,15304,31816,,21,20,aes-256-gcm,none,14.0
+linux,aes-256-gcm,zstd,default,200,1626966,325393200,100.0,100.0,15332,31836,0.6615,22,21,aes-256-gcm,zstd,14.0
+linux,aes-256-gcm,zstd,high-ratio,200,1642260,328452000,100.0,100.0,15244,31928,0.6562,20,19,aes-256-gcm,zstd,14.0
+linux,chacha20-poly1305-ietf,lz4,default,200,916152,183230400,100.0,100.0,14960,31400,0.7656,22,21,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,lz4,fast,200,901899,180379700,100.0,100.0,15112,31812,0.7656,22,21,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,none,default,200,913885,182777000,100.0,100.0,15432,31760,,22,21,chacha20-poly1305-ietf,none,14.0
+linux,chacha20-poly1305-ietf,zstd,default,200,919992,183998400,100.0,100.0,15464,31760,0.6615,22,21,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20-poly1305-ietf,zstd,high-ratio,200,907008,181401600,100.0,100.0,15316,31816,0.6562,22,21,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20,none,default,200,357562,71512400,100.0,100.0,15384,29744,,20,19,chacha20,none,14.0
+linux,none,lz4,default,200,3629902,725980400,100.0,100.0,15360,27488,0.7656,15,14,none,lz4,14.0
+linux,none,lz4,fast,200,3652360,730472000,100.0,100.0,15296,27512,0.7656,15,14,none,lz4,14.0
+linux,none,none,default,200,3656722,731344400,100.0,100.0,14924,25576,,0,0,none,none,14.0
+linux,none,zstd,default,200,3578026,715605200,100.0,100.0,15512,27556,0.6615,15,14,none,zstd,14.0
+linux,none,zstd,high-ratio,200,3650393,730078600,100.0,100.0,15412,27564,0.6562,13,12,none,zstd,14.0
+linux,aes-128-gcm,lz4,default,1024,602312,616767488,100.0,100.0,15328,29896,0.5551,31,30,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,lz4,fast,1024,601840,616284160,100.0,100.0,15232,30060,0.5551,31,30,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,none,default,1024,971824,995147776,100.0,100.0,15508,30028,,34,33,aes-128-gcm,none,14.0
+linux,aes-128-gcm,zstd,default,1024,174577,178766848,100.0,100.0,15664,32056,0.3524,30,29,aes-128-gcm,zstd,14.0
+linux,aes-128-gcm,zstd,high-ratio,1024,174214,178395136,100.0,100.0,15632,31992,0.3327,30,29,aes-128-gcm,zstd,14.0
+linux,aes-192-gcm,none,default,1024,965760,988938240,99.9,100.0,15244,29996,,34,33,aes-192-gcm,none,14.0
+linux,aes-256-gcm,lz4,default,1024,599859,614255616,100.0,100.0,15420,29884,0.5551,34,33,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,lz4,fast,1024,592072,606281728,100.0,100.0,15312,29968,0.5551,31,30,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,none,default,1024,952594,975456256,100.0,100.0,15392,30084,,38,37,aes-256-gcm,none,14.0
+linux,aes-256-gcm,zstd,default,1024,174191,178371584,100.0,100.0,15608,32064,0.3524,30,29,aes-256-gcm,zstd,14.0
+linux,aes-256-gcm,zstd,high-ratio,1024,174246,178427652,100.0,100.0,15368,32052,0.3327,30,29,aes-256-gcm,zstd,14.0
+linux,chacha20-poly1305-ietf,lz4,default,1024,472354,483689984,100.0,100.0,15376,29948,0.5551,34,33,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,lz4,fast,1024,475640,487055360,100.0,100.0,15196,29744,0.5551,34,33,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,none,default,1024,650664,666279936,100.0,100.0,15368,29620,,34,33,chacha20-poly1305-ietf,none,14.0
+linux,chacha20-poly1305-ietf,zstd,default,1024,158460,162262620,100.0,100.0,15364,32060,0.3524,30,29,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20-poly1305-ietf,zstd,high-ratio,1024,158328,162127872,100.0,100.0,15384,31808,0.3327,30,29,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20,none,default,1024,96174,98481998,100.0,100.0,15368,31504,,40,39,chacha20,none,14.0
+linux,none,lz4,default,1024,802647,821910528,100.0,100.0,15268,29740,0.5551,34,33,none,lz4,14.0
+linux,none,lz4,fast,1024,800888,820108800,100.0,100.0,15200,29808,0.5551,38,37,none,lz4,14.0
+linux,none,none,default,1024,1651608,1691246592,100.0,100.0,15408,29732,,45,44,none,none,14.0
+linux,none,zstd,default,1024,182950,187340749,100.0,100.0,15360,31972,0.3524,30,29,none,zstd,14.0
+linux,none,zstd,high-ratio,1024,183582,187988396,100.0,100.0,15368,31812,0.3327,30,29,none,zstd,14.0
+linux,aes-128-gcm,lz4,default,8192,120266,985219072,100.0,100.0,15312,31956,0.4586,39,38,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,lz4,fast,8192,120762,989282304,100.0,100.0,15636,31568,0.4586,37,36,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,none,default,8192,193984,1589116928,100.0,100.0,15384,32140,,37,36,aes-128-gcm,none,14.0
+linux,aes-128-gcm,zstd,default,8192,48001,393220096,100.0,100.0,15516,32124,0.2418,38,37,aes-128-gcm,zstd,14.0
+linux,aes-128-gcm,zstd,high-ratio,8192,48047,393596928,100.0,100.0,15452,32076,0.2191,38,37,aes-128-gcm,zstd,14.0
+linux,aes-192-gcm,none,default,8192,191521,1568935936,100.0,100.0,15136,32124,,35,34,aes-192-gcm,none,14.0
+linux,aes-256-gcm,lz4,default,8192,118965,974561280,100.0,100.0,15292,31832,0.4586,44,43,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,lz4,fast,8192,120330,985743360,100.0,100.0,15444,32016,0.4586,38,37,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,none,default,8192,191904,1572077568,100.0,100.0,15644,40208,,37,36,aes-256-gcm,none,14.0
+linux,aes-256-gcm,zstd,default,8192,48009,393289728,100.0,100.0,15508,32196,0.2418,28,27,aes-256-gcm,zstd,14.0
+linux,aes-256-gcm,zstd,high-ratio,8192,48218,394997760,100.0,100.0,15676,32044,0.2191,38,37,aes-256-gcm,zstd,14.0
+linux,chacha20-poly1305-ietf,lz4,default,8192,109544,897380352,100.0,100.0,15396,31784,0.4586,46,45,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,lz4,fast,8192,108870,891863040,100.0,100.0,15120,31880,0.4586,41,40,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,none,default,8192,174880,1432616960,100.0,100.0,15192,40012,,38,37,chacha20-poly1305-ietf,none,14.0
+linux,chacha20-poly1305-ietf,zstd,default,8192,45870,375767040,100.0,100.0,15404,31832,0.2418,38,37,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20-poly1305-ietf,zstd,high-ratio,8192,46502,380944384,100.0,100.0,15152,31792,0.2191,29,28,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20,none,default,8192,12624,103415808,100.0,100.0,15232,33916,,42,41,chacha20,none,14.0
+linux,none,lz4,default,8192,128738,1054617600,100.0,100.0,15148,31636,0.4586,50,49,none,lz4,14.0
+linux,none,lz4,fast,8192,128648,1053884416,100.0,100.0,15388,31824,0.4586,45,44,none,lz4,14.0
+linux,none,none,default,8192,301960,2473656320,100.0,100.0,15340,31776,,35,34,none,none,14.0
+linux,none,zstd,default,8192,48976,401211392,100.0,100.0,15464,31864,0.2418,39,38,none,zstd,14.0
+linux,none,zstd,high-ratio,8192,48451,396910592,100.0,100.0,15216,31520,0.2191,38,37,none,zstd,14.0
+linux,aes-128-gcm,lz4,default,65536,19496,1277689856,100.0,100.0,15368,29892,0.4365,11,10,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,lz4,fast,65536,19409,1271955456,100.0,100.0,15324,29936,0.4365,10,9,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,none,default,65536,37576,2462580736,100.0,100.0,15368,40124,,6,5,aes-128-gcm,none,14.0
+linux,aes-128-gcm,zstd,default,65536,8400,550502400,100.0,100.0,15660,29836,0.2383,25,24,aes-128-gcm,zstd,14.0
+linux,aes-128-gcm,zstd,high-ratio,65536,8299,543863688,100.0,100.0,15652,27904,0.2099,13,12,aes-128-gcm,zstd,14.0
+linux,aes-192-gcm,none,default,65536,37489,2456879104,100.0,100.0,15472,40168,,19,18,aes-192-gcm,none,14.0
+linux,aes-256-gcm,lz4,default,65536,19435,1273692160,100.0,100.0,15404,29828,0.4365,10,9,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,lz4,fast,65536,19465,1275625472,100.0,100.0,15340,29892,0.4365,11,10,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,none,default,65536,37068,2429288448,100.0,100.0,15624,40236,,12,11,aes-256-gcm,none,14.0
+linux,aes-256-gcm,zstd,default,65536,8400,550502400,100.0,100.0,15636,29876,0.2383,14,13,aes-256-gcm,zstd,14.0
+linux,aes-256-gcm,zstd,high-ratio,65536,8400,550502400,100.0,100.0,15700,29932,0.2099,25,24,aes-256-gcm,zstd,14.0
+linux,chacha20-poly1305-ietf,lz4,default,65536,17824,1168080896,100.0,100.0,15400,31800,0.4365,14,13,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,lz4,fast,65536,17877,1171587072,100.0,100.0,15324,29660,0.4365,12,11,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,none,default,65536,27028,1771274240,100.0,100.0,15388,37936,,7,6,chacha20-poly1305-ietf,none,14.0
+linux,chacha20-poly1305-ietf,zstd,default,65536,8291,543358976,100.0,100.0,15476,29996,0.2383,24,23,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20-poly1305-ietf,zstd,high-ratio,65536,8251,540721103,100.0,100.0,15336,29744,0.2099,24,23,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20,none,default,65536,1632,106937485,100.0,100.0,15328,35192,,8,7,chacha20,none,14.0
+linux,none,lz4,default,65536,19757,1294794752,100.0,100.0,15392,29764,0.4365,12,11,none,lz4,14.0
+linux,none,lz4,fast,65536,19843,1300430848,100.0,100.0,15372,29672,0.4365,10,9,none,lz4,14.0
+linux,none,none,default,65536,42680,2797043712,100.0,100.0,15380,33804,,7,6,none,none,14.0
+linux,none,zstd,default,65536,8432,552599552,100.0,100.0,15348,29772,0.2383,22,21,none,zstd,14.0
+linux,none,zstd,high-ratio,65536,8647,566712903,100.0,100.0,15384,29660,0.2099,14,13,none,zstd,14.0
+linux,aes-128-gcm,lz4,default,307200,2924,898252800,100.0,100.0,15416,40236,0.3832,4,3,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,lz4,fast,307200,2992,919142400,99.9,99.9,15396,35944,0.3832,5,4,aes-128-gcm,lz4,14.0
+linux,aes-128-gcm,none,default,307200,8626,2650059303,100.0,100.0,15656,29624,,3,2,aes-128-gcm,none,14.0
+linux,aes-128-gcm,zstd,default,307200,1532,470486486,100.0,100.0,15664,36352,0.2345,7,6,aes-128-gcm,zstd,14.0
+linux,aes-128-gcm,zstd,high-ratio,307200,1524,468158084,100.0,100.0,15436,36268,0.2059,7,6,aes-128-gcm,zstd,14.0
+linux,aes-192-gcm,none,default,307200,8600,2641766400,100.0,100.0,15636,29852,,2,1,aes-192-gcm,none,14.0
+linux,aes-256-gcm,lz4,default,307200,2992,919142400,100.0,100.0,15184,40268,0.3832,5,4,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,lz4,fast,307200,2940,903168000,100.0,100.0,15768,36168,0.3832,5,4,aes-256-gcm,lz4,14.0
+linux,aes-256-gcm,none,default,307200,8170,2509824000,100.0,100.0,15448,25852,,2,1,aes-256-gcm,none,14.0
+linux,aes-256-gcm,zstd,default,307200,1516,465566366,100.0,100.0,15492,34084,0.2345,7,6,aes-256-gcm,zstd,14.0
+linux,aes-256-gcm,zstd,high-ratio,307200,1509,463715485,100.0,100.0,15624,36152,0.2059,7,6,aes-256-gcm,zstd,14.0
+linux,chacha20-poly1305-ietf,lz4,default,307200,2918,896409600,100.0,100.0,15092,31652,0.3832,5,4,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,lz4,fast,307200,2908,893337600,100.0,100.0,15448,31756,0.3832,5,4,chacha20-poly1305-ietf,lz4,14.0
+linux,chacha20-poly1305-ietf,none,default,307200,5978,1836441600,100.0,100.0,15316,29784,,2,1,chacha20-poly1305-ietf,none,14.0
+linux,chacha20-poly1305-ietf,zstd,default,307200,1508,463257600,100.0,100.0,15368,34140,0.2345,7,6,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20-poly1305-ietf,zstd,high-ratio,307200,1495,459264000,100.0,100.0,15348,36092,0.2059,6,5,chacha20-poly1305-ietf,zstd,14.0
+linux,chacha20,none,default,307200,337,103480998,100.0,100.0,15428,29684,,3,2,chacha20,none,14.4
+linux,none,lz4,default,307200,3060,940032000,100.0,100.0,15340,27452,0.3832,0,0,none,lz4,14.0
+linux,none,lz4,fast,307200,3060,940032000,100.0,100.0,15104,35780,0.3832,6,5,none,lz4,14.0
+linux,none,none,default,307200,9645,2963052947,100.0,100.0,14924,27524,,2,1,none,none,14.0
+linux,none,zstd,default,307200,1527,469094400,100.0,100.0,15512,33896,0.2345,7,6,none,zstd,14.0
+linux,none,zstd,high-ratio,307200,1524,468158084,100.0,100.0,15312,33852,0.2059,7,6,none,zstd,14.0
+linux_shm,aes-128-gcm,lz4,default,200,2715648,543129600,100.0,100.0,277240,277240,0.7656,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,fast,200,2488064,497612800,100.0,100.0,277336,277296,0.7656,0,0,none,none,15.0
+linux_shm,aes-128-gcm,none,default,200,2551808,510361600,100.0,100.0,277252,277364,,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,default,200,2536192,507238400,100.0,100.0,277284,277504,0.6615,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,high-ratio,200,2540288,508057600,100.0,100.0,277024,277548,0.6562,0,0,none,none,14.0
+linux_shm,aes-192-gcm,none,default,200,2744448,548889600,100.0,100.0,277236,277384,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,default,200,2513920,502784000,100.0,100.0,277372,277356,0.7656,0,0,none,none,15.0
+linux_shm,aes-256-gcm,lz4,fast,200,2586368,517273600,100.0,100.0,277312,277272,0.7656,0,0,none,none,14.0
+linux_shm,aes-256-gcm,none,default,200,2485120,497024000,100.0,100.0,277064,277468,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,default,200,2515456,503091200,100.0,100.0,277364,277352,0.6615,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,high-ratio,200,2606848,521369600,100.0,100.0,277356,277500,0.6562,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,default,200,2527872,505574400,100.0,100.0,277268,277292,0.7656,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,fast,200,2751872,550374400,100.0,100.0,277328,277252,0.7656,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,none,default,200,2701184,540236800,100.0,100.0,277080,276996,,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,default,200,2680320,536064000,100.0,100.0,277260,277276,0.6615,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,high-ratio,200,2520576,504115200,100.0,100.0,277268,277336,0.6562,0,0,none,none,14.0
+linux_shm,chacha20,none,default,200,2520704,504140800,99.9,99.9,277168,277260,,0,0,none,none,14.0
+linux_shm,none,lz4,default,200,2582656,516531200,100.0,100.0,277308,277044,0.7656,0,0,none,none,14.0
+linux_shm,none,lz4,fast,200,2501376,500275200,100.0,100.0,277296,277104,0.7656,0,0,none,none,14.0
+linux_shm,none,none,default,200,2677248,535449600,100.0,100.0,277288,277116,,0,0,none,none,14.0
+linux_shm,none,zstd,default,200,2515328,503065600,100.0,100.0,277232,277356,0.6615,0,0,none,none,14.0
+linux_shm,none,zstd,high-ratio,200,2462720,492544000,100.0,100.0,277004,277376,0.6562,0,0,none,none,15.0
+linux_shm,aes-128-gcm,lz4,default,1024,1566464,1604059136,100.0,100.0,277432,277468,0.5551,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,fast,1024,1569152,1606811648,100.0,100.0,277140,277304,0.5551,0,0,none,none,14.0
+linux_shm,aes-128-gcm,none,default,1024,1564288,1601830912,100.0,100.0,277248,277336,,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,default,1024,1617792,1656619008,100.0,100.0,277248,277116,0.3524,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,high-ratio,1024,1572608,1610350592,100.0,100.0,277312,277392,0.3327,0,0,none,none,14.0
+linux_shm,aes-192-gcm,none,default,1024,1569920,1607598080,100.0,100.0,277184,277228,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,default,1024,1557632,1595015168,100.0,100.0,277224,277552,0.5551,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,fast,1024,1570688,1608384512,100.0,100.0,277316,277468,0.5551,0,0,none,none,14.0
+linux_shm,aes-256-gcm,none,default,1024,1565056,1602617344,100.0,100.0,277384,277292,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,default,1024,1516288,1552678912,100.0,100.0,277244,277540,0.3524,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,high-ratio,1024,1550720,1587937280,100.0,100.0,277268,277128,0.3327,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,default,1024,1572864,1610612736,100.0,100.0,277264,277380,0.5551,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,fast,1024,1570432,1608122368,99.9,100.0,277064,277240,0.5551,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,none,default,1024,1571200,1608908800,100.0,100.0,277232,277404,,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,default,1024,1599872,1638268928,100.0,100.0,277248,277292,0.3524,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,high-ratio,1024,1564800,1602355200,100.0,100.0,277264,277260,0.3327,0,0,none,none,14.0
+linux_shm,chacha20,none,default,1024,1563776,1601306624,100.0,100.0,277308,277320,,0,0,none,none,14.0
+linux_shm,none,lz4,default,1024,1564544,1602093056,100.0,100.0,277116,277324,0.5551,0,0,none,none,14.0
+linux_shm,none,lz4,fast,1024,1569920,1607598080,100.0,100.0,277280,277224,0.5551,0,0,none,none,14.0
+linux_shm,none,none,default,1024,1500544,1536557056,100.0,100.0,277068,277300,,0,0,none,none,14.0
+linux_shm,none,zstd,default,1024,1593216,1631453184,100.0,100.0,276996,277208,0.3524,0,0,none,none,14.0
+linux_shm,none,zstd,high-ratio,1024,1553920,1591214080,100.0,100.0,277272,277180,0.3327,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,default,8192,362240,2967470080,100.0,100.0,277300,277212,0.4586,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,fast,8192,362240,2967470080,100.0,100.0,277384,277332,0.4586,0,0,none,none,14.0
+linux_shm,aes-128-gcm,none,default,8192,362112,2966421504,100.0,100.0,277300,277056,,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,default,8192,362112,2966421504,99.9,99.9,277272,277068,0.2418,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,high-ratio,8192,379431,3108294656,100.0,100.0,277292,277352,0.2191,0,0,none,none,14.0
+linux_shm,aes-192-gcm,none,default,8192,380805,3119554560,100.0,100.0,277244,277024,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,default,8192,382003,3129368576,100.0,100.0,276988,277276,0.4586,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,fast,8192,381713,3126988800,100.0,100.0,277232,277136,0.4586,0,0,none,none,14.0
+linux_shm,aes-256-gcm,none,default,8192,381639,3126386688,100.0,100.0,277224,277368,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,default,8192,363008,2973761536,100.0,100.0,277316,277484,0.2418,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,high-ratio,8192,360704,2954887168,100.0,100.0,277236,277064,0.2191,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,default,8192,364032,2982150144,100.0,100.0,277320,277364,0.4586,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,fast,8192,381697,3126861824,100.0,100.0,277256,277248,0.4586,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,none,default,8192,381153,3122405376,100.0,100.0,277264,277016,,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,default,8192,362880,2972712960,100.0,100.0,277448,277428,0.2418,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,high-ratio,8192,362496,2969567232,99.9,100.0,277268,277472,0.2191,0,0,none,none,14.0
+linux_shm,chacha20,none,default,8192,358912,2940207104,100.0,100.0,277504,277476,,0,0,none,none,14.0
+linux_shm,none,lz4,default,8192,361344,2960130048,99.9,100.0,277268,277244,0.4586,0,0,none,none,14.0
+linux_shm,none,lz4,fast,8192,363264,2975858688,100.0,100.0,277340,276888,0.4586,0,0,none,none,14.0
+linux_shm,none,none,default,8192,381793,3127648256,100.0,100.0,277232,277204,,0,0,none,none,14.0
+linux_shm,none,zstd,default,8192,382536,3133734912,100.0,100.0,277320,277352,0.2418,0,0,none,none,14.0
+linux_shm,none,zstd,high-ratio,8192,362496,2969567232,100.0,100.0,277024,277360,0.2191,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,default,65536,50371,3301113856,100.0,100.0,277048,277356,0.4365,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,fast,65536,50383,3301875213,100.0,100.0,277244,277372,0.4365,0,0,none,none,14.0
+linux_shm,aes-128-gcm,none,default,65536,50110,3283976192,100.0,99.9,277064,277104,,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,default,65536,50549,3312779264,100.0,100.0,277444,277040,0.2383,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,high-ratio,65536,50532,3311665152,100.0,100.0,277344,277384,0.2099,0,0,none,none,14.0
+linux_shm,aes-192-gcm,none,default,65536,50622,3317595185,100.0,100.0,277220,277268,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,default,65536,50566,3313893376,100.0,100.0,277348,277336,0.4365,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,fast,65536,50566,3313893376,100.0,100.0,277332,277524,0.4365,0,0,none,none,14.0
+linux_shm,aes-256-gcm,none,default,65536,50623,3317628928,100.0,100.0,277224,277292,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,default,65536,50482,3308388352,100.0,100.0,277116,277216,0.2383,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,high-ratio,65536,50581,3314876416,100.0,100.0,277372,277544,0.2099,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,default,65536,50398,3302883328,99.9,99.9,277396,277056,0.4365,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,fast,65536,50603,3316318208,100.0,100.0,277232,277228,0.4365,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,none,default,65536,48701,3191681530,100.0,100.0,277392,277284,,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,default,65536,50486,3308650496,100.0,100.0,277296,277232,0.2383,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,high-ratio,65536,50555,3313139712,100.0,100.0,277140,277340,0.2099,0,0,none,none,14.0
+linux_shm,chacha20,none,default,65536,50594,3315754965,100.0,100.0,277144,277184,,0,0,none,none,14.0
+linux_shm,none,lz4,default,65536,50502,3309699072,100.0,100.0,277208,277256,0.4365,0,0,none,none,14.0
+linux_shm,none,lz4,fast,65536,50649,3319332864,100.0,100.0,277264,277232,0.4365,0,0,none,none,14.0
+linux_shm,none,none,default,65536,50559,3313434624,100.0,100.0,277208,277296,,0,0,none,none,14.0
+linux_shm,none,zstd,default,65536,50560,3313500160,100.0,100.0,277292,277308,0.2383,0,0,none,none,14.0
+linux_shm,none,zstd,high-ratio,65536,50495,3309240320,100.0,100.0,277260,277272,0.2099,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,default,307200,10344,3177676800,100.0,100.0,277236,277272,0.3832,0,0,none,none,14.0
+linux_shm,aes-128-gcm,lz4,fast,307200,10370,3185664000,100.0,100.0,277252,277352,0.3832,0,0,none,none,14.0
+linux_shm,aes-128-gcm,none,default,307200,10347,3178598400,100.0,100.0,277152,277472,,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,default,307200,10360,3182592000,100.0,100.0,277316,277548,0.2345,0,0,none,none,14.0
+linux_shm,aes-128-gcm,zstd,high-ratio,307200,10351,3179827200,100.0,99.9,277156,277344,0.2059,0,0,none,none,14.0
+linux_shm,aes-192-gcm,none,default,307200,10351,3179827200,99.9,100.0,277248,277460,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,default,307200,10377,3187660800,100.0,100.0,277124,277304,0.3832,0,0,none,none,14.0
+linux_shm,aes-256-gcm,lz4,fast,307200,10357,3181516800,100.0,100.0,277344,277276,0.3832,0,0,none,none,14.0
+linux_shm,aes-256-gcm,none,default,307200,10354,3180748800,99.9,100.0,277276,277752,,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,default,307200,10333,3174297600,100.0,100.0,277148,277388,0.2345,0,0,none,none,14.0
+linux_shm,aes-256-gcm,zstd,high-ratio,307200,10342,3177062400,100.0,100.0,277208,277500,0.2059,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,default,307200,10379,3188428800,99.9,100.0,277356,277300,0.3832,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,lz4,fast,307200,10383,3189657600,100.0,100.0,277240,277244,0.3832,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,none,default,307200,10336,3175065600,100.0,100.0,277300,276980,,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,default,307200,10334,3174604800,99.9,100.0,277420,277268,0.2345,0,0,none,none,14.0
+linux_shm,chacha20-poly1305-ietf,zstd,high-ratio,307200,10371,3185971200,100.0,100.0,277352,277324,0.2059,0,0,none,none,14.0
+linux_shm,chacha20,none,default,307200,10324,3171532800,100.0,100.0,277300,277388,,0,0,none,none,14.0
+linux_shm,none,lz4,default,307200,10356,3181209600,100.0,100.0,277256,277060,0.3832,0,0,none,none,14.0
+linux_shm,none,lz4,fast,307200,10342,3177062400,99.9,100.0,277360,277364,0.3832,0,0,none,none,14.0
+linux_shm,none,none,default,307200,10359,3182131200,100.0,100.0,277212,277560,,0,0,none,none,14.0
+linux_shm,none,zstd,default,307200,10391,3192115200,100.0,100.0,277184,277316,0.2345,0,0,none,none,14.0
+linux_shm,none,zstd,high-ratio,307200,10363,3183513600,100.0,100.0,277096,277084,0.2059,0,0,none,none,14.0
+wsl_mimalloc,aes-128-gcm,lz4,default,200,1571845,314369000,100.0,100.2,20304,36636,0.7656,21,20,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,lz4,fast,200,1555755,311151000,100.0,100.4,20304,36636,0.7656,21,20,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,none,default,200,1652967,330593300,99.9,100.3,20308,36704,,19,18,aes-128-gcm,none,14.0
+wsl_mimalloc,aes-128-gcm,zstd,default,200,1475496,295099100,100.0,100.4,20316,36768,0.6615,21,20,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-128-gcm,zstd,high-ratio,200,1476475,295294900,100.0,100.3,20248,36828,0.6562,20,19,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-192-gcm,none,default,200,1718749,343749800,100.0,100.3,20312,36828,,22,21,aes-192-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,lz4,default,200,1712485,342496900,100.0,100.2,20508,34588,0.7656,17,16,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,lz4,fast,200,1562495,312499000,100.0,100.4,20508,36696,0.7656,21,20,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,none,default,200,1691926,338385100,100.0,100.3,20284,36764,,36,35,aes-256-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,zstd,default,200,1620658,324131600,100.0,100.3,20240,36824,0.6615,25,24,aes-256-gcm,zstd,14.0
+wsl_mimalloc,aes-256-gcm,zstd,high-ratio,200,1579648,315929600,100.0,100.3,20308,34652,0.6562,19,18,aes-256-gcm,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,default,200,972398,194479500,100.0,100.6,20180,36532,0.7656,23,22,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,fast,200,962900,192580000,100.0,100.5,20120,36508,0.7656,25,24,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,none,default,200,1008984,201796700,100.0,100.5,20124,36572,,24,23,chacha20-poly1305-ietf,none,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,default,200,967586,193517100,100.0,100.7,20192,36500,0.6615,22,21,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,high-ratio,200,973208,194641600,100.0,100.8,20128,34408,0.6562,19,18,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20,none,default,200,425240,85048000,100.0,101.7,20172,34528,,37,36,chacha20,none,14.0
+wsl_mimalloc,none,lz4,default,200,3272461,654492200,100.0,100.1,19864,32028,0.7656,13,12,none,lz4,14.0
+wsl_mimalloc,none,lz4,fast,200,3313988,662797500,100.0,100.1,19856,30232,0.7656,0,0,none,lz4,14.0
+wsl_mimalloc,none,none,default,200,3200345,640069000,100.0,100.2,19992,32088,,13,12,none,none,14.0
+wsl_mimalloc,none,zstd,default,200,3192697,638539300,100.0,100.1,19868,30036,0.6615,0,0,none,zstd,14.0
+wsl_mimalloc,none,zstd,high-ratio,200,3477121,695424100,100.0,100.1,19872,29984,0.6562,0,0,none,zstd,14.0
+wsl_mimalloc,aes-128-gcm,lz4,default,1024,645139,660622336,100.0,100.4,20304,34780,0.5551,59,58,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,lz4,fast,1024,645062,660543488,100.0,100.5,20628,34692,0.5551,36,35,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,none,default,1024,900065,921666560,100.0,100.1,20316,34848,,29,28,aes-128-gcm,none,14.0
+wsl_mimalloc,aes-128-gcm,zstd,default,1024,165411,169380352,100.0,102.6,20628,37152,0.3524,54,53,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-128-gcm,zstd,high-ratio,1024,162814,166721024,100.0,101.3,20704,37148,0.3327,52,51,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-192-gcm,none,default,1024,868533,889377792,100.0,100.1,20312,34844,,28,27,aes-192-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,lz4,default,1024,633119,648313344,100.0,100.4,20384,34652,0.5551,33,32,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,lz4,fast,1024,604598,619108352,100.0,100.4,20316,32736,0.5551,32,31,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,none,default,1024,875889,896910336,100.0,100.1,20356,34712,,30,29,aes-256-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,zstd,default,1024,167104,171113984,100.0,101.9,20828,37152,0.3524,33,32,aes-256-gcm,zstd,14.0
+wsl_mimalloc,aes-256-gcm,zstd,high-ratio,1024,160938,164800512,100.0,101.6,20628,37156,0.3327,54,53,aes-256-gcm,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,default,1024,520100,532582400,100.0,100.5,20252,34456,0.5551,36,35,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,fast,1024,508811,521022464,100.0,100.4,20140,32480,0.5551,30,29,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,none,default,1024,636906,652191744,100.0,100.1,20192,34460,,43,42,chacha20-poly1305-ietf,none,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,default,1024,151166,154793472,100.0,101.9,20440,36892,0.3524,54,53,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,high-ratio,1024,147937,151487488,100.0,101.6,20636,36956,0.3327,54,53,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20,none,default,1024,107791,110377472,100.0,101.1,20060,36572,,49,48,chacha20,none,14.0
+wsl_mimalloc,none,lz4,default,1024,816989,836596224,100.0,100.2,19932,34144,0.5551,37,36,none,lz4,14.0
+wsl_mimalloc,none,lz4,fast,1024,805202,824526336,100.0,100.3,19924,30172,0.5551,0,0,none,lz4,14.0
+wsl_mimalloc,none,none,default,1024,1321738,1353459200,100.0,100.0,19872,29956,,0,0,none,none,14.0
+wsl_mimalloc,none,zstd,default,1024,167926,171955712,100.0,102.1,20252,30500,0.3524,0,0,none,zstd,14.0
+wsl_mimalloc,none,zstd,high-ratio,1024,174802,178997248,100.0,102.2,20384,30496,0.3327,0,0,none,zstd,14.0
+wsl_mimalloc,aes-128-gcm,lz4,default,8192,135787,1112367104,100.0,100.3,20492,36832,0.4586,35,34,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,lz4,fast,8192,136200,1115746304,100.0,100.2,20504,36828,0.4586,34,33,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,none,default,8192,127284,1042710528,100.0,100.0,20564,30684,,2,1,aes-128-gcm,none,14.0
+wsl_mimalloc,aes-128-gcm,zstd,default,8192,50544,414052352,100.0,101.2,20692,37208,0.2418,45,44,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-128-gcm,zstd,high-ratio,8192,49424,404877312,100.0,101.4,20760,37408,0.2191,56,55,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-192-gcm,none,default,8192,126934,1039839232,100.0,100.0,20380,36756,,28,27,aes-192-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,lz4,default,8192,133805,1096126464,100.0,100.3,20572,36768,0.4586,40,39,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,lz4,fast,8192,134825,1104482304,100.0,100.3,20572,36648,0.4586,44,43,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,none,default,8192,198810,1628647424,100.0,100.0,20128,30556,,2,1,aes-256-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,zstd,default,8192,51509,421957632,100.0,101.6,20692,37068,0.2418,51,50,aes-256-gcm,zstd,14.0
+wsl_mimalloc,aes-256-gcm,zstd,high-ratio,8192,50916,417103872,100.0,102.2,20780,37220,0.2191,45,44,aes-256-gcm,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,default,8192,124720,1021706240,100.0,100.1,20180,36632,0.4586,42,41,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,fast,8192,124508,1019965440,100.0,100.4,20192,36576,0.4586,37,36,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,none,default,8192,163365,1338286080,100.0,100.0,20048,36556,,33,32,chacha20-poly1305-ietf,none,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,default,8192,50077,410230784,100.0,101.3,20496,36884,0.2418,51,50,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,high-ratio,8192,49641,406654976,100.0,102.4,20556,36964,0.2191,44,43,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20,none,default,8192,14957,122527744,100.0,100.7,20312,38676,,50,49,chacha20,none,14.0
+wsl_mimalloc,none,lz4,default,8192,145120,1188823040,100.0,100.2,19872,30112,0.4586,0,0,none,lz4,14.0
+wsl_mimalloc,none,lz4,fast,8192,146446,1199685632,100.0,100.3,19696,36384,0.4586,38,37,none,lz4,14.0
+wsl_mimalloc,none,none,default,8192,138823,1137233920,100.0,100.0,19804,29980,,0,0,none,none,14.0
+wsl_mimalloc,none,zstd,default,8192,52565,430612480,100.0,101.9,20188,36644,0.2418,54,53,none,zstd,14.0
+wsl_mimalloc,none,zstd,high-ratio,8192,52376,429060096,100.0,101.1,20124,30492,0.2191,0,0,none,zstd,14.0
+wsl_mimalloc,aes-128-gcm,lz4,default,65536,21663,1419673600,100.0,100.3,20636,34784,0.4365,22,21,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,lz4,fast,65536,21345,1398865920,100.0,100.3,20512,34716,0.4365,14,13,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,none,default,65536,37201,2437971968,100.0,100.0,20444,44956,,11,10,aes-128-gcm,none,14.0
+wsl_mimalloc,aes-128-gcm,zstd,default,65536,8822,578125824,100.0,101.0,20700,35172,0.2383,19,18,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-128-gcm,zstd,high-ratio,65536,8855,580321280,100.0,101.3,20824,35108,0.2099,26,25,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-192-gcm,none,default,65536,32536,2132279296,100.0,100.0,20628,34776,,4,3,aes-192-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,lz4,default,65536,21050,1379500032,100.0,100.2,20512,34652,0.4365,11,10,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,lz4,fast,65536,21548,1412169728,100.0,100.2,20572,34660,0.4365,16,15,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,none,default,65536,36399,2385444864,100.0,100.0,20448,34656,,4,3,aes-256-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,zstd,default,65536,8875,581632000,100.0,101.7,20952,35104,0.2383,30,29,aes-256-gcm,zstd,14.0
+wsl_mimalloc,aes-256-gcm,zstd,high-ratio,65536,8885,582254592,100.0,100.9,20832,35100,0.2099,33,32,aes-256-gcm,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,default,65536,19737,1293484032,100.0,100.4,20308,34460,0.4365,13,12,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,fast,65536,19864,1301774336,100.0,100.2,20312,34392,0.4365,17,16,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,none,default,65536,28489,1867055104,100.0,100.0,20256,44692,,11,10,chacha20-poly1305-ietf,none,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,default,65536,8763,574259200,100.0,101.5,20432,34912,0.2383,30,29,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,high-ratio,65536,8786,575799296,100.0,101.6,20512,34908,0.2099,22,21,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20,none,default,65536,1890,123830272,100.1,101.5,20184,40288,,56,55,chacha20,none,14.0
+wsl_mimalloc,none,lz4,default,65536,20641,1352695808,100.0,100.5,19928,34140,0.4365,12,11,none,lz4,14.0
+wsl_mimalloc,none,lz4,fast,65536,22107,1448804352,100.0,100.2,19796,34144,0.4365,24,23,none,lz4,14.0
+wsl_mimalloc,none,none,default,65536,38141,2499575808,100.0,100.0,19792,32156,,0,0,none,none,14.0
+wsl_mimalloc,none,zstd,default,65536,8883,582123520,100.0,101.0,20148,34524,0.2383,23,22,none,zstd,14.0
+wsl_mimalloc,none,zstd,high-ratio,65536,8802,576815104,100.0,101.1,20244,34596,0.2099,20,19,none,zstd,14.0
+wsl_mimalloc,aes-128-gcm,lz4,default,307200,3118,957849600,100.0,100.7,20424,36580,0.3832,4,3,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,lz4,fast,307200,2682,823910400,100.0,101.1,20508,44964,0.3832,4,3,aes-128-gcm,lz4,14.0
+wsl_mimalloc,aes-128-gcm,none,default,307200,8295,2548070400,100.0,100.1,20488,30624,,2,1,aes-128-gcm,none,14.0
+wsl_mimalloc,aes-128-gcm,zstd,default,307200,1672,513638400,100.1,103.4,20764,41248,0.2345,7,6,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-128-gcm,zstd,high-ratio,307200,1498,460032000,100.0,102.1,20624,41188,0.2059,8,7,aes-128-gcm,zstd,14.0
+wsl_mimalloc,aes-192-gcm,none,default,307200,7830,2405376000,100.0,100.0,20560,30816,,0,0,aes-192-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,lz4,default,307200,3085,947558400,100.0,100.5,20444,36772,0.3832,3,2,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,lz4,fast,307200,3060,940032000,100.0,100.7,20444,36768,0.3832,4,3,aes-256-gcm,lz4,14.0
+wsl_mimalloc,aes-256-gcm,none,default,307200,7803,2397081600,100.0,100.0,20304,30620,,0,0,aes-256-gcm,none,14.0
+wsl_mimalloc,aes-256-gcm,zstd,default,307200,1610,494438400,100.0,102.2,20688,41308,0.2345,7,6,aes-256-gcm,zstd,14.0
+wsl_mimalloc,aes-256-gcm,zstd,high-ratio,307200,1558,478617600,100.0,102.6,20768,41124,0.2059,8,7,aes-256-gcm,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,default,307200,2770,850790400,100.0,101.2,20224,36568,0.3832,4,3,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,lz4,fast,307200,2914,895027200,100.0,100.9,20440,34588,0.3832,4,3,chacha20-poly1305-ietf,lz4,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,none,default,307200,6035,1853798400,100.0,100.1,20164,32436,,2,1,chacha20-poly1305-ietf,none,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,default,307200,1566,481075200,100.1,101.9,20636,40924,0.2345,7,6,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20-poly1305-ietf,zstd,high-ratio,307200,1580,485376000,100.0,101.8,20568,40992,0.2059,7,6,chacha20-poly1305-ietf,zstd,14.0
+wsl_mimalloc,chacha20,none,default,307200,378,116121600,101.0,101.6,20372,34516,,3,2,chacha20,none,14.0
+wsl_mimalloc,none,lz4,default,307200,3128,960921600,100.0,100.9,19936,36256,0.3832,4,3,none,lz4,14.0
+wsl_mimalloc,none,lz4,fast,307200,3170,973670400,100.0,100.5,19928,32216,0.3832,0,0,none,lz4,14.0
+wsl_mimalloc,none,none,default,307200,9143,2808729600,100.0,100.0,19700,27992,,0,0,none,none,14.0
+wsl_mimalloc,none,zstd,default,307200,1698,521472000,100.0,101.8,20252,38688,0.2345,8,7,none,zstd,14.0
+wsl_mimalloc,none,zstd,high-ratio,307200,1705,523776000,100.1,102.4,20252,44700,0.2059,7,6,none,zstd,14.0
+wsl,aes-128-gcm,lz4,default,200,1599256,319851100,100.0,100.2,12772,25948,0.7656,21,20,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,lz4,fast,200,1590191,318038100,100.0,100.3,12852,25940,0.7656,25,24,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,none,default,200,1531406,306281100,100.0,100.3,12372,26128,,22,21,aes-128-gcm,none,14.0
+wsl,aes-128-gcm,zstd,default,200,1645134,329026800,100.0,100.3,12652,25848,0.6615,25,24,aes-128-gcm,zstd,14.0
+wsl,aes-128-gcm,zstd,high-ratio,200,1644378,328875500,100.0,100.3,12628,25708,0.6562,34,33,aes-128-gcm,zstd,14.0
+wsl,aes-192-gcm,none,default,200,1662490,332497900,100.0,100.2,12816,25876,,21,20,aes-192-gcm,none,14.0
+wsl,aes-256-gcm,lz4,default,200,1662234,332446700,100.0,100.4,12808,25684,0.7656,31,30,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,lz4,fast,200,1674006,334801200,100.0,100.1,12768,26068,0.7656,23,22,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,none,default,200,1642734,328546800,100.0,100.2,12648,26324,,22,21,aes-256-gcm,none,14.0
+wsl,aes-256-gcm,zstd,default,200,1677020,335404000,100.0,100.2,12796,25812,0.6615,20,19,aes-256-gcm,zstd,14.0
+wsl,aes-256-gcm,zstd,high-ratio,200,1666532,333306300,100.0,100.3,12912,26004,0.6562,22,21,aes-256-gcm,zstd,14.0
+wsl,chacha20-poly1305-ietf,lz4,default,200,977482,195496400,100.0,100.4,12556,26260,0.7656,34,33,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,lz4,fast,200,1003584,200716800,100.0,100.4,12656,25876,0.7656,22,21,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,none,default,200,988751,197750200,100.0,100.5,12588,26196,,26,25,chacha20-poly1305-ietf,none,14.0
+wsl,chacha20-poly1305-ietf,zstd,default,200,977277,195455300,100.0,100.7,12592,25876,0.6615,22,21,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20-poly1305-ietf,zstd,high-ratio,200,1006595,201318900,100.0,100.4,12516,25812,0.6562,21,20,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20,none,default,200,421620,84323900,100.0,101.8,12404,26512,,27,26,chacha20,none,14.0
+wsl,none,lz4,default,200,3391689,678337800,100.0,100.0,12292,21780,0.7656,0,0,none,lz4,14.0
+wsl,none,lz4,fast,200,3333490,666698000,100.0,100.1,12196,21716,0.7656,0,0,none,lz4,14.0
+wsl,none,none,default,200,3509059,701811700,100.0,100.1,12044,21844,,2,1,none,none,14.0
+wsl,none,zstd,default,200,3514109,702821800,100.0,100.1,12048,24336,0.6615,19,18,none,zstd,14.0
+wsl,none,zstd,high-ratio,200,3373883,674776600,100.0,100.1,12352,23632,0.6562,12,11,none,zstd,14.0
+wsl,aes-128-gcm,lz4,default,1024,603263,617741312,100.0,100.3,12880,25236,0.5551,24,23,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,lz4,fast,1024,590610,604784640,100.0,100.3,12976,26196,0.5551,30,29,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,none,default,1024,898859,920431616,100.0,100.1,12868,24468,,23,22,aes-128-gcm,none,14.0
+wsl,aes-128-gcm,zstd,default,1024,160115,163957760,100.0,101.6,13008,27412,0.3524,54,53,aes-128-gcm,zstd,14.0
+wsl,aes-128-gcm,zstd,high-ratio,1024,159168,162988032,100.0,101.7,13140,27180,0.3327,30,29,aes-128-gcm,zstd,14.0
+wsl,aes-192-gcm,none,default,1024,882915,904104448,100.0,100.2,12772,25492,,29,28,aes-192-gcm,none,14.0
+wsl,aes-256-gcm,lz4,default,1024,601630,616068608,100.0,100.4,12752,26380,0.5551,52,51,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,lz4,fast,1024,585261,599306752,100.0,100.2,12828,26128,0.5551,35,34,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,none,default,1024,872688,893632000,100.0,100.0,12776,25556,,30,29,aes-256-gcm,none,14.0
+wsl,aes-256-gcm,zstd,default,1024,160587,164441088,100.0,101.2,13168,27476,0.3524,54,53,aes-256-gcm,zstd,14.0
+wsl,aes-256-gcm,zstd,high-ratio,1024,150365,153973760,100.0,103.7,13340,27280,0.3327,53,52,aes-256-gcm,zstd,14.0
+wsl,chacha20-poly1305-ietf,lz4,default,1024,482377,493954048,100.0,100.4,12648,26196,0.5551,58,57,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,lz4,fast,1024,477721,489186304,100.0,100.3,12436,26196,0.5551,56,55,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,none,default,1024,643724,659173376,100.0,100.2,12676,25556,,30,29,chacha20-poly1305-ietf,none,14.0
+wsl,chacha20-poly1305-ietf,zstd,default,1024,150809,154428416,100.0,101.9,12756,26964,0.3524,54,53,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20-poly1305-ietf,zstd,high-ratio,1024,147971,151522304,100.0,101.9,12628,27220,0.3327,34,33,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20,none,default,1024,109618,112248320,100.0,100.6,12568,26704,,49,48,chacha20,none,14.0
+wsl,none,lz4,default,1024,782557,801337856,100.0,100.4,12180,25044,0.5551,29,28,none,lz4,14.0
+wsl,none,lz4,fast,1024,744348,762212352,100.0,100.3,12420,25364,0.5551,32,31,none,lz4,14.0
+wsl,none,none,default,1024,1396329,1429840896,100.0,100.0,12260,20884,,0,0,none,none,14.0
+wsl,none,zstd,default,1024,168289,172327424,100.0,101.8,12500,21716,0.3524,0,0,none,zstd,14.0
+wsl,none,zstd,high-ratio,1024,165948,169930240,100.0,101.4,12412,21972,0.3327,0,0,none,zstd,14.0
+wsl,aes-128-gcm,lz4,default,8192,119917,982360064,100.0,100.4,12900,25812,0.4586,38,37,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,lz4,fast,8192,117885,965709824,100.0,100.4,12756,26068,0.4586,42,41,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,none,default,8192,118928,974258176,100.0,100.0,12852,20868,,2,1,aes-128-gcm,none,14.0
+wsl,aes-128-gcm,zstd,default,8192,46416,380239872,100.0,101.6,13132,27284,0.2418,55,54,aes-128-gcm,zstd,14.0
+wsl,aes-128-gcm,zstd,high-ratio,8192,49593,406261760,100.0,101.6,13276,27412,0.2191,45,44,aes-128-gcm,zstd,14.0
+wsl,aes-192-gcm,none,default,8192,86494,708558848,100.0,100.0,12784,21016,,0,0,aes-192-gcm,none,14.0
+wsl,aes-256-gcm,lz4,default,8192,124022,1015988224,100.0,100.4,12812,26000,0.4586,46,45,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,lz4,fast,8192,125530,1028337664,100.0,100.3,12860,25940,0.4586,38,37,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,none,default,8192,103859,850812928,100.0,100.0,12720,20940,,2,1,aes-256-gcm,none,14.0
+wsl,aes-256-gcm,zstd,default,8192,48917,400728064,100.0,101.9,13064,27152,0.2418,41,40,aes-256-gcm,zstd,14.0
+wsl,aes-256-gcm,zstd,high-ratio,8192,49208,403111936,100.0,101.2,13348,27348,0.2191,45,44,aes-256-gcm,zstd,14.0
+wsl,chacha20-poly1305-ietf,lz4,default,8192,111046,909684736,100.0,100.4,12576,25748,0.4586,44,43,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,lz4,fast,8192,113102,926527488,100.0,100.4,12648,25876,0.4586,39,38,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,none,default,8192,133177,1090985984,99.9,100.1,12620,21096,,2,1,chacha20-poly1305-ietf,none,14.0
+wsl,chacha20-poly1305-ietf,zstd,default,8192,47463,388812800,100.0,101.9,12860,27092,0.2418,48,47,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20-poly1305-ietf,zstd,high-ratio,8192,47715,390877184,100.0,101.3,13188,27140,0.2191,50,49,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20,none,default,8192,13006,106541056,100.0,101.7,12580,25976,,44,43,chacha20,none,14.0
+wsl,none,lz4,default,8192,135004,1105948672,100.0,100.3,12336,20752,0.4586,0,0,none,lz4,14.0
+wsl,none,lz4,fast,8192,133936,1097203712,100.0,100.2,12340,25492,0.4586,45,44,none,lz4,14.0
+wsl,none,none,default,8192,138681,1136070656,100.0,100.0,12296,20428,,0,0,none,none,14.0
+wsl,none,zstd,default,8192,50362,412561408,100.0,101.7,12484,21196,0.2418,0,0,none,zstd,14.0
+wsl,none,zstd,high-ratio,8192,50533,413962240,100.0,101.9,12372,26576,0.2191,48,47,none,zstd,14.0
+wsl,aes-128-gcm,lz4,default,65536,18199,1192689664,99.9,100.3,13300,26448,0.4365,19,18,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,lz4,fast,65536,18689,1224769536,100.0,100.2,13108,26452,0.4365,23,22,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,none,default,65536,16544,1084227584,99.9,100.0,13172,25712,,7,6,aes-128-gcm,none,14.0
+wsl,aes-128-gcm,zstd,default,65536,8613,564461568,99.9,102.2,13344,25732,0.2383,19,18,aes-128-gcm,zstd,14.0
+wsl,aes-128-gcm,zstd,high-ratio,65536,8675,568524800,100.0,101.3,13320,27464,0.2099,37,36,aes-128-gcm,zstd,14.0
+wsl,aes-192-gcm,none,default,65536,19841,1300299776,99.9,100.0,13260,26152,,10,9,aes-192-gcm,none,14.0
+wsl,aes-256-gcm,lz4,default,65536,19442,1274118144,100.0,100.2,12972,26516,0.4365,18,17,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,lz4,fast,65536,18919,1239842816,100.0,100.2,13208,26388,0.4365,20,19,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,none,default,65536,16936,1109917696,100.0,99.9,13360,26004,,44,43,aes-256-gcm,none,14.0
+wsl,aes-256-gcm,zstd,default,65536,8522,558465024,100.0,101.5,13316,27456,0.2383,33,32,aes-256-gcm,zstd,14.0
+wsl,aes-256-gcm,zstd,high-ratio,65536,8589,562888704,99.6,101.3,13392,27528,0.2099,24,23,aes-256-gcm,zstd,14.0
+wsl,chacha20-poly1305-ietf,lz4,default,65536,17953,1176535040,100.0,100.2,13080,26196,0.4365,21,20,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,lz4,fast,65536,16481,1080066048,100.0,100.3,12956,25812,0.4365,14,13,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,none,default,65536,14176,929038336,99.9,100.0,12912,25940,,41,40,chacha20-poly1305-ietf,none,14.0
+wsl,chacha20-poly1305-ietf,zstd,default,65536,8408,551026688,100.0,101.1,13200,27280,0.2383,40,39,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20-poly1305-ietf,zstd,high-ratio,65536,8361,547913728,99.9,101.6,13148,27268,0.2099,40,39,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20,none,default,65536,1800,117964800,100.5,100.8,12892,26452,,57,56,chacha20,none,14.0
+wsl,none,lz4,default,65536,20247,1326907392,99.8,100.2,12332,23440,0.4365,10,9,none,lz4,14.0
+wsl,none,lz4,fast,65536,20243,1326645248,99.9,100.2,12476,25620,0.4365,19,18,none,lz4,14.0
+wsl,none,none,default,65536,19122,1253179392,100.0,100.1,12116,20580,,0,0,none,none,14.0
+wsl,none,zstd,default,65536,8282,542736384,100.0,101.5,12800,26756,0.2383,25,24,none,zstd,14.0
+wsl,none,zstd,high-ratio,65536,8450,553746432,100.0,102.0,12436,21624,0.2099,0,0,none,zstd,14.0
+wsl,aes-128-gcm,lz4,default,307200,2869,881203200,100.1,100.5,13756,25416,0.3832,4,3,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,lz4,fast,307200,2776,852787200,100.1,100.7,13864,26964,0.3832,4,3,aes-128-gcm,lz4,14.0
+wsl,aes-128-gcm,none,default,307200,3560,1093632000,100.1,99.9,13868,24280,,0,0,aes-128-gcm,none,14.0
+wsl,aes-128-gcm,zstd,default,307200,1377,422860800,100.1,102.6,14036,28928,0.2345,7,6,aes-128-gcm,zstd,14.0
+wsl,aes-128-gcm,zstd,high-ratio,307200,1531,470323200,100.1,102.5,13756,29056,0.2059,9,8,aes-128-gcm,zstd,14.0
+wsl,aes-192-gcm,none,default,307200,3712,1140326400,100.1,100.0,14052,26276,,2,1,aes-192-gcm,none,14.0
+wsl,aes-256-gcm,lz4,default,307200,2697,828364800,100.0,100.5,13692,27088,0.3832,4,3,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,lz4,fast,307200,2741,842035200,100.0,100.5,13832,27076,0.3832,4,3,aes-256-gcm,lz4,14.0
+wsl,aes-256-gcm,none,default,307200,3408,1046937600,100.0,100.0,14152,26596,,2,1,aes-256-gcm,none,14.0
+wsl,aes-256-gcm,zstd,default,307200,1543,473856000,100.2,101.7,13996,28924,0.2345,7,6,aes-256-gcm,zstd,14.0
+wsl,aes-256-gcm,zstd,high-ratio,307200,1571,482611200,100.2,102.5,13592,28732,0.2059,36,35,aes-256-gcm,zstd,14.0
+wsl,chacha20-poly1305-ietf,lz4,default,307200,2540,780134400,100.2,100.9,13476,26780,0.3832,4,3,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,lz4,fast,307200,2739,841267200,100.0,100.5,13744,26936,0.3832,4,3,chacha20-poly1305-ietf,lz4,14.0
+wsl,chacha20-poly1305-ietf,none,default,307200,2824,867532800,100.1,100.0,13720,25352,,2,1,chacha20-poly1305-ietf,none,14.0
+wsl,chacha20-poly1305-ietf,zstd,default,307200,1483,455577600,100.2,102.5,13568,28668,0.2345,7,6,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20-poly1305-ietf,zstd,high-ratio,307200,1529,469555200,100.1,102.1,13816,28604,0.2059,7,6,chacha20-poly1305-ietf,zstd,14.0
+wsl,chacha20,none,default,307200,375,115046400,102.0,101.6,13900,27392,,3,2,chacha20,none,14.0
+wsl,none,lz4,default,307200,2503,768921600,100.1,100.8,13104,27256,0.3832,26,25,none,lz4,14.0
+wsl,none,lz4,fast,307200,1716,527155200,100.1,102.2,12888,26676,0.3832,4,3,none,lz4,14.0
+wsl,none,none,default,307200,3802,1167820800,99.9,99.9,12912,22116,,0,0,none,none,14.0
+wsl,none,zstd,default,307200,1570,482304000,100.1,102.7,13200,23308,0.2345,0,0,none,zstd,14.0
+wsl,none,zstd,high-ratio,307200,1612,495206400,100.1,101.6,13340,23288,0.2059,0,0,none,zstd,14.0
+wsl_shm,aes-128-gcm,lz4,default,200,2187776,437555200,100.0,100.0,274792,274860,0.7656,0,0,none,none,15.0
+wsl_shm,aes-128-gcm,lz4,fast,200,2165504,433100800,100.0,100.0,274764,274772,0.7656,0,0,none,none,15.0
+wsl_shm,aes-128-gcm,none,default,200,2218496,443699200,100.0,100.0,274696,274724,,0,0,none,none,15.0
+wsl_shm,aes-128-gcm,zstd,default,200,2264064,452812800,100.0,100.0,274636,274656,0.6615,0,0,none,none,15.0
+wsl_shm,aes-128-gcm,zstd,high-ratio,200,2151680,430336000,100.0,100.0,274812,274540,0.6562,0,0,none,none,15.0
+wsl_shm,aes-192-gcm,none,default,200,2205440,441088000,100.0,100.0,274452,274664,,0,0,none,none,15.0
+wsl_shm,aes-256-gcm,lz4,default,200,2154240,430848000,100.0,100.0,274528,274676,0.7656,0,0,none,none,15.0
+wsl_shm,aes-256-gcm,lz4,fast,200,2178816,435763200,100.0,100.0,274592,274580,0.7656,0,0,none,none,15.0
+wsl_shm,aes-256-gcm,none,default,200,2202368,440473600,100.0,100.0,274544,274716,,0,0,none,none,15.0
+wsl_shm,aes-256-gcm,zstd,default,200,2174464,434892800,100.0,100.0,274628,274776,0.6615,0,0,none,none,15.0
+wsl_shm,aes-256-gcm,zstd,high-ratio,200,2177280,435456000,100.0,100.0,274660,274660,0.6562,0,0,none,none,15.0
+wsl_shm,chacha20-poly1305-ietf,lz4,default,200,2191872,438374400,100.0,100.0,274520,274528,0.7656,0,0,none,none,15.0
+wsl_shm,chacha20-poly1305-ietf,lz4,fast,200,2169600,433920000,100.0,100.0,274604,274568,0.7656,0,0,none,none,15.0
+wsl_shm,chacha20-poly1305-ietf,none,default,200,2221056,444211200,100.0,100.0,274604,274740,,0,0,none,none,15.0
+wsl_shm,chacha20-poly1305-ietf,zstd,default,200,2208000,441600000,100.0,100.0,274644,274700,0.6615,0,0,none,none,15.0
+wsl_shm,chacha20-poly1305-ietf,zstd,high-ratio,200,2256384,451276800,100.0,100.0,274668,274524,0.6562,0,0,none,none,15.0
+wsl_shm,chacha20,none,default,200,2252544,450508800,100.0,100.0,274620,274520,,0,0,none,none,15.0
+wsl_shm,none,lz4,default,200,2220032,444006400,100.0,100.0,274348,274340,0.7656,0,0,none,none,15.0
+wsl_shm,none,lz4,fast,200,2182144,436428800,100.0,100.0,274412,274412,0.7656,0,0,none,none,15.0
+wsl_shm,none,none,default,200,2221568,444313600,100.0,100.0,274100,274400,,0,0,none,none,15.0
+wsl_shm,none,zstd,default,200,2214912,442982400,100.0,100.0,274400,274272,0.6615,0,0,none,none,15.0
+wsl_shm,none,zstd,high-ratio,200,2197504,439500800,100.0,99.9,274064,274276,0.6562,0,0,none,none,15.0
+wsl_shm,aes-128-gcm,lz4,default,1024,1505152,1541275648,100.0,100.0,274736,274656,0.5551,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,fast,1024,1522304,1558839296,100.0,100.0,274724,274776,0.5551,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,none,default,1024,1481600,1517158400,100.0,100.0,274388,274804,,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,default,1024,1513856,1550188544,100.0,100.0,274672,274712,0.3524,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,high-ratio,1024,1509120,1545338880,100.0,100.0,274564,274540,0.3327,0,0,none,none,14.0
+wsl_shm,aes-192-gcm,none,default,1024,1513728,1550057472,100.0,100.0,274664,274848,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,default,1024,1496320,1532231680,100.0,100.0,274660,274804,0.5551,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,fast,1024,1519744,1556217856,100.0,100.0,274672,274672,0.5551,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,none,default,1024,1484288,1519910912,100.0,100.0,274640,274704,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,default,1024,1489536,1525284864,100.0,100.0,274636,274512,0.3524,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,high-ratio,1024,1505920,1542062080,100.0,100.0,274644,274828,0.3327,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,default,1024,1515136,1551499264,100.0,100.0,274476,274692,0.5551,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,fast,1024,1495168,1531052032,100.0,100.0,274636,274656,0.5551,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,none,default,1024,1498624,1534590976,100.0,100.0,274404,274680,,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,default,1024,1515008,1551368192,100.0,100.0,274636,274648,0.3524,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,high-ratio,1024,1485440,1521090560,100.0,100.0,274704,274580,0.3327,0,0,none,none,14.0
+wsl_shm,chacha20,none,default,1024,1488384,1524105216,100.0,100.0,274728,274600,,0,0,none,none,14.0
+wsl_shm,none,lz4,default,1024,1484544,1520173056,100.0,100.0,274276,274352,0.5551,0,0,none,none,14.0
+wsl_shm,none,lz4,fast,1024,1480448,1515978752,100.0,99.9,274372,274212,0.5551,0,0,none,none,14.0
+wsl_shm,none,none,default,1024,1523712,1560281088,100.0,100.0,274376,274396,,0,0,none,none,14.0
+wsl_shm,none,zstd,default,1024,1482752,1518338048,100.0,100.0,274404,274448,0.3524,0,0,none,none,14.0
+wsl_shm,none,zstd,high-ratio,1024,1503872,1539964928,100.0,100.0,274068,274460,0.3327,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,default,8192,390272,3197108224,100.0,100.0,274588,274644,0.4586,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,fast,8192,387328,3172990976,100.0,100.0,274420,274864,0.4586,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,none,default,8192,388224,3180331008,100.0,100.1,274388,274796,,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,default,8192,388480,3182428160,100.0,100.1,274468,275024,0.2418,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,high-ratio,8192,393856,3226468352,100.0,100.0,274700,274668,0.2191,0,0,none,none,14.0
+wsl_shm,aes-192-gcm,none,default,8192,388352,3181379584,100.0,100.0,274712,274864,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,default,8192,386304,3164602368,100.0,100.0,274712,274844,0.4586,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,fast,8192,391040,3203399680,100.0,100.0,274740,274804,0.4586,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,none,default,8192,377600,3093299200,100.0,100.0,274448,274996,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,default,8192,389376,3189768192,100.0,100.0,274672,274748,0.2418,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,high-ratio,8192,388736,3184525312,100.0,100.0,274692,274752,0.2191,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,default,8192,385920,3161456640,100.0,99.9,274420,274836,0.4586,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,fast,8192,387712,3176136704,100.0,100.0,274464,274660,0.4586,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,none,default,8192,389504,3190816768,100.0,100.0,274656,274844,,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,default,8192,392832,3218079744,100.0,100.0,274736,274752,0.2418,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,high-ratio,8192,385280,3156213760,100.0,100.0,274672,274836,0.2191,0,0,none,none,14.0
+wsl_shm,chacha20,none,default,8192,387328,3172990976,100.0,100.0,274284,274456,,0,0,none,none,14.0
+wsl_shm,none,lz4,default,8192,389376,3189768192,100.0,100.0,274140,274184,0.4586,0,0,none,none,14.0
+wsl_shm,none,lz4,fast,8192,382336,3132096512,100.0,100.0,274412,274420,0.4586,0,0,none,none,14.0
+wsl_shm,none,none,default,8192,383744,3143630848,100.0,100.0,274392,274328,,0,0,none,none,14.0
+wsl_shm,none,zstd,default,8192,384000,3145728000,100.0,100.0,273964,274304,0.2418,0,0,none,none,14.0
+wsl_shm,none,zstd,high-ratio,8192,384512,3149922304,100.0,100.0,274316,274144,0.2191,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,default,65536,37526,2459271168,100.0,100.0,274912,274772,0.4365,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,fast,65536,36768,2409627648,100.0,100.0,274904,274960,0.4365,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,none,default,65536,37260,2441871360,100.0,100.0,274924,274972,,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,default,65536,33578,2200567808,100.0,99.6,274612,275144,0.2383,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,high-ratio,65536,33230,2177728512,100.0,99.6,274580,274952,0.2099,0,0,none,none,14.0
+wsl_shm,aes-192-gcm,none,default,65536,37014,2425716736,100.0,100.0,274788,274980,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,default,65536,33371,2187001856,100.0,99.7,274908,274900,0.4365,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,fast,65536,36647,2401665024,100.0,100.0,274844,275004,0.4365,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,none,default,65536,36727,2406940672,100.0,100.0,274764,274796,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,default,65536,33572,2200141824,100.0,99.7,274736,275012,0.2383,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,high-ratio,65536,33844,2218000384,100.0,99.4,274828,275088,0.2099,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,default,65536,36892,2417721344,100.0,100.0,274864,274804,0.4365,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,fast,65536,36995,2424504320,100.0,100.0,274760,275016,0.4365,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,none,default,65536,36720,2406481920,100.0,100.0,274680,275012,,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,default,65536,33555,2199060480,100.0,99.6,274792,274676,0.2383,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,high-ratio,65536,33456,2192539648,100.0,99.6,274788,274912,0.2099,0,0,none,none,14.0
+wsl_shm,chacha20,none,default,65536,37138,2433875968,100.0,100.0,274788,274860,,0,0,none,none,14.0
+wsl_shm,none,lz4,default,65536,33960,2225569792,100.0,99.6,274656,274636,0.4365,0,0,none,none,14.0
+wsl_shm,none,lz4,fast,65536,37013,2425651200,100.0,100.0,274584,274464,0.4365,0,0,none,none,14.0
+wsl_shm,none,none,default,65536,32991,2162098176,100.0,99.6,274444,274468,,0,0,none,none,14.0
+wsl_shm,none,zstd,default,65536,36802,2411855872,100.0,100.0,274184,274572,0.2383,0,0,none,none,14.0
+wsl_shm,none,zstd,high-ratio,65536,36795,2411397120,100.0,100.0,274156,274260,0.2099,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,default,307200,4202,1290854400,100.0,100.0,275312,275716,0.3832,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,lz4,fast,307200,4221,1296537600,100.0,100.0,275220,275752,0.3832,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,none,default,307200,4278,1314201600,100.0,100.0,275136,275536,,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,default,307200,4224,1297459200,100.0,100.0,275352,275472,0.2345,0,0,none,none,14.0
+wsl_shm,aes-128-gcm,zstd,high-ratio,307200,4159,1277644800,100.0,100.0,275372,275908,0.2059,0,0,none,none,14.0
+wsl_shm,aes-192-gcm,none,default,307200,4197,1289164800,100.0,100.0,275308,275768,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,default,307200,4201,1290393600,100.0,100.0,275228,275540,0.3832,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,lz4,fast,307200,4135,1270118400,100.0,100.0,275428,275796,0.3832,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,none,default,307200,4202,1290700800,100.0,100.0,275296,275796,,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,default,307200,4264,1309747200,100.0,100.0,275288,275800,0.2345,0,0,none,none,14.0
+wsl_shm,aes-256-gcm,zstd,high-ratio,307200,4231,1299763200,100.0,100.0,275284,275780,0.2059,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,default,307200,4182,1284710400,100.0,100.0,275384,275516,0.3832,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,lz4,fast,307200,4244,1303756800,100.0,100.0,275388,275384,0.3832,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,none,default,307200,4231,1299763200,100.0,100.0,275048,275556,,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,default,307200,4241,1302681600,100.0,100.0,275296,275492,0.2345,0,0,none,none,14.0
+wsl_shm,chacha20-poly1305-ietf,zstd,high-ratio,307200,4189,1286707200,100.0,100.0,275284,275676,0.2059,1,0,none,none,14.0
+wsl_shm,chacha20,none,default,307200,4230,1299302400,100.0,100.0,275120,275548,,0,0,none,none,14.0
+wsl_shm,none,lz4,default,307200,4243,1303296000,100.0,100.0,274896,275244,0.3832,0,0,none,none,14.0
+wsl_shm,none,lz4,fast,307200,4027,1237094400,100.0,100.0,274896,275108,0.3832,0,0,none,none,14.0
+wsl_shm,none,none,default,307200,4173,1281945600,100.0,100.0,274948,275116,,0,0,none,none,14.0
+wsl_shm,none,zstd,default,307200,4226,1298073600,100.0,99.9,275040,275324,0.2345,0,0,none,none,14.0
+wsl_shm,none,zstd,high-ratio,307200,4240,1302528000,100.0,100.0,274652,275256,0.2059,0,0,none,none,14.0
+windows,aes-128-gcm,lz4,default,200,286952,57390438,97.5,96.9,11676,29996,0.7656,33,32,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,lz4,fast,200,287267,57453320,97.2,96.7,11684,30000,0.7656,25,24,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,none,default,200,334731,66946108,99.3,99.2,11668,30016,,38,37,aes-128-gcm,none,14.0
+windows,aes-128-gcm,zstd,default,200,269953,53990628,92.5,92.8,11668,30172,0.6615,33,32,aes-128-gcm,zstd,15.1
+windows,aes-128-gcm,zstd,high-ratio,200,342114,68422732,98.1,98.4,11712,30040,0.6562,33,32,aes-128-gcm,zstd,14.0
+windows,aes-192-gcm,none,default,200,255997,51199403,95.2,94.2,11688,30016,,9,8,aes-192-gcm,none,14.1
+windows,aes-256-gcm,lz4,default,200,252716,50543112,96.2,96.1,11668,30032,0.7656,33,32,aes-256-gcm,lz4,14.1
+windows,aes-256-gcm,lz4,fast,200,254687,50937450,97.1,97.5,11712,30324,0.7656,44,43,aes-256-gcm,lz4,14.0
+windows,aes-256-gcm,none,default,200,242943,48588600,93.3,93.2,11676,30336,,43,42,aes-256-gcm,none,15.1
+windows,aes-256-gcm,zstd,default,200,255044,51008722,96.6,95.8,11708,30008,0.6615,33,32,aes-256-gcm,zstd,14.1
+windows,aes-256-gcm,zstd,high-ratio,200,291325,58265000,98.3,97.3,11700,30096,0.6562,37,36,aes-256-gcm,zstd,15.0
+windows,chacha20-poly1305-ietf,lz4,default,200,365907,73181456,95.5,95.2,11672,30080,0.7656,35,34,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,lz4,fast,200,371426,74285115,95.5,94.7,11684,30028,0.7656,26,25,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,none,default,200,371835,74367066,97.4,96.7,11616,30368,,36,35,chacha20-poly1305-ietf,none,14.0
+windows,chacha20-poly1305-ietf,zstd,default,200,426177,85235458,97.4,96.8,11668,30004,0.6615,25,24,chacha20-poly1305-ietf,zstd,15.0
+windows,chacha20-poly1305-ietf,zstd,high-ratio,200,451457,90291417,98.0,98.5,11632,30400,0.6562,34,33,chacha20-poly1305-ietf,zstd,14.0
+windows,chacha20,none,default,200,426776,85355245,94.8,93.9,11632,30092,,26,25,chacha20,none,15.0
+windows,none,lz4,default,200,703905,140781000,96.3,96.7,11508,28552,0.7656,17,16,none,lz4,15.0
+windows,none,lz4,fast,200,682490,136498055,94.5,94.3,11488,28864,0.7656,16,15,none,lz4,14.0
+windows,none,none,default,200,917767,183553400,98.5,98.7,11516,27692,,12,11,none,none,14.0
+windows,none,zstd,default,200,695474,139094810,97.6,96.0,11500,30020,0.6615,24,23,none,zstd,14.0
+windows,none,zstd,high-ratio,200,686660,137332000,97.0,97.1,11496,30424,0.6562,21,20,none,zstd,14.0
+windows,aes-128-gcm,lz4,default,1024,121636,124554986,96.2,96.4,11696,29452,0.5551,35,34,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,lz4,fast,1024,117163,119974579,94.4,94.2,11700,29840,0.5551,44,43,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,none,default,1024,117455,120274012,99.2,99.3,11712,29056,,56,55,aes-128-gcm,none,15.0
+windows,aes-128-gcm,zstd,default,1024,76492,78327808,97.1,96.9,11816,30176,0.3524,17,16,aes-128-gcm,zstd,14.0
+windows,aes-128-gcm,zstd,high-ratio,1024,72448,74186401,94.5,94.2,11900,30204,0.3327,9,8,aes-128-gcm,zstd,14.0
+windows,aes-192-gcm,none,default,1024,106036,108580717,98.2,98.2,11700,29024,,53,52,aes-192-gcm,none,14.0
+windows,aes-256-gcm,lz4,default,1024,106792,109355089,94.1,93.6,11700,29512,0.5551,48,47,aes-256-gcm,lz4,15.1
+windows,aes-256-gcm,lz4,fast,1024,106180,108728505,95.3,95.1,11724,29652,0.5551,53,52,aes-256-gcm,lz4,15.1
+windows,aes-256-gcm,none,default,1024,97189,99521208,99.4,99.2,11716,28916,,53,52,aes-256-gcm,none,14.1
+windows,aes-256-gcm,zstd,default,1024,72609,74351746,97.8,96.9,11852,30156,0.3524,27,26,aes-256-gcm,zstd,14.0
+windows,aes-256-gcm,zstd,high-ratio,1024,72437,74175113,97.3,97.0,11820,30300,0.3327,19,18,aes-256-gcm,zstd,15.1
+windows,chacha20-poly1305-ietf,lz4,default,1024,171048,175153005,96.9,96.0,11672,29396,0.5551,21,20,chacha20-poly1305-ietf,lz4,15.0
+windows,chacha20-poly1305-ietf,lz4,fast,1024,172592,176734020,96.6,94.5,11716,29500,0.5551,44,43,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,none,default,1024,176733,180974592,99.2,98.8,11700,29016,,51,50,chacha20-poly1305-ietf,none,15.0
+windows,chacha20-poly1305-ietf,zstd,default,1024,77812,79679488,93.3,95.0,11816,30232,0.3524,10,9,chacha20-poly1305-ietf,zstd,15.0
+windows,chacha20-poly1305-ietf,zstd,high-ratio,1024,85932,87994507,97.4,95.6,11792,30168,0.3327,9,8,chacha20-poly1305-ietf,zstd,15.0
+windows,chacha20,none,default,1024,250790,256809389,98.7,99.0,11676,29152,,48,47,chacha20,none,14.0
+windows,none,lz4,default,1024,287409,294306304,98.8,98.4,11528,28768,0.5551,32,31,none,lz4,14.0
+windows,none,lz4,fast,1024,296963,304090188,98.6,98.7,11508,29380,0.5551,38,37,none,lz4,14.0
+windows,none,none,default,1024,294780,301854720,99.4,99.3,11512,28644,,28,27,none,none,14.0
+windows,none,zstd,default,1024,112803,115510070,97.5,97.6,11640,29912,0.3524,12,11,none,zstd,15.0
+windows,none,zstd,high-ratio,1024,97491,99830320,96.1,96.7,11636,30304,0.3327,9,8,none,zstd,15.0
+windows,aes-128-gcm,lz4,default,8192,32130,263208960,98.1,98.7,11932,29480,0.4586,55,54,aes-128-gcm,lz4,15.0
+windows,aes-128-gcm,lz4,fast,8192,29250,239616000,97.6,96.8,11900,29536,0.4586,52,51,aes-128-gcm,lz4,15.0
+windows,aes-128-gcm,none,default,8192,11470,93962731,92.4,91.0,11852,28072,,48,47,aes-128-gcm,none,14.0
+windows,aes-128-gcm,zstd,default,8192,29550,242069910,97.9,97.3,11992,30308,0.2418,47,46,aes-128-gcm,zstd,14.0
+windows,aes-128-gcm,zstd,high-ratio,8192,30299,248212695,97.3,98.3,11916,30140,0.2191,21,20,aes-128-gcm,zstd,14.0
+windows,aes-192-gcm,none,default,8192,10875,89089023,92.6,92.3,11880,28684,,52,51,aes-192-gcm,none,15.0
+windows,aes-256-gcm,lz4,default,8192,28801,235939421,98.5,98.6,11884,29552,0.4586,49,48,aes-256-gcm,lz4,14.0
+windows,aes-256-gcm,lz4,fast,8192,27842,228082957,98.6,97.7,11904,29492,0.4586,58,57,aes-256-gcm,lz4,14.0
+windows,aes-256-gcm,none,default,8192,10409,85273118,92.5,91.5,11864,28428,,51,50,aes-256-gcm,none,14.1
+windows,aes-256-gcm,zstd,default,8192,26839,219864811,98.4,98.2,11980,30264,0.2418,51,50,aes-256-gcm,zstd,14.0
+windows,aes-256-gcm,zstd,high-ratio,8192,28442,232993247,99.3,99.1,11972,30100,0.2191,28,27,aes-256-gcm,zstd,15.0
+windows,chacha20-poly1305-ietf,lz4,default,8192,26745,219095040,98.1,97.8,11856,29520,0.4586,49,48,chacha20-poly1305-ietf,lz4,15.0
+windows,chacha20-poly1305-ietf,lz4,fast,8192,25035,205086720,98.4,98.6,11916,29244,0.4586,48,47,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,none,default,8192,13784,112922060,94.9,95.8,11832,27464,,38,37,chacha20-poly1305-ietf,none,14.0
+windows,chacha20-poly1305-ietf,zstd,default,8192,37147,304309429,98.8,98.7,11924,30108,0.2418,47,46,chacha20-poly1305-ietf,zstd,14.0
+windows,chacha20-poly1305-ietf,zstd,high-ratio,8192,38130,312360960,98.8,98.7,11972,30208,0.2191,14,13,chacha20-poly1305-ietf,zstd,15.0
+windows,chacha20,none,default,8192,18308,149981662,91.6,91.3,11824,27144,,31,30,chacha20,none,14.0
+windows,none,lz4,default,8192,22590,185057280,93.6,92.4,11700,28872,0.4586,8,7,none,lz4,14.0
+windows,none,lz4,fast,8192,25483,208756736,93.1,93.4,11680,28836,0.4586,20,19,none,lz4,14.0
+windows,none,none,default,8192,52943,433709056,96.2,95.9,11588,21232,,0,0,none,none,14.0
+windows,none,zstd,default,8192,31308,256478886,91.1,88.4,11752,29516,0.2418,21,20,none,zstd,14.0
+windows,none,zstd,high-ratio,8192,33411,273701009,95.5,95.0,11808,29308,0.2191,11,10,none,zstd,14.0
+windows,aes-128-gcm,lz4,default,65536,4667,305834667,98.5,97.0,11880,28644,0.4365,20,19,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,lz4,fast,65536,4561,298930409,98.3,97.8,11900,28648,0.4365,11,10,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,none,default,65536,2214,145082693,97.9,97.6,11964,27988,,2,1,aes-128-gcm,none,14.1
+windows,aes-128-gcm,zstd,default,65536,4131,270703537,97.6,97.4,12260,29544,0.2383,24,23,aes-128-gcm,zstd,14.0
+windows,aes-128-gcm,zstd,high-ratio,65536,4078,267235442,97.8,97.9,12272,29584,0.2099,33,32,aes-128-gcm,zstd,14.0
+windows,aes-192-gcm,none,default,65536,2158,141406020,98.5,98.1,11940,28024,,9,8,aes-192-gcm,none,14.1
+windows,aes-256-gcm,lz4,default,65536,3690,241843506,97.4,97.8,11904,28232,0.4365,20,19,aes-256-gcm,lz4,14.0
+windows,aes-256-gcm,lz4,fast,65536,3816,250109445,98.0,97.6,11884,28744,0.4365,18,17,aes-256-gcm,lz4,14.1
+windows,aes-256-gcm,none,default,65536,1889,123768868,98.2,96.8,11876,27992,,2,1,aes-256-gcm,none,14.1
+windows,aes-256-gcm,zstd,default,65536,3815,250039039,97.7,97.5,12204,29544,0.2383,24,23,aes-256-gcm,zstd,14.0
+windows,aes-256-gcm,zstd,high-ratio,65536,3760,246415360,97.9,98.1,12208,29560,0.2099,24,23,aes-256-gcm,zstd,15.0
+windows,chacha20-poly1305-ietf,lz4,default,65536,6327,414628678,97.0,95.8,11836,28644,0.4365,20,19,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,lz4,fast,65536,6560,429944967,98.5,98.1,11832,29068,0.4365,20,19,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,none,default,65536,2534,166054934,98.7,98.4,11860,27932,,2,1,chacha20-poly1305-ietf,none,14.0
+windows,chacha20-poly1305-ietf,zstd,default,65536,4994,327286784,97.9,97.8,12232,29536,0.2383,24,23,chacha20-poly1305-ietf,zstd,14.0
+windows,chacha20-poly1305-ietf,zstd,high-ratio,65536,5043,330499458,98.0,97.7,12216,29496,0.2099,24,23,chacha20-poly1305-ietf,zstd,14.0
+windows,chacha20,none,default,65536,2871,188153856,99.2,98.0,11824,27784,,9,8,chacha20,none,14.0
+windows,none,lz4,default,65536,6211,407044096,98.2,97.7,11716,28540,0.4365,11,10,none,lz4,15.0
+windows,none,lz4,fast,65536,6215,407306240,97.5,97.5,11688,29040,0.4365,11,10,none,lz4,14.0
+windows,none,none,default,65536,6127,401539072,99.1,98.2,11680,27644,,2,1,none,none,15.0
+windows,none,zstd,default,65536,5720,374865920,98.0,98.7,11920,29368,0.2383,24,23,none,zstd,14.0
+windows,none,zstd,high-ratio,65536,5798,379977728,98.4,98.6,11960,29152,0.2099,23,22,none,zstd,14.0
+windows,aes-128-gcm,lz4,default,307200,915,281061862,98.6,98.2,12528,28488,0.3832,7,6,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,lz4,fast,307200,932,286372881,97.8,98.4,12524,28520,0.3832,2,1,aes-128-gcm,lz4,14.0
+windows,aes-128-gcm,none,default,307200,278,85333333,98.2,98.7,12852,27908,,4,3,aes-128-gcm,none,14.0
+windows,aes-128-gcm,zstd,default,307200,630,193536000,97.8,98.0,12652,29872,0.2345,12,11,aes-128-gcm,zstd,14.0
+windows,aes-128-gcm,zstd,high-ratio,307200,702,215530539,98.8,98.3,12648,29868,0.2059,14,13,aes-128-gcm,zstd,14.0
+windows,aes-192-gcm,none,default,307200,267,82019417,98.5,97.4,12812,27864,,4,3,aes-192-gcm,none,14.1
+windows,aes-256-gcm,lz4,default,307200,795,244231642,98.3,98.2,12536,28636,0.3832,11,10,aes-256-gcm,lz4,14.0
+windows,aes-256-gcm,lz4,fast,307200,783,240604196,98.8,98.5,12512,28536,0.3832,8,7,aes-256-gcm,lz4,14.0
+windows,aes-256-gcm,none,default,307200,259,79564800,98.5,97.5,12808,27884,,4,3,aes-256-gcm,none,15.1
+windows,aes-256-gcm,zstd,default,307200,649,199372800,98.8,98.2,12576,29860,0.2345,7,6,aes-256-gcm,zstd,15.0
+windows,aes-256-gcm,zstd,high-ratio,307200,659,202347305,99.1,97.8,12572,29884,0.2059,7,6,aes-256-gcm,zstd,14.1
+windows,chacha20-poly1305-ietf,lz4,default,307200,1446,444244311,97.8,97.5,12512,28616,0.3832,8,7,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,lz4,fast,307200,1435,440698501,98.8,97.8,12492,28140,0.3832,6,5,chacha20-poly1305-ietf,lz4,14.0
+windows,chacha20-poly1305-ietf,none,default,307200,465,142848000,96.3,95.5,12632,27852,,2,1,chacha20-poly1305-ietf,none,14.0
+windows,chacha20-poly1305-ietf,zstd,default,307200,845,259584000,98.6,99.1,12528,29812,0.2345,12,11,chacha20-poly1305-ietf,zstd,15.0
+windows,chacha20-poly1305-ietf,zstd,high-ratio,307200,839,257888734,98.4,98.4,12592,29880,0.2059,11,10,chacha20-poly1305-ietf,zstd,14.1
+windows,chacha20,none,default,307200,559,171724800,97.4,98.2,12784,27836,,5,4,chacha20,none,14.0
+windows,none,lz4,default,307200,1273,391065600,98.6,98.9,12256,28140,0.3832,3,2,none,lz4,15.0
+windows,none,lz4,fast,307200,1206,370483200,98.0,97.8,12252,28360,0.3832,6,5,none,lz4,14.0
+windows,none,none,default,307200,1536,471859200,96.6,97.6,12292,26188,,3,2,none,none,14.0
+windows,none,zstd,default,307200,848,260505600,98.3,97.6,12316,29764,0.2345,11,10,none,zstd,14.0
+windows,none,zstd,high-ratio,307200,865,265728000,98.2,98.0,12316,29816,0.2059,13,12,none,zstd,14.0
+windows_shm,aes-128-gcm,lz4,default,200,1090816,218163200,99.0,99.6,273820,273856,0.7656,0,0,none,none,15.0
+windows_shm,aes-128-gcm,lz4,fast,200,1319680,263936000,98.7,98.8,273808,273812,0.7656,0,0,none,none,15.0
+windows_shm,aes-128-gcm,none,default,200,1325056,265011200,98.9,98.8,273836,273836,,0,0,none,none,15.0
+windows_shm,aes-128-gcm,zstd,default,200,1156608,231321600,96.8,97.5,273820,273868,0.6615,0,0,none,none,15.0
+windows_shm,aes-128-gcm,zstd,high-ratio,200,1151232,230246400,99.0,99.3,273856,273808,0.6562,0,0,none,none,15.0
+windows_shm,aes-192-gcm,none,default,200,1332992,266598400,98.9,97.1,273812,273808,,0,0,none,none,15.0
+windows_shm,aes-256-gcm,lz4,default,200,1082112,216422400,98.5,98.7,273812,273816,0.7656,0,0,none,none,15.0
+windows_shm,aes-256-gcm,lz4,fast,200,1326848,265369600,97.9,99.2,273828,273824,0.7656,0,0,none,none,15.0
+windows_shm,aes-256-gcm,none,default,200,1314560,262912000,98.7,98.7,273804,273800,,0,0,none,none,15.0
+windows_shm,aes-256-gcm,zstd,default,200,1122816,224563200,99.0,98.8,273808,273864,0.6615,0,0,none,none,15.0
+windows_shm,aes-256-gcm,zstd,high-ratio,200,1147648,229529600,99.1,98.9,273824,273852,0.6562,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,lz4,default,200,1142528,228505600,96.6,96.9,273820,273804,0.7656,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,lz4,fast,200,1260032,252006400,96.6,96.0,273780,273792,0.7656,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,none,default,200,1317888,263577600,98.4,98.4,273800,273828,,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,zstd,default,200,1137664,227532800,98.4,98.7,273836,273776,0.6615,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,zstd,high-ratio,200,1168640,233728000,99.1,99.3,273812,273808,0.6562,0,0,none,none,15.0
+windows_shm,chacha20,none,default,200,1328640,265728000,98.8,99.2,273836,273812,,0,0,none,none,15.0
+windows_shm,none,lz4,default,200,1310464,262092800,98.2,99.3,273668,273640,0.7656,0,0,none,none,15.0
+windows_shm,none,lz4,fast,200,1321728,264345600,98.5,98.2,273664,273680,0.7656,0,0,none,none,15.0
+windows_shm,none,none,default,200,1263104,252620800,98.3,97.0,273684,273716,,0,0,none,none,15.0
+windows_shm,none,zstd,default,200,1313536,262707200,98.3,99.2,273652,273656,0.6615,0,0,none,none,15.0
+windows_shm,none,zstd,high-ratio,200,1318144,263628800,98.4,98.3,273676,273708,0.6562,0,0,none,none,15.0
+windows_shm,aes-128-gcm,lz4,default,1024,876544,897581056,99.2,98.8,273852,273844,0.5551,0,0,none,none,15.0
+windows_shm,aes-128-gcm,lz4,fast,1024,894848,916324352,99.5,99.4,273848,273856,0.5551,0,0,none,none,14.0
+windows_shm,aes-128-gcm,none,default,1024,891648,913047552,99.1,98.8,273888,273816,,0,0,none,none,15.0
+windows_shm,aes-128-gcm,zstd,default,1024,924416,946601984,99.2,99.6,273840,273852,0.3524,0,0,none,none,15.0
+windows_shm,aes-128-gcm,zstd,high-ratio,1024,916992,938999808,99.6,99.0,273844,273844,0.3327,0,0,none,none,15.0
+windows_shm,aes-192-gcm,none,default,1024,914176,936116224,99.4,99.2,273860,273836,,0,0,none,none,15.0
+windows_shm,aes-256-gcm,lz4,default,1024,878336,899416064,99.4,98.9,273844,273832,0.5551,0,0,none,none,15.0
+windows_shm,aes-256-gcm,lz4,fast,1024,910208,932052992,99.5,99.4,273848,273852,0.5551,0,0,none,none,14.0
+windows_shm,aes-256-gcm,none,default,1024,877312,898367488,98.4,97.8,273836,273848,,0,0,none,none,14.0
+windows_shm,aes-256-gcm,zstd,default,1024,887296,908591104,99.5,99.3,273864,273820,0.3524,0,0,none,none,15.0
+windows_shm,aes-256-gcm,zstd,high-ratio,1024,896768,918290432,98.0,99.4,273872,273848,0.3327,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,lz4,default,1024,904192,925892608,99.3,99.5,273796,273816,0.5551,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,lz4,fast,1024,903936,925630464,99.8,99.4,273800,273808,0.5551,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,none,default,1024,896256,917766144,98.6,99.4,273832,273812,,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,zstd,default,1024,923136,945291264,99.7,99.6,273812,273844,0.3524,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,zstd,high-ratio,1024,886016,907280384,99.5,99.4,273800,273820,0.3327,0,0,none,none,15.0
+windows_shm,chacha20,none,default,1024,916224,938213376,99.4,98.8,273780,273852,,0,0,none,none,15.0
+windows_shm,none,lz4,default,1024,889344,910688256,99.0,98.1,273656,273696,0.5551,0,0,none,none,15.0
+windows_shm,none,lz4,fast,1024,902272,923926528,99.1,99.6,273660,273684,0.5551,0,0,none,none,14.0
+windows_shm,none,none,default,1024,890368,911736832,98.7,98.8,273660,273700,,0,0,none,none,14.0
+windows_shm,none,zstd,default,1024,928256,950534144,99.4,98.7,273660,273732,0.3524,0,0,none,none,15.0
+windows_shm,none,zstd,high-ratio,1024,880896,902037504,99.5,98.8,273660,273780,0.3327,0,0,none,none,15.0
+windows_shm,aes-128-gcm,lz4,default,8192,308224,2524971008,98.9,98.7,273916,274016,0.4586,0,0,none,none,14.0
+windows_shm,aes-128-gcm,lz4,fast,8192,303000,2482175672,99.1,99.4,273916,273996,0.4586,0,0,none,none,14.0
+windows_shm,aes-128-gcm,none,default,8192,302336,2476736512,99.5,99.2,273936,273976,,0,0,none,none,14.0
+windows_shm,aes-128-gcm,zstd,default,8192,305024,2498756608,99.2,99.7,273960,274016,0.2418,0,0,none,none,14.0
+windows_shm,aes-128-gcm,zstd,high-ratio,8192,303360,2485125120,99.4,99.3,273912,273988,0.2191,0,0,none,none,14.0
+windows_shm,aes-192-gcm,none,default,8192,299776,2455764992,99.0,99.6,273904,273996,,0,0,none,none,14.0
+windows_shm,aes-256-gcm,lz4,default,8192,303057,2482642478,99.4,99.6,273928,274012,0.4586,0,0,none,none,14.0
+windows_shm,aes-256-gcm,lz4,fast,8192,301568,2470445056,99.1,99.2,273936,273996,0.4586,0,0,none,none,14.0
+windows_shm,aes-256-gcm,none,default,8192,309248,2533359616,99.2,99.1,273916,273980,,0,0,none,none,14.0
+windows_shm,aes-256-gcm,zstd,default,8192,304432,2493910486,99.5,99.6,273924,273988,0.2418,0,0,none,none,14.0
+windows_shm,aes-256-gcm,zstd,high-ratio,8192,303872,2489319424,99.3,99.3,273948,274032,0.2191,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,lz4,default,8192,298496,2445279232,99.3,99.4,273920,273960,0.4586,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,lz4,fast,8192,298198,2442836396,98.9,98.4,273928,273980,0.4586,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,none,default,8192,300288,2459959296,99.0,98.9,273868,273980,,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,zstd,default,8192,303616,2487222272,99.5,99.4,273908,273952,0.2418,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,zstd,high-ratio,8192,300544,2462056448,99.1,98.9,273912,273984,0.2191,0,0,none,none,14.0
+windows_shm,chacha20,none,default,8192,302080,2474639360,98.8,99.6,273860,273972,,0,0,none,none,14.0
+windows_shm,none,lz4,default,8192,301312,2468347904,99.0,99.2,273764,273872,0.4586,0,0,none,none,15.0
+windows_shm,none,lz4,fast,8192,304640,2495610880,99.4,98.8,273780,273836,0.4586,0,0,none,none,14.0
+windows_shm,none,none,default,8192,298240,2443182080,99.1,99.3,273752,273852,,0,0,none,none,14.0
+windows_shm,none,zstd,default,8192,304336,2493117762,98.6,99.5,273796,273856,0.2418,0,0,none,none,14.0
+windows_shm,none,zstd,high-ratio,8192,303616,2487222272,98.7,98.7,273772,273876,0.2191,0,0,none,none,14.0
+windows_shm,aes-128-gcm,lz4,default,65536,33458,2192670720,99.1,98.8,273936,274028,0.4365,1,0,none,none,14.0
+windows_shm,aes-128-gcm,lz4,fast,65536,33160,2173173760,99.2,99.3,273968,273996,0.4365,0,0,none,none,14.0
+windows_shm,aes-128-gcm,none,default,65536,33805,2215444480,99.3,99.0,274028,274036,,0,0,none,none,15.0
+windows_shm,aes-128-gcm,zstd,default,65536,33769,2213085184,99.3,99.5,273948,273936,0.2383,0,0,none,none,14.0
+windows_shm,aes-128-gcm,zstd,high-ratio,65536,33650,2205286400,99.4,98.6,273980,274004,0.2099,0,0,none,none,14.0
+windows_shm,aes-192-gcm,none,default,65536,33565,2199715840,99.5,98.9,274036,274020,,0,0,none,none,14.0
+windows_shm,aes-256-gcm,lz4,default,65536,33370,2186936320,99.0,99.1,273984,274032,0.4365,0,0,none,none,14.0
+windows_shm,aes-256-gcm,lz4,fast,65536,33730,2210496512,99.4,99.3,273936,273996,0.4365,0,0,none,none,14.0
+windows_shm,aes-256-gcm,none,default,65536,33360,2186280960,99.4,99.0,273984,274016,,0,0,none,none,15.0
+windows_shm,aes-256-gcm,zstd,default,65536,33475,2193817600,99.1,100.0,273996,274032,0.2383,0,0,none,none,14.0
+windows_shm,aes-256-gcm,zstd,high-ratio,65536,33057,2166423552,99.7,99.6,273984,273956,0.2099,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,lz4,default,65536,34315,2248867840,99.4,99.6,273908,273980,0.4365,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,lz4,fast,65536,33413,2189754368,99.2,99.4,273928,274024,0.4365,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,none,default,65536,33875,2220032000,99.0,99.7,273908,274020,,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,zstd,default,65536,33445,2191851520,99.0,98.9,273904,273996,0.2383,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,zstd,high-ratio,65536,33409,2189459456,99.0,99.3,274052,273984,0.2099,0,0,none,none,14.0
+windows_shm,chacha20,none,default,65536,33555,2199060480,99.7,99.5,273944,274012,,0,0,none,none,14.0
+windows_shm,none,lz4,default,65536,33565,2199715840,99.2,99.7,273836,273868,0.4365,0,0,none,none,14.0
+windows_shm,none,lz4,fast,65536,33430,2190868480,99.5,99.0,273808,273856,0.4365,0,0,none,none,15.0
+windows_shm,none,none,default,65536,33754,2212102144,98.1,99.0,273784,273888,,0,0,none,none,14.0
+windows_shm,none,zstd,default,65536,33910,2222325760,99.2,99.5,273800,273904,0.2383,0,0,none,none,14.0
+windows_shm,none,zstd,high-ratio,65536,33595,2201681920,99.1,99.1,273780,273864,0.2099,0,0,none,none,14.0
+windows_shm,aes-128-gcm,lz4,default,307200,8092,2485862400,98.7,99.2,274424,274716,0.3832,0,0,none,none,14.0
+windows_shm,aes-128-gcm,lz4,fast,307200,8312,2553446400,98.8,98.8,274460,274720,0.3832,0,0,none,none,16.0
+windows_shm,aes-128-gcm,none,default,307200,8338,2561433600,99.5,99.3,274476,274728,,0,0,none,none,14.0
+windows_shm,aes-128-gcm,zstd,default,307200,7999,2457292800,96.6,97.3,274484,274736,0.2345,0,0,none,none,14.0
+windows_shm,aes-128-gcm,zstd,high-ratio,307200,7973,2449305600,97.2,97.7,274468,274716,0.2059,1,0,none,none,15.0
+windows_shm,aes-192-gcm,none,default,307200,8202,2519654400,99.2,99.1,274472,274748,,0,0,none,none,14.0
+windows_shm,aes-256-gcm,lz4,default,307200,7962,2445926400,98.2,98.6,274440,274748,0.3832,0,0,none,none,14.0
+windows_shm,aes-256-gcm,lz4,fast,307200,8547,2625638400,99.5,99.2,274444,274668,0.3832,0,0,none,none,14.0
+windows_shm,aes-256-gcm,none,default,307200,8402,2581094400,99.6,99.2,274508,274752,,0,0,none,none,14.0
+windows_shm,aes-256-gcm,zstd,default,307200,8126,2496268531,97.4,97.7,274460,274756,0.2345,1,0,none,none,15.0
+windows_shm,aes-256-gcm,zstd,high-ratio,307200,8415,2585088000,97.0,98.0,274508,274720,0.2059,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,lz4,default,307200,7833,2406297600,96.7,96.5,274448,274656,0.3832,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,lz4,fast,307200,8396,2579251200,98.8,99.3,274452,274708,0.3832,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,none,default,307200,8419,2586316800,98.6,98.9,274416,274668,,0,0,none,none,14.0
+windows_shm,chacha20-poly1305-ietf,zstd,default,307200,7978,2450848352,98.0,97.7,274452,274684,0.2345,0,0,none,none,15.0
+windows_shm,chacha20-poly1305-ietf,zstd,high-ratio,307200,8290,2546835721,97.8,98.9,274452,274628,0.2059,0,0,none,none,14.0
+windows_shm,chacha20,none,default,307200,8338,2561433600,98.2,98.2,274444,274616,,0,0,none,none,14.0
+windows_shm,none,lz4,default,307200,8330,2558976000,98.5,98.4,274348,274572,0.3832,0,0,none,none,15.0
+windows_shm,none,lz4,fast,307200,8175,2511360000,97.8,99.4,274328,274564,0.3832,0,0,none,none,15.0
+windows_shm,none,none,default,307200,8350,2565227628,99.3,99.3,274340,274564,,0,0,none,none,15.0
+windows_shm,none,zstd,default,307200,8141,2500785643,98.6,99.2,274300,274556,0.2345,0,0,none,none,14.0
+windows_shm,none,zstd,high-ratio,307200,8239,2531094294,98.8,98.9,274292,274500,0.2059,0,0,none,none,14.0
+</script>
+
+<script type="text/csv" id="multi-data">
+nodes,crypto,compression,level,payload_size,qps,mbps,plateau_sec,receiver_cpu_percent,receiver_peak_rss_kb,receiver_msgs,receiver_whole_run_avg_qps,receiver_max_sample_interval_sec,senders,idle_senders,sent_msgs,sender_backpressure,sender_peak_rss_min_kb,sender_peak_rss_max_kb,sender_send_buffer_bytes,register_wait_sec,min_mem_available_mb,valid,note
+2,none,none,default,200,3725924,710.7,9.00,100.0,15204,37250885,2820755,1.00,1,0,37250885,2010,25640,25640,0,0,24413,yes,
+2,none,none,default,256,3466950,846.4,9.00,100.0,15252,34662393,2624746,1.00,1,0,34662393,2271,25532,25532,0,0,24419,yes,
+2,none,none,default,1024,1673616,1634.4,9.00,100.0,15396,16737492,1267320,1.00,1,0,16737492,8540,25592,25592,0,1,24417,yes,
+2,none,none,default,8192,227626,1778.3,9.00,100.0,15148,2309181,174819,1.00,1,0,2309181,2326,25684,25684,0,0,24414,yes,
+2,none,none,default,32768,81964,2561.4,9.00,100.0,15328,823497,62358,1.00,1,0,823497,3268,25728,25728,0,0,24417,yes,
+2,none,none,default,307200,9947,2914.2,9.00,100.0,15404,99480,7532,1.00,1,0,99480,3684,23644,23644,0,0,24417,yes,
+2,none,lz4,fast,200,3714584,708.5,9.00,100.0,15128,37115300,2810275,1.00,1,0,37115300,1956,25520,25520,0,0,24417,yes,
+2,none,lz4,fast,256,3438864,839.6,9.00,100.0,15140,34388080,2603777,1.00,1,0,34388080,2042,25720,25720,0,0,24419,yes,
+2,none,lz4,fast,1024,803879,785.0,9.00,100.0,15388,8027066,607835,1.00,1,0,8027066,886,23628,23628,0,0,24420,yes,
+2,none,lz4,fast,8192,130380,1018.6,9.00,100.0,15380,1303650,98709,1.00,1,0,1303650,1092,25776,25776,0,1,24418,yes,
+2,none,lz4,fast,32768,32127,1004.0,9.00,100.0,15440,322073,24387,1.00,1,0,322073,598,23564,23564,0,1,24419,yes,
+2,none,lz4,fast,307200,3157,924.9,9.00,100.0,15372,31321,2372,1.00,1,0,31321,462,27536,27536,0,0,24414,yes,
+2,none,lz4,default,200,3720152,709.6,9.00,100.0,15336,37182075,2815971,1.00,1,0,37182075,2803,25516,25516,0,1,24418,yes,
+2,none,lz4,default,256,3445340,841.1,9.00,100.0,15336,34460990,2608902,1.00,1,0,34460990,2047,25588,25588,0,0,24418,yes,
+2,none,lz4,default,1024,807113,788.2,9.00,100.0,15472,8077550,611565,1.00,1,0,8077550,890,23428,23428,0,0,24419,yes,
+2,none,lz4,default,8192,128391,1003.1,9.00,100.0,15376,1286537,97421,1.00,1,0,1286537,680,25668,25668,0,0,24415,yes,
+2,none,lz4,default,32768,32252,1007.9,9.00,100.0,15444,322704,24434,1.00,1,0,322704,610,23584,23584,0,0,24418,yes,
+2,none,lz4,default,307200,3064,897.7,9.00,100.0,15520,30464,2306,1.00,1,0,30464,448,27764,27764,0,0,24415,yes,
+2,none,zstd,default,200,3739130,713.2,9.00,100.0,15128,37329718,2826724,1.00,1,0,37329718,2865,25648,25648,0,0,24419,yes,
+2,none,zstd,default,256,3461852,845.2,9.00,100.0,15508,34609135,2620514,1.00,1,0,34609135,2055,25828,25828,0,1,24419,yes,
+2,none,zstd,default,1024,183074,178.8,9.00,100.0,15404,1842549,139513,1.00,1,0,1842549,138,25704,25704,0,0,24416,yes,
+2,none,zstd,default,8192,48768,381.0,9.00,99.9,15380,484295,36670,1.00,1,0,484295,206,25672,25672,0,0,24419,yes,
+2,none,zstd,default,32768,15664,489.5,9.00,100.0,15372,159245,12057,1.00,1,0,159245,155,23612,23612,0,0,24416,yes,
+2,none,zstd,default,307200,1514,443.6,9.00,100.0,15396,15458,1170,1.00,1,0,15458,136,27716,27716,0,0,24414,yes,
+2,none,zstd,high-ratio,200,3672916,700.6,9.00,100.0,15412,36693577,2778343,1.00,1,0,36693577,2519,25772,25772,0,0,24418,yes,
+2,none,zstd,high-ratio,256,3465640,846.1,9.00,100.0,15472,34643830,2623142,1.00,1,0,34643830,2057,25860,25860,0,0,24419,yes,
+2,none,zstd,high-ratio,1024,186027,181.7,9.00,100.0,15456,1855938,140537,1.00,1,0,1855938,138,25664,25664,0,0,24416,yes,
+2,none,zstd,high-ratio,8192,49003,382.8,9.00,100.0,15488,490901,37170,1.00,1,0,490901,210,25680,25680,0,1,24418,yes,
+2,none,zstd,high-ratio,32768,15744,492.0,9.00,100.0,15484,158894,12031,1.00,1,0,158894,154,23616,23616,0,0,24418,yes,
+2,none,zstd,high-ratio,307200,1543,452.1,9.00,100.0,15536,15478,1172,1.00,1,0,15478,135,27776,27776,0,0,24414,yes,
+2,aes-128-gcm,none,default,200,1640532,312.9,9.00,100.0,15372,16400803,1241733,1.00,1,0,16400803,967,25676,25676,0,0,24417,yes,
+2,aes-128-gcm,none,default,256,1531435,373.9,9.00,100.0,15672,15306311,1158867,1.00,1,0,15306311,1076,25896,25896,0,0,24419,yes,
+2,aes-128-gcm,none,default,1024,970032,947.3,9.00,100.0,15704,9666334,731965,1.00,1,0,9666334,6737,25920,25920,0,0,24416,yes,
+2,aes-128-gcm,none,default,8192,245584,1918.6,9.00,100.0,15364,2455652,185964,1.00,1,0,2455652,15639,25892,25892,0,0,24412,yes,
+2,aes-128-gcm,none,default,32768,72025,2250.8,9.00,100.0,15720,722195,54679,1.00,1,0,722195,2861,25604,25604,0,0,24416,yes,
+2,aes-128-gcm,none,default,307200,8656,2535.9,9.00,100.0,15716,86506,6550,1.00,1,0,86506,3203,25992,25992,0,1,24416,yes,
+2,aes-256-gcm,none,default,200,1627020,310.3,9.00,100.0,15704,16257303,1231148,1.00,1,0,16257303,973,25696,25696,0,0,24417,yes,
+2,aes-256-gcm,none,default,256,1507105,367.9,9.00,99.9,15608,15076351,1141542,1.00,1,0,15076351,1029,25984,25984,0,0,24415,yes,
+2,aes-256-gcm,none,default,1024,942768,920.7,9.00,100.0,15400,9447757,715306,1.00,1,0,9447757,1547,25828,25828,0,0,24417,yes,
+2,aes-256-gcm,none,default,8192,242024,1890.8,8.00,100.0,15652,2302672,174366,1.00,1,0,2302672,7045,26016,26016,0,0,24412,yes,
+2,aes-256-gcm,none,default,32768,71205,2225.2,9.00,100.0,15476,716483,54246,1.00,1,0,716483,2871,25940,25940,0,0,24415,yes,
+2,aes-256-gcm,none,default,307200,8516,2494.9,9.00,100.0,15664,84956,6433,1.00,1,0,84956,3547,26008,26008,0,0,24416,yes,
+2,chacha20-poly1305-ietf,none,default,200,910759,173.7,9.00,100.0,15416,9102526,689220,1.00,1,0,9102526,566,25596,25596,0,0,24417,yes,
+2,chacha20-poly1305-ietf,none,default,256,882970,215.6,9.00,100.0,15488,8803634,666639,1.00,1,0,8803634,655,25640,25640,0,0,24419,yes,
+2,chacha20-poly1305-ietf,none,default,1024,651616,636.3,9.00,100.0,15352,6510808,493056,1.00,1,0,6510808,11538,25628,25628,0,1,24418,yes,
+2,chacha20-poly1305-ietf,none,default,8192,150368,1174.8,9.00,100.0,15404,1516340,114805,1.00,1,0,1516340,1543,25660,25660,0,0,24417,yes,
+2,chacha20-poly1305-ietf,none,default,32768,52118,1628.7,9.00,100.0,15396,523181,39614,1.00,1,0,523181,2076,25492,25492,0,0,24416,yes,
+2,chacha20-poly1305-ietf,none,default,307200,6069,1778.0,9.01,100.0,15416,60635,4591,1.00,1,0,60635,2246,25708,25708,0,0,24417,yes,
+2,aes-128-gcm,lz4,fast,200,1628544,310.6,9.00,100.0,15516,16245283,1230051,1.00,1,0,16245283,958,25620,25620,0,0,24418,yes,
+2,aes-128-gcm,lz4,fast,256,1537024,375.3,9.00,100.0,15672,15356686,1162857,1.00,1,0,15356686,1063,25776,25776,0,0,24419,yes,
+2,aes-128-gcm,lz4,fast,1024,606648,592.4,9.00,100.0,15396,6066560,459379,1.00,1,0,6066560,785,23824,23824,0,0,24418,yes,
+2,aes-128-gcm,lz4,fast,8192,122412,956.3,9.00,100.0,15644,1222880,92586,1.00,1,0,1222880,1046,25968,25968,0,0,24418,yes,
+2,aes-128-gcm,lz4,fast,32768,31438,982.4,9.00,100.0,15544,314961,23846,1.00,1,0,314961,586,23632,23632,0,1,24417,yes,
+2,aes-128-gcm,lz4,fast,307200,3067,898.6,9.00,100.0,15668,30755,2329,1.00,1,0,30755,454,27752,27752,0,0,24415,yes,
+2,aes-256-gcm,lz4,fast,200,1616172,308.3,9.00,100.0,15632,16149700,1222721,1.00,1,0,16149700,952,25980,25980,0,1,24417,yes,
+2,aes-256-gcm,lz4,fast,256,1512248,369.2,9.00,100.0,15592,15110952,1144076,1.00,1,0,15110952,1059,25920,25920,0,0,24419,yes,
+2,aes-256-gcm,lz4,fast,1024,601339,587.2,9.00,100.0,15716,6014538,455405,1.00,1,0,6014538,950,23584,23584,0,0,24420,yes,
+2,aes-256-gcm,lz4,fast,8192,121440,948.8,9.00,100.0,15684,1213972,91919,1.00,1,0,1213972,735,26008,26008,0,0,24416,yes,
+2,aes-256-gcm,lz4,fast,32768,31166,973.9,9.00,100.0,15676,312970,23701,1.00,1,0,312970,582,23912,23912,0,0,24419,yes,
+2,aes-256-gcm,lz4,fast,307200,3081,902.7,9.00,100.0,15684,30784,2331,1.00,1,0,30784,493,28036,28036,0,0,24416,yes,
+2,chacha20-poly1305-ietf,lz4,fast,200,909740,173.5,9.00,100.0,15524,9087526,688136,1.00,1,0,9087526,573,25732,25732,0,0,24418,yes,
+2,chacha20-poly1305-ietf,lz4,fast,256,885451,216.2,9.00,100.0,15400,8853622,670475,1.00,1,0,8853622,660,25672,25672,0,1,24418,yes,
+2,chacha20-poly1305-ietf,lz4,fast,1024,477935,466.7,9.00,100.0,15428,4773537,361440,1.00,1,0,4773537,754,23652,23652,0,0,24420,yes,
+2,chacha20-poly1305-ietf,lz4,fast,8192,109733,857.3,9.00,100.0,15368,1097206,83078,1.00,1,0,1097206,725,25712,25712,0,0,24416,yes,
+2,chacha20-poly1305-ietf,lz4,fast,32768,29074,908.6,9.00,100.0,15392,290318,21984,1.00,1,0,290318,539,23652,23652,0,0,24418,yes,
+2,chacha20-poly1305-ietf,lz4,fast,307200,2924,856.6,9.00,100.0,15448,29030,2198,1.00,1,0,29030,428,25640,25640,0,0,24415,yes,
+2,aes-128-gcm,lz4,default,200,1619244,308.8,9.00,100.0,15688,16205940,1227258,1.00,1,0,16205940,955,25628,25628,0,0,24418,yes,
+2,aes-128-gcm,lz4,default,256,1522656,371.7,9.00,100.0,15340,15181453,1149500,1.00,1,0,15181453,1901,25872,25872,0,0,24417,yes,
+2,aes-128-gcm,lz4,default,1024,603054,588.9,9.00,100.0,15624,6037459,457141,1.00,1,0,6037459,749,23628,23628,0,0,24419,yes,
+2,aes-128-gcm,lz4,default,8192,121463,948.9,9.00,100.0,15484,1214338,91940,1.00,1,0,1214338,726,26012,26012,0,1,24415,yes,
+2,aes-128-gcm,lz4,default,32768,31694,990.4,9.00,100.0,15680,317251,24020,1.00,1,0,317251,591,23712,23712,0,0,24418,yes,
+2,aes-128-gcm,lz4,default,307200,3060,896.5,9.00,100.0,15640,30562,2314,1.00,1,0,30562,450,27948,27948,0,0,24414,yes,
+2,aes-256-gcm,lz4,default,200,1610412,307.2,9.00,100.0,15704,16105798,1219674,1.00,1,0,16105798,949,25928,25928,0,0,24419,yes,
+2,aes-256-gcm,lz4,default,256,1504908,367.4,9.00,100.0,15736,15070829,1141038,1.00,1,0,15070829,994,25684,25684,0,0,24417,yes,
+2,aes-256-gcm,lz4,default,1024,608346,594.1,9.00,100.0,15764,6064283,459172,1.00,1,0,6064283,744,23824,23824,0,0,24419,yes,
+2,aes-256-gcm,lz4,default,8192,120906,944.6,9.00,100.0,15464,1209500,91580,1.00,1,0,1209500,672,25904,25904,0,0,24415,yes,
+2,aes-256-gcm,lz4,default,32768,31406,981.4,9.00,100.0,15640,315063,23852,1.00,1,0,315063,589,23728,23728,0,0,24418,yes,
+2,aes-256-gcm,lz4,default,307200,3060,896.5,9.00,100.0,15500,30634,2320,1.00,1,0,30634,462,27952,27952,0,1,24414,yes,
+2,chacha20-poly1305-ietf,lz4,default,200,907532,173.1,9.00,100.0,15448,9060900,686016,1.00,1,0,9060900,565,25680,25680,0,0,24418,yes,
+2,chacha20-poly1305-ietf,lz4,default,256,875006,213.6,9.00,100.0,15340,8758983,663157,1.00,1,0,8758983,650,25688,25688,0,1,24418,yes,
+2,chacha20-poly1305-ietf,lz4,default,1024,471244,460.2,9.00,100.0,15328,4713010,356857,1.00,1,0,4713010,577,23648,23648,0,0,24419,yes,
+2,chacha20-poly1305-ietf,lz4,default,8192,110350,862.1,9.00,100.0,15440,1100657,83333,1.00,1,0,1100657,813,25692,25692,0,0,24417,yes,
+2,chacha20-poly1305-ietf,lz4,default,32768,29106,909.6,9.00,100.0,15464,291638,22080,1.00,1,0,291638,542,23648,23648,0,0,24418,yes,
+2,chacha20-poly1305-ietf,lz4,default,307200,2876,842.6,9.00,100.0,15444,28853,2185,1.00,1,0,28853,426,25584,25584,0,0,24416,yes,
+2,aes-128-gcm,zstd,default,200,1622400,309.4,9.00,100.0,15468,16209475,1227526,1.00,1,0,16209475,956,25780,25780,0,0,24418,yes,
+2,aes-128-gcm,zstd,default,256,1537962,375.5,9.00,100.0,15656,15325414,1160489,1.00,1,0,15325414,1065,25868,25868,0,0,24418,yes,
+2,aes-128-gcm,zstd,default,1024,175592,171.5,9.00,100.0,15644,1757974,133180,1.00,1,0,1757974,142,25904,25904,0,1,24417,yes,
+2,aes-128-gcm,zstd,default,8192,47352,369.9,9.00,100.0,15464,476518,36081,1.00,1,0,476518,131,25940,25940,0,1,24417,yes,
+2,aes-128-gcm,zstd,default,32768,15719,491.2,9.00,100.0,15704,158383,11991,1.00,1,0,158383,155,27956,27956,0,0,24413,yes,
+2,aes-128-gcm,zstd,default,307200,1543,452.1,9.00,100.0,15668,15304,1159,1.00,1,0,15304,134,27972,27972,0,0,24414,yes,
+2,aes-256-gcm,zstd,default,200,1619712,308.9,9.00,100.0,15620,16220482,1228173,1.00,1,0,16220482,1183,25980,25980,0,0,24418,yes,
+2,aes-256-gcm,zstd,default,256,1508429,368.3,9.00,100.0,15652,15045710,1139222,1.00,1,0,15045710,1020,25908,25908,0,0,24418,yes,
+2,aes-256-gcm,zstd,default,1024,173702,169.6,9.00,100.0,15704,1728744,130886,1.00,1,0,1728744,140,25940,25940,0,0,24417,yes,
+2,aes-256-gcm,zstd,default,8192,48295,377.3,9.00,100.0,15588,479683,36320,1.00,1,0,479683,149,26044,26044,0,0,24417,yes,
+2,aes-256-gcm,zstd,default,32768,15824,494.5,9.00,100.0,15724,157987,11963,1.00,1,0,157987,154,28156,28156,0,1,24412,yes,
+2,aes-256-gcm,zstd,default,307200,1498,438.9,9.00,100.0,15668,15112,1144,1.00,1,0,15112,133,27752,27752,0,0,24415,yes,
+2,chacha20-poly1305-ietf,zstd,default,200,906687,172.9,9.00,100.0,15364,9056876,685815,1.00,1,0,9056876,564,25800,25800,0,1,24418,yes,
+2,chacha20-poly1305-ietf,zstd,default,256,886953,216.5,9.00,100.0,15320,8868499,671602,1.00,1,0,8868499,663,25896,25896,0,0,24418,yes,
+2,chacha20-poly1305-ietf,zstd,default,1024,157334,153.6,9.00,100.0,15464,1574767,119255,1.00,1,0,1574767,128,25736,25736,0,0,24417,yes,
+2,chacha20-poly1305-ietf,zstd,default,8192,46230,361.2,9.00,100.0,15632,461945,34977,1.00,1,0,461945,152,25944,25944,0,0,24418,yes,
+2,chacha20-poly1305-ietf,zstd,default,32768,15230,475.9,9.00,100.0,15572,151953,11505,1.00,1,0,151953,149,27780,27780,0,0,24413,yes,
+2,chacha20-poly1305-ietf,zstd,default,307200,1487,435.6,9.00,100.0,15660,14893,1128,1.00,1,0,14893,134,27980,27980,0,0,24417,yes,
+2,aes-128-gcm,zstd,high-ratio,200,1626540,310.2,9.00,100.0,15652,16314221,1235551,1.00,1,0,16314221,974,25696,25696,0,0,24419,yes,
+2,aes-128-gcm,zstd,high-ratio,256,1520496,371.2,9.00,100.0,15664,15199478,1150952,1.00,1,0,15199478,1000,25780,25780,0,1,24417,yes,
+2,aes-128-gcm,zstd,high-ratio,1024,175534,171.4,9.00,100.0,15700,1761730,133384,1.00,1,0,1761730,142,25956,25956,0,1,24417,yes,
+2,aes-128-gcm,zstd,high-ratio,8192,47354,370.0,9.00,100.0,15620,477410,36148,1.00,1,0,477410,134,25892,25892,0,0,24416,yes,
+2,aes-128-gcm,zstd,high-ratio,32768,15808,494.0,9.00,100.0,15656,158378,11993,1.00,1,0,158378,155,28008,28008,0,0,24413,yes,
+2,aes-128-gcm,zstd,high-ratio,307200,1495,438.0,9.00,100.0,15760,15112,1144,1.00,1,0,15112,132,27960,27960,0,0,24413,yes,
+2,aes-256-gcm,zstd,high-ratio,200,1623552,309.7,9.00,100.0,15708,16255844,1230944,1.00,1,0,16255844,959,25948,25948,0,0,24418,yes,
+2,aes-256-gcm,zstd,high-ratio,256,1500072,366.2,9.00,100.0,15644,14923278,1129867,1.00,1,0,14923278,981,25940,25940,0,0,24417,yes,
+2,aes-256-gcm,zstd,high-ratio,1024,176828,172.7,9.00,100.0,15656,1766108,133715,1.00,1,0,1766108,143,25988,25988,0,0,24417,yes,
+2,aes-256-gcm,zstd,high-ratio,8192,48142,376.1,9.00,100.0,15660,481034,36423,1.00,1,0,481034,213,26004,26004,0,1,24419,yes,
+2,aes-256-gcm,zstd,high-ratio,32768,15439,482.5,9.00,100.0,15716,155117,11744,1.00,1,0,155117,151,27984,27984,0,1,24413,yes,
+2,aes-256-gcm,zstd,high-ratio,307200,1514,443.6,9.00,99.9,15676,15301,1158,1.00,1,0,15301,134,27960,27960,0,0,24414,yes,
+2,chacha20-poly1305-ietf,zstd,high-ratio,200,906811,173.0,9.00,100.0,15400,9065800,686491,1.00,1,0,9065800,572,25704,25704,0,0,24418,yes,
+2,chacha20-poly1305-ietf,zstd,high-ratio,256,891584,217.7,9.00,100.0,15388,8906551,674381,1.00,1,0,8906551,661,25908,25908,0,0,24418,yes,
+2,chacha20-poly1305-ietf,zstd,high-ratio,1024,160784,157.0,9.00,100.0,15428,1597914,120990,1.00,1,0,1597914,131,25944,25944,0,0,24417,yes,
+2,chacha20-poly1305-ietf,zstd,high-ratio,8192,45704,357.1,9.00,100.0,15464,462147,34990,1.00,1,0,462147,128,25832,25832,0,0,24417,yes,
+2,chacha20-poly1305-ietf,zstd,high-ratio,32768,14652,457.9,9.00,99.9,15432,147847,11195,1.00,1,0,147847,144,27960,27960,0,0,24415,yes,
+2,chacha20-poly1305-ietf,zstd,high-ratio,307200,1495,438.0,9.01,100.0,15592,14971,1133,1.00,1,0,14971,131,27996,27996,0,1,24414,yes,
+10,none,none,default,200,3779280,720.8,9.00,100.0,15396,38134908,2887040,1.00,9,0,38134908,3261432,25408,25700,0,0,24158,yes,
+10,none,none,default,256,3445622,841.2,9.00,100.0,15364,34656629,2623515,1.00,9,0,34656629,3249393,25424,25732,0,0,24176,yes,
+10,none,none,default,1024,1515181,1479.7,9.00,100.0,15388,15202791,1150768,1.00,9,0,15202791,3351834,25476,25740,0,0,24228,yes,
+10,none,none,default,8192,263901,2061.7,9.00,100.0,15172,2646438,200381,1.00,9,0,2646438,3367768,25336,25692,0,0,24211,yes,
+10,none,none,default,32768,84426,2638.3,9.00,100.0,15404,848728,64259,1.00,9,0,848728,3240872,25360,25664,0,0,24233,yes,
+10,none,none,default,307200,9759,2859.1,9.07,100.0,17424,97821,7405,1.01,9,0,97821,2395601,23472,23668,0,1,24235,yes,
+10,none,lz4,fast,200,3781925,721.3,9.00,100.0,15208,38095132,2884247,1.00,9,0,38095132,3284547,25520,25680,0,0,24149,yes,
+10,none,lz4,fast,256,3452544,842.9,9.00,100.0,15416,34817436,2635289,1.00,9,0,34817436,3289673,25364,25700,0,0,24150,yes,
+10,none,lz4,fast,1024,1319569,1288.6,9.00,100.0,15300,13283026,1005528,1.00,9,0,13283026,2942472,23356,23616,0,0,24230,yes,
+10,none,lz4,fast,8192,260015,2031.4,9.00,100.0,15240,2618376,198212,1.00,9,0,2618376,2284769,25556,25756,0,0,24171,yes,
+10,none,lz4,fast,32768,72408,2262.8,9.00,100.0,15376,730849,55330,1.00,9,0,730849,1345750,23540,23748,0,0,24208,yes,
+10,none,lz4,fast,307200,9952,2915.5,9.08,100.0,17464,100058,7575,1.01,9,0,100058,165774,27488,27764,0,0,24209,yes,
+10,none,lz4,default,200,3783456,721.6,9.00,100.0,15308,38046252,2880110,1.00,9,0,38046252,3285821,25384,25632,0,1,24149,yes,
+10,none,lz4,default,256,3459459,844.6,9.00,100.0,15416,34879671,2640599,1.00,9,0,34879671,3256764,25484,25728,0,0,24175,yes,
+10,none,lz4,default,1024,1320807,1289.9,9.00,100.0,15356,13308870,1007484,1.00,9,0,13308870,2927639,23348,23692,0,0,24225,yes,
+10,none,lz4,default,8192,259481,2027.2,9.00,100.0,15468,2619677,198310,1.00,9,0,2619677,2279169,25500,25780,0,0,24177,yes,
+10,none,lz4,default,32768,72438,2263.7,9.01,100.0,15336,731515,55384,1.00,9,0,731515,1341359,23356,23660,0,0,24216,yes,
+10,none,lz4,default,307200,9992,2927.4,9.05,100.0,17464,100486,7607,1.01,9,0,100486,165000,27484,27764,0,0,24208,yes,
+10,none,zstd,default,200,3804336,725.6,9.00,100.0,15368,37926652,2871274,1.00,9,0,37926652,3266370,25532,25716,0,0,24168,yes,
+10,none,zstd,default,256,3411027,832.8,9.00,100.0,15380,34393438,2603591,1.00,9,0,34393438,3298597,25352,25740,0,0,24157,yes,
+10,none,zstd,default,1024,321104,313.6,9.04,100.0,15432,3366426,254820,1.01,9,0,3366426,2458902,25544,25836,0,0,24183,yes,
+10,none,zstd,default,8192,126928,991.6,9.02,100.0,15388,1307687,98992,1.00,9,0,1307687,1371167,25644,25808,0,1,24227,yes,
+10,none,zstd,default,32768,39982,1249.4,9.02,100.0,15396,409198,30979,1.00,9,0,409198,699262,23572,23812,0,1,24244,yes,
+10,none,zstd,default,307200,4603,1348.7,9.12,100.0,17644,47433,3591,1.03,9,0,47433,79800,27544,27928,0,1,24201,yes,
+10,none,zstd,high-ratio,200,3783456,721.6,9.00,100.0,15324,38207908,2891909,1.00,9,0,38207908,3278281,25496,25708,0,0,24151,yes,
+10,none,zstd,high-ratio,256,3397248,829.4,9.00,100.0,15256,34411674,2604774,1.00,9,0,34411674,3281075,25444,25688,0,0,24153,yes,
+10,none,zstd,high-ratio,1024,322821,315.3,10.03,100.0,15552,3482548,263570,1.01,9,0,3482548,2439189,25464,25860,0,0,24146,yes,
+10,none,zstd,high-ratio,8192,126501,988.3,9.02,100.0,15528,1315349,99580,1.00,9,0,1315349,1361919,25496,25812,0,0,24199,yes,
+10,none,zstd,high-ratio,32768,40076,1252.4,9.01,100.0,15440,412257,31210,1.00,9,0,412257,698647,23552,23852,0,0,24241,yes,
+10,none,zstd,high-ratio,307200,4614,1351.6,9.15,100.0,17500,47469,3592,1.03,9,0,47469,80466,27636,27912,0,0,24198,yes,
+10,aes-128-gcm,none,default,200,1764664,336.6,9.00,100.0,15468,17883588,1353792,1.00,9,0,17883588,3266169,25580,25896,0,0,24139,yes,
+10,aes-128-gcm,none,default,256,1629424,397.8,9.01,100.0,15532,16541892,1252320,1.00,9,0,16541892,3269280,25596,25920,0,0,24166,yes,
+10,aes-128-gcm,none,default,1024,931392,909.6,9.00,100.0,15736,9381013,710145,1.00,9,0,9381013,3316965,25636,25988,0,0,24174,yes,
+10,aes-128-gcm,none,default,8192,223400,1745.3,9.00,100.0,15708,2241287,169666,1.00,9,0,2241287,3275090,25616,25928,0,0,24215,yes,
+10,aes-128-gcm,none,default,32768,73072,2283.5,9.00,100.0,15524,734982,55638,1.00,9,0,734982,3015631,25660,25928,0,0,24235,yes,
+10,aes-128-gcm,none,default,307200,8269,2422.6,9.08,100.0,17596,83043,6287,1.02,9,0,83043,1523758,25636,25944,0,0,24218,yes,
+10,aes-256-gcm,none,default,200,1769700,337.5,9.00,100.0,15500,17921185,1356946,1.00,9,0,17921185,3215939,25628,25916,0,1,24157,yes,
+10,aes-256-gcm,none,default,256,1609256,392.9,9.00,100.0,15680,16279349,1232257,1.00,9,0,16279349,3280625,25652,25952,0,1,24165,yes,
+10,aes-256-gcm,none,default,1024,933333,911.5,9.00,100.0,15508,9437006,714438,1.00,9,0,9437006,3290640,25648,25948,0,1,24180,yes,
+10,aes-256-gcm,none,default,8192,220328,1721.3,9.00,100.0,15388,2213182,167564,1.00,9,0,2213182,3262766,25796,25956,0,1,24218,yes,
+10,aes-256-gcm,none,default,32768,72672,2271.0,9.00,100.0,15636,729169,55198,1.00,9,0,729169,2957683,25628,25952,0,1,24237,yes,
+10,aes-256-gcm,none,default,307200,8166,2392.5,9.07,100.0,17708,81954,6205,1.01,9,0,81954,1472083,25648,25964,0,0,24207,yes,
+10,chacha20-poly1305-ietf,none,default,200,933407,178.0,9.02,100.0,15476,9527974,721324,1.00,9,0,9527974,3275596,25468,25744,0,0,24159,yes,
+10,chacha20-poly1305-ietf,none,default,256,884175,215.9,9.01,100.0,15568,9052190,685253,1.00,9,0,9052190,3291854,25556,25848,0,0,24186,yes,
+10,chacha20-poly1305-ietf,none,default,1024,641378,626.3,9.00,100.0,15436,6506933,492614,1.00,9,0,6506933,3284603,25536,25832,0,0,24164,yes,
+10,chacha20-poly1305-ietf,none,default,8192,165420,1292.3,9.00,100.0,15372,1668221,126266,1.00,9,0,1668221,3070344,25560,25820,0,0,24198,yes,
+10,chacha20-poly1305-ietf,none,default,32768,53155,1661.1,9.00,100.0,15408,533720,40406,1.00,9,0,533720,2520693,25516,25712,0,0,24240,yes,
+10,chacha20-poly1305-ietf,none,default,307200,6042,1770.1,9.08,100.0,17432,60704,4596,1.02,9,0,60704,798673,25484,25720,0,0,24222,yes,
+10,aes-128-gcm,lz4,fast,200,1767748,337.2,9.00,100.0,15576,17896750,1354891,1.00,9,0,17896750,3226833,25552,25928,0,0,24148,yes,
+10,aes-128-gcm,lz4,fast,256,1635557,399.3,9.00,100.0,15728,16621280,1258235,1.00,9,0,16621280,3269619,25628,25912,0,0,24163,yes,
+10,aes-128-gcm,lz4,fast,1024,859765,839.6,9.00,100.0,15724,8690771,657993,1.00,9,0,8690771,2987239,23748,23960,0,0,24221,yes,
+10,aes-128-gcm,lz4,fast,8192,226695,1771.1,9.00,100.0,15684,2286798,173124,1.00,9,0,2286798,2295433,25648,25944,0,0,24168,yes,
+10,aes-128-gcm,lz4,fast,32768,67748,2117.1,9.01,100.0,15440,684477,51819,1.00,9,0,684477,1335447,23604,23952,0,0,24210,yes,
+10,aes-128-gcm,lz4,fast,307200,9175,2688.0,9.06,100.0,17684,92517,7003,1.01,9,0,92517,169304,27760,27976,0,0,24212,yes,
+10,aes-256-gcm,lz4,fast,200,1775562,338.7,9.00,100.0,15384,18011618,1363277,1.00,9,0,18011618,3250656,25656,25976,0,1,24144,yes,
+10,aes-256-gcm,lz4,fast,256,1633234,398.7,9.00,100.0,15660,16576706,1254860,1.00,9,0,16576706,3255628,25656,26004,0,1,24156,yes,
+10,aes-256-gcm,lz4,fast,1024,859519,839.4,9.00,100.0,15400,8703613,658766,1.00,9,0,8703613,3005059,23632,23956,0,1,24216,yes,
+10,aes-256-gcm,lz4,fast,8192,225906,1764.9,9.00,100.0,15444,2274821,172218,1.00,9,0,2274821,2307104,25616,25944,0,0,24183,yes,
+10,aes-256-gcm,lz4,fast,32768,67390,2105.9,9.00,100.0,15620,680551,51530,1.00,9,0,680551,1340711,23704,23876,0,0,24207,yes,
+10,aes-256-gcm,lz4,fast,307200,9090,2663.1,9.09,100.0,17756,91907,6958,1.01,9,0,91907,171034,27668,27976,0,0,24206,yes,
+10,chacha20-poly1305-ietf,lz4,fast,200,935255,178.4,9.01,100.0,15440,9639540,729660,1.00,9,0,9639540,3268919,25536,25828,0,0,24145,yes,
+10,chacha20-poly1305-ietf,lz4,fast,256,890359,217.4,9.01,100.0,15436,9111856,689770,1.00,9,0,9111856,3275352,25564,25740,0,0,24168,yes,
+10,chacha20-poly1305-ietf,lz4,fast,1024,609292,595.0,9.01,100.0,15532,6226036,471312,1.00,9,0,6226036,3011885,23476,23812,0,0,24196,yes,
+10,chacha20-poly1305-ietf,lz4,fast,8192,186160,1454.4,9.00,100.0,15400,1883894,142622,1.00,9,0,1883894,2294228,25584,25752,0,0,24141,yes,
+10,chacha20-poly1305-ietf,lz4,fast,32768,57357,1792.4,9.00,100.0,15460,579858,43905,1.00,9,0,579858,1311191,23496,23788,0,0,24219,yes,
+10,chacha20-poly1305-ietf,lz4,fast,307200,7751,2270.9,9.05,100.0,17468,78019,5906,1.01,9,0,78019,174498,25556,25852,0,1,24231,yes,
+10,aes-128-gcm,lz4,default,200,1772383,338.1,9.00,100.0,15448,17957411,1359380,1.00,9,0,17957411,3236610,25616,25964,0,0,24151,yes,
+10,aes-128-gcm,lz4,default,256,1642583,401.0,9.00,100.0,15760,16644882,1259831,1.00,9,0,16644882,3254324,25696,25932,0,0,24157,yes,
+10,aes-128-gcm,lz4,default,1024,859336,839.2,9.00,100.0,15644,8721860,660347,1.00,9,0,8721860,3011515,23628,23888,0,0,24204,yes,
+10,aes-128-gcm,lz4,default,8192,225664,1763.0,9.00,100.0,15528,2273502,172105,1.00,9,0,2273502,2299884,25672,25964,0,0,24173,yes,
+10,aes-128-gcm,lz4,default,32768,67709,2115.9,9.01,100.0,15644,683349,51730,1.00,9,0,683349,1341571,23572,23932,0,0,24203,yes,
+10,aes-128-gcm,lz4,default,307200,9325,2731.9,9.06,100.0,17520,93698,7093,1.01,9,0,93698,169126,27888,28060,0,0,24209,yes,
+10,aes-256-gcm,lz4,default,200,1777093,339.0,9.00,100.0,15468,18051410,1366496,1.00,9,0,18051410,3253297,25612,25912,0,0,24147,yes,
+10,aes-256-gcm,lz4,default,256,1627661,397.4,9.00,100.0,15464,16522225,1250831,1.00,9,0,16522225,3261630,25720,25968,0,0,24163,yes,
+10,aes-256-gcm,lz4,default,1024,858836,838.7,9.00,100.0,15468,8706162,659208,1.00,9,0,8706162,3003836,23592,23860,0,0,24209,yes,
+10,aes-256-gcm,lz4,default,8192,224037,1750.3,9.00,100.0,15636,2257383,170859,1.00,9,0,2257383,2309238,25768,25956,0,0,24175,yes,
+10,aes-256-gcm,lz4,default,32768,67756,2117.4,9.01,100.0,15712,684011,51788,1.00,9,0,684011,1334098,23580,23832,0,0,24220,yes,
+10,aes-256-gcm,lz4,default,307200,9222,2701.7,9.06,100.0,17492,92756,7022,1.01,9,0,92756,170838,27656,28048,0,0,24209,yes,
+10,chacha20-poly1305-ietf,lz4,default,200,937592,178.8,9.01,100.0,15336,9555967,723498,1.00,9,0,9555967,3267663,25548,25752,0,0,24160,yes,
+10,chacha20-poly1305-ietf,lz4,default,256,886311,216.4,9.01,100.0,15568,9041044,684409,1.00,9,0,9041044,3283975,25556,25760,0,0,24184,yes,
+10,chacha20-poly1305-ietf,lz4,default,1024,606308,592.1,9.01,100.0,15584,6209897,470055,1.00,9,0,6209897,3026419,23548,23664,0,0,24184,yes,
+10,chacha20-poly1305-ietf,lz4,default,8192,186172,1454.5,9.00,100.0,15488,1889269,143007,1.00,9,0,1889269,2291473,25604,25672,0,1,24140,yes,
+10,chacha20-poly1305-ietf,lz4,default,32768,57458,1795.6,9.01,100.0,15352,581262,44005,1.00,9,0,581262,1307735,23488,23836,0,1,24205,yes,
+10,chacha20-poly1305-ietf,lz4,default,307200,7856,2301.5,9.10,100.0,17624,78958,5977,1.02,9,0,78958,169886,25500,25868,0,1,24224,yes,
+10,aes-128-gcm,zstd,default,200,1770900,337.8,9.00,100.0,15684,17919917,1356542,1.00,9,0,17919917,3252097,25684,26104,0,0,24158,yes,
+10,aes-128-gcm,zstd,default,256,1641122,400.7,9.00,100.0,15712,16646572,1260149,1.00,9,0,16646572,3256263,25844,26052,0,0,24160,yes,
+10,aes-128-gcm,zstd,default,1024,294216,287.3,9.01,100.0,15648,3084221,233494,1.00,9,0,3084221,2465782,25848,26048,0,0,24179,yes,
+10,aes-128-gcm,zstd,default,8192,118868,928.7,9.01,100.0,15712,1220315,92385,1.00,9,0,1220315,1387981,25776,26136,0,0,24238,yes,
+10,aes-128-gcm,zstd,default,32768,38328,1197.8,9.01,100.0,15712,393317,29774,1.00,9,0,393317,706068,27872,28136,0,0,24208,yes,
+10,aes-128-gcm,zstd,default,307200,4579,1341.4,9.12,100.0,17484,47005,3559,1.03,9,0,47005,79804,27884,28076,0,0,24203,yes,
+10,aes-256-gcm,zstd,default,200,1751397,334.1,9.01,100.0,15588,17848450,1351132,1.00,9,0,17848450,3271897,25772,26036,0,0,24138,yes,
+10,aes-256-gcm,zstd,default,256,1625189,396.8,9.00,100.0,15640,16511295,1249909,1.00,9,0,16511295,3271466,25572,25908,0,0,24162,yes,
+10,aes-256-gcm,zstd,default,1024,294497,287.6,9.03,100.0,15660,3098319,234419,1.01,9,0,3098319,2447129,25920,26080,0,0,24176,yes,
+10,aes-256-gcm,zstd,default,8192,118472,925.6,9.02,100.0,15440,1220951,92433,1.00,9,0,1220951,1396655,25832,26044,0,0,24235,yes,
+10,aes-256-gcm,zstd,default,32768,38849,1214.0,9.01,100.0,15708,399629,30257,1.00,9,0,399629,696100,27860,28124,0,0,24207,yes,
+10,aes-256-gcm,zstd,default,307200,4544,1331.1,9.14,100.0,17688,46630,3530,1.02,9,0,46630,79936,27724,28184,0,0,24202,yes,
+10,chacha20-poly1305-ietf,zstd,default,200,937326,178.8,9.01,100.0,15460,9602405,726904,1.00,9,0,9602405,3254176,25544,25892,0,1,24159,yes,
+10,chacha20-poly1305-ietf,zstd,default,256,899731,219.7,9.02,100.0,15308,9179690,694957,1.00,9,0,9179690,3267236,25532,25820,0,1,24191,yes,
+10,chacha20-poly1305-ietf,zstd,default,1024,250241,244.4,10.04,100.0,15428,2668576,202027,1.01,9,0,2668576,2436611,25580,25932,0,1,24178,yes,
+10,chacha20-poly1305-ietf,zstd,default,8192,111153,868.4,9.02,100.0,15688,1140168,86324,1.00,9,0,1140168,1378804,25640,25956,0,1,24247,yes,
+10,chacha20-poly1305-ietf,zstd,default,32768,35888,1121.5,9.02,100.0,15644,369921,28001,1.00,9,0,369921,691741,27688,27980,0,0,24205,yes,
+10,chacha20-poly1305-ietf,zstd,default,307200,4269,1250.6,9.14,100.0,17632,43922,3324,1.03,9,0,43922,79386,27628,27976,0,0,24195,yes,
+10,aes-128-gcm,zstd,high-ratio,200,1785455,340.5,9.00,100.0,15688,18102661,1370687,1.00,9,0,18102661,3221712,25796,26072,0,0,24149,yes,
+10,aes-128-gcm,zstd,high-ratio,256,1626912,397.2,9.00,100.0,15488,16531621,1251447,1.00,9,0,16531621,3277441,25676,25972,0,0,24158,yes,
+10,aes-128-gcm,zstd,high-ratio,1024,293726,286.8,9.02,100.0,15684,3084181,233403,1.00,9,0,3084181,2444431,25848,26092,0,0,24178,yes,
+10,aes-128-gcm,zstd,high-ratio,8192,118587,926.5,9.02,100.0,15736,1226863,92874,1.00,9,0,1226863,1395260,25768,26116,0,0,24223,yes,
+10,aes-128-gcm,zstd,high-ratio,32768,38812,1212.9,9.01,100.0,15640,399066,30209,1.00,9,0,399066,698456,27876,27992,0,0,24206,yes,
+10,aes-128-gcm,zstd,high-ratio,307200,4487,1314.5,9.19,100.0,17768,46217,3497,1.03,9,0,46217,80422,27844,28152,0,0,24195,yes,
+10,aes-256-gcm,zstd,high-ratio,200,1770668,337.7,9.00,100.0,15436,17951384,1358924,1.00,9,0,17951384,3233742,25668,25988,0,0,24140,yes,
+10,aes-256-gcm,zstd,high-ratio,256,1628213,397.5,9.00,100.0,15648,16517422,1250373,1.00,9,0,16517422,3284065,25620,26164,0,0,24163,yes,
+10,aes-256-gcm,zstd,high-ratio,1024,287817,281.1,9.03,100.0,15728,3030097,229379,1.01,9,0,3030097,2467712,25772,25932,0,0,24182,yes,
+10,aes-256-gcm,zstd,high-ratio,8192,119863,936.4,9.02,100.0,15680,1239189,93828,1.00,9,0,1239189,1376714,25816,26064,0,0,24215,yes,
+10,aes-256-gcm,zstd,high-ratio,32768,38708,1209.6,9.01,100.0,15620,397840,30117,1.00,9,0,397840,699592,27900,28048,0,0,24209,yes,
+10,aes-256-gcm,zstd,high-ratio,307200,4487,1314.5,9.18,100.0,17764,46122,3491,1.03,9,0,46122,80676,27716,28156,0,0,24208,yes,
+10,chacha20-poly1305-ietf,zstd,high-ratio,200,932817,177.9,9.02,100.0,15444,9596755,726147,1.00,9,0,9596755,3255143,25548,25988,0,1,24145,yes,
+10,chacha20-poly1305-ietf,zstd,high-ratio,256,887713,216.7,9.01,100.0,15396,9061826,686034,1.00,9,0,9061826,3271698,25512,25820,0,1,24193,yes,
+10,chacha20-poly1305-ietf,zstd,high-ratio,1024,250988,245.1,10.02,100.0,15576,2688414,203514,1.01,9,0,2688414,2426939,25600,25916,0,0,24176,yes,
+10,chacha20-poly1305-ietf,zstd,high-ratio,8192,109739,857.3,9.02,100.0,15536,1140413,86336,1.01,9,0,1140413,1383584,25608,25876,0,0,24223,yes,
+10,chacha20-poly1305-ietf,zstd,high-ratio,32768,35994,1124.8,9.01,100.0,15600,370300,28038,1.00,9,0,370300,691274,27676,27996,0,0,24207,yes,
+10,chacha20-poly1305-ietf,zstd,high-ratio,307200,4239,1242.0,9.19,100.0,17520,43808,3314,1.03,9,0,43808,79334,27684,27948,0,0,24197,yes,
+100,none,none,default,200,3685302,702.9,10.05,99.5,17172,40336102,3023016,1.01,99,0,40336102,4096544,25376,25752,0,0,21651,yes,
+100,none,none,default,256,3357976,819.8,10.05,99.5,17248,36929341,2768109,1.01,99,0,36929341,4111972,25380,25752,0,0,21476,yes,
+100,none,none,default,1024,1471497,1437.0,10.02,99.5,16976,15870102,1187082,1.00,99,0,15870102,4158876,25384,25748,0,0,21428,yes,
+100,none,none,default,8192,259297,2025.8,10.02,99.5,17404,2753167,205783,1.00,99,0,2753167,4154329,25396,25772,0,0,21668,yes,
+100,none,none,default,32768,78429,2450.9,9.07,99.4,21596,817611,61249,1.02,99,0,817611,3911601,24800,25732,0,0,21797,yes,
+100,none,none,default,307200,8939,2618.9,9.34,99.4,48112,94268,7060,1.15,99,0,94268,2738500,23200,23648,0,1,21352,yes,
+100,none,lz4,fast,200,3713394,708.3,10.05,99.5,17468,40863760,3060039,1.01,99,0,40863760,4091615,25388,25776,0,0,21590,yes,
+100,none,lz4,fast,256,3360174,820.4,10.04,99.5,16940,36908266,2761355,1.01,99,0,36908266,4099907,25380,25724,0,0,21495,yes,
+100,none,lz4,fast,1024,1297208,1266.8,10.05,99.5,17148,14423769,1078735,1.01,99,0,14423769,3693122,23356,25700,0,1,21805,yes,
+100,none,lz4,fast,8192,257164,2009.1,10.04,99.5,16976,2867563,214815,1.01,99,0,2867563,2853996,25416,25780,0,0,21389,yes,
+100,none,lz4,fast,32768,70850,2214.1,10.08,99.5,19312,783680,58650,1.02,99,0,783680,1677294,23356,23728,0,0,21996,yes,
+100,none,lz4,fast,307200,9429,2762.5,10.08,99.4,33808,102312,7650,1.15,99,0,102312,155877,26612,27208,0,0,21419,yes,
+100,none,lz4,default,200,3709370,707.5,10.05,99.5,17000,40951001,3066342,1.01,99,0,40951001,4100078,25376,25768,0,1,21612,yes,
+100,none,lz4,default,256,3353984,818.8,10.06,99.5,17268,36413336,2728817,1.01,99,0,36413336,4109380,25404,25760,0,0,21593,yes,
+100,none,lz4,default,1024,1272608,1242.8,10.04,99.5,17172,14210312,1062771,1.01,99,0,14210312,3672160,23352,25648,0,0,21769,yes,
+100,none,lz4,default,8192,257486,2011.6,10.07,99.5,17340,2866862,214393,1.01,99,0,2866862,2856346,25416,25800,0,0,21412,yes,
+100,none,lz4,default,32768,71317,2228.7,10.13,99.5,19504,786551,58821,1.02,99,0,786551,1674101,23356,23704,0,0,22035,yes,
+100,none,lz4,default,307200,9527,2791.2,9.75,99.5,33784,101995,7641,1.14,99,0,101995,157661,26776,27260,0,1,21370,yes,
+100,none,zstd,default,200,3637874,693.9,10.05,99.5,17032,39952323,2987536,1.01,99,0,39952323,4110641,25380,25776,0,0,21642,yes,
+100,none,zstd,default,256,3370097,822.8,10.01,99.5,17352,37060651,2772548,1.00,99,0,37060651,4094387,25376,25732,0,0,21484,yes,
+100,none,zstd,default,1024,319833,312.3,10.50,99.5,17296,3675811,273355,1.07,99,0,4941652,2847695,25520,25908,0,1,21976,yes,
+100,none,zstd,default,8192,123391,964.0,11.25,99.3,17384,1408090,104870,1.05,99,0,1716544,1562457,25516,25892,0,1,21688,yes,
+100,none,zstd,default,32768,38859,1214.3,11.14,99.5,17336,444078,33135,1.03,99,0,524641,683621,23508,23836,0,1,21869,yes,
+100,none,zstd,default,307200,4491,1315.7,10.42,99.3,25480,52059,3766,1.17,99,0,56934,42079,27180,27592,0,0,21338,yes,
+100,none,zstd,high-ratio,200,3736581,712.7,10.05,99.5,17228,41324871,3091097,1.01,99,0,41324871,4090146,25384,25728,0,1,21582,yes,
+100,none,zstd,high-ratio,256,3378361,824.8,10.06,99.5,17136,37031667,2773908,1.01,99,0,37031667,4102240,25380,25756,0,1,21537,yes,
+100,none,zstd,high-ratio,1024,321415,313.9,11.23,99.6,17664,3678124,273507,1.06,99,0,4860402,2863172,25592,25896,0,1,22009,yes,
+100,none,zstd,high-ratio,8192,124609,973.5,10.11,99.5,17464,1417907,104097,1.04,99,0,1773807,1538831,25552,25888,0,0,21670,yes,
+100,none,zstd,high-ratio,32768,39283,1227.6,11.10,99.5,17644,448310,33404,1.02,99,0,530883,679896,23524,23840,0,0,21848,yes,
+100,none,zstd,high-ratio,307200,4449,1303.5,9.96,99.3,25660,51533,3722,1.14,99,0,56123,41008,27200,28736,0,0,21328,yes,
+100,aes-128-gcm,none,default,200,1751633,334.1,11.08,99.3,17724,20603395,1541709,1.02,99,0,20603395,4050647,25576,25996,0,0,21548,yes,
+100,aes-128-gcm,none,default,256,1545884,377.4,11.13,99.5,17544,18527368,1385742,1.02,99,0,18544303,4079784,25608,26000,0,0,21636,yes,
+100,aes-128-gcm,none,default,1024,905860,884.6,10.03,99.5,17432,10152726,760390,1.01,99,0,10152726,4119608,25608,26016,0,1,21468,yes,
+100,aes-128-gcm,none,default,8192,217038,1695.6,10.02,99.5,17628,2319823,173536,1.00,99,0,2319823,4016604,25608,25992,0,0,21724,yes,
+100,aes-128-gcm,none,default,32768,68633,2144.8,9.08,99.4,21548,722000,54078,1.02,99,0,722000,3643265,25344,25984,0,1,21905,yes,
+100,aes-128-gcm,none,default,307200,7607,2228.7,9.42,99.4,48380,81441,6092,1.21,99,0,81441,1662428,25376,25992,0,0,20944,yes,
+100,aes-256-gcm,none,default,200,1748981,333.6,11.12,99.5,17448,20809036,1553145,1.02,99,0,20810113,4043904,25628,25988,0,1,21533,yes,
+100,aes-256-gcm,none,default,256,1603643,391.5,11.07,99.5,17556,19134735,1429245,1.01,99,0,19134735,4051393,25616,26024,0,1,21591,yes,
+100,aes-256-gcm,none,default,1024,927258,905.5,10.04,99.3,17608,10441201,783286,1.01,99,0,10441201,4081818,25604,25988,0,0,21415,yes,
+100,aes-256-gcm,none,default,8192,214786,1678.0,10.03,99.5,17736,2292412,171216,1.00,99,0,2292412,4036799,25616,26016,0,0,21740,yes,
+100,aes-256-gcm,none,default,32768,67770,2117.8,10.06,99.5,21624,714911,53547,1.02,99,0,714911,3611148,25276,25968,0,0,21891,yes,
+100,aes-256-gcm,none,default,307200,7505,2198.7,9.36,99.4,48356,80777,6047,1.13,99,0,80777,1626028,25412,25956,0,1,20958,yes,
+100,chacha20-poly1305-ietf,none,default,200,918843,175.3,11.19,99.5,17400,10930020,826654,1.03,99,0,11832665,4017397,25504,25872,0,0,21823,yes,
+100,chacha20-poly1305-ietf,none,default,256,877487,214.2,11.18,99.5,17432,10464929,780965,1.02,99,0,11145391,4037595,25484,25848,0,0,21903,yes,
+100,chacha20-poly1305-ietf,none,default,1024,625763,611.1,11.09,99.5,17448,7416668,554849,1.01,99,0,7416668,4053092,25484,25868,0,0,21525,yes,
+100,chacha20-poly1305-ietf,none,default,8192,162158,1266.9,10.04,99.5,17376,1767625,132238,1.01,99,0,1767625,3811007,25492,25888,0,0,21769,yes,
+100,chacha20-poly1305-ietf,none,default,32768,49889,1559.0,10.06,99.5,21592,532362,39791,1.03,99,0,532362,3057972,25168,25892,0,1,22078,yes,
+100,chacha20-poly1305-ietf,none,default,307200,5670,1661.1,9.85,99.4,48156,63093,4720,1.14,99,0,63093,882834,25284,25776,0,0,20823,yes,
+100,aes-128-gcm,lz4,fast,200,1744183,332.7,11.12,99.5,17492,20776716,1553632,1.02,99,0,20776716,4045407,25604,26004,0,0,21524,yes,
+100,aes-128-gcm,lz4,fast,256,1619978,395.5,11.10,99.5,17640,18816518,1407158,1.02,99,0,18816518,4066652,25592,26004,0,1,21721,yes,
+100,aes-128-gcm,lz4,fast,1024,847028,827.2,10.06,99.5,17592,9690776,734595,1.01,99,0,9690776,3729011,23564,23964,0,0,21945,yes,
+100,aes-128-gcm,lz4,fast,8192,220873,1725.6,10.06,99.5,17608,2499070,187210,1.01,99,0,2499070,2872020,25644,26024,0,1,21597,yes,
+100,aes-128-gcm,lz4,fast,32768,65679,2052.5,10.08,99.2,19496,747533,55953,1.02,99,0,747533,1661808,23564,23968,0,0,21758,yes,
+100,aes-128-gcm,lz4,fast,307200,8873,2599.6,10.42,99.4,36188,96510,7218,1.15,99,0,96510,161164,26784,27572,0,1,21484,yes,
+100,aes-256-gcm,lz4,fast,200,1747651,333.3,10.11,99.5,17652,20064690,1501511,1.02,99,0,20064690,4052019,25624,26004,0,0,21665,yes,
+100,aes-256-gcm,lz4,fast,256,1594842,389.4,11.08,99.6,17712,18712526,1400114,1.02,99,0,18712526,4062018,25632,26028,0,0,21646,yes,
+100,aes-256-gcm,lz4,fast,1024,812526,793.5,11.05,99.5,17516,9404880,702538,1.01,99,0,9404880,3771705,23576,23968,0,0,21955,yes,
+100,aes-256-gcm,lz4,fast,8192,221204,1728.2,10.06,99.5,17712,2490268,186230,1.01,99,0,2490268,2873824,25632,26020,0,0,21596,yes,
+100,aes-256-gcm,lz4,fast,32768,65759,2055.0,11.11,99.5,19600,755468,56572,1.02,99,0,755468,1649687,23532,23960,0,0,21691,yes,
+100,aes-256-gcm,lz4,fast,307200,8816,2582.7,10.21,99.5,36140,95677,7165,1.16,99,0,95677,160304,26928,27604,0,0,21455,yes,
+100,chacha20-poly1305-ietf,lz4,fast,200,917587,175.0,11.13,99.5,17480,10934475,816432,1.04,99,0,12267935,4001100,25460,25896,0,0,21757,yes,
+100,chacha20-poly1305-ietf,lz4,fast,256,879017,214.6,11.20,99.3,17448,10472964,781623,1.03,99,0,10968654,4032595,25440,25840,0,1,21943,yes,
+100,chacha20-poly1305-ietf,lz4,fast,1024,592726,578.8,11.04,99.5,17628,7025152,525324,1.02,99,0,7064658,3766181,23460,23848,0,1,22128,yes,
+100,chacha20-poly1305-ietf,lz4,fast,8192,185001,1445.3,11.08,99.5,17436,2144712,160496,1.02,99,0,2144712,2847340,25496,25888,0,1,21597,yes,
+100,chacha20-poly1305-ietf,lz4,fast,32768,56492,1765.4,11.15,99.5,19504,664823,49740,1.03,99,0,664823,1594432,23460,23832,0,0,21623,yes,
+100,chacha20-poly1305-ietf,lz4,fast,307200,7614,2230.6,10.47,99.5,35836,83998,6290,1.19,99,0,83998,162604,24868,25536,0,1,21555,yes,
+100,aes-128-gcm,lz4,default,200,1752248,334.2,11.08,99.5,17428,20813282,1557181,1.02,99,0,20813282,4046912,25596,26008,0,1,21512,yes,
+100,aes-128-gcm,lz4,default,256,1627515,397.3,11.07,99.5,17620,19159531,1435063,1.02,99,0,19159531,4049478,25588,25984,0,0,21662,yes,
+100,aes-128-gcm,lz4,default,1024,845638,825.8,11.07,99.5,17492,10034915,753146,1.01,99,0,10034915,3741150,23568,23976,0,0,21716,yes,
+100,aes-128-gcm,lz4,default,8192,222437,1737.8,10.05,99.5,17684,2506505,187528,1.01,99,0,2506505,2869054,25612,26024,0,0,21578,yes,
+100,aes-128-gcm,lz4,default,32768,66413,2075.4,11.08,99.5,19620,761658,56989,1.02,99,0,761658,1652369,23560,23972,0,0,21666,yes,
+100,aes-128-gcm,lz4,default,307200,8897,2606.4,10.40,99.4,36088,96431,7211,1.17,99,0,96431,159993,26828,27572,0,0,21461,yes,
+100,aes-256-gcm,lz4,default,200,1724598,328.9,11.04,99.5,17580,20310166,1518971,1.01,99,0,20310166,4049907,25616,25992,0,0,21597,yes,
+100,aes-256-gcm,lz4,default,256,1616609,394.7,11.06,99.5,17624,19126296,1430859,1.02,99,0,19126296,4045664,25632,26036,0,0,21583,yes,
+100,aes-256-gcm,lz4,default,1024,851724,831.8,11.08,99.5,17728,9828361,735161,1.01,99,0,9828361,3735106,23588,23968,0,1,21891,yes,
+100,aes-256-gcm,lz4,default,8192,223043,1742.5,10.09,99.5,17256,2513162,188125,1.01,99,0,2513162,2862546,25624,26016,0,1,21561,yes,
+100,aes-256-gcm,lz4,default,32768,66184,2068.3,10.15,99.5,19784,753090,56184,1.02,99,0,753090,1648063,23560,23960,0,0,21731,yes,
+100,aes-256-gcm,lz4,default,307200,8732,2558.2,10.58,99.5,36144,95254,7123,1.16,99,0,95254,162213,26896,27596,0,1,21443,yes,
+100,chacha20-poly1305-ietf,lz4,default,200,923929,176.2,11.18,99.4,17472,11004393,820244,1.03,99,0,11961357,4006408,25504,25840,0,1,21830,yes,
+100,chacha20-poly1305-ietf,lz4,default,256,877402,214.2,11.16,99.5,17476,10489179,782483,1.03,99,0,11172132,4028353,25444,25880,0,0,21867,yes,
+100,chacha20-poly1305-ietf,lz4,default,1024,596881,582.9,11.11,99.5,17464,7020079,525849,1.02,99,0,7020079,3764546,23460,23848,0,0,22177,yes,
+100,chacha20-poly1305-ietf,lz4,default,8192,184665,1442.7,11.07,99.5,17668,2145376,160426,1.01,99,0,2145376,2838443,25516,25900,0,0,21619,yes,
+100,chacha20-poly1305-ietf,lz4,default,32768,56101,1753.2,11.14,99.5,19496,658269,49301,1.03,99,0,658269,1598894,23448,23848,0,0,21566,yes,
+100,chacha20-poly1305-ietf,lz4,default,307200,7614,2230.8,10.52,99.2,33812,83975,6280,1.20,99,0,83975,161149,25056,27380,0,0,21551,yes,
+100,aes-128-gcm,zstd,default,200,1750316,333.8,11.08,99.5,17344,20395785,1526174,1.02,99,0,20395785,4054720,25596,26016,0,0,21621,yes,
+100,aes-128-gcm,zstd,default,256,1602237,391.2,11.09,99.5,17480,18712354,1401150,1.02,99,0,18712354,4060435,25600,26012,0,0,21730,yes,
+100,aes-128-gcm,zstd,default,1024,291314,284.5,11.31,99.6,17756,3350995,248682,1.03,99,0,4702009,2786750,25700,26132,0,0,21884,yes,
+100,aes-128-gcm,zstd,default,8192,118025,922.1,11.15,99.5,17584,1346473,101056,1.05,99,0,1707549,1533947,25700,26140,0,0,21519,yes,
+100,aes-128-gcm,zstd,default,32768,37721,1178.8,11.31,99.5,19784,430436,32005,1.04,99,0,531154,653291,27760,28140,0,0,21143,yes,
+100,aes-128-gcm,zstd,default,307200,4367,1279.3,10.09,99.3,27972,50059,3632,1.32,99,0,56995,41650,27528,27884,0,1,21349,yes,
+100,aes-256-gcm,zstd,default,200,1751662,334.1,11.07,99.5,17712,20941927,1568331,1.01,99,0,20995532,4044384,25632,26080,0,1,21489,yes,
+100,aes-256-gcm,zstd,default,256,1616366,394.6,11.09,99.5,17760,19054065,1425349,1.02,99,0,19054065,4045007,25648,26036,0,0,21613,yes,
+100,aes-256-gcm,zstd,default,1024,286982,280.3,10.55,99.6,17768,3303448,245027,1.06,99,0,4708668,2796072,25752,26140,0,0,21898,yes,
+100,aes-256-gcm,zstd,default,8192,117055,914.5,11.20,99.5,17824,1338050,99520,1.05,99,0,1638886,1568409,25840,26104,0,0,21547,yes,
+100,aes-256-gcm,zstd,default,32768,37780,1180.6,11.11,99.5,19780,431461,32201,1.04,99,0,521627,665555,27804,28172,0,0,21187,yes,
+100,aes-256-gcm,zstd,default,307200,4294,1258.1,10.57,99.4,27956,48923,3566,1.20,99,0,54759,44190,27432,27880,0,1,21384,yes,
+100,chacha20-poly1305-ietf,zstd,default,200,919611,175.4,11.23,99.5,17380,10966780,817806,1.04,99,0,12086562,4005056,25488,25880,0,0,21769,yes,
+100,chacha20-poly1305-ietf,zstd,default,256,886008,216.3,11.23,99.5,17432,10545216,787250,1.03,99,0,11831113,3999295,25576,25984,0,0,21641,yes,
+100,chacha20-poly1305-ietf,zstd,default,1024,248437,242.6,10.63,99.6,17472,2837610,210630,1.08,99,0,4389049,2724248,25596,26004,0,0,21921,yes,
+100,chacha20-poly1305-ietf,zstd,default,8192,107786,842.1,11.36,99.5,17464,1225909,91112,1.04,99,0,1532327,1566489,25616,26000,0,0,21534,yes,
+100,chacha20-poly1305-ietf,zstd,default,32768,35107,1097.1,11.27,99.3,19448,398334,29671,1.03,99,0,483456,667058,27596,28004,0,0,21189,yes,
+100,chacha20-poly1305-ietf,zstd,default,307200,4069,1192.0,10.37,99.3,27948,46254,3386,1.06,99,0,52618,47520,27368,27780,0,1,21425,yes,
+100,aes-128-gcm,zstd,high-ratio,200,1752277,334.2,11.10,99.5,17696,20895565,1564039,1.02,99,0,20895565,4050478,25588,26100,0,0,21513,yes,
+100,aes-128-gcm,zstd,high-ratio,256,1616905,394.8,11.04,99.5,17728,18646302,1395786,1.01,99,0,18646302,4067753,25600,25996,0,0,21780,yes,
+100,aes-128-gcm,zstd,high-ratio,1024,288861,282.1,11.18,99.5,17492,3324063,246757,1.02,99,0,4581091,2819426,25700,26144,0,0,21966,yes,
+100,aes-128-gcm,zstd,high-ratio,8192,116412,909.5,11.13,99.5,17488,1325126,98684,1.03,99,0,1619527,1575930,25764,26100,0,0,21536,yes,
+100,aes-128-gcm,zstd,high-ratio,32768,37378,1168.1,11.21,99.5,19856,427629,31853,1.03,99,0,522255,666042,27764,28156,0,0,21168,yes,
+100,aes-128-gcm,zstd,high-ratio,307200,4396,1287.8,10.38,99.4,27964,51095,3674,1.32,99,0,57141,41149,27524,29464,0,1,21346,yes,
+100,aes-256-gcm,zstd,high-ratio,200,1745516,332.9,11.08,99.5,17568,20481854,1531125,1.02,99,0,20481854,4051159,25628,26056,0,0,21574,yes,
+100,aes-256-gcm,zstd,high-ratio,256,1607342,392.4,11.10,99.3,17624,19127945,1432590,1.02,99,0,19127945,4046212,25596,26156,0,0,21550,yes,
+100,aes-256-gcm,zstd,high-ratio,1024,287121,280.4,11.32,99.6,17616,3302636,244948,1.05,99,0,4595596,2826998,25768,26168,0,0,21952,yes,
+100,aes-256-gcm,zstd,high-ratio,8192,118339,924.5,11.44,99.6,17648,1348453,100242,1.05,99,0,1653486,1566298,25776,26172,0,0,21568,yes,
+100,aes-256-gcm,zstd,high-ratio,32768,37686,1177.7,11.15,99.5,19776,428567,31952,1.03,99,0,518499,665367,27776,28180,0,0,21194,yes,
+100,aes-256-gcm,zstd,high-ratio,307200,4366,1279.2,10.43,99.4,27912,49915,3636,1.24,99,0,55993,42672,27428,29456,0,0,21374,yes,
+100,chacha20-poly1305-ietf,zstd,high-ratio,200,909197,173.4,11.23,99.6,17468,10822835,807433,1.03,99,0,11753631,4026355,25560,25868,0,0,21835,yes,
+100,chacha20-poly1305-ietf,zstd,high-ratio,256,894312,218.3,11.23,99.6,17396,10601553,791456,1.03,99,0,11163499,4036144,25484,25896,0,1,21873,yes,
+100,chacha20-poly1305-ietf,zstd,high-ratio,1024,244660,238.9,11.39,99.6,17440,2808977,208319,1.08,99,0,4385498,2714366,25600,26004,0,0,21909,yes,
+100,chacha20-poly1305-ietf,zstd,high-ratio,8192,108334,846.4,11.23,99.5,17500,1234445,91705,1.03,99,0,1526764,1570063,25612,26000,0,0,21539,yes,
+100,chacha20-poly1305-ietf,zstd,high-ratio,32768,35102,1096.9,11.20,99.5,19464,400433,29807,1.02,99,0,501326,652580,27620,28024,0,0,21191,yes,
+100,chacha20-poly1305-ietf,zstd,high-ratio,307200,4116,1205.8,10.21,99.4,27712,47211,3431,1.33,99,0,54267,43743,27368,28924,0,0,21365,yes,
+1000,none,none,default,200,3704533,706.6,12.76,99.2,35864,47729187,2408133,2.49,999,0,60333481,3947686,15136,17556,1048576,0,9014,yes,
+1000,none,none,default,256,3362521,820.9,12.06,99.2,36008,42874987,2132872,1.35,999,0,47922276,4052652,15136,17436,1048576,0,10300,yes,
+1000,none,none,default,1024,1394630,1361.9,11.73,99.2,35812,17363164,1148357,2.37,999,0,17584388,4197374,15136,15532,1048576,0,11719,yes,
+1000,none,none,default,8192,243587,1903.0,11.23,99.2,46008,3047553,154275,1.03,999,0,3169736,4119087,15124,15536,1048576,1,8972,yes,
+1000,none,none,default,32768,73212,2287.9,11.29,99.1,74112,830606,42859,2.70,999,0,830606,3791262,17184,17580,1048576,0,9618,yes,
+1000,none,none,default,307200,9425,2761.2,11.31,99.1,333236,113823,5778,9.84,999,0,114078,2689290,16704,17584,1048576,1,4927,yes,
+1000,none,lz4,fast,200,3668910,699.8,12.35,99.2,35644,47215902,2417980,3.49,999,0,59527275,3973718,15160,17512,1048576,0,9185,yes,
+1000,none,lz4,fast,256,3338937,815.2,12.16,99.2,35820,42601516,2102429,1.41,999,0,47248933,4074305,15136,17500,1048576,1,10683,yes,
+1000,none,lz4,fast,1024,1274044,1244.2,11.78,99.1,35924,16449713,992501,3.42,999,0,20573811,3378243,15136,17004,1048576,1,9899,yes,
+1000,none,lz4,fast,8192,246022,1922.0,12.61,99.2,39880,3150459,160060,1.24,999,0,3232648,2745214,15156,15560,1048576,0,12180,yes,
+1000,none,lz4,fast,32768,69476,2171.1,12.37,99.2,50208,917030,44466,5.39,999,0,1018466,1517383,15156,15556,1048576,1,11100,yes,
+1000,none,lz4,fast,307200,9411,2757.1,13.14,99.1,154744,127224,5481,12.03,999,0,127937,125265,17192,17608,1048576,3,8410,yes,
+1000,none,lz4,default,200,3707232,707.1,12.84,99.2,35160,47537385,2987330,2.92,999,0,59992774,3955843,15156,17528,1048576,0,9066,yes,
+1000,none,lz4,default,256,3338575,815.1,12.06,99.2,35768,42566131,2115718,1.34,999,0,47232642,4047275,15156,17452,1048576,1,10556,yes,
+1000,none,lz4,default,1024,1272415,1242.6,12.94,99.2,35800,16491916,824761,2.23,999,0,20443174,3398092,15156,17352,1048576,0,9858,yes,
+1000,none,lz4,default,8192,245899,1921.1,11.81,99.2,39916,3150098,190269,2.35,999,0,3215291,2735383,15156,15560,1048576,1,12164,yes,
+1000,none,lz4,default,32768,69454,2170.4,12.68,99.2,50096,916760,54488,3.58,999,0,969807,1552816,15156,15556,1048576,0,11750,yes,
+1000,none,lz4,default,307200,9427,2761.9,12.23,98.9,164984,125418,6038,10.69,999,0,126607,126587,17208,17608,1048576,0,8665,yes,
+1000,none,zstd,default,200,3701238,706.0,11.93,99.2,35904,47822531,3048934,2.29,999,0,61910809,3916600,15196,17552,1048576,0,8578,yes,
+1000,none,zstd,default,256,3295068,804.5,11.93,99.0,35936,41867893,2109001,1.26,999,0,46890134,4062557,15176,17544,1048576,1,10610,yes,
+1000,none,zstd,default,1024,312831,305.5,13.37,99.2,35420,4443291,249189,3.45,999,0,14218965,812667,16940,17704,1048576,1,8496,yes,
+1000,none,zstd,default,8192,122026,953.3,13.04,99.3,37440,1691501,91984,3.71,999,0,2976800,892271,16960,17508,1048576,1,8757,yes,
+1000,none,zstd,default,32768,37860,1183.1,12.59,99.2,44176,504329,29810,3.19,999,0,817331,384186,17320,17720,1048576,1,9334,yes,
+1000,none,zstd,default,307200,4479,1312.3,13.22,99.1,103328,61188,3343,5.86,999,0,79152,25060,17328,17704,1048576,1,9209,yes,
+1000,none,zstd,high-ratio,200,3686853,703.2,12.23,99.2,35844,47393773,3077718,2.30,999,0,59454111,3967204,15160,17568,1048576,1,9206,yes,
+1000,none,zstd,high-ratio,256,3307338,807.5,11.74,99.2,35900,42201380,2745341,2.34,999,0,46672721,4093901,15192,17396,1048576,1,10788,yes,
+1000,none,zstd,high-ratio,1024,313436,306.1,13.93,99.4,36028,4597666,253427,4.27,999,0,14918689,661084,17324,17760,1048576,1,8262,yes,
+1000,none,zstd,high-ratio,8192,120369,940.4,13.44,99.3,37980,1645405,76466,7.54,999,0,3117704,818939,17112,17512,1048576,1,8403,yes,
+1000,none,zstd,high-ratio,32768,37355,1167.3,13.21,99.2,44056,495547,23314,7.03,999,0,794546,405116,17316,17724,1048576,0,9450,yes,
+1000,none,zstd,high-ratio,307200,4537,1329.3,12.67,99.2,106008,63614,3487,4.32,999,0,79364,24827,18616,19804,1048576,1,9253,yes,
+1000,aes-128-gcm,none,default,200,1678910,320.2,12.77,99.2,41936,22156580,1315711,3.62,999,0,28810191,3851115,15336,17580,1048576,1,11799,yes,
+1000,aes-128-gcm,none,default,256,1559669,380.8,13.29,99.1,40196,20501302,1254977,3.00,999,0,27660677,3825661,15352,17820,1048576,1,10195,yes,
+1000,aes-128-gcm,none,default,1024,877213,856.7,12.32,99.2,42076,11312578,688490,3.21,999,0,15039686,3900724,15360,15772,1048576,1,8349,yes,
+1000,aes-128-gcm,none,default,8192,205093,1602.3,11.48,99.3,52540,2601106,161811,1.64,999,0,2790073,3958407,15356,15772,1048576,1,9662,yes,
+1000,aes-128-gcm,none,default,32768,63396,1981.1,10.74,99.2,80796,739932,46330,3.37,999,0,739932,3454891,17392,17816,1048576,0,9773,yes,
+1000,aes-128-gcm,none,default,307200,8069,2364.0,11.24,99.0,337256,100588,6304,5.37,999,0,100631,1622507,17408,17824,1048576,1,4593,yes,
+1000,aes-256-gcm,none,default,200,1684304,321.3,11.93,99.2,40100,22323709,1113069,5.28,999,0,28727707,3842501,15376,15764,1048576,1,11817,yes,
+1000,aes-256-gcm,none,default,256,1559249,380.7,12.71,99.2,40196,20489112,1293423,2.42,999,0,27611664,3818558,15376,17832,1048576,1,10377,yes,
+1000,aes-256-gcm,none,default,1024,896854,875.8,11.12,99.3,41932,11428135,567999,2.35,999,0,15143685,3872433,15376,17732,1048576,0,8209,yes,
+1000,aes-256-gcm,none,default,8192,203368,1588.8,12.11,98.9,52352,2569208,158927,1.55,999,0,2822619,3958556,15336,15796,1048576,1,9299,yes,
+1000,aes-256-gcm,none,default,32768,64055,2001.7,10.38,99.2,80644,744837,44537,2.02,999,0,744837,3549314,17392,17844,1048576,0,9850,yes,
+1000,aes-256-gcm,none,default,307200,7834,2295.2,12.01,99.0,339620,99337,4903,10.75,999,0,100127,1584229,17420,17840,1048576,0,4691,yes,
+1000,chacha20-poly1305-ietf,none,default,200,902856,172.2,13.77,99.2,39916,12549786,743075,2.89,999,0,24448096,3360329,17248,17700,1048576,1,8600,yes,
+1000,chacha20-poly1305-ietf,none,default,256,869097,212.2,13.20,99.3,40152,12068128,726864,2.37,999,0,25222607,3313391,15200,17704,1048576,1,8133,yes,
+1000,chacha20-poly1305-ietf,none,default,1024,617170,602.7,13.12,99.2,39984,8128482,472120,3.82,999,0,12031144,3760395,15200,17608,1048576,1,8873,yes,
+1000,chacha20-poly1305-ietf,none,default,8192,154232,1204.9,12.24,99.1,52092,1966322,96782,1.36,999,0,2180621,3703121,15200,15656,1048576,1,9923,yes,
+1000,chacha20-poly1305-ietf,none,default,32768,48539,1516.9,10.85,99.2,80240,596267,37525,3.29,999,0,596888,2939730,17248,17696,1048576,0,9737,yes,
+1000,chacha20-poly1305-ietf,none,default,307200,5828,1707.3,11.33,99.1,342068,78860,4421,4.54,999,0,78920,855929,17248,17704,1048576,2,4323,yes,
+1000,aes-128-gcm,lz4,fast,200,1678838,320.2,12.45,99.2,40044,21955770,1325351,3.42,999,0,28642520,3871351,15344,15776,1048576,1,11606,yes,
+1000,aes-128-gcm,lz4,fast,256,1568908,383.0,12.26,99.2,40268,20603259,1248228,2.92,999,0,29491399,3772150,15356,17824,1048576,0,9283,yes,
+1000,aes-128-gcm,lz4,fast,1024,825267,805.9,12.70,99.2,42152,10757008,639043,3.70,999,0,14912306,3378624,15364,15780,1048576,1,10428,yes,
+1000,aes-128-gcm,lz4,fast,8192,210405,1643.8,11.66,99.2,46160,2729561,166660,2.99,999,0,2978236,2718681,17424,17836,1048576,0,9944,yes,
+1000,aes-128-gcm,lz4,fast,32768,64814,2025.4,12.70,99.2,56408,862405,41488,6.43,999,0,900759,1541184,15364,15776,1048576,1,12148,yes,
+1000,aes-128-gcm,lz4,fast,307200,8778,2571.6,14.11,99.0,170860,123554,6456,6.70,999,0,124504,124195,17416,17832,1048576,2,7660,yes,
+1000,aes-256-gcm,lz4,fast,200,1680480,320.5,13.33,99.1,39928,22211927,1090638,4.30,999,0,28997883,3842610,15384,15772,1048576,1,11600,yes,
+1000,aes-256-gcm,lz4,fast,256,1552921,379.1,12.37,99.1,40296,20400526,1001744,3.73,999,0,27108179,3846166,15356,17844,1048576,0,10480,yes,
+1000,aes-256-gcm,lz4,fast,1024,797944,779.2,13.17,98.9,42304,10436355,516191,3.60,999,0,14381979,3408341,15340,15800,1048576,1,10561,yes,
+1000,aes-256-gcm,lz4,fast,8192,212984,1663.9,12.19,99.2,46376,2750526,168899,2.97,999,0,3033629,2697067,17424,17848,1048576,0,9794,yes,
+1000,aes-256-gcm,lz4,fast,32768,63925,1997.6,13.22,99.2,56632,852692,52473,2.42,999,0,885446,1557535,15336,15796,1048576,1,12167,yes,
+1000,aes-256-gcm,lz4,fast,307200,8790,2575.2,14.50,99.1,166464,125969,7195,5.24,999,0,126830,123295,17388,17848,1048576,1,7414,yes,
+1000,chacha20-poly1305-ietf,lz4,fast,200,900189,171.7,14.23,99.2,39964,12582536,726936,3.32,999,0,24850390,3341125,17296,17704,1048576,1,8467,yes,
+1000,chacha20-poly1305-ietf,lz4,fast,256,859205,209.8,13.65,99.3,39976,12059628,580097,6.32,999,0,25436118,3285441,15248,17700,1048576,1,8017,yes,
+1000,chacha20-poly1305-ietf,lz4,fast,1024,584704,571.0,13.54,99.1,39968,7796004,378649,5.87,999,0,10883476,3419094,15248,15656,1048576,1,11598,yes,
+1000,chacha20-poly1305-ietf,lz4,fast,8192,176778,1381.1,12.86,99.2,46188,2302722,115564,3.09,999,0,2723681,2629128,17300,17708,1048576,0,9653,yes,
+1000,chacha20-poly1305-ietf,lz4,fast,32768,55076,1721.1,13.20,99.0,54316,733568,45123,2.84,999,0,852662,1457898,17296,17708,1048576,1,9146,yes,
+1000,chacha20-poly1305-ietf,lz4,fast,307200,7545,2210.5,13.74,99.2,179456,109218,4977,12.60,999,0,110424,129586,17300,17708,1048576,1,9242,yes,
+1000,aes-128-gcm,lz4,default,200,1683782,321.2,12.40,99.1,39956,22121020,1084417,4.38,999,0,28884719,3839870,15336,15776,1048576,1,11603,yes,
+1000,aes-128-gcm,lz4,default,256,1565082,382.1,13.03,99.3,40020,20589368,1202439,3.51,999,0,29414581,3782973,15352,17824,1048576,1,9472,yes,
+1000,aes-128-gcm,lz4,default,1024,826039,806.7,12.20,99.2,42168,10764901,672386,1.77,999,0,15297172,3344797,15364,15780,1048576,1,10328,yes,
+1000,aes-128-gcm,lz4,default,8192,211924,1655.7,12.30,99.2,46456,2737170,134103,2.07,999,0,2995912,2710987,17416,17836,1048576,1,9960,yes,
+1000,aes-128-gcm,lz4,default,32768,64624,2019.5,12.64,99.2,56604,855842,50976,3.10,999,0,898078,1549398,15364,15776,1048576,0,12201,yes,
+1000,aes-128-gcm,lz4,default,307200,8832,2587.5,14.02,99.1,162468,123234,7239,5.17,999,0,123758,128597,17416,17832,1048576,1,7867,yes,
+1000,aes-256-gcm,lz4,default,200,1673504,319.2,11.90,99.3,41992,21913998,1101206,5.29,999,0,28604921,3854342,15372,15764,1048576,1,11733,yes,
+1000,aes-256-gcm,lz4,default,256,1550208,378.5,12.12,99.3,40180,20573377,1019898,4.61,999,0,27660616,3825236,15388,17844,1048576,0,10360,yes,
+1000,aes-256-gcm,lz4,default,1024,819325,800.1,12.29,99.2,42256,10768267,654327,2.33,999,0,14846264,3378858,15336,15800,1048576,1,10497,yes,
+1000,aes-256-gcm,lz4,default,8192,212114,1657.1,12.65,99.0,46344,2733886,163549,1.78,999,0,2966676,2716475,17436,17852,1048576,0,10097,yes,
+1000,aes-256-gcm,lz4,default,32768,64323,2010.1,12.69,99.2,56500,847787,53300,2.17,999,0,897230,1547669,15340,15800,1048576,1,11861,yes,
+1000,aes-256-gcm,lz4,default,307200,8702,2549.4,13.97,99.1,176560,121552,5794,9.37,999,0,123001,127731,17388,17828,1048576,0,7970,yes,
+1000,chacha20-poly1305-ietf,lz4,default,200,896128,170.9,12.91,99.4,40152,12579374,590332,6.93,999,0,24666937,3356958,17252,17700,1048576,0,8573,yes,
+1000,chacha20-poly1305-ietf,lz4,default,256,859319,209.8,13.99,99.1,39716,11866784,694939,3.19,999,0,25583648,3277889,15248,17700,1048576,0,8269,yes,
+1000,chacha20-poly1305-ietf,lz4,default,1024,583576,569.9,12.49,99.2,39940,7750163,374223,5.78,999,0,10843573,3420087,15248,15656,1048576,1,11623,yes,
+1000,chacha20-poly1305-ietf,lz4,default,8192,176702,1380.5,13.19,99.0,46072,2313357,126933,2.62,999,0,2677049,2646517,17300,17708,1048576,1,9861,yes,
+1000,chacha20-poly1305-ietf,lz4,default,32768,54601,1706.3,13.62,99.1,56284,741439,35898,6.03,999,0,844350,1462772,17296,17708,1048576,1,9211,yes,
+1000,chacha20-poly1305-ietf,lz4,default,307200,7599,2226.4,15.27,99.2,144072,115741,6003,6.20,999,0,116619,121741,17296,17708,1048576,1,8488,yes,
+1000,aes-128-gcm,zstd,default,200,1679317,320.3,13.11,99.2,40264,21892276,1274956,3.97,999,0,28725387,3860211,15360,15900,1048576,1,11728,yes,
+1000,aes-128-gcm,zstd,default,256,1572609,383.9,12.61,99.2,39928,20514286,990789,2.26,999,0,28005505,3810826,15448,17824,1048576,5,10125,yes,
+1000,aes-128-gcm,zstd,default,1024,278877,272.3,14.55,99.4,41888,4122403,129913,6.20,999,0,13221817,862994,17496,17948,1048576,14,7842,yes,
+1000,aes-128-gcm,zstd,default,8192,114854,897.3,13.52,99.3,44400,1560169,72324,7.26,999,0,3125598,764040,17504,17948,1048576,1,8174,yes,
+1000,aes-128-gcm,zstd,default,32768,36666,1145.8,12.25,99.3,49892,476436,28755,3.33,999,0,810361,398560,17512,17940,1048576,1,9119,yes,
+1000,aes-128-gcm,zstd,default,307200,4202,1231.1,13.01,99.0,113344,57555,2603,10.00,999,0,76907,11201,19340,19976,1048576,1,7871,yes,
+1000,aes-256-gcm,zstd,default,200,1667850,318.1,13.04,99.2,40292,21803754,1085736,3.60,999,0,28646738,3844323,15380,15860,1048576,1,11790,yes,
+1000,aes-256-gcm,zstd,default,256,1530331,373.6,13.12,99.2,40212,20089625,995768,4.66,999,0,28137637,3801701,15408,17840,1048576,1,9766,yes,
+1000,aes-256-gcm,zstd,default,1024,283320,276.7,14.33,99.4,42280,4052433,180856,8.26,999,0,12617971,984960,17560,17996,1048576,1,8127,yes,
+1000,aes-256-gcm,zstd,default,8192,115909,905.5,13.55,99.3,44476,1611861,74040,7.16,999,0,2986043,838956,17524,17992,1048576,0,8569,yes,
+1000,aes-256-gcm,zstd,default,32768,37070,1158.5,12.99,99.3,50240,482527,26712,4.80,999,0,789709,425397,17564,17992,1048576,1,9410,yes,
+1000,aes-256-gcm,zstd,default,307200,4303,1260.7,13.05,99.0,109292,57199,2999,7.46,999,0,75823,12576,19320,20036,1048576,1,7884,yes,
+1000,chacha20-poly1305-ietf,zstd,default,200,901546,172.0,13.65,99.3,39992,12702191,583982,6.87,999,0,25123965,3336484,17256,17804,1048576,1,8498,yes,
+1000,chacha20-poly1305-ietf,zstd,default,256,867362,211.8,14.14,99.2,39980,12127075,704448,3.18,999,0,25018013,3311438,15296,17784,1048576,1,8361,yes,
+1000,chacha20-poly1305-ietf,zstd,default,1024,244080,238.4,15.27,99.4,40016,3697760,158444,8.38,999,0,11805987,895175,17368,17812,1048576,1,8545,yes,
+1000,chacha20-poly1305-ietf,zstd,default,8192,106339,830.8,14.05,99.3,44068,1480840,66955,7.76,999,0,2903115,816853,17400,17816,1048576,1,8613,yes,
+1000,chacha20-poly1305-ietf,zstd,default,32768,34369,1074.0,13.32,99.1,50312,457637,26307,3.90,999,0,784984,398376,17368,17816,1048576,1,9200,yes,
+1000,chacha20-poly1305-ietf,zstd,default,307200,4019,1177.4,12.21,99.1,117680,55393,2933,6.45,999,0,75780,11796,19204,19832,1048576,1,7773,yes,
+1000,aes-128-gcm,zstd,high-ratio,200,1664436,317.5,12.73,99.2,39940,21950433,1376980,2.32,999,0,28791004,3859779,15340,17604,1048576,1,11627,yes,
+1000,aes-128-gcm,zstd,high-ratio,256,1577384,385.1,12.99,99.3,40332,20701364,1029253,2.19,999,0,27788425,3832574,15376,17896,1048576,4,10210,yes,
+1000,aes-128-gcm,zstd,high-ratio,1024,283519,276.9,13.59,99.4,42376,4087937,215643,4.21,999,0,13254697,841867,17520,17952,1048576,1,7803,yes,
+1000,aes-128-gcm,zstd,high-ratio,8192,116092,907.0,13.01,99.3,44392,1597368,91724,3.84,999,0,2916674,861205,17492,17948,1048576,0,8693,yes,
+1000,aes-128-gcm,zstd,high-ratio,32768,36903,1153.2,12.98,99.2,50548,481602,28251,3.62,999,0,789677,425168,17524,17952,1048576,1,9399,yes,
+1000,aes-128-gcm,zstd,high-ratio,307200,4251,1245.4,13.16,99.0,115944,59960,2955,6.69,999,0,77149,11335,19364,19992,1048576,0,7812,yes,
+1000,aes-256-gcm,zstd,high-ratio,200,1677723,320.0,13.02,99.3,40216,22189771,1297496,3.78,999,0,28690253,3864082,15400,15892,1048576,1,11587,yes,
+1000,aes-256-gcm,zstd,high-ratio,256,1553622,379.3,12.82,99.2,40232,20507122,1210074,3.55,999,0,27419144,3839502,15428,17948,1048576,1,10434,yes,
+1000,aes-256-gcm,zstd,high-ratio,1024,280503,273.9,13.61,99.4,42172,3766078,225608,3.38,999,0,12759627,960551,17568,17992,1048576,1,8051,yes,
+1000,aes-256-gcm,zstd,high-ratio,8192,115344,901.1,13.00,99.3,44236,1584075,86274,3.85,999,0,2775777,953001,17556,17996,1048576,1,8990,yes,
+1000,aes-256-gcm,zstd,high-ratio,32768,36774,1149.2,12.23,99.3,48412,481171,27484,4.05,999,0,793398,420146,17556,17992,1048576,1,9400,yes,
+1000,aes-256-gcm,zstd,high-ratio,307200,4283,1254.8,13.57,99.0,109208,59194,3361,5.72,999,0,76606,11768,19324,20024,1048576,0,7910,yes,
+1000,chacha20-poly1305-ietf,zstd,high-ratio,200,904371,172.5,13.37,99.3,39992,12548141,609015,6.16,999,0,25158025,3339261,17328,17820,1048576,1,8532,yes,
+1000,chacha20-poly1305-ietf,zstd,high-ratio,256,855094,208.8,13.99,99.2,40008,11968012,567877,6.73,999,0,25637156,3283842,15328,17776,1048576,0,8394,yes,
+1000,chacha20-poly1305-ietf,zstd,high-ratio,1024,243151,237.5,15.16,99.4,41492,3609255,162352,5.25,999,0,11313535,1016728,17408,17812,1048576,4,8795,yes,
+1000,chacha20-poly1305-ietf,zstd,high-ratio,8192,107679,841.2,13.42,99.3,44340,1506141,76970,4.72,999,0,2742344,898382,17352,17816,1048576,0,8963,yes,
+1000,chacha20-poly1305-ietf,zstd,high-ratio,32768,34015,1063.0,13.35,99.3,50440,454204,21201,7.24,999,0,759614,416825,17404,17804,1048576,0,9416,yes,
+1000,chacha20-poly1305-ietf,zstd,high-ratio,307200,4008,1174.2,13.68,99.1,117256,59315,2606,9.08,999,0,75136,13188,19208,19844,1048576,1,7773,yes,
+</script>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const isEn = (params.get('lang') || '').toLowerCase().startsWith('en');
+  const locale = isEn ? 'en-US' : 'zh-CN';
+  document.documentElement.lang = isEn ? 'en' : 'zh-CN';
+
+  const T = isEn ? {
+    title: 'libatbus Benchmark Matrix',
+    backText: 'Back to docs: libatbus Benchmark',
+    backHref: '/en/development/libatbus-benchmark',
+    langText: '简体中文',
+    langHref: 'matrix.html',
+    heading: 'libatbus Full Benchmark Matrix',
+    subtitleHtml: 'libatbus <code>ffdd409</code> · 770 single-pair runs (TCP / shm:// / allocator comparison) + 480 multi-node fan-in runs (2 / 10 / 100 / 1000 nodes) · Binary units (1 KB = 1024 B, 1 MB = 1024 KB)',
+    scopeNote: 'Scope: These measurements cover only the underlying communication library (libatbus). Real business RPCs in atsf4g-co add observability instrumentation, richer RPC headers and coroutine dispatch, and object routing/proxy forwarding, so application RPC throughput is lower. Measure actual service capacity by replaying realistic business RPC workloads.',
+    tabsAria: 'Benchmark datasets',
+    tabSingle: 'Single Pair (770 runs)',
+    tabMulti: 'Multi-Node Fan-In (480 runs)',
+    lblView: 'Compare by',
+    optViewConfig: 'Fixed environment, compare algorithms',
+    optViewEnv: 'Fixed configuration, compare environments',
+    lblEnv: 'Environment & channel',
+    lblCfg: 'Requested configuration',
+    lblMetric: 'Additional metric',
+    optMNone: 'QPS, throughput & compression ratio',
+    optMPlain: 'vs plaintext uncompressed (%)',
+    optMCrypto: 'vs same compression, unencrypted (%)',
+    optMRcpu: 'Receiver CPU (%)',
+    optMScpu: 'Sender CPU (%)',
+    optMRrss: 'Receiver peak RSS (MB)',
+    optMSrss: 'Sender peak RSS (MB)',
+    singleRegionAria: 'Single-pair benchmark matrix',
+    metricNote: 'Each cell shows QPS and payload throughput. Click any cell for detailed metrics.',
+    flagsHtml: 'Note: "Compressed size" uses the original size as 100% (for example, 24% means ~76% reduction), measured by the sender compressing the test payload at the requested level; the send path currently uses <code>kBalanced</code> (LZ4 <code>accel=6</code>, zstd <code>level 3</code>), so wire rates across levels of the same algorithm are nearly identical. ‡ 200 B is below the 1 KB compression threshold and is not compressed. † <code>shm://</code> disables encryption and compression by design (negotiated as <code>none/none</code>); all rows measure plaintext shared memory.',
+    lblMview: 'Compare by',
+    optMvNodes: 'Fixed node count, compare algorithms',
+    optMvCfg: 'Fixed configuration, compare 2 / 10 / 100 / 1000 nodes',
+    lblMnodes: 'Node count',
+    optN1000: '1000 nodes (999 senders + 1 receiver)',
+    optN100: '100 nodes (99 senders + 1 receiver)',
+    optN10: '10 nodes (9 senders + 1 receiver)',
+    optN2: '2 nodes (1 sender + 1 receiver)',
+    lblMcfg: 'Configuration',
+    lblMmetric: 'Additional metric',
+    optMMNone: 'Aggregate QPS & throughput',
+    optMMVs2: 'vs 2-node baseline (%)',
+    optMMRrss: 'Receiver peak RSS (MB)',
+    optMMMaxint: 'Max sample interval (s)',
+    multiRegionAria: 'Multi-node fan-in benchmark matrix',
+    mNote: 'Linux (mimalloc) single-receiver TCP fan-in test. Click any cell for resource and sampling details.',
+    csvHeading: 'Raw CSV Downloads',
+    csvLtcp: 'TCP (mimalloc)',
+    csvLshm: 'Shared memory',
+    csvMulti: 'Multi-node fan-in (480 runs)',
+    csvWmtcp: 'TCP (mimalloc)',
+    csvWtcp: 'TCP (glibc)',
+    csvWshm: 'Shared memory',
+    csvNtcp: 'TCP (MSVC)',
+    csvNshm: 'Shared memory',
+    close: 'Close',
+    unitQps: ' msg/s',
+    compressedPrefix: 'Compressed ',
+    headCfg: 'Configuration',
+    headEnv: 'Environment & channel',
+    headNodes: 'Node count',
+    cryptoNone: 'No encryption',
+    compNone: 'No compression',
+    plainNone: 'No encryption / no compression',
+    environments: {
+      linux: 'Linux · TCP (mimalloc)',
+      linux_shm: 'Linux · shm:// (mimalloc)',
+      wsl_mimalloc: 'WSL2 · TCP (mimalloc)',
+      wsl: 'WSL2 · TCP (glibc)',
+      wsl_shm: 'WSL2 · shm:// (glibc)',
+      windows: 'Windows · TCP (MSVC)',
+      windows_shm: 'Windows · shm:// (MSVC)',
+    },
+    nodeLabels: {
+      '2': '2 nodes (1S + 1R)',
+      '10': '10 nodes (9S + 1R)',
+      '100': '100 nodes (99S + 1R)',
+      '1000': '1000 nodes (999S + 1R)',
+    },
+    noteShm: 'shm:// disables encryption and compression by design; this row measures plaintext shared memory.',
+    noteSmall: '200 B is below the 1 KB compression threshold; no compression was applied.',
+    noteBalanced: 'The send path currently packs with kBalanced (LZ4 accel=6, zstd level 3); compressed size below was measured separately at the requested level.',
+    noteMultiSmall: 'Below the 1 KB compression threshold; no compression was applied.',
+    noteMultiInterval: (sec) => 'During high-fan-in saturation, a single poll() drained arriving data continuously; max sample interval was ' + sec + ' s.',
+    sFields: {
+      cfg: 'Requested config',
+      neg: 'Negotiated',
+      qps: 'QPS',
+      tp: 'Throughput (payload)',
+      cpu: 'CPU (recv / send)',
+      rss: 'Peak RSS (recv / send)',
+      steady: 'Steady window',
+      ratio: 'Compressed size',
+      err: 'Total errors / seq_gaps',
+    },
+    mFields: {
+      cfg: 'Configuration',
+      qps: 'Aggregate QPS',
+      tp: 'Aggregate throughput',
+      rcpu: 'Receiver CPU',
+      rrss: 'Receiver peak RSS',
+      srss: 'Sender peak RSS',
+      steady: 'Steady window / max interval',
+      senders: 'Active senders / connect wait',
+      mem: 'Min system MemAvailable',
+      sendersVal: (s, w) => s + ' / ' + w + ' s',
+    },
+    lp: ' (',
+    rp: ')',
+  } : {
+    title: 'libatbus 性能对比表',
+    backText: '返回文档：libatbus 性能测试',
+    backHref: '/development/libatbus-benchmark',
+    langText: 'English',
+    langHref: 'matrix.html?lang=en',
+    heading: 'libatbus 完整性能对比表',
+    subtitleHtml: 'libatbus <code>ffdd409</code> · 770 组单对基线（TCP / 共享内存 / 分配器对照）+ 480 组多节点汇聚（2 / 10 / 100 / 1000 节点）· 单位按 1024 进制换算（1 KB = 1024 B，1 MB = 1024 KB）',
+    scopeNote: '适用范围：本表仅反映底层通信库（libatbus）的性能上限。atsf4g-co 实际业务 RPC 包含可观测性采集、更复杂的 RPC 协议头与协程分发、对象路由与代理转发，性能会低于基础通信库；实际业务承载能力需通过模拟回放真实业务 RPC 进行压测验证。',
+    tabsAria: '测试数据集',
+    tabSingle: '单对连接（770 组）',
+    tabMulti: '多节点汇聚（480 组）',
+    lblView: '对比方式',
+    optViewConfig: '固定环境，比较算法配置',
+    optViewEnv: '固定配置，比较环境与通道',
+    lblEnv: '环境与通道',
+    lblCfg: '请求配置',
+    lblMetric: '附加指标',
+    optMNone: 'QPS、吞吐量与压缩率',
+    optMPlain: '相对无加密无压缩（%）',
+    optMCrypto: '相对同压缩无加密（%）',
+    optMRcpu: '接收端 CPU（%）',
+    optMScpu: '发送端 CPU（%）',
+    optMRrss: '接收端峰值 RSS（MB）',
+    optMSrss: '发送端峰值 RSS（MB）',
+    singleRegionAria: '单对连接性能对比',
+    metricNote: '每格显示 QPS 与 payload 吞吐量。点击任意单元格可查看详细指标。',
+    flagsHtml: '说明：“压缩后体积”以原始大小为 100%（例如 24% 表示体积缩小约 76%），由发送端按请求档位单独压缩测试文本测得；当前发送路径打包固定使用 <code>kBalanced</code>（LZ4 <code>accel=6</code>、zstd <code>level 3</code>），因此同算法不同档位的线上速率基本一致。‡ 200 B 低于 1 KB 压缩阈值，实际不压缩。† <code>shm://</code> 按设计不启用加密和压缩，协商结果为 <code>none/none</code>，实测均为明文共享内存速率。',
+    lblMview: '对比方式',
+    optMvNodes: '固定节点数，比较算法配置',
+    optMvCfg: '固定配置，比较 2 / 10 / 100 / 1000 节点',
+    lblMnodes: '互联节点数',
+    optN1000: '1000 节点（999 发 1 收）',
+    optN100: '100 节点（99 发 1 收）',
+    optN10: '10 节点（9 发 1 收）',
+    optN2: '2 节点（1 发 1 收）',
+    lblMcfg: '配置组合',
+    lblMmetric: '附加指标',
+    optMMNone: '聚合 QPS 与吞吐量',
+    optMMVs2: '相对 2 节点倍率（%）',
+    optMMRrss: '接收端峰值 RSS（MB）',
+    optMMMaxint: '最长单次采样间隔（s）',
+    multiRegionAria: '多节点汇聚性能对比',
+    mNote: 'Linux（mimalloc）单接收节点 TCP 汇聚测试。点击单元格查看详细资源与采样数据。',
+    csvHeading: '原始 CSV 下载',
+    csvLtcp: 'TCP（mimalloc）',
+    csvLshm: '共享内存',
+    csvMulti: '多节点汇聚（480 组）',
+    csvWmtcp: 'TCP（mimalloc）',
+    csvWtcp: 'TCP（glibc）',
+    csvWshm: '共享内存',
+    csvNtcp: 'TCP（MSVC）',
+    csvNshm: '共享内存',
+    close: '关闭',
+    unitQps: ' 条/s',
+    compressedPrefix: '压缩后 ',
+    headCfg: '请求配置',
+    headEnv: '环境与通道',
+    headNodes: '互联节点数',
+    cryptoNone: '无加密',
+    compNone: '无压缩',
+    plainNone: '无加密无压缩',
+    environments: {
+      linux: 'Linux · TCP（mimalloc）',
+      linux_shm: 'Linux · shm://（mimalloc）',
+      wsl_mimalloc: 'WSL2 · TCP（mimalloc）',
+      wsl: 'WSL2 · TCP（glibc）',
+      wsl_shm: 'WSL2 · shm://（glibc）',
+      windows: 'Windows · TCP（MSVC）',
+      windows_shm: 'Windows · shm://（MSVC）',
+    },
+    nodeLabels: {
+      '2': '2 节点（1 发 1 收）',
+      '10': '10 节点（9 发 1 收）',
+      '100': '100 节点（99 发 1 收）',
+      '1000': '1000 节点（999 发 1 收）',
+    },
+    noteShm: 'shm:// 按设计不启用加密与压缩，本行实测的是明文共享内存速率。',
+    noteSmall: '200 B 低于 1 KB 压缩阈值，协议栈实际未执行压缩。',
+    noteBalanced: '当前发送路径打包固定使用 kBalanced（LZ4 accel=6、zstd level 3）；下方压缩后体积为发送端按请求档位单独测得。',
+    noteMultiSmall: '低于 1 KB 压缩阈值，实际未执行压缩。',
+    noteMultiInterval: (sec) => '高并发满载期间单次 poll() 持续处理已到达数据，最长采样间隔为 ' + sec + ' s。',
+    sFields: {
+      cfg: '请求配置',
+      neg: '协商结果',
+      qps: 'QPS',
+      tp: '吞吐量（payload）',
+      cpu: 'CPU（收 / 发）',
+      rss: '峰值 RSS（收 / 发）',
+      steady: '稳态采样时长',
+      ratio: '压缩后体积',
+      err: '全程 errors / seq_gaps',
+    },
+    mFields: {
+      cfg: '配置组合',
+      qps: '聚合 QPS',
+      tp: '聚合吞吐量',
+      rcpu: '接收端 CPU',
+      rrss: '接收端峰值 RSS',
+      srss: '发送端峰值 RSS',
+      steady: '稳态时长 / 最长采样间隔',
+      senders: '活跃发送端 / 建连等待',
+      mem: '系统可用内存下限',
+      sendersVal: (s, w) => s + ' 个 / ' + w + ' s',
+    },
+    lp: '（',
+    rp: '）',
+  };
+
+  const id = (name) => document.getElementById(name);
+  document.title = T.title;
+  id('back-link').textContent = T.backText;
+  id('back-link').href = T.backHref;
+  id('lang-link').textContent = T.langText;
+  id('lang-link').href = T.langHref;
+  id('page-heading').textContent = T.heading;
+  id('page-subtitle').innerHTML = T.subtitleHtml;
+  id('scope-note').textContent = T.scopeNote;
+  id('dataset-tabs').setAttribute('aria-label', T.tabsAria);
+  id('tab-single').textContent = T.tabSingle;
+  id('tab-multi').textContent = T.tabMulti;
+  id('lbl-view').textContent = T.lblView;
+  id('opt-view-config').textContent = T.optViewConfig;
+  id('opt-view-env').textContent = T.optViewEnv;
+  id('lbl-env').textContent = T.lblEnv;
+  id('lbl-cfg').textContent = T.lblCfg;
+  id('lbl-metric').textContent = T.lblMetric;
+  id('opt-m-none').textContent = T.optMNone;
+  id('opt-m-plain').textContent = T.optMPlain;
+  id('opt-m-crypto').textContent = T.optMCrypto;
+  id('opt-m-rcpu').textContent = T.optMRcpu;
+  id('opt-m-scpu').textContent = T.optMScpu;
+  id('opt-m-rrss').textContent = T.optMRrss;
+  id('opt-m-srss').textContent = T.optMSrss;
+  id('single-region').setAttribute('aria-label', T.singleRegionAria);
+  id('flags').innerHTML = T.flagsHtml;
+  id('lbl-mview').textContent = T.lblMview;
+  id('opt-mv-nodes').textContent = T.optMvNodes;
+  id('opt-mv-cfg').textContent = T.optMvCfg;
+  id('lbl-mnodes').textContent = T.lblMnodes;
+  id('opt-n1000').textContent = T.optN1000;
+  id('opt-n100').textContent = T.optN100;
+  id('opt-n10').textContent = T.optN10;
+  id('opt-n2').textContent = T.optN2;
+  id('lbl-mcfg').textContent = T.lblMcfg;
+  id('lbl-mmetric').textContent = T.lblMmetric;
+  id('opt-mm-none').textContent = T.optMMNone;
+  id('opt-mm-vs2').textContent = T.optMMVs2;
+  id('opt-mm-rrss').textContent = T.optMMRrss;
+  id('opt-mm-maxint').textContent = T.optMMMaxint;
+  id('multi-region').setAttribute('aria-label', T.multiRegionAria);
+  id('m-note').textContent = T.mNote;
+  id('csv-heading').textContent = T.csvHeading;
+  id('csv-ltcp').textContent = T.csvLtcp;
+  id('csv-lshm').textContent = T.csvLshm;
+  id('csv-multi').textContent = T.csvMulti;
+  id('csv-wmtcp').textContent = T.csvWmtcp;
+  id('csv-wtcp').textContent = T.csvWtcp;
+  id('csv-wshm').textContent = T.csvWshm;
+  id('csv-ntcp').textContent = T.csvNtcp;
+  id('csv-nshm').textContent = T.csvNshm;
+  id('btn-close').textContent = T.close;
+
+  const decimal = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const percent = new Intl.NumberFormat(locale, { maximumFractionDigits: 1, style: 'percent' });
+  const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+  const cell = (tag, value) => { const el = document.createElement(tag); el.textContent = value; return el; };
+
+  function fmtThroughput(mbps) {
+    return mbps >= 1024 ? decimal.format(mbps / 1024) + ' GB/s' : decimal.format(mbps) + ' MB/s';
+  }
+  const sizeLabel = (size) => size < 1024 ? size + ' B' : (size / 1024) + ' KB';
+
+  const cryptoNames = {
+    none: T.cryptoNone,
+    'aes-128-gcm': 'AES-128-GCM',
+    'aes-192-gcm': 'AES-192-GCM',
+    'aes-256-gcm': 'AES-256-GCM',
+    chacha20: 'ChaCha20',
+    'chacha20-poly1305-ietf': 'ChaCha20-Poly1305',
+  };
+  const compressionNames = {
+    'none/default': T.compNone,
+    'lz4/fast': 'LZ4 fast',
+    'lz4/default': 'LZ4 default',
+    'zstd/default': 'zstd default',
+    'zstd/high-ratio': 'zstd high-ratio',
+  };
+  function configLabel(crypto, compLevel) {
+    if (crypto === 'none' && compLevel === 'none/default') return T.plainNone;
+    if (compLevel === 'none/default') return cryptoNames[crypto] || crypto;
+    if (crypto === 'none') return compressionNames[compLevel] || compLevel;
+    return (compressionNames[compLevel] || compLevel) + ' + ' + (cryptoNames[crypto] || crypto);
+  }
+
+  // Tabs
+  const tabSingle = id('tab-single');
+  const tabMulti = id('tab-multi');
+  function switchTab(which) {
+    const isSingle = which === 'single';
+    tabSingle.setAttribute('aria-selected', String(isSingle));
+    tabMulti.setAttribute('aria-selected', String(!isSingle));
+    id('panel-single').hidden = !isSingle;
+    id('panel-multi').hidden = isSingle;
+  }
+  tabSingle.onclick = () => switchTab('single');
+  tabMulti.onclick = () => switchTab('multi');
+
+  // ---------- Single-pair matrix ----------
+  const environments = T.environments;
+  const singleSizes = [200, 1024, 8192, 65536, 307200];
+  const [sHeader, ...sLines] = id('single-data').textContent.trim().split(/\r?\n/);
+  const sFields = sHeader.split(',');
+  const sMap = new Map();
+  for (const line of sLines) {
+    const vals = line.split(',');
+    const row = Object.fromEntries(sFields.map((f, i) => [f, vals[i]]));
+    const ck = [row.crypto, row.compression, row.level].join('/');
+    sMap.set([row.environment, ck, row.payload_size].join(':'), row);
+  }
+
+  const sConfigs = [];
+  for (const compLevel of Object.keys(compressionNames)) {
+    for (const crypto of Object.keys(cryptoNames)) {
+      const key = crypto + '/' + compLevel;
+      if (sMap.has('linux:' + key + ':200')) {
+        sConfigs.push([key, configLabel(crypto, compLevel)]);
+      }
+    }
+  }
+  const sConfigNames = Object.fromEntries(sConfigs);
+  for (const [k, l] of sConfigs) id('config').add(new Option(l, k));
+  for (const [k, l] of Object.entries(environments)) id('environment').add(new Option(l, k));
+
+  const sMbps = (r) => Number(r.throughput_Bps) / 1048576;
+  const sMismatch = (r) => r.crypto !== r.negotiated_crypto || r.compression !== r.negotiated_compression;
+  const sRefRatio = (r, comp, lvl) => {
+    if (sMismatch(r)) return null;
+    const base = sMap.get([r.environment, 'none/' + comp + '/' + lvl, r.payload_size].join(':'));
+    return base && !sMismatch(base) ? 100 * sMbps(r) / sMbps(base) : null;
+  };
+  const sMetrics = {
+    plainRatio: (r) => sRefRatio(r, 'none', 'default'),
+    cryptoRatio: (r) => sRefRatio(r, r.compression, r.level),
+    recv_cpu_percent: (r) => Number(r.recv_cpu_percent),
+    send_cpu_percent: (r) => Number(r.send_cpu_percent),
+    recvRss: (r) => Number(r.recv_peak_rss_kb) / 1024,
+    sendRss: (r) => Number(r.send_peak_rss_kb) / 1024,
+  };
+  const sExtraUnits = {
+    plainRatio: '%', cryptoRatio: '%',
+    recv_cpu_percent: '%', send_cpu_percent: '%',
+    recvRss: ' MB', sendRss: ' MB',
+  };
+
+  function showSingleSample(row, configKey) {
+    id('sample-title').textContent = environments[row.environment] + ' · ' + sizeLabel(Number(row.payload_size));
+    const notes = [];
+    if (sMismatch(row)) {
+      notes.push(T.noteShm);
+    } else if (row.payload_size === '200' && row.compression !== 'none') {
+      notes.push(T.noteSmall);
+    } else if (row.compression !== 'none') {
+      notes.push(T.noteBalanced);
+    }
+    id('sample-note').textContent = notes.join(' ');
+    id('sample-note').hidden = notes.length === 0;
+    const entries = [
+      [T.sFields.cfg, sConfigNames[configKey]],
+      [T.sFields.neg, row.negotiated_crypto + ' / ' + row.negotiated_compression],
+      [T.sFields.qps, integer.format(Number(row.qps)) + T.unitQps],
+      [T.sFields.tp, fmtThroughput(sMbps(row)) + T.lp + decimal.format(sMbps(row)) + ' MB/s' + T.rp],
+      [T.sFields.cpu, row.recv_cpu_percent + '% / ' + row.send_cpu_percent + '%'],
+      [T.sFields.rss, decimal.format(sMetrics.recvRss(row)) + ' / ' + decimal.format(sMetrics.sendRss(row)) + ' MB'],
+      [T.sFields.steady, row.steady_sec + ' s'],
+      [T.sFields.ratio, row.compression_ratio === '' ? '—' : percent.format(Number(row.compression_ratio))],
+      [T.sFields.err, row.errors + ' / ' + row.seq_gaps],
+    ];
+    id('sample-metrics').replaceChildren(...entries.flatMap(([k, v]) => [cell('dt', k), cell('dd', v)]));
+    id('sample').showModal();
+  }
+
+  function renderSingle() {
+    const byConfig = id('view').value === 'config';
+    id('environment-filter').hidden = !byConfig;
+    id('config-filter').hidden = byConfig;
+    const metric = id('metric').value;
+    id('metric-note').textContent = T.metricNote;
+    const showRatio = metric === 'plainRatio' || metric === 'cryptoRatio';
+    id('head').replaceChildren(...[byConfig ? T.headCfg : T.headEnv, ...singleSizes.map(sizeLabel)].map((h) => {
+      const th = cell('th', h); th.scope = 'col'; return th;
+    }));
+    const items = byConfig ? sConfigs : Object.entries(environments);
+    id('rows').replaceChildren(...items.map(([key, label]) => {
+      const tr = document.createElement('tr');
+      const th = cell('th', label); th.scope = 'row'; tr.append(th);
+      const env = byConfig ? id('environment').value : key;
+      const cfg = byConfig ? key : id('config').value;
+      for (const sz of singleSizes) {
+        const row = sMap.get([env, cfg, sz].join(':'));
+        const flagged = sMismatch(row);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.append(
+          cell('span', integer.format(Number(row.qps)) + T.unitQps + (flagged ? ' †' : '')),
+          cell('span', fmtThroughput(sMbps(row)))
+        );
+        if (row.compression_ratio !== '') {
+          const sub = cell('span', T.compressedPrefix + percent.format(Number(row.compression_ratio)) + (sz === 200 ? ' ‡' : ''));
+          sub.className = 'sub';
+          btn.append(sub);
+        }
+        if (metric) {
+          const val = sMetrics[metric](row);
+          const extra = cell('span', val === null ? '—' : decimal.format(val) + sExtraUnits[metric]);
+          extra.className = 'additional';
+          btn.append(extra);
+          if (showRatio && val !== null) btn.style.setProperty('--fill', Math.min(100, val) + '%');
+        }
+        btn.onclick = () => showSingleSample(row, cfg);
+        const td = document.createElement('td');
+        td.className = 'measure';
+        td.append(btn);
+        tr.append(td);
+      }
+      return tr;
+    }));
+  }
+  for (const n of ['view', 'config', 'environment', 'metric']) id(n).addEventListener('change', renderSingle);
+
+  // ---------- Multi-node matrix ----------
+  const multiSizes = [200, 256, 1024, 8192, 32768, 307200];
+  const nodeCounts = ['2', '10', '100', '1000'];
+  const nodeLabels = T.nodeLabels;
+  const [mHeader, ...mLines] = id('multi-data').textContent.trim().split(/\r?\n/);
+  const mFields = mHeader.split(',');
+  const mMap = new Map();
+  for (const line of mLines) {
+    const vals = line.split(',');
+    const row = Object.fromEntries(mFields.map((f, i) => [f, vals[i]]));
+    const ck = [row.crypto, row.compression, row.level].join('/');
+    mMap.set([row.nodes, ck, row.payload_size].join(':'), row);
+  }
+  const mConfigs = [];
+  for (const compLevel of Object.keys(compressionNames)) {
+    for (const crypto of Object.keys(cryptoNames)) {
+      const key = crypto + '/' + compLevel;
+      if (mMap.has('1000:' + key + ':200')) {
+        mConfigs.push([key, configLabel(crypto, compLevel)]);
+      }
+    }
+  }
+  const mConfigNames = Object.fromEntries(mConfigs);
+  for (const [k, l] of mConfigs) id('m-config').add(new Option(l, k));
+
+  function showMultiSample(row, configKey) {
+    id('sample-title').textContent = nodeLabels[row.nodes] + ' · ' + sizeLabel(Number(row.payload_size));
+    const notes = [];
+    if ((row.payload_size === '200' || row.payload_size === '256') && row.compression !== 'none') {
+      notes.push(T.noteMultiSmall);
+    }
+    if (Number(row.receiver_max_sample_interval_sec) > 1.5) {
+      notes.push(T.noteMultiInterval(row.receiver_max_sample_interval_sec));
+    }
+    id('sample-note').textContent = notes.join(' ');
+    id('sample-note').hidden = notes.length === 0;
+    const entries = [
+      [T.mFields.cfg, mConfigNames[configKey]],
+      [T.mFields.qps, integer.format(Number(row.qps)) + T.unitQps],
+      [T.mFields.tp, fmtThroughput(Number(row.mbps)) + T.lp + decimal.format(Number(row.mbps)) + ' MB/s' + T.rp],
+      [T.mFields.rcpu, row.receiver_cpu_percent + '%'],
+      [T.mFields.rrss, decimal.format(Number(row.receiver_peak_rss_kb) / 1024) + ' MB'],
+      [T.mFields.srss, decimal.format(Number(row.sender_peak_rss_min_kb) / 1024) + '–' + decimal.format(Number(row.sender_peak_rss_max_kb) / 1024) + ' MB'],
+      [T.mFields.steady, row.plateau_sec + ' s / ' + row.receiver_max_sample_interval_sec + ' s'],
+      [T.mFields.senders, T.mFields.sendersVal(row.senders, row.register_wait_sec)],
+      [T.mFields.mem, row.min_mem_available_mb + ' MB'],
+    ];
+    id('sample-metrics').replaceChildren(...entries.flatMap(([k, v]) => [cell('dt', k), cell('dd', v)]));
+    id('sample').showModal();
+  }
+
+  function renderMulti() {
+    const byNodes = id('m-view').value === 'by-nodes';
+    id('m-nodes-filter').hidden = !byNodes;
+    id('m-config-filter').hidden = byNodes;
+    const metric = id('m-metric').value;
+    id('m-head').replaceChildren(...[byNodes ? T.headCfg : T.headNodes, ...multiSizes.map(sizeLabel)].map((h) => {
+      const th = cell('th', h); th.scope = 'col'; return th;
+    }));
+    const items = byNodes ? mConfigs : nodeCounts.map((n) => [n, nodeLabels[n]]);
+    id('m-rows').replaceChildren(...items.map(([key, label]) => {
+      const tr = document.createElement('tr');
+      const th = cell('th', label); th.scope = 'row'; tr.append(th);
+      const nodes = byNodes ? id('m-nodes').value : key;
+      const cfg = byNodes ? key : id('m-config').value;
+      for (const sz of multiSizes) {
+        const row = mMap.get([nodes, cfg, sz].join(':'));
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.append(
+          cell('span', integer.format(Number(row.qps)) + T.unitQps),
+          cell('span', fmtThroughput(Number(row.mbps)))
+        );
+        if (metric === 'vs2') {
+          const base = mMap.get(['2', cfg, sz].join(':'));
+          const pct = 100 * Number(row.qps) / Number(base.qps);
+          const extra = cell('span', decimal.format(pct) + '%');
+          extra.className = 'additional';
+          btn.append(extra);
+          btn.style.setProperty('--fill', Math.min(100, pct / 3) + '%');
+        } else if (metric === 'recvRss') {
+          const extra = cell('span', decimal.format(Number(row.receiver_peak_rss_kb) / 1024) + ' MB');
+          extra.className = 'additional';
+          btn.append(extra);
+        } else if (metric === 'maxInterval') {
+          const extra = cell('span', row.receiver_max_sample_interval_sec + ' s');
+          extra.className = 'additional';
+          btn.append(extra);
+        }
+        btn.onclick = () => showMultiSample(row, cfg);
+        const td = document.createElement('td');
+        td.className = 'measure';
+        td.append(btn);
+        tr.append(td);
+      }
+      return tr;
+    }));
+  }
+  for (const n of ['m-view', 'm-nodes', 'm-config', 'm-metric']) id(n).addEventListener('change', renderMulti);
+
+  renderSingle();
+  renderMulti();
+</script>
+</body>
+</html>

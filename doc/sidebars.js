@@ -65,6 +65,7 @@ const sidebars = {
         'development/testing',
         'development/rpc-unit-test',
         'development/atgateway-linux-benchmark',
+        'development/libatbus-benchmark',
         'development/diagrams',
       ],
     },

@@ -1,0 +1,600 @@
+{
+  "animation": false,
+  "backgroundColor": "#ffffff",
+  "textStyle": {
+    "fontFamily": "Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif",
+    "color": "#223044"
+  },
+  "aria": {
+    "enabled": true,
+    "label": {
+      "description": "Aggregate QPS and throughput for encryption and compression combinations at 1000-node fan-in, with 2-node LZ4 and zstd baselines showing the compression bottleneck shift."
+    }
+  },
+  "legend": {
+    "data": [
+      "Plaintext (1000 nodes)",
+      "AES-128-GCM (1000 nodes)",
+      "ChaCha20-Poly1305 (1000 nodes)",
+      "LZ4 (1000 nodes)",
+      "LZ4 + AES-128-GCM (1000 nodes)",
+      "LZ4 (2-node ref)",
+      "zstd (1000 nodes)",
+      "zstd + AES-128-GCM (1000 nodes)",
+      "zstd (2-node ref)"
+    ],
+    "bottom": 4,
+    "left": "center",
+    "width": 756,
+    "itemWidth": 18,
+    "itemHeight": 10,
+    "itemGap": 10,
+    "textStyle": {
+      "fontSize": 10,
+      "color": "#253952"
+    }
+  },
+  "grid": [
+    {
+      "left": 86,
+      "right": 24,
+      "top": 30,
+      "height": 138
+    },
+    {
+      "left": 86,
+      "right": 24,
+      "top": 210,
+      "height": 148
+    }
+  ],
+  "xAxis": [
+    {
+      "gridIndex": 0,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B*",
+        "256 B*",
+        "1 KB",
+        "8 KB",
+        "32 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": false,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    },
+    {
+      "gridIndex": 1,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B*",
+        "256 B*",
+        "1 KB",
+        "8 KB",
+        "32 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": true,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    }
+  ],
+  "yAxis": [
+    {
+      "gridIndex": 0,
+      "name": "Aggregate QPS (msg/s, log)",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "log",
+      "min": 1000,
+      "max": 10000000,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    },
+    {
+      "gridIndex": 1,
+      "name": "Aggregate Throughput (MB/s)",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "value",
+      "min": 0,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    }
+  ],
+  "series": [
+    {
+      "name": "Plaintext (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3704533,
+        3362521,
+        1394630,
+        243587,
+        73212,
+        9425
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.4,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "AES-128-GCM (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1678910,
+        1559669,
+        877213,
+        205093,
+        63396,
+        8069
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "ChaCha20-Poly1305 (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        902856,
+        869097,
+        617170,
+        154232,
+        48539,
+        5828
+      ],
+      "symbol": "diamond",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#75889d"
+      },
+      "itemStyle": {
+        "color": "#75889d"
+      }
+    },
+    {
+      "name": "LZ4 (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3707232,
+        3338575,
+        1272415,
+        245899,
+        69454,
+        9427
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "LZ4 + AES-128-GCM (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1683782,
+        1565082,
+        826039,
+        211924,
+        64624,
+        8832
+      ],
+      "symbol": "emptyRect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "LZ4 (2-node ref)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3720152,
+        3445340,
+        807113,
+        128391,
+        32252,
+        3064
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 1.7,
+        "type": "dotted",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "zstd (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3701238,
+        3295068,
+        312831,
+        122026,
+        37860,
+        4479
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.2,
+        "type": "solid",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "zstd + AES-128-GCM (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1679317,
+        1572609,
+        278877,
+        114854,
+        36666,
+        4202
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "zstd (2-node ref)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3739130,
+        3461852,
+        183074,
+        48768,
+        15664,
+        1514
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 1.7,
+        "type": "dotted",
+        "color": "#be697e"
+      },
+      "itemStyle": {
+        "color": "#be697e"
+      }
+    },
+    {
+      "name": "Plaintext (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        706.6,
+        820.9,
+        1361.9,
+        1903,
+        2287.9,
+        2761.2
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.4,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "AES-128-GCM (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        320.2,
+        380.8,
+        856.7,
+        1602.3,
+        1981.1,
+        2364
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "ChaCha20-Poly1305 (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        172.2,
+        212.2,
+        602.7,
+        1204.9,
+        1516.9,
+        1707.3
+      ],
+      "symbol": "diamond",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#75889d"
+      },
+      "itemStyle": {
+        "color": "#75889d"
+      }
+    },
+    {
+      "name": "LZ4 (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        707.1,
+        815.1,
+        1242.6,
+        1921.1,
+        2170.4,
+        2761.9
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "LZ4 + AES-128-GCM (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        321.2,
+        382.1,
+        806.7,
+        1655.7,
+        2019.5,
+        2587.5
+      ],
+      "symbol": "emptyRect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "LZ4 (2-node ref)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        709.6,
+        841.1,
+        788.2,
+        1003.1,
+        1007.9,
+        897.7
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 1.7,
+        "type": "dotted",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "zstd (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        706,
+        804.5,
+        305.5,
+        953.3,
+        1183.1,
+        1312.3
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.2,
+        "type": "solid",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "zstd + AES-128-GCM (1000 nodes)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        320.3,
+        383.9,
+        272.3,
+        897.3,
+        1145.8,
+        1231.1
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "zstd (2-node ref)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        713.2,
+        845.2,
+        178.8,
+        381,
+        489.5,
+        443.6
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 1.7,
+        "type": "dotted",
+        "color": "#be697e"
+      },
+      "itemStyle": {
+        "color": "#be697e"
+      }
+    }
+  ]
+}

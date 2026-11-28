@@ -1,0 +1,439 @@
+{
+  "animation": false,
+  "backgroundColor": "#ffffff",
+  "textStyle": {
+    "fontFamily": "Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif",
+    "color": "#223044"
+  },
+  "aria": {
+    "enabled": true,
+    "label": {
+      "description": "Unencrypted, uncompressed QPS and throughput comparison between TCP and shared memory on Linux, WSL2, and native Windows."
+    }
+  },
+  "legend": {
+    "data": [
+      "Linux TCP",
+      "Linux shm://",
+      "WSL2 TCP",
+      "WSL2 shm://",
+      "Windows TCP",
+      "Windows shm://"
+    ],
+    "bottom": 8,
+    "left": "center",
+    "width": 756,
+    "itemWidth": 18,
+    "itemHeight": 10,
+    "itemGap": 14,
+    "textStyle": {
+      "fontSize": 11,
+      "color": "#253952"
+    }
+  },
+  "grid": [
+    {
+      "left": 86,
+      "right": 24,
+      "top": 34,
+      "height": 158
+    },
+    {
+      "left": 86,
+      "right": 24,
+      "top": 238,
+      "height": 170
+    }
+  ],
+  "xAxis": [
+    {
+      "gridIndex": 0,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "1 KB",
+        "8 KB",
+        "64 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": false,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    },
+    {
+      "gridIndex": 1,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "1 KB",
+        "8 KB",
+        "64 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": true,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    }
+  ],
+  "yAxis": [
+    {
+      "gridIndex": 0,
+      "name": "QPS (msg/s, log)",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "log",
+      "min": 1000,
+      "max": 10000000,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    },
+    {
+      "gridIndex": 1,
+      "name": "Throughput (MB/s)",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "value",
+      "min": 0,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    }
+  ],
+  "series": [
+    {
+      "name": "Linux TCP",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3656722,
+        1651608,
+        301960,
+        42680,
+        9645
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "Linux shm://",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        2677248,
+        1500544,
+        381793,
+        50559,
+        10359
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "WSL2 TCP",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3509059,
+        1396329,
+        138681,
+        19122,
+        3802
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "WSL2 shm://",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        2221568,
+        1523712,
+        383744,
+        32991,
+        4173
+      ],
+      "symbol": "emptyRect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "Windows TCP",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        917767,
+        294780,
+        52943,
+        6127,
+        1536
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "Windows shm://",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1263104,
+        890368,
+        298240,
+        33754,
+        8350
+      ],
+      "symbol": "emptyTriangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "Linux TCP",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        697.5,
+        1612.9,
+        2359.1,
+        2667.5,
+        2825.8
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "Linux shm://",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        510.6,
+        1465.4,
+        2982.8,
+        3159.9,
+        3034.7
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "WSL2 TCP",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        669.3,
+        1363.6,
+        1083.4,
+        1195.1,
+        1113.7
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "WSL2 shm://",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        423.7,
+        1488,
+        2998,
+        2061.9,
+        1222.6
+      ],
+      "symbol": "emptyRect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "Windows TCP",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        175.1,
+        287.9,
+        413.6,
+        382.9,
+        450
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "Windows shm://",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        240.9,
+        869.5,
+        2330,
+        2109.6,
+        2446.4
+      ],
+      "symbol": "emptyTriangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    }
+  ]
+}

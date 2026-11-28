@@ -1,0 +1,345 @@
+{
+  "animation": false,
+  "backgroundColor": "#ffffff",
+  "textStyle": {
+    "fontFamily": "Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif",
+    "color": "#223044"
+  },
+  "aria": {
+    "enabled": true,
+    "label": {
+      "description": "Linux、WSL2（mimalloc 与 glibc）和 Windows 原生在无加密无压缩 TCP 回环下的 QPS 与吞吐量。"
+    }
+  },
+  "legend": {
+    "data": [
+      "Linux (mimalloc)",
+      "WSL2 (mimalloc)",
+      "WSL2 (glibc)",
+      "Windows (MSVC)"
+    ],
+    "bottom": 8,
+    "left": "center",
+    "width": 756,
+    "itemWidth": 18,
+    "itemHeight": 10,
+    "itemGap": 14,
+    "textStyle": {
+      "fontSize": 11,
+      "color": "#253952"
+    }
+  },
+  "grid": [
+    {
+      "left": 86,
+      "right": 24,
+      "top": 34,
+      "height": 158
+    },
+    {
+      "left": 86,
+      "right": 24,
+      "top": 238,
+      "height": 170
+    }
+  ],
+  "xAxis": [
+    {
+      "gridIndex": 0,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "1 KB",
+        "8 KB",
+        "64 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": false,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    },
+    {
+      "gridIndex": 1,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "1 KB",
+        "8 KB",
+        "64 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": true,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    }
+  ],
+  "yAxis": [
+    {
+      "gridIndex": 0,
+      "name": "QPS（条/s，对数）",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "log",
+      "min": 1000,
+      "max": 10000000,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    },
+    {
+      "gridIndex": 1,
+      "name": "吞吐量（MB/s）",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "value",
+      "min": 0,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    }
+  ],
+  "series": [
+    {
+      "name": "Linux (mimalloc)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3656722,
+        1651608,
+        301960,
+        42680,
+        9645
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "WSL2 (mimalloc)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3200345,
+        1321738,
+        138823,
+        38141,
+        9143
+      ],
+      "symbol": "diamond",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "WSL2 (glibc)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3509059,
+        1396329,
+        138681,
+        19122,
+        3802
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "Windows (MSVC)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        917767,
+        294780,
+        52943,
+        6127,
+        1536
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "Linux (mimalloc)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        697.5,
+        1612.9,
+        2359.1,
+        2667.5,
+        2825.8
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "WSL2 (mimalloc)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        610.4,
+        1290.8,
+        1084.6,
+        2383.8,
+        2678.6
+      ],
+      "symbol": "diamond",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "WSL2 (glibc)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        669.3,
+        1363.6,
+        1083.4,
+        1195.1,
+        1113.7
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "Windows (MSVC)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        175.1,
+        287.9,
+        413.6,
+        382.9,
+        450
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    }
+  ]
+}

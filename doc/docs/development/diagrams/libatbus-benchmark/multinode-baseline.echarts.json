@@ -1,0 +1,365 @@
+{
+  "animation": false,
+  "backgroundColor": "#ffffff",
+  "textStyle": {
+    "fontFamily": "Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif",
+    "color": "#223044"
+  },
+  "aria": {
+    "enabled": true,
+    "label": {
+      "description": "Linux TCP 无加密无压缩下，2、10、100 和 1000 节点汇聚到单接收节点的聚合 QPS 与聚合吞吐量。"
+    }
+  },
+  "legend": {
+    "data": [
+      "2 节点（1 发 1 收）",
+      "10 节点（9 发 1 收）",
+      "100 节点（99 发 1 收）",
+      "1000 节点（999 发 1 收）"
+    ],
+    "bottom": 8,
+    "left": "center",
+    "width": 756,
+    "itemWidth": 18,
+    "itemHeight": 10,
+    "itemGap": 14,
+    "textStyle": {
+      "fontSize": 11,
+      "color": "#253952"
+    }
+  },
+  "grid": [
+    {
+      "left": 86,
+      "right": 24,
+      "top": 34,
+      "height": 158
+    },
+    {
+      "left": 86,
+      "right": 24,
+      "top": 238,
+      "height": 170
+    }
+  ],
+  "xAxis": [
+    {
+      "gridIndex": 0,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "256 B",
+        "1 KB",
+        "8 KB",
+        "32 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": false,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    },
+    {
+      "gridIndex": 1,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "256 B",
+        "1 KB",
+        "8 KB",
+        "32 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": true,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    }
+  ],
+  "yAxis": [
+    {
+      "gridIndex": 0,
+      "name": "聚合 QPS（条/s，对数）",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "log",
+      "min": 1000,
+      "max": 10000000,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    },
+    {
+      "gridIndex": 1,
+      "name": "聚合吞吐量（MB/s）",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "value",
+      "min": 0,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    }
+  ],
+  "series": [
+    {
+      "name": "2 节点（1 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3725924,
+        3466950,
+        1673616,
+        227626,
+        81964,
+        9947
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#75889d"
+      },
+      "itemStyle": {
+        "color": "#75889d"
+      }
+    },
+    {
+      "name": "10 节点（9 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3779280,
+        3445622,
+        1515181,
+        263901,
+        84426,
+        9759
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "100 节点（99 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3685302,
+        3357976,
+        1471497,
+        259297,
+        78429,
+        8939
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": [
+          6,
+          3,
+          2,
+          3
+        ],
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "1000 节点（999 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3704533,
+        3362521,
+        1394630,
+        243587,
+        73212,
+        9425
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.5,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "2 节点（1 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        710.7,
+        846.4,
+        1634.4,
+        1778.3,
+        2561.4,
+        2914.2
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#75889d"
+      },
+      "itemStyle": {
+        "color": "#75889d"
+      }
+    },
+    {
+      "name": "10 节点（9 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        720.8,
+        841.2,
+        1479.7,
+        2061.7,
+        2638.3,
+        2859.1
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "100 节点（99 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        702.9,
+        819.8,
+        1437,
+        2025.8,
+        2450.9,
+        2618.9
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": [
+          6,
+          3,
+          2,
+          3
+        ],
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "1000 节点（999 发 1 收）",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        706.6,
+        820.9,
+        1361.9,
+        1903,
+        2287.9,
+        2761.2
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2.5,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    }
+  ]
+}

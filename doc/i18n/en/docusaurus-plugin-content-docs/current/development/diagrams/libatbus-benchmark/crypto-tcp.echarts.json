@@ -1,0 +1,449 @@
+{
+  "animation": false,
+  "backgroundColor": "#ffffff",
+  "textStyle": {
+    "fontFamily": "Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif",
+    "color": "#223044"
+  },
+  "aria": {
+    "enabled": true,
+    "label": {
+      "description": "QPS and throughput of six encryption configurations over uncompressed Linux TCP from 200 B to 300 KB."
+    }
+  },
+  "legend": {
+    "data": [
+      "No encryption",
+      "AES-128-GCM",
+      "AES-192-GCM",
+      "AES-256-GCM",
+      "ChaCha20-Poly1305",
+      "ChaCha20 (raw)"
+    ],
+    "bottom": 8,
+    "left": "center",
+    "width": 756,
+    "itemWidth": 18,
+    "itemHeight": 10,
+    "itemGap": 14,
+    "textStyle": {
+      "fontSize": 11,
+      "color": "#253952"
+    }
+  },
+  "grid": [
+    {
+      "left": 86,
+      "right": 24,
+      "top": 34,
+      "height": 158
+    },
+    {
+      "left": 86,
+      "right": 24,
+      "top": 238,
+      "height": 170
+    }
+  ],
+  "xAxis": [
+    {
+      "gridIndex": 0,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "1 KB",
+        "8 KB",
+        "64 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": false,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    },
+    {
+      "gridIndex": 1,
+      "type": "category",
+      "boundaryGap": false,
+      "data": [
+        "200 B",
+        "1 KB",
+        "8 KB",
+        "64 KB",
+        "300 KB"
+      ],
+      "axisLine": {
+        "lineStyle": {
+          "color": "#a4b4c2"
+        }
+      },
+      "axisTick": {
+        "show": false
+      },
+      "axisLabel": {
+        "interval": 0,
+        "show": true,
+        "fontSize": 11,
+        "color": "#40546b"
+      }
+    }
+  ],
+  "yAxis": [
+    {
+      "gridIndex": 0,
+      "name": "QPS (msg/s, log)",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "log",
+      "min": 100,
+      "max": 10000000,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    },
+    {
+      "gridIndex": 1,
+      "name": "Throughput (MB/s)",
+      "nameGap": 10,
+      "nameTextStyle": {
+        "align": "left",
+        "padding": [
+          0,
+          0,
+          0,
+          -24
+        ],
+        "fontSize": 11.5,
+        "fontWeight": 600,
+        "color": "#223044"
+      },
+      "type": "value",
+      "min": 0,
+      "axisLabel": {
+        "fontSize": 10.5,
+        "color": "#40546b"
+      },
+      "splitLine": {
+        "lineStyle": {
+          "color": "#e3eaf0"
+        }
+      }
+    }
+  ],
+  "series": [
+    {
+      "name": "No encryption",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        3656722,
+        1651608,
+        301960,
+        42680,
+        9645
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "AES-128-GCM",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1622400,
+        971824,
+        193984,
+        37576,
+        8626
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "AES-192-GCM",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1636692,
+        965760,
+        191521,
+        37489,
+        8600
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "AES-256-GCM",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        1630848,
+        952594,
+        191904,
+        37068,
+        8170
+      ],
+      "symbol": "diamond",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#75889d"
+      },
+      "itemStyle": {
+        "color": "#75889d"
+      }
+    },
+    {
+      "name": "ChaCha20-Poly1305",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        913885,
+        650664,
+        174880,
+        27028,
+        5978
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": [
+          6,
+          3,
+          2,
+          3
+        ],
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "ChaCha20 (raw)",
+      "type": "line",
+      "xAxisIndex": 0,
+      "yAxisIndex": 0,
+      "data": [
+        357562,
+        96174,
+        12624,
+        1632,
+        337
+      ],
+      "symbol": "emptyRect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#be697e"
+      },
+      "itemStyle": {
+        "color": "#be697e"
+      }
+    },
+    {
+      "name": "No encryption",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        697.5,
+        1612.9,
+        2359.1,
+        2667.5,
+        2825.8
+      ],
+      "symbol": "circle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#267a93"
+      },
+      "itemStyle": {
+        "color": "#267a93"
+      }
+    },
+    {
+      "name": "AES-128-GCM",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        309.4,
+        949,
+        1515.5,
+        2348.5,
+        2527.3
+      ],
+      "symbol": "triangle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "solid",
+        "color": "#399886"
+      },
+      "itemStyle": {
+        "color": "#399886"
+      }
+    },
+    {
+      "name": "AES-192-GCM",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        312.2,
+        943.1,
+        1496.3,
+        2343.1,
+        2519.4
+      ],
+      "symbol": "rect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dashed",
+        "color": "#6c79b8"
+      },
+      "itemStyle": {
+        "color": "#6c79b8"
+      }
+    },
+    {
+      "name": "AES-256-GCM",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        311.1,
+        930.3,
+        1499.2,
+        2316.8,
+        2393.6
+      ],
+      "symbol": "diamond",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#75889d"
+      },
+      "itemStyle": {
+        "color": "#75889d"
+      }
+    },
+    {
+      "name": "ChaCha20-Poly1305",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        174.3,
+        635.4,
+        1366.2,
+        1689.2,
+        1751.4
+      ],
+      "symbol": "emptyCircle",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": [
+          6,
+          3,
+          2,
+          3
+        ],
+        "color": "#cd9344"
+      },
+      "itemStyle": {
+        "color": "#cd9344"
+      }
+    },
+    {
+      "name": "ChaCha20 (raw)",
+      "type": "line",
+      "xAxisIndex": 1,
+      "yAxisIndex": 1,
+      "data": [
+        68.2,
+        93.9,
+        98.6,
+        102,
+        98.7
+      ],
+      "symbol": "emptyRect",
+      "symbolSize": 6,
+      "lineStyle": {
+        "width": 2,
+        "type": "dotted",
+        "color": "#be697e"
+      },
+      "itemStyle": {
+        "color": "#be697e"
+      }
+    }
+  ]
+}
