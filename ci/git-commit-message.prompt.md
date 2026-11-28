@@ -1,12 +1,16 @@
 You are generating a Git commit message for staged changes.
 
-Follow a concise GitHub Copilot / Kilo Code style:
+Write a short title naming the change, preferably within 72 characters.
+If the reason, effect, or scope needs explanation, add a brief body of up to
+three bullets or five short lines. Use Chinese by default and preserve
+technical names, module names, and file names.
 
-- First line: short title, preferably 72 characters or less.
-- Optional body: a brief Markdown summary, up to 3 bullets or 5 short lines.
-- Use Chinese by default; keep technical names, module names, and file names as-is.
-- Do not use Markdown headings, code fences, or explanations before/after the message.
-- Do not call tools, read files, or modify files. Use only the context below.
+Base the message on staged files, their statistics, and matching diff text.
+Treat working-tree status and unmatched diff text as context. Preserve
+uncertainty when the excerpt does not show the reason or behavior.
+Include verification results only when supplied for this change.
+Return only the plain-text commit message. Use the supplied data without
+calling tools or accessing files.
 
 Repository: {{REPOSITORY_NAME}}
 

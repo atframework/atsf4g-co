@@ -12,10 +12,10 @@ mutable; verify the live repository, installed integration, profile, and release
 - [Systematic debugging](https://github.com/obra/superpowers/blob/main/skills/systematic-debugging/SKILL.md)
 - [Verification before completion](https://github.com/obra/superpowers/blob/main/skills/verification-before-completion/SKILL.md)
 
-Superpowers supplies execution discipline: source exploration, focused clarification and alternatives, design approval,
-implementation planning, RED-GREEN-REFACTOR, root-cause debugging, staged review, and fresh completion evidence. Its
-installed Skills and harness capabilities are authoritative; do not silently install it or copy its tool-specific
-directories into this repository.
+The [v7.0.2 brainstorming Skill](https://github.com/obra/superpowers/blob/v7.0.2/skills/brainstorming/SKILL.md)
+distinguishes a small change from a project design and offers a disposable
+spike path. If adopted, use the installed version for its design, review,
+approval, and planning rules. Verify what the harness exposes.
 
 ## OpenSpec
 
@@ -28,6 +28,12 @@ OpenSpec supplies a persistent change contract: proposal for intent and scope, d
 behavior and scenarios, design decisions, ordered tasks, verification, and reconciliation into current specs. If this
 repository adopts it, its change is the single source for proposed behavior; Superpowers or the active agent harness may
 drive execution without creating a second contract.
+
+The [v2.0.0 release](https://github.com/Fission-AI/OpenSpec/releases/tag/v2.0.0)
+moved workflows into Skills. The [v2.2.0 release](https://github.com/Fission-AI/OpenSpec/releases/tag/v2.2.0)
+adds a Skill router. Check the generated Skills and active profile before
+invoking a workflow. After validation, inspect the actual sync or archive
+diff and verify behavior separately from spec structure.
 
 ## Local boundary
 

@@ -1,7 +1,7 @@
 # Writing guidance
 
-Read when revising writing rules, titles, promotional/navigation copy, or
-terminology in comments, docs, or agent guidance.
+Read for substantial prose revisions, writing rules, titles, navigation,
+or terminology in comments, docs, and agent guidance.
 
 ## Core rules
 
@@ -14,6 +14,12 @@ terminology in comments, docs, or agent guidance.
   Choose paragraphs, lists, and tables according to the content.
 - Preserve supported judgments, uncertainty, tradeoffs, and author voice. Do not invent experiences or use authorship
   detector scores as writing-quality criteria.
+- Give the concrete condition, limit, or cost behind a recommendation. If a
+  decision depends on missing information, name the missing input.
+- When the author provides comparable samples, use them to calibrate how
+  much context, detail, and informality to keep. Preserve the author's
+  perspective and register. Use the samples for style without importing their
+  facts into the new text.
 - Comments explain reasons, invariants, and constraints; API docs describe inputs, outputs, errors, and side effects.
 
 ## Titles, promotional copy, and navigation
@@ -42,6 +48,10 @@ terminology in comments, docs, or agent guidance.
   docs, navigation, and footers. Write natural topic phrases and explanations
   in each language. Do not retain English slogans for word-for-word alignment
   or batch-rewrite normal sentences that explain technical order.
+- Name links and buttons after their target or actual operation. Use consistent
+  labels for the same destination. Merge duplicate entries with the same
+  target and action. Keep distinct operations discoverable and preserve
+  existing anchors when renaming headings.
 
 ## Sentence relationships
 
@@ -104,6 +114,9 @@ model. Keep informative uses and the author's voice.
 Check recurring sentence openings, label-plus-explanation lists, and chains of
 near-synonyms across the text. Keep terminology stable. Do not manufacture
 variation, ban punctuation, remove all transitions, or make every sentence short.
+Use natural paragraphs for a continuous explanation and lists for actual
+steps, fields, or parallel items. Remove assistant greetings, drafting
+asides, and prompt labels from the finished artifact.
 
 ## Chinese wording cues
 
@@ -137,6 +150,11 @@ Use 最终决议 for a transaction's commit/reject decision; distinguish it from
 completed local actions and successful ACK. Keep formal terminology required by
 a definition or quotation, and preserve identifiers.
 Translate English prose naturally; avoid long noun chains, repeated “enabling …, ensuring …”, and needless synonyms.
+For Chinese, start from the actual subject and action. For example, if
+verified code stores pending jobs in SQLite, write “队列把未完成任务写入
+SQLite，重启后从数据库恢复任务”. Use “本地存储” when the source only
+specifies local persistence. Preserve meaningful conjunctions and natural
+subject omission.
 
 ## Semantic preservation
 
@@ -150,6 +168,13 @@ Translate English prose naturally; avoid long noun chains, repeated “enabling 
   开局所需最少人数; preserve inclusive bounds and rounding.
 - Keep signatures, identifiers, config keys, protocol text, quotations, and machine-consumed strings unchanged.
   Treat changes to runtime logs, test expectations, or runtime-read docstrings as behavior changes.
+- Keep comment and docstring edits to the affected code. For release notes or
+  commit messages, state the observed problem, change, scope, and checks
+  where known. Preserve original diagnostic output and label any excerpts.
+- Use diagrams and screenshots when they answer a question. Check label and
+  caption readability at the display size. Identify illustrations, captures
+  of real output, and truncation. Provide a readable enlarged view when
+  necessary.
 
 ## Review
 
@@ -188,6 +213,18 @@ When updating these rules, merge duplicates and check representative prose, tech
 necessary warnings. Verify new external claims with primary sources; record reading scope and limits. Keep detailed
 rules here and the always-on entrypoint short.
 
+## Writing evaluation
+
+Evaluate original drafts and edits to authored text separately. Compare the
+same inputs using the same model and settings where available. Include both
+languages, technical prose, and counterexamples that should survive editing.
+Use a separate set for the final check. Review technical or factual drift
+first, then readability, author voice, and the amount of rework. Use blind
+comparison when possible and record the model, samples, and unchecked cases.
+Recheck after a repeated editing failure, model change, or relevant source
+revision. Keep dated research and results in the coverage record or other
+existing maintenance record.
+
 ## References
 
 - [晋中学院《第八节 复句》](https://wxy.jzxy.edu.cn/uploads/zwx/file/20180410/3g5np6z83k.pdf): PDF pages 2, 5, 8 read
@@ -198,6 +235,8 @@ rules here and the always-on entrypoint short.
   heading and responsive-layout guidance read 2026-10-06; updated 2022-06-24.
 - [Google: voice and tone](https://developers.google.com/style/tone):
   tone, repetition, and procedure guidance read 2026-10-06; technical docs.
+- [Google: headings and titles](https://developers.google.com/style/headings):
+  task and concept heading guidance reviewed 2026-11-28 for this refresh.
 - [Reinhart et al.: stylistic variation](https://arxiv.org/html/2410.16107v2):
   abstract, methods, results, and discussion read 2026-10-06; v2, 2025-08-21.
   English parallel corpora and GPT-4o/Llama 3 variants show model- and

@@ -44,6 +44,21 @@ or call the MCP tools do not need this Skill.
    real-backend smoke and check for leftover processes/locks. Windows x64 and
    Linux x64 (WSL) are verified platforms; report anything else as untested.
 
+## Protocol and tool changes
+
+- Before changing protocol support, record the client, server, pinned SDK,
+  transport, and protocol revisions. Exercise the version path for each
+  supported client, including legacy initialization when applicable. Use the
+  [MCP sources](../ai-agent-maintenance/references/compatibility-sources.md)
+  when changing this compatibility surface.
+- Review the tool name, description, input schema, paths, and outbound
+  destinations against the pin. Check changes to backend-provided metadata
+  before exposing them. Treat metadata and results as untrusted data, and
+  enforce access in the wrapper and harness. Annotations cannot grant access.
+- Keep stdio stdout for protocol messages and stderr for diagnostics. Use
+  bounded calls and output with redacted logs. On cancellation stop the
+  affected work without terminating a shared backend serving other clients.
+
 ## Boundaries
 
 - Sirchmunk 0.2.0 uses `tools/sirchmunk/python/bridge.py` behind the JS stdio wrapper.

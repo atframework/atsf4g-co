@@ -1,6 +1,6 @@
 # Repository Source Index
 
-Use this file only when the repository map and a task-matching Skill do not reveal where authoritative evidence lives,
+Use this file when a task-matching Skill does not reveal where authoritative evidence lives,
 or when a task crosses several subsystems. It is a current-state routing map, not an exhaustive file inventory, a
 history log, or startup context.
 
@@ -38,7 +38,7 @@ For published documentation discovery, read `../doc/sidebars.js` as the catalog.
 | Expression-enabled configuration | libatapp's nearest `AGENTS.md`, `include/atframe/atapp_conf.proto`, `src/atframe/atapp_conf.cpp`, and matching tests | `skills/configure-expression/SKILL.md`, `../doc/docs/architecture/configuration.md` | Annotation or expansion semantics changed |
 | Deployment rendering | `../install/cloud-native/charts/`, `../install/cloud-native/values/`, renderer inputs, and representative rendered output | `skills/deployment-config/SKILL.md`, `../doc/docs/getting-started/run-deploy.md` | Template, values layering, renderer, or target syntax changed |
 | Documentation site | Source code/config being documented, `../doc/sidebars.js`, `../doc/docusaurus.config.js`, and both locale files | `skills/docs-site/SKILL.md` | Navigation, source behavior, locale structure, or build config changed |
-| MCP integration (tgrep/CodeGraph wrappers, installer) | `../project/integration/mcp/README.md`, affected wrapper sources/tests | `skills/mcp-integration-maintenance/SKILL.md` | Upstream pins, agent config formats, lifecycle, or installer behavior changed |
+| MCP integration (tgrep, CodeGraph, Sirchmunk, installer) | `../project/integration/mcp/README.md`, affected wrapper sources/tests | `skills/mcp-integration-maintenance/SKILL.md` | Upstream pins, agent config formats, lifecycle, or installer behavior changed |
 | AI guidance and Skills | `../AGENTS.md`, Skill metadata, affected `SKILL.md`, references, and thin bridges | `skills/ai-agent-maintenance/SKILL.md` | Discovery behavior, trigger scope, or source ownership changed |
 
 When a path moves, update the owning Skill first if it is task-specific; update this map only when the cross-task route

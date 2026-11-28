@@ -17,6 +17,10 @@ commands, or claim to use them unless the current checkout and harness prove tha
 - When requirements or architecture remain materially ambiguous after source inspection, explore read-only first. Ask
   only the focused question needed to unblock a consequential choice, compare two or three viable approaches with a
   recommendation, and obtain approval before taking a materially different or irreversible path.
+- Complete authorized local work through verification. Ask for input when an
+  unresolved decision changes scope or a required action needs authority.
+  A worktree isolates files, so choose separate database, port, and cache
+  resources when a test needs isolation there too.
 
 ## 2. Keep one change contract
 
@@ -36,8 +40,9 @@ commands, or claim to use them unless the current checkout and harness prove tha
 
 - Debug systematically: read the full error, reproduce consistently, trace inputs and state across component boundaries,
   compare with a working path, state one root-cause hypothesis, and test one variable at a time.
-- After three failed fix hypotheses, stop stacking patches and re-evaluate the architecture or missing evidence with the
-  user before another implementation attempt.
+- When attempts stop producing new diagnostic evidence, inspect the failing
+  assumption and test a different cause. Escalate a concrete blocker when
+  available checks cannot resolve it.
 - For behavior changes and defects, prefer RED-GREEN-REFACTOR: add the smallest regression or acceptance test, run it and
   confirm it fails for the intended reason, implement the minimum change, run it green, then refactor while staying green.
   If test-first is impractical for generated, configuration-only, or environment-dependent work, state why and define an
@@ -56,6 +61,9 @@ commands, or claim to use them unless the current checkout and harness prove tha
 - Inspect the final diff and status for scope, accidental generated output, unrelated formatting, and staging boundaries.
 - Reconcile durable behavior and design decisions into the repository's long-lived source of truth. Retire temporary
   artifacts only when repository policy or user scope calls for it; use the verified archive flow if OpenSpec is active.
+- For a resumed task, retain the goal, acceptance status, evidence paths,
+  outstanding work, next step, and authorization boundaries in the existing
+  plan or handoff.
 - Report verified behavior, commands and results, deliberate gaps, and remaining risks without overstating confidence.
 
 ## Reference

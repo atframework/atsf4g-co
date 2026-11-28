@@ -43,3 +43,9 @@ instance.
 After a template edit, render representative values before validating the target YAML, shell, or PowerShell syntax.
 Review the rendered diff as well as the template diff; a target-language linter passing on unrendered Go-template
 source is not evidence.
+
+Use sample values for local checks. Pass real credentials through the
+existing authorized secret store or injection path and redact rendered
+diagnostics. For deployment changes, identify the target, artifact,
+migration order, health checks, and rollback conditions. Record local
+rendering, staging validation, and production results separately.

@@ -33,8 +33,8 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 - Keep business modules under `business-logic/references/<module>/`; its `SKILL.md` is the compact module index.
   Add module guides there, with direct links and load conditions, rather than a separate or nested module `SKILL.md`.
 - Keep compact behavioral guardrails in `AGENTS.md`; do not duplicate the full generic guideline body in every skill.
-- Do not duplicate this Skill table in `AGENTS.md`; native clients already expose metadata, while `CLAUDE.md` imports
-  this index as its fallback router.
+- Keep this table available for manual lookup through `AGENTS.md` and
+  `CLAUDE.md`. Native discovery uses each Skill's metadata.
 - Keep shared engineering style and review conventions in `engineering-guidelines/SKILL.md`, not in this index; add
   source-of-truth convention changes there before summarizing them elsewhere.
 - This index is root-scoped; subprojects maintain independent `.agents/skills/README.md` files.

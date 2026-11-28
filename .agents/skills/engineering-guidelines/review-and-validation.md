@@ -95,6 +95,17 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 - Run `markdownlint` when available; if no repository-specific markdownlint config exists, use tool defaults plus
   `.editorconfig` expectations.
 - Always check YAML frontmatter, heading order, whitespace, and line endings for changed prompt/skill files.
+- Check local link targets, anchors, fences, and referenced examples or
+  assets. Use the site preview for changes that affect layout or diagrams.
+  Report pre-existing failures separately from findings introduced by the
+  change. Run executable examples only when the change calls for it.
+
+## CI and release changes
+
+- In new or changed release steps, restrict token permissions, prefer
+  short-lived credentials, and pin third-party GitHub Actions to full
+  commit SHAs. Keep untrusted PR input away from steps with release access.
+  See [GitHub Actions security guidance](https://docs.github.com/en/actions/reference/security/secure-use).
 
 ## Reporting
 
